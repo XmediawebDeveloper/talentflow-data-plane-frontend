@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { SourceIcon } from './inviteSources';
 import InviteFolderTree, { flattenTree, isArchivedFolder, isRootFolder } from './InviteFolderTree';
 import ResumeRowMenu, { type ResumeRowAction } from './ResumeRowMenu';
-import DeleteResumeDialog from '@/components/resumes/DeleteResumeDialog';
+import DeleteResumeDialog, { type DeleteResumeVersionTarget } from '@/components/resumes/DeleteResumeDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -947,11 +947,17 @@ export default function ServerCandidatePicker({
       void reloadFolders();
     }
   };
-  const deleteResume = async (id: string, archived: boolean) => {
+  const deleteResume = async (id: string, archived: boolean, version?: DeleteResumeVersionTarget) => {
     try {
-      await resumeService.delete(id);
-      unpick(id);
-      toast.success('Resume deleted');
+      if (version) {
+        // Just one version: the candidate stays, another version becomes the latest.
+        await resumeService.delete(version.id, { onlyThisVersion: true });
+        toast.success(`Version ${version.version} deleted`);
+      } else {
+        await resumeService.delete(id);
+        unpick(id);
+        toast.success('Resume deleted');
+      }
     } catch (err) {
       toast.error(`Couldn't delete resume. ${friendlyErrorMessage(err, 'Please try again.')}`);
     } finally {
@@ -1694,8 +1700,9 @@ export default function ServerCandidatePicker({
       <DeleteResumeDialog
         open={!!deleteAsk}
         names={deleteAsk ? [deleteAsk.name] : []}
+        resumeId={deleteAsk?.id}
         onCancel={() => doneAsking(setDeleteAsk)}
-        onConfirm={() => { const d = deleteAsk; doneAsking(setDeleteAsk); if (d) void deleteResume(d.id, d.archived); }}
+        onConfirm={(version) => { const d = deleteAsk; doneAsking(setDeleteAsk); if (d) void deleteResume(d.id, d.archived, version); }}
       />
       {previewing && (
         <ResumeTextPreviewModal

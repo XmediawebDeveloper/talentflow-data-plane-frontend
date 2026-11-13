@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { isResumeDatabaseRun, resumeDatabaseCandidateScoreUrl, runResultsUrl } from '@/lib/utils/scoringLinks';
 import { markHintSeen, wasHintSeen } from '@/components/ui/first-time-hint';
+import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
 
 const WIDGET_HINT = 'scoring-widget';
 import dynamic from 'next/dynamic';
@@ -32,6 +33,10 @@ export default function GlobalScoringProgressIndicator() {
     clearJob,
     onRestorePanel
   } = useScoringProgress();
+  /* The invite icon owns the bottom-right corner; while it is on screen this
+     widget sits just to its left, so neither ever jumps sides. */
+  const inviteIconShown = useOptionalBulkInviteProgress()?.iconShown ?? false;
+  const rightCls = inviteIconShown ? 'right-[4.5rem] sm:right-[5.25rem]' : 'right-3 sm:right-6';
 
   /* `isMinimized` only flips true one render AFTER `isMainPanelOpen` flips
      false — that happens in the effect further down, and effects run after
@@ -341,7 +346,7 @@ export default function GlobalScoringProgressIndicator() {
   const widgetHint = !widgetHintSeen && (
     <div
       role="note"
-      className="fixed bottom-24 right-6 z-[10050] w-64 rounded-lg bg-gray-900 px-3 py-2.5 text-sm text-white shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-300"
+      className={`fixed bottom-24 ${rightCls} z-[10050] w-64 rounded-lg bg-gray-900 px-3 py-2.5 text-sm text-white shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-300`}
     >
       <p>Scoring continues here in the background. You can keep working — click this to see progress.</p>
       <button
@@ -372,7 +377,7 @@ export default function GlobalScoringProgressIndicator() {
   /* Shared between the persistent card (isMinimized && !shrunk) and the
      hover-preview of it (isMinimized && shrunk && isHoveringShrunk) — same
      run, same content, so it's built once instead of kept in sync twice. */
-  const cardClassName = `fixed bottom-6 right-6 z-[10050] text-white px-4 py-3 rounded-xl shadow-2xl transition-all cursor-pointer flex items-center gap-3 border max-w-xs ${
+  const cardClassName = `fixed bottom-6 ${rightCls} z-[10050] text-white px-4 py-3 rounded-xl shadow-2xl transition-all cursor-pointer flex items-center gap-3 border max-w-xs ${
     isAllFailed ? 'bg-destructive hover:bg-destructive border-destructive-line' : 'bg-brand-blue hover:bg-brand-blue-2 border-white/10 shadow-brand-blue/25'
   }`;
   const cardBody = (
@@ -465,7 +470,7 @@ export default function GlobalScoringProgressIndicator() {
             : `Scoring ${overallProgress}% complete. Open progress.`
         }
         title={isAllComplete ? 'Scoring complete' : `Scoring ${overallProgress}%`}
-        className="fixed bottom-6 right-6 z-[10050] h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105 animate-in zoom-in duration-200"
+        className={`fixed bottom-6 ${rightCls} z-[10050] h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105 animate-in zoom-in duration-200`}
         style={{
           background: `conic-gradient(${isAllComplete ? 'var(--raw-22c55e)' : 'var(--raw-ffffff)'} ${overallProgress * 3.6}deg, rgba(255,255,255,0.25) 0deg)`,
         }}
@@ -498,7 +503,7 @@ export default function GlobalScoringProgressIndicator() {
 
   // Expanded panel
   return (
-    <div className="fixed bottom-4 right-3 sm:bottom-6 sm:right-6 z-[10050] w-[calc(100vw-1.5rem)] sm:w-96 max-w-96 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
+    <div className={`fixed bottom-4 sm:bottom-6 ${inviteIconShown ? 'right-3 sm:right-[5.25rem]' : 'right-3 sm:right-6'} z-[10050] w-[calc(100vw-1.5rem)] sm:w-96 max-w-96 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden`}>
       {/* Header */}
       <div className={`flex items-center justify-between px-4 py-3 ${
         isAllFailed ? 'bg-destructive' : hasSomeFailures ? 'bg-warning' : isAllComplete ? 'bg-success' : 'bg-gray-800'

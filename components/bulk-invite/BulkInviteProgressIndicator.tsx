@@ -2,15 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, ChevronRight, Clock, ClipboardList, Hourglass, Info, Loader2, Pause,
-  RotateCcw, Send, SkipForward, Users, Video, X, XCircle,
+  AlertTriangle, CheckCircle2, ChevronRight, Clock, ClipboardList, Hourglass, Info, Loader2, Minus, Pause,
+  RotateCcw, Send, SkipForward, Video, X, XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { useBulkInviteProgress, type BulkInviteResultsTab, type TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
-import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { bulkInviteNeedsLook, formatTimeLeft, isBulkInviteActive } from '@/lib/services/bulkInviteService';
 import BulkInviteResultsDialog from './BulkInviteResultsDialog';
 import { useBulkInviteActions } from './useBulkInviteActions';
@@ -29,10 +28,13 @@ import { useBulkInviteActions } from './useBulkInviteActions';
  *          each send with its name, who sent it and when, its own progress,
  *          clickable counts, and View / Cancel / Send again / Resume / ✕.
  *
- * ✕ and Clear finished only drop runs from this list ("Show removed" brings
+ * ✕ and Clear finished only drop runs from this list ("Show earlier" brings
  * them back); Cancel is the only thing that stops a send, after a confirm.
- * Bottom-left instead while the scoring widget holds the bottom-right corner.
- * Mounted once in the dashboard layout.
+ * Only this visit's sends are listed — batches finished before the page was
+ * opened start hidden (BulkInviteProgressContext). While anything still
+ * sends, the header offers Minimize only; Close appears once all finished.
+ * Always bottom-right — the scoring widget sits to its left (it reads
+ * `iconShown`). Mounted once in the dashboard layout.
  */
 
 const COACH_KEY = 'tf-bulk-invite-widget-coach-seen';
@@ -40,6 +42,15 @@ const COACH_KEY = 'tf-bulk-invite-widget-coach-seen';
 const TOAST_BATCH_MS = 3000;
 
 type Filter = 'all' | 'running' | 'look';
+type KindFilter = 'all' | 'assessment' | 'interview';
+
+const kindOf = (j: TrackedBulkInvite): Exclude<KindFilter, 'all'> => (j.kind === 'assessment' ? 'assessment' : 'interview');
+/** "Assessment invites" / "AI interview invites" when the list holds one kind only. */
+const kindNoun = (list: TrackedBulkInvite[]) => {
+  const a = list.some((j) => kindOf(j) === 'assessment');
+  const i = list.some((j) => kindOf(j) === 'interview');
+  return a && !i ? 'Assessment invites' : i && !a ? 'AI interview invites' : 'Invitations';
+};
 
 const kindLabel = (j: TrackedBulkInvite) => (j.kind === 'assessment' ? 'Assessment' : 'AI Interview');
 /** Version sent — from the send, else read from its label ("… - Version 2"). */
@@ -95,12 +106,8 @@ const TONE: Record<string, string> = {
 
 export default function BulkInviteProgressIndicator() {
   const {
-    jobs, dismiss, restore, inPopupIds, openResultsFor, openResultsTab, setOpenResultsFor, widget, setWidget,
+    jobs, dismiss, restore, inPopupIds, openResultsFor, openResultsTab, setOpenResultsFor, widget, setWidget, setIconShown,
   } = useBulkInviteProgress();
-  /* The scoring widget shows whenever a run is tracked and its own panel is
-     not open (GlobalScoringProgressIndicator's rule). */
-  const { activeScoringJobs, isMainPanelOpen } = useScoringProgress();
-  const onLeft = activeScoringJobs.length > 0 && !isMainPanelOpen;
   const { busy, retry, resume, askCancel, cancelDialog } = useBulkInviteActions();
 
   // Sends in the background: not removed, and not shown in their own popup.
@@ -113,6 +120,7 @@ export default function BulkInviteProgressIndicator() {
   const hasUnfinished = shown.some((j) => isBulkInviteActive(j) || j.status === 'paused' || !!j.stalled);
 
   const [filter, setFilter] = useState<Filter>('all');
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   /* Groups opened / closed by hand; the rest follow the default (running or
      needing a look → open). */
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
@@ -207,37 +215,64 @@ export default function BulkInviteProgressIndicator() {
     />
   ) : null;
   // All finished and the mini popup closed: no icon left on the page.
-  if (shown.length === 0 || widget === 'hidden' || (!miniOpen && !hasUnfinished)) {
+  const iconVisible = !(shown.length === 0 || widget === 'hidden' || (!miniOpen && !hasUnfinished));
+  useEffect(() => { setIconShown(iconVisible); }, [iconVisible, setIconShown]);
+  useEffect(() => () => setIconShown(false), [setIconShown]);
+  if (!iconVisible) {
     return <>{results}{cancelDialog}</>;
   }
 
-  const active = shown.filter(isBulkInviteActive);
-  const running = active.length;
-  const look = shown.filter((j) => bulkInviteNeedsLook(j));
-  const sum = (pick: (j: TrackedBulkInvite) => number, of: TrackedBulkInvite[] = shown) => of.reduce((n, j) => n + pick(j), 0);
+  const sum = (pick: (j: TrackedBulkInvite) => number, of: TrackedBulkInvite[]) => of.reduce((n, j) => n + pick(j), 0);
   const processingOf = (j: TrackedBulkInvite) => (isBulkInviteActive(j) ? j.processing ?? 0 : 0);
   const queuedOf = (j: TrackedBulkInvite) => (isBulkInviteActive(j) ? j.queued ?? Math.max(0, j.remaining - processingOf(j)) : 0);
-  /* The ring and "running now" follow the sends still going, not finished ones. */
-  const runTotal = sum((j) => j.total, active);
-  const runDone = sum((j) => j.processed, active);
-  const pct = running > 0 ? (runTotal > 0 ? Math.round((runDone / runTotal) * 100) : 0) : 100;
   /* Time left only means something while a send is really moving. */
   const moving = (j: TrackedBulkInvite) => isBulkInviteActive(j) && !j.stalled && (j.is_sending !== false || !!j.waiting_turn);
-  const eta = formatTimeLeft(active.filter(moving).reduce((m, j) => Math.max(m, j.eta_seconds ?? 0), 0));
-  const failedAll = sum((j) => j.failed);
-  const pausedN = shown.filter((j) => j.status === 'paused' || j.stalled).length;
-  const finishedIds = shown.filter((j) => !isBulkInviteActive(j) && j.status !== 'paused').map((j) => j.job_id);
-  const title = running > 0
-    ? (active.some((j) => j.is_sending !== false) ? `Sending ${running} of ${shown.length} batches` : `${running} of ${shown.length} batches waiting to send`)
-    : look.length > 0 ? 'Finished — some need a look' : 'All invitations sent';
-  const ringColour = look.length > 0 ? 'var(--raw-f59e0b, #f59e0b)' : running > 0 ? 'var(--raw-ffffff)' : 'var(--raw-22c55e)';
+  /* Progress of a list of sends: the ring and "running now" follow the sends
+     still going, not finished ones. The title names the kind when the list
+     holds only assessment or only AI interview invites. */
+  const statsOf = (list: TrackedBulkInvite[]) => {
+    const act = list.filter(isBulkInviteActive);
+    const lk = list.filter((j) => bulkInviteNeedsLook(j));
+    const total = sum((j) => j.total, act);
+    const done = sum((j) => j.processed, act);
+    const noun = kindNoun(list);
+    return {
+      active: act,
+      running: act.length,
+      look: lk,
+      runTotal: total,
+      runDone: done,
+      pct: act.length > 0 ? (total > 0 ? Math.round((done / total) * 100) : 0) : 100,
+      eta: formatTimeLeft(act.filter(moving).reduce((m, j) => Math.max(m, j.eta_seconds ?? 0), 0)),
+      title: act.length > 0
+        ? (act.some((j) => j.is_sending !== false)
+          ? `${noun}: sending ${act.length} of ${list.length} ${list.length === 1 ? 'batch' : 'batches'}`
+          : `${noun}: ${act.length} of ${list.length} ${list.length === 1 ? 'batch' : 'batches'} waiting to send`)
+        : lk.length > 0 ? `${noun}: finished — some need a look` : noun === 'Invitations' ? 'All invitations sent' : `${noun} sent`,
+    };
+  };
+
+  /* Assessment / AI interview chips — only when both kinds are in the list.
+     A chip whose kind emptied falls back to All. */
+  const kindCount = { assessment: shown.filter((j) => kindOf(j) === 'assessment').length, interview: shown.filter((j) => kindOf(j) === 'interview').length };
+  const mixed = kindCount.assessment > 0 && kindCount.interview > 0;
+  const kindView: KindFilter = mixed && kindFilter !== 'all' && kindCount[kindFilter] > 0 ? kindFilter : 'all';
+  const scoped = kindView === 'all' ? shown : shown.filter((j) => kindOf(j) === kindView);
+
+  /* The round icon follows every send; the popup follows the chosen kind. */
+  const iconStats = statsOf(shown);
+  const { running, look, eta, title } = statsOf(scoped);
+  const failedAll = sum((j) => j.failed, scoped);
+  const pausedN = scoped.filter((j) => j.status === 'paused' || j.stalled).length;
+  const finishedIds = scoped.filter((j) => !isBulkInviteActive(j) && j.status !== 'paused').map((j) => j.job_id);
+  const ringColour = iconStats.look.length > 0 ? 'var(--raw-f59e0b, #f59e0b)' : iconStats.running > 0 ? 'var(--raw-ffffff)' : 'var(--raw-22c55e)';
 
   /* Sends grouped by job (and job version), newest first. */
   /* A chip whose list emptied (everything finished, nothing needs a look)
      falls back to All rather than showing an empty list. */
-  const chipCount = filter === 'running' ? running : filter === 'look' ? look.length : shown.length;
+  const chipCount = filter === 'running' ? running : filter === 'look' ? look.length : scoped.length;
   const view: Filter = chipCount === 0 ? 'all' : filter;
-  const visible = shown.filter((j) => view === 'all' || (view === 'running' ? isBulkInviteActive(j) : bulkInviteNeedsLook(j)));
+  const visible = scoped.filter((j) => view === 'all' || (view === 'running' ? isBulkInviteActive(j) : bulkInviteNeedsLook(j)));
   const groupKey = (j: TrackedBulkInvite) => `${j.jdCode ?? j.jd_code ?? j.jd_id}|${j.jobVersion ?? j.job_version ?? ''}`;
   const sentAt = (j: TrackedBulkInvite) => j.created_at ?? j.trackedAt;
   const groups: { key: string; head: TrackedBulkInvite; items: TrackedBulkInvite[] }[] = [];
@@ -249,13 +284,13 @@ export default function BulkInviteProgressIndicator() {
   const single = groups.length === 1;
 
   const totals = [
-    { key: 'queue', label: 'In queue', n: sum(queuedOf), icon: <Clock className="w-3.5 h-3.5" />, tone: 'text-gray-600 dark:text-slate-300', hint: HINT.queue },
-    { key: 'processing', label: 'Sending', n: sum(processingOf), icon: <Loader2 className={`w-3.5 h-3.5 ${sum(processingOf) > 0 ? 'animate-spin' : ''}`} />, tone: 'text-brand-blue', hint: HINT.processing },
-    { key: 'sent', label: 'Sent', n: sum((j) => j.sent), icon: <CheckCircle2 className="w-3.5 h-3.5" />, tone: 'text-success', hint: HINT.sent },
-    { key: 'skipped', label: 'Skipped', n: sum((j) => j.skipped), icon: <SkipForward className="w-3.5 h-3.5" />, tone: 'text-gray-500 dark:text-slate-400', hint: HINT.skipped },
+    { key: 'queue', label: 'In queue', n: sum(queuedOf, scoped), icon: <Clock className="w-3.5 h-3.5" />, tone: 'text-gray-600 dark:text-slate-300', hint: HINT.queue },
+    { key: 'processing', label: 'Sending', n: sum(processingOf, scoped), icon: <Loader2 className={`w-3.5 h-3.5 ${sum(processingOf, scoped) > 0 ? 'animate-spin' : ''}`} />, tone: 'text-brand-blue', hint: HINT.processing },
+    { key: 'sent', label: 'Sent', n: sum((j) => j.sent, scoped), icon: <CheckCircle2 className="w-3.5 h-3.5" />, tone: 'text-success', hint: HINT.sent },
+    { key: 'skipped', label: 'Skipped', n: sum((j) => j.skipped, scoped), icon: <SkipForward className="w-3.5 h-3.5" />, tone: 'text-gray-500 dark:text-slate-400', hint: HINT.skipped },
     { key: 'failed', label: 'Failed', n: failedAll, icon: <XCircle className="w-3.5 h-3.5" />, tone: 'text-destructive', hint: HINT.failed },
   ];
-  const side = onLeft ? 'left-3 sm:left-6' : 'right-3 sm:right-6';
+  const side = 'right-3 sm:right-6';
   const openTab = (j: TrackedBulkInvite, tab: BulkInviteResultsTab) => setOpenResultsFor(j.job_id, tab);
 
   /* A clickable count: opens that send's results on that tab. */
@@ -323,15 +358,17 @@ export default function BulkInviteProgressIndicator() {
             >
               View
             </button>
-            <button
-              type="button"
-              onClick={() => dismiss(j.job_id)}
-              aria-label={`Remove ${kindLabel(j)}${v ? ` V${v}` : ''} from this list`}
-              title={isActive ? 'Remove from this list — it carries on sending' : 'Remove from this list'}
-              className="h-6 w-6 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+            {!isActive && (
+              <button
+                type="button"
+                onClick={() => dismiss(j.job_id)}
+                aria-label={`Remove ${kindLabel(j)}${v ? ` V${v}` : ''} from this list`}
+                title="Remove from this list"
+                className="h-6 w-6 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
         {bar(j.processed, j.total, tone)}
@@ -380,8 +417,13 @@ export default function BulkInviteProgressIndicator() {
     );
   };
 
+  const kindChips: { key: KindFilter; label: string; n: number }[] = [
+    { key: 'all', label: 'All types', n: shown.length },
+    { key: 'interview', label: 'AI Interview', n: kindCount.interview },
+    { key: 'assessment', label: 'Assessment', n: kindCount.assessment },
+  ];
   const chips: { key: Filter; label: string; n: number }[] = [
-    { key: 'all', label: 'All', n: shown.length },
+    { key: 'all', label: 'All', n: scoped.length },
     { key: 'running', label: 'Running', n: running },
     { key: 'look', label: 'Needs a look', n: look.length },
   ];
@@ -415,33 +457,23 @@ export default function BulkInviteProgressIndicator() {
                   Clear finished ({finishedIds.length})
                 </button>
               )}
-              <Button variant="secondary" size="sm" onClick={closeWidget} className="w-7 h-7 !px-0" aria-label="Close" title={hasUnfinished ? 'Close — sending carries on; the icon stays' : 'Close — everything has finished'}>
-                <X className="w-3.5 h-3.5" />
-              </Button>
+              {hasUnfinished ? (
+                <Button variant="secondary" size="sm" onClick={() => setWidget('icon')} className="w-7 h-7 !px-0" aria-label="Minimize" title="Minimize — sending carries on; the icon stays">
+                  <Minus className="w-3.5 h-3.5" />
+                </Button>
+              ) : (
+                <Button variant="secondary" size="sm" onClick={closeWidget} className="w-7 h-7 !px-0" aria-label="Close" title="Close — everything has finished">
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              )}
             </div>
           </div>
 
           {/* Now: what is left of the running sends, and what needs a look. */}
           <div className="px-3.5 pt-3 pb-2 space-y-2 shrink-0">
-            {running > 0 && (
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
-                  <div className="h-full rounded-full transition-[width] duration-500 bg-brand-blue" style={{ width: `${pct}%` }} />
-                </div>
-                <span className="text-xs font-semibold tabular-nums text-gray-900 dark:text-slate-100">{runDone}/{runTotal}</span>
-              </div>
-            )}
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span
-                className="inline-flex items-center gap-1.5 text-gray-700 dark:text-slate-300 cursor-help"
-                title="A batch is one press of Send in the invite popup — one job version and one assessment or interview version, to all the candidates picked that time."
-              >
-                <Users className="w-3.5 h-3.5" />
-                {running > 0
-                  ? `Not sent yet: ${sum(queuedOf) + sum(processingOf)}${sum(processingOf) > 0 ? ` · ${sum(processingOf)} going out now` : ''}`
-                  : `${sum((j) => j.total)} candidates in ${shown.length} ${shown.length === 1 ? 'batch' : 'batches'}`}
-              </span>
-              {(failedAll > 0 || pausedN > 0) && (
+            {(failedAll > 0 || pausedN > 0) && (
+            <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+              {(
                 <button
                   type="button"
                   onClick={() => {
@@ -455,6 +487,7 @@ export default function BulkInviteProgressIndicator() {
                 </button>
               )}
             </div>
+            )}
             <ul className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
               {totals.map((r) => (
                 <li key={r.key} title={r.hint} className="min-w-0 flex flex-col gap-0.5 rounded-lg border border-gray-100 dark:border-slate-700/60 px-2 py-1.5 cursor-help">
@@ -466,7 +499,26 @@ export default function BulkInviteProgressIndicator() {
                 </li>
               ))}
             </ul>
-            {shown.length > 1 && (
+            {mixed && (
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Invite type">
+                {kindChips.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    aria-pressed={kindView === c.key}
+                    onClick={() => setKindFilter(c.key)}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-2xs font-medium transition-colors ${kindView === c.key
+                      ? 'bg-brand-blue border-brand-blue text-white'
+                      : 'border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
+                  >
+                    {c.key === 'interview' && <Video className="w-3 h-3" aria-hidden="true" />}
+                    {c.key === 'assessment' && <ClipboardList className="w-3 h-3" aria-hidden="true" />}
+                    {c.label} <span className="tabular-nums">({c.n})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {scoped.length > 1 && (
               <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show">
                 {chips.map((c) => (
                   <button
@@ -535,9 +587,22 @@ export default function BulkInviteProgressIndicator() {
                         {!single && (
                           <button
                             type="button"
+                            onClick={() => {
+                              if (g.items.length === 1) openTab(g.items[0], g.items[0].failed > 0 && !isBulkInviteActive(g.items[0]) ? 'failed' : 'all');
+                              else setToggled((t) => ({ ...t, [g.key]: true }));
+                            }}
+                            title={g.items.length === 1 ? 'Open — every candidate and their status' : 'Show this job’s batches'}
+                            className="h-6 px-2 inline-flex items-center rounded-md text-2xs font-medium text-brand-blue hover:bg-brand-blue/5"
+                          >
+                            View
+                          </button>
+                        )}
+                        {!single && gRunning === 0 && (
+                          <button
+                            type="button"
                             onClick={() => dismiss(g.items.map((j) => j.job_id))}
                             aria-label={`Remove ${code || 'this job'} from this list`}
-                            title={gRunning > 0 ? 'Remove this job from the list — its batches carry on' : 'Remove this job from the list'}
+                            title="Remove this job from the list"
                             className="h-6 w-6 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800"
                           >
                             <X className="w-3.5 h-3.5" />
@@ -581,7 +646,7 @@ export default function BulkInviteProgressIndicator() {
                   <>
                     {' · '}
                     <button type="button" onClick={() => restore(removed.map((j) => j.job_id))} className="font-medium text-brand-blue hover:underline underline-offset-2">
-                      Show removed ({removed.length})
+                      Show earlier ({removed.length})
                     </button>
                   </>
                 )}
@@ -609,7 +674,7 @@ export default function BulkInviteProgressIndicator() {
           <div className="mt-2 flex justify-end">
             <button type="button" onClick={seeCoach} className="text-2xs font-semibold text-white underline underline-offset-2">Got it</button>
           </div>
-          <span aria-hidden="true" className={`absolute -bottom-1.5 ${onLeft ? 'left-5' : 'right-5'} h-3 w-3 rotate-45 bg-gray-900`} />
+          <span aria-hidden="true" className="absolute -bottom-1.5 right-5 h-3 w-3 rotate-45 bg-gray-900" />
         </div>
       )}
 
@@ -617,20 +682,20 @@ export default function BulkInviteProgressIndicator() {
       <button
         type="button"
         onClick={() => { seeCoach(); setWidget(miniOpen ? 'icon' : 'mini'); }}
-        aria-label={`${title}${eta && running > 0 ? `, ${eta}` : ''}${look.length > 0 ? `, ${look.length} need a look` : ''}. ${miniOpen ? 'Hide' : 'Show'} status.`}
+        aria-label={`${iconStats.title}${iconStats.eta && iconStats.running > 0 ? `, ${iconStats.eta}` : ''}${iconStats.look.length > 0 ? `, ${iconStats.look.length} need a look` : ''}. ${miniOpen ? 'Hide' : 'Show'} status.`}
         aria-expanded={miniOpen}
-        title={`${title}${running > 0 ? ` · ${runDone}/${runTotal}${eta ? ` · ${eta}` : ''}` : ''}${look.length > 0 ? ` · ${look.length} need a look` : ''}`}
+        title={`${iconStats.title}${iconStats.running > 0 ? ` · ${iconStats.runDone}/${iconStats.runTotal}${iconStats.eta ? ` · ${iconStats.eta}` : ''}` : ''}${iconStats.look.length > 0 ? ` · ${iconStats.look.length} need a look` : ''}`}
         className={`fixed bottom-6 ${side} z-40 h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 focus-visible:ring-offset-2`}
-        style={{ background: `conic-gradient(${ringColour} ${pct * 3.6}deg, rgba(255,255,255,0.25) 0deg)` }}
+        style={{ background: `conic-gradient(${ringColour} ${iconStats.pct * 3.6}deg, rgba(255,255,255,0.25) 0deg)` }}
       >
         <span className="relative flex h-full w-full items-center justify-center rounded-full bg-brand-blue text-white">
           <Send className="h-5 w-5" />
-          {running > 0 && (
+          {iconStats.running > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[1.125rem] h-[1.125rem] px-1 rounded-full bg-white text-brand-blue text-[10px] font-bold leading-[1.125rem] tabular-nums ring-1 ring-brand-blue/20">
-              {running}
+              {iconStats.running}
             </span>
           )}
-          {look.length > 0 && (
+          {iconStats.look.length > 0 && (
             <span aria-hidden="true" className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-warning-strong ring-2 ring-white dark:ring-slate-900" />
           )}
         </span>

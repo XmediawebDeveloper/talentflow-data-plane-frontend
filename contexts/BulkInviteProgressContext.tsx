@@ -75,6 +75,10 @@ interface BulkInviteProgressContextType {
   setOpenResultsFor: (jobId: string | null, tab?: BulkInviteResultsTab) => void;
   /** Re-read "my sends" from the server now. */
   refreshMine: () => void;
+  /** The round invite icon is on screen (bottom-right). The scoring widget
+   *  sits to its left meanwhile, so the invite icon never moves. */
+  iconShown: boolean;
+  setIconShown: (shown: boolean) => void;
 }
 
 const STORAGE_PREFIX = 'bulk_invite_progress_state';
@@ -89,6 +93,20 @@ const POLLER_LEASE_MS = 8000;
 /* A run that has stopped moving (or never started): poll it every
    STALE_POLL_MS instead, so stuck runs do not keep hitting the API. */
 const STALE_POLL_MS = 30 * 1000;
+
+/* When this page was opened / refreshed. The widget lists only the sends of
+   this visit: a batch that finished before it starts hidden ("Show removed"
+   brings it back). Batches still sending always show. */
+const PAGE_OPENED_AT = Date.now();
+const isEarlier = (j: TrackedBulkInvite) => {
+  if (isBulkInviteActive(j) || j.status === 'paused' || j.stalled) return false;
+  const t = new Date(j.created_at ?? j.trackedAt).getTime();
+  return Number.isFinite(t) && t < PAGE_OPENED_AT;
+};
+/* Hidden as "earlier", not removed by hand: dismissedAt 0 so another tab's
+   own choice for the same run still wins the merge. */
+const hideEarlier = (j: TrackedBulkInvite): TrackedBulkInvite =>
+  (!j.dismissed && isEarlier(j) ? { ...j, dismissed: true, dismissedAt: 0 } : j);
 
 const TAB_ID = typeof window !== 'undefined' ? `${Date.now()}-${Math.random().toString(36).slice(2)}` : 'ssr';
 
@@ -187,7 +205,7 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
   useEffect(() => { checkIdentity(); }, [pathname, checkIdentity]);
 
   useEffect(() => {
-    const stored = readStored(identity);
+    const stored = readStored(identity).map(hideEarlier);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setJobs(stored);
     // Runs carried over from before a reload come back as the round icon.
@@ -279,12 +297,12 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
           if (!p) added = true;
           byId.set(f.job_id, p
             ? { ...p, ...f, ...withNames(f, p), syncedAt: now }
-            : { ...f, ...withNames(f), trackedAt: f.created_at ?? new Date().toISOString(), syncedAt: now } as TrackedBulkInvite);
+            : hideEarlier({ ...f, ...withNames(f), trackedAt: f.created_at ?? new Date().toISOString(), syncedAt: now } as TrackedBulkInvite));
         }
         return [...byId.values()].filter(keep)
           .sort((a, b) => (b.created_at ?? b.trackedAt).localeCompare(a.created_at ?? a.trackedAt));
       });
-      if (added) setWidget((w) => (w === 'hidden' ? 'icon' : w));
+      if (added && fresh.some((f) => !isEarlier({ ...f, trackedAt: f.created_at ?? new Date().toISOString() } as TrackedBulkInvite))) setWidget((w) => (w === 'hidden' ? 'icon' : w));
     } catch {
       /* offline / signed out: the next round retries */
     } finally {
@@ -302,6 +320,8 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     }, MINE_EVERY_MS);
     return () => clearInterval(t);
   }, [identity, pullMine]);
+
+  const [iconShown, setIconShown] = useState(false);
 
   const activeJobs = useMemo(() => jobs.filter(isBulkInviteActive), [jobs]);
 
@@ -367,8 +387,8 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
   const value = useMemo<BulkInviteProgressContextType>(() => ({
     jobs, activeJobs, track, sync, dismiss, restore, inPopupIds, setInPopup,
     openResultsFor: openResults?.id ?? null, openResultsTab: openResults?.tab ?? 'all', setOpenResultsFor,
-    widget, setWidget, refreshMine,
-  }), [jobs, activeJobs, track, sync, dismiss, restore, inPopupIds, setInPopup, openResults, setOpenResultsFor, widget, refreshMine]);
+    widget, setWidget, refreshMine, iconShown, setIconShown,
+  }), [jobs, activeJobs, track, sync, dismiss, restore, inPopupIds, setInPopup, openResults, setOpenResultsFor, widget, refreshMine, iconShown]);
 
   return <BulkInviteProgressContext.Provider value={value}>{children}</BulkInviteProgressContext.Provider>;
 }

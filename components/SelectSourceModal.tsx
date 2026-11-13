@@ -15,7 +15,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { resumeService, folderService, archiveResumeToArchivedFolder, Resume, Folder as FolderType } from '@/lib/services/resumeService';
 import type { Folder as TableFolder } from '@/lib/types/types';
 import ResumeTable from './ResumeTable';
-import DeleteResumeDialog from '@/components/resumes/DeleteResumeDialog';
+import DeleteResumeDialog, { type DeleteResumeVersionTarget } from '@/components/resumes/DeleteResumeDialog';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH } from './FolderTree';
 import NoResumesEmptyState from '@/components/resumes/NoResumesEmptyState';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
@@ -552,14 +552,20 @@ export default function SelectSourceModal({
     }
   };
 
-  const handleConfirmDeleteResume = async () => {
+  const handleConfirmDeleteResume = async (version?: DeleteResumeVersionTarget) => {
     if (!deleteResumeTarget) return;
     const { id } = deleteResumeTarget;
     setDeleteResumeTarget(null);
     try {
-      await resumeService.delete(id);
-      setSelectedResumes(prev => prev.filter(rid => rid !== id));
-      toast.success('Resume deleted');
+      if (version) {
+        // Just one version: the candidate stays, another version becomes the latest.
+        await resumeService.delete(version.id, { onlyThisVersion: true });
+        toast.success(`Version ${version.version} deleted`);
+      } else {
+        await resumeService.delete(id);
+        setSelectedResumes(prev => prev.filter(rid => rid !== id));
+        toast.success('Resume deleted');
+      }
       await fetchData();
       refreshTabCounts();
     } catch (error: any) {
@@ -1433,6 +1439,7 @@ export default function SelectSourceModal({
       <DeleteResumeDialog
         open={!!deleteResumeTarget}
         names={deleteResumeTarget ? [deleteResumeTarget.name] : []}
+        resumeId={deleteResumeTarget?.id}
         onCancel={() => setDeleteResumeTarget(null)}
         onConfirm={handleConfirmDeleteResume}
       />

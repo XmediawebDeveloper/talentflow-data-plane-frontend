@@ -31,7 +31,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
-import DeleteResumeDialog from '@/components/resumes/DeleteResumeDialog';
+import DeleteResumeDialog, { type DeleteResumeVersionTarget } from '@/components/resumes/DeleteResumeDialog';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
@@ -362,7 +362,16 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[]; names: string[] } | null>(null);
 
-  const executeDelete = async (ids: string[]) => {
+  const executeDelete = async (ids: string[], version?: DeleteResumeVersionTarget) => {
+    if (version) {
+      try {
+        await resumeService.delete(version.id, { onlyThisVersion: true });
+        toast.success(`Version ${version.version} deleted`);
+      } catch {
+        toast.error(`Couldn't delete version ${version.version}. Please try again.`);
+      }
+      return;
+    }
     try {
       await Promise.all(ids.map(id => resumeService.delete(id)));
       setSelectedResumes(prev => prev.filter(r => !ids.includes(r)));
@@ -1263,10 +1272,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       <DeleteResumeDialog
         open={!!deleteConfirm}
         names={deleteConfirm?.names ?? []}
+        resumeId={deleteConfirm?.ids.length === 1 ? deleteConfirm.ids[0] : undefined}
         onCancel={() => setDeleteConfirm(null)}
-        onConfirm={() => {
+        onConfirm={(version) => {
           if (deleteConfirm) {
-            executeDelete(deleteConfirm.ids);
+            executeDelete(deleteConfirm.ids, version);
             setDeleteConfirm(null);
           }
         }}
