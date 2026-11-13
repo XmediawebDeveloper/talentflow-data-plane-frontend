@@ -503,7 +503,7 @@ export const ALWAYS_ON_PERMISSION_CODES = [
 
 /**
  * Set by the server, never picked in the role editor (2026-11-12): My Resumes
- * (view only) comes with Resume Upload or Shared Database, and stays for a
+ * (view only) comes with Resume Upload only (not Shared Database), and stays for a
  * person who uploaded resumes under an earlier role
  * (app/config/mandatory_permissions.py apply_my_resumes_view_rule).
  */
