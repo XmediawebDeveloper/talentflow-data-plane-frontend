@@ -60,7 +60,8 @@ export default function TeamChatPage() {
   const searchParams = useSearchParams();
   const { user: currentUser } = useAuth();
   const dialog = useGlobalDialog();
-  const [activeTab, setActiveTab] = useState<'all' | 'channels' | 'direct'>('all');
+  // Direct first — it's where most conversations happen.
+  const [activeTab, setActiveTab] = useState<'all' | 'channels' | 'direct'>('direct');
   const [channels, setChannels] = useState<Channel[]>([]);
   const [directMessages, setDirectMessages] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
@@ -470,8 +471,11 @@ export default function TeamChatPage() {
         }
       }
 
-      if ((selectFirst || !selectedChannel) && response.channels.length > 0) {
-        setSelectedChannel(response.channels[0]);
+      // Open the most recent conversation (the server lists them newest
+      // first), a direct one ahead of a channel — Direct is the default tab.
+      if (selectFirst || !selectedChannel) {
+        const first = response.direct_messages[0] ?? response.channels[0];
+        if (first) setSelectedChannel(first);
       }
     } catch (error: any) {
       console.error('Error fetching channels:', error);
@@ -551,6 +555,32 @@ export default function TeamChatPage() {
       await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
       toast.error(friendlyErrorMessage(e, "Couldn't delete channel. Please try again."));
+    }
+  };
+
+  // "Delete chat" on a direct conversation — for this user only; the other
+  // person keeps the history and a new message brings the chat back.
+  const handleDeleteDirectChat = async () => {
+    if (!selectedChannel || selectedChannel.type !== 'direct') return;
+    setShowHeaderMenu(false);
+    const ok = await dialog.confirm({
+      title: 'Delete Chat',
+      message: 'Delete this chat and all its messages?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Chat',
+      item: { label: 'CHAT WITH', name: selectedChannel.name },
+      warningNote: 'The messages are removed for you only. The other person still sees them, and the chat comes back if either of you sends a new message.',
+    });
+    if (!ok) return;
+    try {
+      await chatService.clearDirectChat(selectedChannel.id);
+      toast.success('Chat deleted');
+      delete draftsRef.current[selectedChannel.id];
+      setSelectedChannel(null);
+      setMessages([]);
+      await fetchChannels({ initial: false, selectFirst: true });
+    } catch (e: any) {
+      toast.error(friendlyErrorMessage(e, "Couldn't delete chat. Please try again."));
     }
   };
 
@@ -699,6 +729,7 @@ export default function TeamChatPage() {
       if (selectedChannelIdRef.current === channelId) {
         setMessages((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
       }
+      bumpConversation(channelId, newMessage);
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
@@ -710,6 +741,19 @@ export default function TeamChatPage() {
       setIsSending(false);
       if (selectedChannelIdRef.current === channelId) inputRef.current?.focus();
     }
+  };
+
+  // My own message moves its conversation to the top of the list (the socket
+  // only tells the others).
+  const bumpConversation = (channelId: string, msg: Message) => {
+    const bump = (list: Channel[]) =>
+      list.map((c) =>
+        c.id === channelId
+          ? { ...c, last_message: msg.content, last_message_by: msg.user_name, last_message_at: msg.created_at }
+          : c,
+      );
+    setChannels(bump);
+    setDirectMessages(bump);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -744,6 +788,7 @@ export default function TeamChatPage() {
       if (selectedChannelIdRef.current === channelId) {
         setMessages((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
       }
+      bumpConversation(channelId, newMessage);
     } catch (error: any) {
       console.error('Error uploading attachment:', error);
       toast.error(friendlyErrorMessage(error, "Couldn't upload image. Please try again."));
@@ -885,7 +930,10 @@ export default function TeamChatPage() {
         member_ids: [userId],
       });
 
-      toast.success(`Started conversation with ${userName}`);
+      // The server hands back the existing chat with this person, if any.
+      if (!directMessages.some((dm) => dm.id === channel.id)) {
+        toast.success(`Started conversation with ${userName}`);
+      }
       setShowNewDMModal(false);
 
       await fetchChannels({ initial: false });
@@ -912,13 +960,17 @@ export default function TeamChatPage() {
     );
   };
 
-  const filteredChannels = channels.filter((channel) =>
-    channel.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Most recent conversation first; one with no messages yet sorts by when it was made.
+  const byRecent = (a: Channel, b: Channel) =>
+    (b.last_message_at || b.created_at || '').localeCompare(a.last_message_at || a.created_at || '');
 
-  const filteredDMs = directMessages.filter((dm) =>
-    dm.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredChannels = channels
+    .filter((channel) => channel.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort(byRecent);
+
+  const filteredDMs = directMessages
+    .filter((dm) => dm.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort(byRecent);
 
   const onlineMembersCount = selectedChannel?.members?.filter((m) => m.is_online).length || 0;
   const isMuted = selectedChannel ? mutedChannels.has(selectedChannel.id) : false;
@@ -964,7 +1016,7 @@ export default function TeamChatPage() {
   const sortedMembers = [...(selectedChannel?.members ?? [])].sort(
     (a, b) => Number(b.is_online) - Number(a.is_online) || a.name.localeCompare(b.name),
   );
-  const tabIndex = activeTab === 'all' ? 0 : activeTab === 'channels' ? 1 : 2;
+  const tabIndex = activeTab === 'direct' ? 0 : activeTab === 'channels' ? 1 : 2;
   const typingNames = Object.values(typingUsers);
 
   const iconButtonClass = (active: boolean) =>
@@ -1125,7 +1177,7 @@ export default function TeamChatPage() {
                 style={{ transform: `translateX(${tabIndex * 100}%)` }}
                 className="absolute bottom-1 left-1 top-1 w-[calc((100%-0.5rem)/3)] rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out dark:bg-slate-800"
               />
-              {(['all', 'channels', 'direct'] as const).map((tab) => (
+              {(['direct', 'channels', 'all'] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -1143,22 +1195,8 @@ export default function TeamChatPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-2">
-            {(activeTab === 'all' || activeTab === 'channels') && (
-              <div className="mb-2">
-                {groupHeader('Channels', openCreateModal, permissions.can_create_channel, 'Create channel', 'You do not have permission to create channels')}
-                {filteredChannels.length === 0 ? (
-                  <div className="px-3 py-4 text-center">
-                    {!searchQuery && <MessageSquareText className="mx-auto mb-1.5 h-7 w-7 text-[#7FB0FF]" strokeWidth={1.75} />}
-                    <p className="tf-hint">{searchQuery ? 'No channels match your search' : 'No channels yet'}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-0.5">{filteredChannels.map(renderConversationRow)}</div>
-                )}
-              </div>
-            )}
-
             {(activeTab === 'all' || activeTab === 'direct') && (
-              <div>
+              <div className="mb-2">
                 {groupHeader('Direct messages', openNewDMModal, true, 'New direct message')}
                 {filteredDMs.length === 0 ? (
                   <div className="px-3 py-4 text-center">
@@ -1167,6 +1205,20 @@ export default function TeamChatPage() {
                   </div>
                 ) : (
                   <div className="space-y-0.5">{filteredDMs.map(renderConversationRow)}</div>
+                )}
+              </div>
+            )}
+
+            {(activeTab === 'all' || activeTab === 'channels') && (
+              <div>
+                {groupHeader('Channels', openCreateModal, permissions.can_create_channel, 'Create channel', 'You do not have permission to create channels')}
+                {filteredChannels.length === 0 ? (
+                  <div className="px-3 py-4 text-center">
+                    {!searchQuery && <MessageSquareText className="mx-auto mb-1.5 h-7 w-7 text-[#7FB0FF]" strokeWidth={1.75} />}
+                    <p className="tf-hint">{searchQuery ? 'No channels match your search' : 'No channels yet'}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-0.5">{filteredChannels.map(renderConversationRow)}</div>
                 )}
               </div>
             )}
@@ -1401,6 +1453,18 @@ export default function TeamChatPage() {
                                 }`}
                               >
                                 <Trash2 className="h-4 w-4" /> Delete channel
+                              </button>
+                            </>
+                          )}
+                          {selectedChannel.type === 'direct' && (
+                            <>
+                              <div className="my-1 h-px bg-gray-100 dark:bg-slate-700/60" />
+                              <button
+                                type="button"
+                                onClick={handleDeleteDirectChat}
+                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive-subtle"
+                              >
+                                <Trash2 className="h-4 w-4" /> Delete chat
                               </button>
                             </>
                           )}

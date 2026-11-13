@@ -132,6 +132,13 @@ class ChatService {
   }
 
   /**
+   * Delete a direct chat for the current user only (the other person keeps it)
+   */
+  async clearDirectChat(channelId: string): Promise<void> {
+    await api.post(`/chat/channels/${channelId}/clear`);
+  }
+
+  /**
    * Unread messages across every conversation (header chat badge)
    */
   async getUnreadCount(): Promise<number> {
