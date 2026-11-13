@@ -12,7 +12,10 @@ import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { internalTicketService, InternalTicket, InternalTicketStats, InternalTicketCategory, InternalTicketPriority } from '@/lib/services';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { forwardTeamLabel } from '@/lib/services/internalTicketService';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { AttachmentPicker, AttachmentList } from '@/components/support/TicketAttachments';
+import { saveBlob } from '@/lib/supportAttachments';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
@@ -62,6 +65,9 @@ export default function InternalHelpDesk() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [replyMessage, setReplyMessage] = useState('');
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
+  const [replySending, setReplySending] = useState(false);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
 
   // Form states
   const [title, setTitle] = useState('');
@@ -188,8 +194,18 @@ export default function InternalHelpDesk() {
         priority,
       });
 
-      setTickets([newTicket, ...tickets]);
+      // Files go up right after the ticket exists (same endpoint replies use).
+      let created = newTicket;
+      if (newFiles.length) {
+        try {
+          created = await internalTicketService.uploadAttachments(newTicket.id, newFiles);
+        } catch (uploadError) {
+          toast.warning(`Ticket #${newTicket.ticket_number} created, but the attachments were not uploaded: ${friendlyErrorMessage(uploadError, 'upload failed')}. You can attach them from the ticket.`);
+        }
+      }
+      setTickets([created, ...tickets]);
       toast.success(`Ticket #${newTicket.ticket_number} created. Your administrator will respond soon.`);
+      setNewFiles([]);
 
       // Reset form
       setTitle('');
@@ -207,20 +223,37 @@ export default function InternalHelpDesk() {
   };
 
   const handleSendReply = async () => {
-    if (!replyMessage.trim() || !selectedTicket) return;
+    if ((!replyMessage.trim() && replyFiles.length === 0) || !selectedTicket || replySending) return;
 
+    setReplySending(true);
     try {
-      const updatedTicket = await internalTicketService.addResponse(selectedTicket.id, {
-        message: replyMessage,
-      });
+      let updatedTicket = selectedTicket;
+      if (replyFiles.length) {
+        updatedTicket = await internalTicketService.uploadAttachments(selectedTicket.id, replyFiles);
+        setReplyFiles([]);
+      }
+      const text = replyMessage.trim()
+        || `Attached ${replyFiles.length} file${replyFiles.length > 1 ? 's' : ''}: ${replyFiles.map(f => f.name).join(', ')}`;
+      updatedTicket = await internalTicketService.addResponse(selectedTicket.id, { message: text });
 
       setSelectedTicket(updatedTicket);
-      setTickets(tickets.map(t => t.id === selectedTicket.id ? updatedTicket : t));
+      setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
       setReplyMessage('');
       toast.success('Reply sent successfully');
     } catch (error) {
       console.error('Error sending reply:', error);
-      toast.error('Failed to send reply');
+      toast.error(friendlyErrorMessage(error, 'Failed to send reply'));
+    } finally {
+      setReplySending(false);
+    }
+  };
+
+  const handleDownload = async (file: { id: string; file_name: string }) => {
+    if (!selectedTicket) return;
+    try {
+      saveBlob(await internalTicketService.downloadAttachment(selectedTicket.id, file.id), file.file_name);
+    } catch (error) {
+      toast.error(friendlyErrorMessage(error, 'Could not download the file'));
     }
   };
 
@@ -539,9 +572,16 @@ export default function InternalHelpDesk() {
                   />
                 </div>
 
+                <div>
+                  <label className="block tf-label mb-2">
+                    Attachments <span className="font-normal text-gray-500">(Optional)</span>
+                  </label>
+                  <AttachmentPicker files={newFiles} onChange={setNewFiles} disabled={submitting} />
+                </div>
+
                 <div className="flex gap-4 pt-4">
                   <button
-                    onClick={() => setView('overview')}
+                    onClick={() => { setNewFiles([]); setView('overview'); }}
                     className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                     disabled={submitting}
                   >
@@ -758,6 +798,13 @@ export default function InternalHelpDesk() {
                       </div>
                     </div>
                   </div>
+                  {selectedTicket.forwarding && (
+                    <div className="mt-4 rounded-lg border border-brand-blue/20 bg-brand-blue/[0.05] p-3 tf-body">
+                      Your admin forwarded this request to <strong>{forwardTeamLabel(selectedTicket.forwarding.team)}</strong> (platform support)
+                      {selectedTicket.forwarding.support_ticket_number && <> as <strong>{selectedTicket.forwarding.support_ticket_number}</strong></>}.
+                      Their updates will appear in the conversation below.
+                    </div>
+                  )}
                 </div>
 
                 {/* Conversation */}
@@ -798,6 +845,12 @@ export default function InternalHelpDesk() {
                     ))}
                   </div>
 
+                  {/* Attachments (incl. files platform support added after forwarding) */}
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <h4 className="tf-label mb-3">Attachments ({selectedTicket.attachments?.length || 0})</h4>
+                    <AttachmentList files={selectedTicket.attachments || []} onDownload={handleDownload} />
+                  </div>
+
                   {/* Reply Box */}
                   {selectedTicket.status !== 'closed' && (
                     <div className="mt-6 pt-6 border-t border-gray-200">
@@ -809,10 +862,19 @@ export default function InternalHelpDesk() {
                         rows={4}
                         className="tf-textarea px-4 py-3 resize-none"
                       />
+                      <div className="mt-3">
+                        <AttachmentPicker
+                          compact
+                          files={replyFiles}
+                          onChange={setReplyFiles}
+                          onTicket={selectedTicket.attachments?.length || 0}
+                          disabled={replySending}
+                        />
+                      </div>
                       <div className="flex justify-end mt-3">
                         <button
                           onClick={handleSendReply}
-                          disabled={!replyMessage.trim()}
+                          disabled={(!replyMessage.trim() && replyFiles.length === 0) || replySending}
                           className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                           <MessageSquare className="w-4 h-4" />

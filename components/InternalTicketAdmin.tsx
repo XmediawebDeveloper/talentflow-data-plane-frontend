@@ -7,12 +7,17 @@ import {
   Inbox, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
   Search, ArrowLeft, Filter, CheckCircle2, Circle, Clock3, XCircle,
   User, Calendar, Loader2, HelpCircle, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal,
-  UserCheck, Users, BarChart3, RefreshCw, Sparkles, Eye
+  UserCheck, Users, BarChart3, RefreshCw, Sparkles, Eye, Forward, ExternalLink
 } from 'lucide-react';
+import Link from 'next/link';
+import ForwardTicketDialog from '@/components/support/ForwardTicketDialog';
+import { forwardTeamLabel } from '@/lib/services/internalTicketService';
 import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketCategory, InternalTicketPriority, InternalTicketStatus } from '@/lib/services';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { AttachmentPicker, AttachmentList } from '@/components/support/TicketAttachments';
+import { saveBlob } from '@/lib/supportAttachments';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
@@ -70,6 +75,8 @@ export default function InternalTicketAdmin() {
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterAssignment, setFilterAssignment] = useState<string>('all');
   const [replyMessage, setReplyMessage] = useState('');
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
+  const [replySending, setReplySending] = useState(false);
 
   // Data states
   const [tickets, setTickets] = useState<InternalTicket[]>([]);
@@ -197,6 +204,16 @@ export default function InternalTicketAdmin() {
     }
   };
 
+  // Forward to platform support (creates the linked My Support Ticket + Control Plane ticket).
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const handleForwarded = (updatedTicket: InternalTicket) => {
+    setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
+    if (selectedTicket?.id === updatedTicket.id) {
+      setSelectedTicket(updatedTicket);
+    }
+    fetchStats();
+  };
+
   const handleResolveTicket = async (ticketId: string) => {
     try {
       setActionLoading(ticketId);
@@ -252,20 +269,38 @@ export default function InternalTicketAdmin() {
   };
 
   const handleSendReply = async () => {
-    if (!replyMessage.trim() || !selectedTicket) return;
+    if ((!replyMessage.trim() && replyFiles.length === 0) || !selectedTicket || replySending) return;
 
+    setReplySending(true);
     try {
-      const updatedTicket = await internalTicketService.addResponse(selectedTicket.id, {
-        message: replyMessage,
-      });
+      // On a forwarded ticket the backend also adds the files to My Support Tickets / the Control Plane.
+      if (replyFiles.length) {
+        await internalTicketService.uploadAttachments(selectedTicket.id, replyFiles);
+      }
+      const text = replyMessage.trim()
+        || `Attached ${replyFiles.length} file${replyFiles.length > 1 ? 's' : ''}: ${replyFiles.map(f => f.name).join(', ')}`;
+      setReplyFiles([]);
+      const updatedTicket = await internalTicketService.addResponse(selectedTicket.id, { message: text });
 
       setSelectedTicket(updatedTicket);
-      setTickets(tickets.map(t => t.id === selectedTicket.id ? updatedTicket : t));
+      setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
       setReplyMessage('');
       toast.success('Reply sent successfully');
     } catch (error) {
       console.error('Error sending reply:', error);
-      toast.error('Failed to send reply');
+      const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'Failed to send reply');
+    } finally {
+      setReplySending(false);
+    }
+  };
+
+  const handleDownload = async (file: { id: string; file_name: string }) => {
+    if (!selectedTicket) return;
+    try {
+      saveBlob(await internalTicketService.downloadAttachment(selectedTicket.id, file.id), file.file_name);
+    } catch {
+      toast.error('Could not download the file');
     }
   };
 
@@ -832,9 +867,29 @@ export default function InternalTicketAdmin() {
                         <span className="tf-meta">
                           {getCategoryLabel(selectedTicket.category)}
                         </span>
+                        {selectedTicket.forwarding && (
+                          <span className="tf-badge bg-brand-blue/10 text-brand-blue">
+                            <Forward className="h-3 w-3" />
+                            Forwarded
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
+                  {selectedTicket.forwarding && (
+                    <div className="mb-4 rounded-lg border border-brand-blue/20 bg-brand-blue/[0.05] p-3 tf-body">
+                      <p>
+                        Forwarded to <strong>{forwardTeamLabel(selectedTicket.forwarding.team)}</strong>
+                        {selectedTicket.forwarding.support_ticket_number && <> as <strong>{selectedTicket.forwarding.support_ticket_number}</strong></>}
+                        {selectedTicket.forwarding.forwarded_by?.name && <> by {selectedTicket.forwarding.forwarded_by.name}</>}
+                        {selectedTicket.forwarding.forwarded_at && <> · {formatIST(selectedTicket.forwarding.forwarded_at)}</>}
+                      </p>
+                      {selectedTicket.forwarding.note && <p className="mt-1 tf-meta">Note: {selectedTicket.forwarding.note}</p>}
+                      <Link href="/support-tickets" className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-brand-blue hover:underline">
+                        Open My Support Tickets <ExternalLink className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
+                  )}
                   <div className="pt-4 border-t border-gray-200">
                     <div className="flex items-center gap-2 tf-body-secondary">
                       <User className="w-4 h-4" />
@@ -884,6 +939,12 @@ export default function InternalTicketAdmin() {
                     ))}
                   </div>
 
+                  {/* Attachments (shared with the forwarded ticket, if any) */}
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <h4 className="tf-label mb-3">Attachments ({selectedTicket.attachments?.length || 0})</h4>
+                    <AttachmentList files={selectedTicket.attachments || []} onDownload={handleDownload} />
+                  </div>
+
                   {/* Reply Box */}
                   {selectedTicket.status !== 'closed' && (
                     <div className="mt-6 pt-6 border-t border-gray-200">
@@ -895,10 +956,19 @@ export default function InternalTicketAdmin() {
                         rows={4}
                         className="tf-textarea px-4 py-3 resize-none"
                       />
+                      <div className="mt-3">
+                        <AttachmentPicker
+                          compact
+                          files={replyFiles}
+                          onChange={setReplyFiles}
+                          onTicket={selectedTicket.attachments?.length || 0}
+                          disabled={replySending}
+                        />
+                      </div>
                       <div className="flex justify-end mt-3">
                         <button
                           onClick={handleSendReply}
-                          disabled={!replyMessage.trim()}
+                          disabled={(!replyMessage.trim() && replyFiles.length === 0) || replySending}
                           className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                           <MessageSquare className="w-4 h-4" />
@@ -996,6 +1066,17 @@ export default function InternalTicketAdmin() {
                       </button>
                     ) : null}
 
+                    {!selectedTicket.forwarding && (selectedTicket.status === 'open' || selectedTicket.status === 'in-progress') && (
+                      <button
+                        onClick={() => setForwardOpen(true)}
+                        disabled={actionLoading === selectedTicket.id}
+                        className="w-full px-4 py-2.5 bg-brand-blue/10 text-brand-blue rounded-lg hover:bg-brand-blue/15 transition-colors text-sm text-left flex items-center gap-2"
+                      >
+                        <Forward className="w-4 h-4" />
+                        Forward Ticket
+                      </button>
+                    )}
+
                     {(selectedTicket.status === 'resolved' || selectedTicket.status === 'closed') && (
                       <button
                         onClick={() => handleReopenTicket(selectedTicket.id)}
@@ -1034,6 +1115,12 @@ export default function InternalTicketAdmin() {
       </div>
       </div>
       </div>
+      <ForwardTicketDialog
+        ticket={selectedTicket}
+        open={forwardOpen && !!selectedTicket}
+        onClose={() => setForwardOpen(false)}
+        onForwarded={handleForwarded}
+      />
     </main>
   );
 }
