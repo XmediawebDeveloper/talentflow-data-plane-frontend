@@ -178,32 +178,53 @@ export default function TeamChatPage() {
     }
   };
 
-  // Delete one of my own messages, for everyone ("This message was deleted"
-  // stays in its place; the text and any image are removed).
-  const handleDeleteMessage = async (message: Message) => {
+  /* Delete: "Delete for everyone" (own messages, within 24 hours of sending —
+     the text goes for all and an image is deleted from storage) or "Delete
+     for me" (any message, any time — only your view). One popup for a single
+     message (its 🗑) or a selection (header 🗑 while selecting). */
+  const DELETE_FOR_EVERYONE_MS = 24 * 60 * 60 * 1000;
+  const [deleteTargets, setDeleteTargets] = useState<Message[] | null>(null);
+  const [deletingScope, setDeletingScope] = useState<'everyone' | 'me' | null>(null);
+  const canDeleteForEveryone = (m: Message) =>
+    m.user_id === currentUser?.id &&
+    !m.is_deleted &&
+    Date.now() - new Date(m.created_at).getTime() < DELETE_FOR_EVERYONE_MS;
+  const handleDeleteMessage = (message: Message) => {
     setActiveMessageId(null);
-    const isImageMessage = message.message_type === 'file';
-    const ok = await dialog.confirm({
-      title: 'Delete Message',
-      message: `Delete this ${isImageMessage ? 'image' : 'message'} for everyone?\nThis action cannot be undone.`,
-      variant: 'delete',
-      confirmText: 'Delete',
-    });
-    if (!ok) return;
+    setShowEmojiPicker(null);
+    setDeleteTargets([message]);
+  };
+  const handleDeleteSelected = () => {
+    const selected = messages.filter((m) => selectedMessageIds.has(m.id));
+    if (selected.length > 0) setDeleteTargets(selected);
+  };
+  const performDelete = async (scope: 'everyone' | 'me') => {
+    if (!deleteTargets || deletingScope) return;
+    const targets = deleteTargets;
+    setDeletingScope(scope);
     try {
-      await chatService.deleteMessage(message.id);
-      setMessages((prev) =>
-        prev.map((m) => (m.id === message.id ? { ...m, is_deleted: true, content: '', metadata: null, is_pinned: false } : m)),
-      );
-      setSelectedMessageIds((prev) => {
-        if (!prev.has(message.id)) return prev;
-        const next = new Set(prev);
-        next.delete(message.id);
-        return next;
-      });
-      toast.success('Message deleted');
-    } catch (e: any) {
-      toast.error(friendlyErrorMessage(e, "Couldn't delete message. Please try again."));
+      const results = await Promise.allSettled(targets.map((m) => chatService.deleteMessage(m.id, scope)));
+      const done = new Set(targets.filter((_, i) => results[i].status === 'fulfilled').map((m) => m.id));
+      if (done.size > 0) {
+        setMessages((prev) =>
+          scope === 'me'
+            ? prev.filter((m) => !done.has(m.id))
+            : prev.map((m) => (done.has(m.id) ? { ...m, is_deleted: true, content: '', metadata: null, is_pinned: false } : m)),
+        );
+        setSelectedMessageIds((prev) => {
+          const next = new Set([...prev].filter((id) => !done.has(id)));
+          return next.size === prev.size ? prev : next;
+        });
+        const noun = done.size === 1 ? 'Message' : `${done.size} messages`;
+        toast.success(`${noun} deleted${scope === 'me' ? ' for you' : ' for everyone'}`);
+      }
+      const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (firstError) {
+        toast.error(friendlyErrorMessage(firstError.reason, "Couldn't delete message. Please try again."));
+      }
+      setDeleteTargets(null);
+    } finally {
+      setDeletingScope(null);
     }
   };
 
@@ -1369,6 +1390,18 @@ export default function TeamChatPage() {
                       {selectedMessageIds.size} <X className="h-3.5 w-3.5" />
                     </button>
                   )}
+                  {/* Delete the selected messages */}
+                  {isSelecting && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteSelected}
+                      className={`${iconButtonClass(false)} hover:text-destructive`}
+                      aria-label={`Delete ${selectedMessageIds.size} selected`}
+                      title={`Delete selected (${selectedMessageIds.size})`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                   {/* Refresh this chat */}
                   <button
                     type="button"
@@ -1609,6 +1642,74 @@ export default function TeamChatPage() {
                                 ? 'bg-brand-blue text-white'
                                 : 'bg-white text-gray-900 ring-1 ring-gray-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700'
                             }`;
+                      const actionButtons = (
+                                    <div
+                                      className={`flex items-center gap-0.5 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 ${
+                                        isSender ? 'order-first flex-row-reverse' : ''
+                                      } ${actionsOpen ? 'opacity-100' : 'opacity-0'}`}
+                                    >
+                                      {!message.is_deleted && (<>
+                                      <div className="relative">
+                                        <button
+                                          type="button"
+                                          onClick={() => setShowEmojiPicker(showEmojiPicker === message.id ? null : message.id)}
+                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
+                                            showEmojiPicker === message.id ? 'text-brand-blue' : 'text-gray-400'
+                                          }`}
+                                          aria-label="Add reaction"
+                                          title="Add reaction"
+                                        >
+                                          <Smile className="h-3.5 w-3.5" />
+                                        </button>
+                                        {showEmojiPicker === message.id && (
+                                          <>
+                                            <div className="fixed inset-0 z-[9]" onClick={() => setShowEmojiPicker(null)} />
+                                            <div
+                                              className={`absolute bottom-full z-10 mb-1 flex gap-0.5 rounded-xl border border-gray-200 bg-white p-1 shadow-lg sm:p-1.5 dark:border-slate-700 dark:bg-slate-900 ${
+                                                isSender ? 'right-0' : 'left-0'
+                                              }`}
+                                            >
+                                              {quickEmojis.map((emoji) => (
+                                                <button
+                                                  key={emoji}
+                                                  type="button"
+                                                  onClick={() => { handleAddReaction(message.id, emoji); setShowEmojiPicker(null); }}
+                                                  className="rounded-md p-1 text-base max-sm:text-sm transition-transform hover:scale-110 hover:bg-brand-blue/[0.06] sm:p-1.5 sm:text-lg"
+                                                >
+                                                  {emoji}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                      {!isImage && message.content && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopyMessage(message)}
+                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
+                                            copiedMessageId === message.id ? 'text-success' : 'text-gray-400'
+                                          }`}
+                                          aria-label="Copy message"
+                                          title="Copy"
+                                        >
+                                          {copiedMessageId === message.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                        </button>
+                                      )}
+                                      </>)}
+                                      {/* Delete for me / for everyone (also clears a "deleted" placeholder). */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteMessage(message)}
+                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white hover:text-destructive dark:hover:bg-slate-800"
+                                        aria-label="Delete message"
+                                        title="Delete"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                      );
+
                       return (
                         <Fragment key={message.id}>
                           {showDateSeparator && (
@@ -1628,7 +1729,14 @@ export default function TeamChatPage() {
                               <div className="w-9 shrink-0" aria-hidden />
                             ))}
 
-                            <div className={`flex max-w-[80%] flex-col sm:max-w-[65%] ${isSender ? 'items-end' : 'items-start'}`}>
+                            <div className={`relative flex max-w-[80%] flex-col sm:max-w-[65%] ${isSender ? 'items-end' : 'items-start'}`}>
+                              {/* No time row under this one: its actions float beside the
+                                  bubble on hover (mouse only — touch taps or long-presses). */}
+                              {!showMeta && (
+                                <div className={`absolute top-1/2 z-[5] -translate-y-1/2 [@media(hover:none)]:hidden ${isSender ? 'right-full mr-1' : 'left-full ml-1'}`}>
+                                  {actionButtons}
+                                </div>
+                              )}
                               {groupStart && !isSender && (
                                 <span className="mb-1 px-1 tf-caption">
                                   {message.user_name}
@@ -1712,75 +1820,10 @@ export default function TeamChatPage() {
                                     </span>
                                   )}
 
-                                  {/* React + Copy — on the inner side of the time (after it for
-                                      received, before it for sent, so the time stays flush with the
-                                      bubble); on hover/focus, always on touch screens or once tapped. */}
-                                  {!message.is_deleted && (
-                                    <div
-                                      className={`flex items-center gap-0.5 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 ${
-                                        isSender ? 'order-first flex-row-reverse' : ''
-                                      } ${actionsOpen ? 'opacity-100' : 'opacity-0'}`}
-                                    >
-                                      <div className="relative">
-                                        <button
-                                          type="button"
-                                          onClick={() => setShowEmojiPicker(showEmojiPicker === message.id ? null : message.id)}
-                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
-                                            showEmojiPicker === message.id ? 'text-brand-blue' : 'text-gray-400'
-                                          }`}
-                                          aria-label="Add reaction"
-                                          title="Add reaction"
-                                        >
-                                          <Smile className="h-3.5 w-3.5" />
-                                        </button>
-                                        {showEmojiPicker === message.id && (
-                                          <>
-                                            <div className="fixed inset-0 z-[9]" onClick={() => setShowEmojiPicker(null)} />
-                                            <div
-                                              className={`absolute bottom-full z-10 mb-1 flex gap-0.5 rounded-xl border border-gray-200 bg-white p-1 shadow-lg sm:p-1.5 dark:border-slate-700 dark:bg-slate-900 ${
-                                                isSender ? 'right-0' : 'left-0'
-                                              }`}
-                                            >
-                                              {quickEmojis.map((emoji) => (
-                                                <button
-                                                  key={emoji}
-                                                  type="button"
-                                                  onClick={() => { handleAddReaction(message.id, emoji); setShowEmojiPicker(null); }}
-                                                  className="rounded-md p-1 text-base max-sm:text-sm transition-transform hover:scale-110 hover:bg-brand-blue/[0.06] sm:p-1.5 sm:text-lg"
-                                                >
-                                                  {emoji}
-                                                </button>
-                                              ))}
-                                            </div>
-                                          </>
-                                        )}
-                                      </div>
-                                      {!isImage && message.content && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleCopyMessage(message)}
-                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
-                                            copiedMessageId === message.id ? 'text-success' : 'text-gray-400'
-                                          }`}
-                                          aria-label="Copy message"
-                                          title="Copy"
-                                        >
-                                          {copiedMessageId === message.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                                        </button>
-                                      )}
-                                      {isSender && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteMessage(message)}
-                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white hover:text-destructive dark:hover:bg-slate-800"
-                                          aria-label="Delete message"
-                                          title="Delete"
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
+                                  {/* React + Copy + Delete — on the inner side of the time (after
+                                      it for received, before it for sent, so the time stays flush with
+                                      the bubble); on hover/focus, always on touch screens or once tapped. */}
+                                  {actionButtons}
                                 </div>
                               )}
                             </div>
@@ -1981,6 +2024,60 @@ export default function TeamChatPage() {
         </div>
 
         {/* Create Channel Modal */}
+        {deleteTargets && (() => {
+          const count = deleteTargets.length;
+          const forEveryone = deleteTargets.every(canDeleteForEveryone);
+          const allMine = deleteTargets.every((m) => m.user_id === currentUser?.id);
+          const hasImage = deleteTargets.some((m) => m.message_type === 'file' && !m.is_deleted);
+          const what = count > 1 ? `${count} messages` : hasImage ? 'image' : 'message';
+          return (
+            <AppModal
+              open
+              onCancel={() => { if (!deletingScope) setDeleteTargets(null); }}
+              cancelDisabled={!!deletingScope}
+              size="sm"
+              icon={<Trash2 />}
+              title={`Delete ${what}?`}
+              actions={[
+                {
+                  label: deletingScope === 'me' ? 'Deleting…' : 'Delete for me',
+                  onClick: () => performDelete('me'),
+                  variant: forEveryone ? 'secondary' : 'destructive',
+                  disabled: !!deletingScope,
+                  loading: deletingScope === 'me',
+                },
+                ...(forEveryone
+                  ? [{
+                      label: deletingScope === 'everyone' ? 'Deleting…' : 'Delete for everyone',
+                      onClick: () => performDelete('everyone'),
+                      variant: 'destructive' as const,
+                      disabled: !!deletingScope,
+                      loading: deletingScope === 'everyone',
+                    }]
+                  : []),
+              ]}
+            >
+              <div className="space-y-2 tf-body text-gray-600 dark:text-slate-300">
+                {forEveryone ? (
+                  <p>
+                    <strong>Delete for everyone</strong> removes it for all members of this chat
+                    {hasImage ? ', and the image is permanently deleted from storage' : ''}.{' '}
+                    <strong>Delete for me</strong> removes it only from your view.
+                  </p>
+                ) : allMine ? (
+                  <p>
+                    Delete for everyone is only available for 24 hours after sending. You can still
+                    remove it from your view; others in the chat will keep seeing it.
+                  </p>
+                ) : (
+                  <p>It will be removed from your view only. Others in the chat will keep seeing it.</p>
+                )}
+                <p className="tf-hint">This can&apos;t be undone.</p>
+              </div>
+            </AppModal>
+          );
+        })()}
+
         <AppModal
           open={showCreateModal}
           onCancel={() => setShowCreateModal(false)}

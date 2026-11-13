@@ -284,9 +284,14 @@ class ChatService {
   /**
    * Delete a message
    */
-  async deleteMessage(messageId: string): Promise<void> {
+  /**
+   * Delete a message. 'everyone': gone for all, image removed from storage
+   * (own message, within 24h of sending). 'me': gone from my view only.
+   */
+  async deleteMessage(messageId: string, scope: 'everyone' | 'me' = 'everyone'): Promise<string> {
     try {
-      await api.delete(`/chat/messages/${messageId}`);
+      const response = await api.delete(`/chat/messages/${messageId}`, { params: { scope } });
+      return response.data?.outcome ?? 'deleted';
     } catch (error) {
       console.error('Error deleting message:', error);
       throw error;
