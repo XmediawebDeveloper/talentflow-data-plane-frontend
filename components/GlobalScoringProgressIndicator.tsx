@@ -2,8 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useScoringProgress, ScoringJob } from '@/contexts/ScoringProgressContext';
-import { ClipboardList, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { ClipboardList, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { isResumeDatabaseRun, resumeDatabaseCandidateScoreUrl, runResultsUrl } from '@/lib/utils/scoringLinks';
+import { markHintSeen, wasHintSeen } from '@/components/ui/first-time-hint';
+
+const WIDGET_HINT = 'scoring-widget';
 import dynamic from 'next/dynamic';
 import type { ScoringProgressItem } from '@/components/BulkScoringProgressModal';
 
@@ -53,7 +59,6 @@ export default function GlobalScoringProgressIndicator() {
   const justReleased = wasMainPanelOpen.current && !isMainPanelOpen;
   const effectiveMinimized = isMinimized || justReleased;
 
-  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   /* The full popup, opened right where the recruiter is — no page owns this
      instance, so it's built straight from the shared context's own job data
      instead of a page's `scoredHistory`. This is what `restore()` falls back
@@ -62,7 +67,46 @@ export default function GlobalScoringProgressIndicator() {
      `router.push(...&show_progress=true)`, which took the recruiter away to
      the Resume Scoring page and needed a second click there to actually show
      anything. */
-  const [showGlobalModal, setShowGlobalModal] = useState(false);
+  /* Which run's popup is open here. One run at a time: several runs (different
+     jobs or versions) each keep their own popup, opened from their own row. */
+  const [modalJobId, setModalJobId] = useState<string | null>(null);
+  const modalJob = modalJobId ? activeScoringJobs.find(job => job.jobId === modalJobId) : undefined;
+
+  /* A run's results — the page it named when it started. */
+  const openResults = (job: ScoringJob) => {
+    setModalJobId(null);
+    setMinimized(true);
+    router.push(runResultsUrl(job));
+  };
+
+  /* Say when a background run finishes: a toast with its counts and View
+     Results, so the recruiter learns of it wherever they are. Only runs that
+     asked for it (`announce`), each once; runs already finished when this
+     mounts (a reload) are not announced again. */
+  const announcedRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const isDone = (job: ScoringJob) => job.total > 0 && job.queued === 0 && job.processing === 0;
+    if (!announcedRef.current) {
+      announcedRef.current = new Set(activeScoringJobs.filter(isDone).map(job => job.jobId));
+      return;
+    }
+    const announced = announcedRef.current;
+    activeScoringJobs.forEach(job => {
+      if (!job.announce || !isDone(job) || announced.has(job.jobId)) return;
+      announced.add(job.jobId);
+      const exact = job.items.filter(item => item.matchResult === 'Exact Match').length;
+      const title = `${job.jobTitle}${job.jobVersion ? ` v${job.jobVersion}` : ''}`;
+      const parts = [`${job.completed} scored`, exact > 0 && `${exact} Exact Match`, job.failed > 0 && `${job.failed} failed`]
+        .filter(Boolean).join(' · ');
+      const show = job.completed === 0 ? toast.error : job.failed > 0 ? toast.warning : toast.success;
+      show(`Scoring finished: ${title}`, {
+        description: parts,
+        duration: 8000,
+        action: job.completed > 0 ? { label: 'View Results', onClick: () => openResults(job) } : undefined,
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeScoringJobs]);
 
   /** Context's own `ScoringProgressItem` -> the shape `BulkScoringProgressModal`
    *  renders. The two are almost identical (same run, same fields); only
@@ -157,6 +201,19 @@ export default function GlobalScoringProgressIndicator() {
      the button snaps straight back to the dot. */
   const [isHoveringShrunk, setIsHoveringShrunk] = useState(false);
 
+  /* The first time a run drops into the corner: a one-time bubble saying the
+     run carries on here and the recruiter can keep working. */
+  const [widgetHintSeen, setWidgetHintSeen] = useState(true);
+  useEffect(() => {
+    // localStorage is browser-only, so it is read after the first render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWidgetHintSeen(wasHintSeen(WIDGET_HINT));
+  }, []);
+  const dismissWidgetHint = () => {
+    markHintSeen(WIDGET_HINT);
+    setWidgetHintSeen(true);
+  };
+
   /* Persists the real `isMinimized` context flag once a panel-close is
      confirmed, and advances `wasMainPanelOpen.current` for the NEXT
      transition. Render-time already reacted to this via `justReleased`
@@ -183,38 +240,40 @@ export default function GlobalScoringProgressIndicator() {
   }
 
   // The standalone popup takes over regardless of anything else — there's
-  // nothing else for this widget to show while it's up.
-  if (showGlobalModal) {
+  // nothing else for this widget to show while it's up. It shows ONE run.
+  if (modalJob) {
     return (
       <BulkScoringProgressModal
-        progressData={activeScoringJobs.flatMap(toModalItems)}
-        showJobTitleColumn
-        showJobColumns={activeScoringJobs.length > 1}
+        progressData={toModalItems(modalJob)}
         showScoreColumn
         onClose={() => {
-          setShowGlobalModal(false);
-          // Only settled jobs — anything still queued/processing keeps running
-          // and stays reachable from the widget after this closes.
-          activeScoringJobs.forEach(job => {
-            if (job.queued === 0 && job.processing === 0) clearJob(job.jobId);
-          });
+          setModalJobId(null);
+          // A settled run goes; one still queued/processing keeps running and
+          // stays reachable from the widget after this closes.
+          if (modalJob.queued === 0 && modalJob.processing === 0) clearJob(modalJob.jobId);
         }}
         onMinimize={() => {
-          setShowGlobalModal(false);
+          setModalJobId(null);
           setMinimized(true);
         }}
         // Same tab: this popup's run lives in context, so leaving the page
         // loses nothing — it shrinks to the corner widget and carries on.
-        // A scored row's View: that candidate's scorecard — the job page's
+        // A scored row's View: that candidate's score — under Resume
+        // Database's trail for a run started there, else the job page's
         // Scored Resumes tab with the resume open (`?resume=`).
         onViewResult={(item) => {
           if (!item.jobId || !item.resumeId) return;
-          setShowGlobalModal(false);
+          const { jobId, resumeId } = item;
+          setModalJobId(null);
           setMinimized(true);
-          router.push(scorecardUrl(item.jobId, item.resumeId));
+          if (isResumeDatabaseRun(modalJob)) {
+            void resumeDatabaseCandidateScoreUrl(jobId, resumeId).then(url => router.push(url));
+          } else {
+            router.push(scorecardUrl(jobId, resumeId));
+          }
         }}
         onOpenResume={(resumeId) => {
-          setShowGlobalModal(false);
+          setModalJobId(null);
           setMinimized(true);
           router.push(`/recruitment/resume-view/${resumeId}`);
         }}
@@ -241,6 +300,14 @@ export default function GlobalScoringProgressIndicator() {
     : 0;
 
   const isAllComplete = totalStats.queued === 0 && totalStats.processing === 0;
+  const isRunDone = (job: ScoringJob) => job.queued === 0 && job.processing === 0;
+  const runningCount = activeScoringJobs.filter(job => !isRunDone(job)).length;
+  const doneCount = activeScoringJobs.length - runningCount;
+  const runsSummary = [runningCount > 0 && `${runningCount} running`, doneCount > 0 && `${doneCount} done`].filter(Boolean).join(' · ');
+  /* Running first, then finished; newest first within each. */
+  const orderedJobs = [...activeScoringJobs].sort((a, b) =>
+    Number(isRunDone(a)) - Number(isRunDone(b))
+    || new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
   // "Complete" only means every item that finished actually succeeded. If every
   // finished item failed (e.g. the backend has no OpenAI key configured), calling
   // it "Complete" with a green checkmark told the user scoring worked when it
@@ -270,12 +337,35 @@ export default function GlobalScoringProgressIndicator() {
      full item list already lives in the shared context, so this widget just
      builds and shows the same popup itself (`showGlobalModal` below) instead
      of navigating the recruiter away to go find it. */
+  const widgetHint = !widgetHintSeen && (
+    <div
+      role="note"
+      className="fixed bottom-24 right-6 z-[10050] w-64 rounded-lg bg-gray-900 px-3 py-2.5 text-sm text-white shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-300"
+    >
+      <p>Scoring continues here in the background. You can keep working — click this to see progress.</p>
+      <button
+        type="button"
+        onClick={dismissWidgetHint}
+        className="mt-2 text-xs font-semibold text-brand-cyan hover:underline"
+      >
+        Got it
+      </button>
+      {/* Pointer down to the widget */}
+      <span className="absolute -bottom-1.5 right-6 h-3 w-3 rotate-45 bg-gray-900" aria-hidden="true" />
+    </div>
+  );
+
   const restore = () => {
     if (onRestorePanel) {
       onRestorePanel();
       return;
     }
-    setShowGlobalModal(true);
+    // One run: its popup. Several: the list of runs, each opening its own.
+    if (activeScoringJobs.length === 1) {
+      setModalJobId(activeScoringJobs[0].jobId);
+      return;
+    }
+    setMinimized(false);
   };
 
   /* Shared between the persistent card (isMinimized && !shrunk) and the
@@ -297,6 +387,8 @@ export default function GlobalScoringProgressIndicator() {
         <p className="text-xs text-white/70">
           {isAllFailed
             ? `${totalStats.failed} resume${totalStats.failed !== 1 ? 's' : ''} could not be scored`
+            : activeScoringJobs.length > 1
+            ? `${activeScoringJobs.length} runs · ${runsSummary}`
             : isAllComplete
             ? `Complete: ${totalStats.completed} scored${totalStats.failed > 0 ? `, ${totalStats.failed} failed` : ''}`
             : `${totalStats.completed}/${totalStats.total} (${overallProgress}%)`
@@ -345,6 +437,8 @@ export default function GlobalScoringProgressIndicator() {
   if (effectiveMinimized && shrunk) {
     if (isHoveringShrunk) {
       return (
+        <>
+        {widgetHint}
         <div
           className={`${cardClassName} animate-in fade-in zoom-in-95 duration-150`}
           onClick={restore}
@@ -353,9 +447,12 @@ export default function GlobalScoringProgressIndicator() {
         >
           {cardBody}
         </div>
+        </>
       );
     }
     return (
+      <>
+      {widgetHint}
       <button
         type="button"
         onClick={restore}
@@ -379,18 +476,22 @@ export default function GlobalScoringProgressIndicator() {
           )}
         </span>
       </button>
+      </>
     );
   }
 
   // The black progress card — what a minimise drops into, before it shrinks.
   if (effectiveMinimized) {
     return (
+      <>
+      {widgetHint}
       <div
         className={`${cardClassName} animate-in slide-in-from-bottom duration-300`}
         onClick={restore}
       >
         {cardBody}
       </div>
+      </>
     );
   }
 
@@ -410,7 +511,9 @@ export default function GlobalScoringProgressIndicator() {
             <CheckCircle2 className="w-5 h-5" />
           )}
           <span className="font-medium text-sm">
-            {hasActiveScoring
+            {activeScoringJobs.length > 1
+              ? `Scoring · ${runsSummary}`
+              : hasActiveScoring
               ? 'Scoring in Progress'
               : isAllFailed
               ? 'Scoring Failed'
@@ -420,25 +523,28 @@ export default function GlobalScoringProgressIndicator() {
           </span>
         </div>
         <div className="flex items-center gap-1">
+          {/* Finished runs only — a run still going keeps being tracked. */}
+          {doneCount > 0 && (
+            <Button
+              tone="onColor"
+              variant="secondary"
+              size="sm"
+              onClick={() => activeScoringJobs.filter(isRunDone).forEach(job => clearJob(job.jobId))}
+              className="px-2 text-xs"
+              title="Remove finished runs from this list"
+            >
+              Clear done
+            </Button>
+          )}
           <Button
             tone="onColor"
             variant="secondary"
             size="sm"
             onClick={() => setMinimized(true)}
             className=""
-            aria-label="Minimize" title="Minimize"
+            aria-label="Collapse" title="Collapse"
           >
             <Minimize2 className="w-4 h-4" />
-          </Button>
-          <Button
-            tone="onColor"
-            variant="secondary"
-            size="sm"
-            onClick={() => activeScoringJobs.forEach(job => clearJob(job.jobId))}
-            className=""
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" />
           </Button>
         </div>
       </div>
@@ -481,27 +587,19 @@ export default function GlobalScoringProgressIndicator() {
         </div>
       </div>
 
-      {/* Job List */}
-      <div className="max-h-64 overflow-y-auto">
-        {activeScoringJobs.map((job) => (
-          <JobProgressItem
+      {/* One row per run — running first, then finished. A row opens that
+          run's own popup; a finished one also offers View and ✕. */}
+      <div className="max-h-72 overflow-y-auto">
+        {orderedJobs.map((job) => (
+          <RunRow
             key={job.jobId}
             job={job}
-            isExpanded={expandedJobId === job.jobId}
-            onToggle={() => setExpandedJobId(expandedJobId === job.jobId ? null : job.jobId)}
-            onClear={() => clearJob(job.jobId)}
-            onNavigate={() => {
-              // If the page that owns the progress popup is still mounted, bring
-              // that popup back in place. Previously this always navigated away
-              // and then immediately re-minimised, so "View Details" looked like
-              // it did nothing.
-              if (onRestorePanel) {
-                onRestorePanel();
-                return;
-              }
-              router.push(job.returnUrl || `/recruitment/resume-scoring?jd_id=${job.jobId}`);
-              setMinimized(true);
+            onOpen={() => {
+              if (onRestorePanel) { onRestorePanel(); return; }
+              setModalJobId(job.jobId);
             }}
+            onView={() => openResults(job)}
+            onClear={() => clearJob(job.jobId)}
           />
         ))}
       </div>
@@ -509,28 +607,25 @@ export default function GlobalScoringProgressIndicator() {
   );
 }
 
-function JobProgressItem({
+/** One run in the expanded widget: its job (JD ID, title, version) and where
+ *  it stands — a progress bar while running, its counts once finished. */
+function RunRow({
   job,
-  isExpanded,
-  onToggle,
+  onOpen,
+  onView,
   onClear,
-  onNavigate
 }: {
   job: ScoringJob;
-  isExpanded: boolean;
-  onToggle: () => void;
+  onOpen: () => void;
+  onView: () => void;
   onClear: () => void;
-  onNavigate: () => void;
 }) {
   const isComplete = job.queued === 0 && job.processing === 0;
-  const progress = job.total > 0
-    ? Math.round(((job.completed + job.failed) / job.total) * 100)
-    : 0;
+  const progress = job.total > 0 ? Math.round(((job.completed + job.failed) / job.total) * 100) : 0;
+  const exact = job.items.filter(item => item.matchResult === 'Exact Match').length;
 
   // Surface *why* it failed instead of just a count — a missing API key and a
-  // transient network error need different reactions from the user, and both
-  // previously showed the same bare "X failed" with no way to tell them apart
-  // without opening each candidate's result individually.
+  // transient network error need different reactions from the user.
   const firstFailureReason = job.items.find(item => item.status === 'Failed' && item.errorReason)?.errorReason;
   const friendlyFailureReason = firstFailureReason
     ? /openai client|api key|RS_OPENAI_API_KEY/i.test(firstFailureReason)
@@ -539,112 +634,79 @@ function JobProgressItem({
     : undefined;
 
   return (
-    <div className="border-b border-gray-100 last:border-b-0">
-      <div
-        className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 cursor-pointer"
-        onClick={onToggle}
-      >
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-            isComplete ? 'bg-success-subtle' : 'bg-gray-100'
-          }`}>
-            {isComplete ? (
-              <CheckCircle2 className="w-4 h-4 text-success" />
-            ) : (
-              <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="tf-row-name truncate">
-              {job.jobTitle}
-            </div>
-            <div className="tf-meta">
-              {job.completed}/{job.total} scored
-              {job.failed > 0 && <span className="text-destructive ml-1">({job.failed} failed)</span>}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {isExpanded ? (
-            <ChevronUp className="w-4 h-4 text-gray-400" />
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
+      className="border-b border-gray-100 last:border-b-0 px-4 py-3 hover:bg-gray-50 cursor-pointer focus:outline-none focus-visible:bg-gray-50"
+      title="Open this run's progress"
+    >
+      <div className="flex items-start gap-3">
+        <div className={`mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
+          !isComplete ? 'bg-gray-100' : job.completed === 0 ? 'bg-destructive-subtle' : 'bg-success-subtle'
+        }`}>
+          {!isComplete ? (
+            <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
+          ) : job.completed === 0 ? (
+            <XCircle className="w-4 h-4 text-destructive" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-gray-400" />
+            <CheckCircle2 className="w-4 h-4 text-success" />
           )}
         </div>
-      </div>
-
-      {/* Expanded Details */}
-      {isExpanded && (
-        <div className="px-4 pb-3 bg-gray-50">
-          {/* Mini progress bar */}
-          <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mb-3">
-            <div className="h-full flex">
-              <div
-                className="bg-success"
-                style={{ width: `${(job.completed / job.total) * 100}%` }}
-              />
-              <div
-                className="bg-destructive"
-                style={{ width: `${(job.failed / job.total) * 100}%` }}
-              />
-              <div
-                className="bg-gray-600 animate-pulse"
-                style={{ width: `${(job.processing / job.total) * 100}%` }}
-              />
-            </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {job.jobCode && <JobIdBadge className="inline-flex h-5 items-center flex-shrink-0 text-2xs">{job.jobCode}</JobIdBadge>}
+            <span className="tf-row-name truncate">{job.jobTitle}</span>
+            {job.jobVersion != null && (
+              <span className="px-1.5 py-0.5 rounded font-semibold text-2xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
+                v{job.jobVersion}
+              </span>
+            )}
           </div>
-
-          {/* Stats */}
-          <div className="tf-grid-stats mb-3">
-            <div className="text-center">
-              <div className="tf-meta">Queued</div>
-              <div className="tf-label">{job.queued}</div>
+          {isComplete ? (
+            <div className="tf-meta mt-0.5">
+              {job.completed} scored
+              {exact > 0 && <> · {exact} Exact</>}
+              {job.failed > 0 && <span className="text-destructive"> · {job.failed} failed</span>}
             </div>
-            <div className="text-center">
-              <div className="tf-meta">Processing</div>
-              <div className="tf-label">{job.processing}</div>
+          ) : (
+            <div className="flex items-center gap-2 mt-1.5">
+              <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-brand-blue transition-[width] duration-300" style={{ width: `${progress}%` }} />
+              </div>
+              <span className="tf-meta tabular-nums flex-shrink-0">{job.completed + job.failed}/{job.total}</span>
             </div>
-            <div className="text-center">
-              <div className="tf-meta">Done</div>
-              <div className="text-sm font-medium text-success">{job.completed}</div>
-            </div>
-            <div className="text-center">
-              <div className="tf-meta">Failed</div>
-              <div className="text-sm font-medium text-destructive">{job.failed}</div>
-            </div>
-          </div>
-
+          )}
           {isComplete && job.failed > 0 && friendlyFailureReason && (
-            <div className="mb-3 px-3 py-2 bg-destructive-subtle border border-destructive-line rounded tf-error">
+            <div className="mt-2 px-2 py-1.5 bg-destructive-subtle border border-destructive-line rounded tf-error">
               {friendlyFailureReason}
             </div>
           )}
-
-          {/* Actions */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onNavigate();
-              }}
-              className="flex-1 text-xs py-1.5 px-3 bg-gray-800 text-white rounded hover:bg-gray-900 transition-colors"
-            >
-              View Details
-            </button>
-            {isComplete && (
+        </div>
+        {isComplete && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {job.completed > 0 && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClear();
-                }}
-                className="text-xs py-1.5 px-3 border border-gray-300 text-gray-600 rounded hover:bg-gray-100 transition-colors"
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onView(); }}
+                className="text-xs font-medium py-1 px-2.5 rounded bg-brand-blue text-white hover:bg-brand-blue-2 transition-colors"
               >
-                Clear
+                View
               </button>
             )}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onClear(); }}
+              className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              aria-label="Remove this run from the list"
+              title="Remove from list"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

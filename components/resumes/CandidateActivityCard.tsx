@@ -190,11 +190,14 @@ export default function CandidateActivityCard({
   resumeId,
   trail,
   headerAction,
+  onTotalChange,
 }: {
   resumeId: string;
   trail: TrailCrumb[];
   /** The host's own control at the right end of the card's header. */
   headerAction?: ReactNode;
+  /** How many records the card lists (null until loaded) — for a tab title. */
+  onTotalChange?: (total: number | null) => void;
 }) {
   const router = useRouter();
   /* Every View goes through here: the destination shows THIS page's trail
@@ -249,6 +252,11 @@ export default function CandidateActivityCard({
   const noModules = !loading && !failed && allowedTabs.length === 0;
 
   const total = data ? allowedTabs.reduce((n, t) => n + (isPlanLocked(t.plan) ? 0 : data[t.key].items.length), 0) : 0;
+  const totalKnown = data && !loading ? total : null;
+  useEffect(() => {
+    onTotalChange?.(totalKnown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalKnown]);
 
   const renderRows = () => {
     if (!data || !active) return null;

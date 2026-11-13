@@ -14,7 +14,6 @@ import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from './FolderTree';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
-import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
 import ErrorModal from './ErrorModal';
 
 // Default constants for fallback
@@ -104,12 +103,8 @@ interface UploadModalProps {
   }>;
   onCreateFolder?: (name: string, parentId?: string) => void;
   onViewResume?: (resumeId: string) => void;
-  onScoreResume?: (resumeId: string, candidateName: string) => void; // New callback for scoring
-  onScoreResumes?: (resumes: { id: string; candidateName: string }[]) => void; // Bulk counterpart of onScoreResume
   onDuplicateDetected?: (duplicateData: any) => void; // Callback for duplicate resolution
   targetFolder?: string;
-  /** The duplicate dialog's main button (with `onScoreResume`); defaults to "Proceed with Scoring". */
-  duplicateProceedLabel?: string;
   /** Opened from a folder's "Upload to Folder": the Select Folder dropdown
    *  lists only that folder and its subfolders (no System Folders, no other
    *  folders). Omitted: every folder. */
@@ -136,7 +131,7 @@ export default function UploadModal(props: UploadModalProps) {
   return <UploadModalBody {...props} />;
 }
 
-function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onScoreResume, onScoreResumes, onDuplicateDetected, targetFolder: requestedTargetFolder, duplicateProceedLabel, scopeFolderId }: UploadModalProps) {
+function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onDuplicateDetected, targetFolder: requestedTargetFolder, scopeFolderId }: UploadModalProps) {
   /* Never a destination: the root "Archived Resumes" folder. A resume filed
      there is archived (the flag follows the folder), so a fresh upload would
      land archived — unscorable and hidden from every list. My Resumes already
@@ -396,6 +391,8 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
   };
 
   const [isDragging, setIsDragging] = useState(false);
+  // Drop zone vs file list — they swap in the same slot.
+  const hasSelectedFiles = selectedFiles.length > 0;
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [validationErrors, setValidationErrors] = useState<FileValidationError[]>([]);
@@ -405,21 +402,6 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
   const [showNoFilesError, setShowNoFilesError] = useState(false);
   const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Duplicate resume detection state
-  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
-  const [duplicateInfo, setDuplicateInfo] = useState<{
-    fileName: string;
-    existingResume: {
-      id: string;
-      candidate_name: string;
-      email?: string;
-      current_title?: string;
-      folder_name?: string;
-      uploaded_at?: string;
-      version?: number;
-    };
-  } | null>(null);
 
   const [tabSwitchWarning, setTabSwitchWarning] = useState<{ message: string; targetTab: 'single' | 'bulk' } | null>(null);
 
@@ -523,6 +505,9 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
       const validatedFiles = validateAndFilterFiles(files);
       setSelectedFiles(prev => [...prev, ...validatedFiles]);
     }
+    // Clear the picker so a file that was removed can be picked again
+    // (the same value would not fire onChange).
+    e.target.value = '';
   };
 
   const handleRemoveFile = (index: number) => {
@@ -707,38 +692,12 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
     try {
       // Use root folder as fallback when no folder is selected
       const result = await onUpload(selectedFiles, selectedFolder || rootFolder?.id || undefined);
-      console.log('[UPLOAD-MODAL-DEBUG] Result from onUpload:', result);
-      console.log('[UPLOAD-MODAL-DEBUG] result.existingResume:', result.existingResume);
 
       if (!result.success && result.error) {
         // Check if this is a duplicate error with existing resume info
         if (result.existingResume) {
-          console.log('[UPLOAD-MODAL-DEBUG] Duplicate detected:', result.existingResume);
-
-          // If onScoreResume is provided (scoring context), show DuplicateResumeDetectedModal
-          // with options: View existing, Proceed with Scoring, Cancel
-          if (onScoreResume) {
-            console.log('[UPLOAD-MODAL-DEBUG] Scoring mode - showing DuplicateResumeDetectedModal');
-            setDuplicateInfo({
-              fileName: selectedFiles[0]?.name || '',
-              existingResume: {
-                id: result.existingResume.id,
-                candidate_name: result.existingResume.candidateName,
-                email: result.existingResume.email,
-                current_title: result.existingResume.currentTitle,
-                folder_name: result.existingResume.folderName,
-                uploaded_at: result.existingResume.uploadedAt,
-                version: result.existingResume.version,
-              }
-            });
-            setShowDuplicateModal(true);
-            setIsUploading(false);
-            return;
-          }
-
-          // Not in scoring mode - check if parent wants to handle duplicates
+          // The host shows the duplicate dialog (discard / overwrite / new version)
           if (onDuplicateDetected && result.duplicateData) {
-            console.log('[UPLOAD-MODAL-DEBUG] Calling onDuplicateDetected with data');
             /* Carry the chosen destination through with it. The parent used to
                re-derive this from its own folder state, which reported Root
                whenever that lookup came up empty — so the duplicate dialog
@@ -747,8 +706,6 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
             onClose(); // Close upload modal, parent will show duplicate modal
             return;
           }
-
-          console.log('[UPLOAD-MODAL-DEBUG] Not scoring mode - showing error with details');
         }
 
         // Show errors in the validation errors section
@@ -762,24 +719,12 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
             uploadedAt: result.existingResume.uploadedAt,
           } : undefined
         };
-        console.log('[UPLOAD-MODAL-DEBUG] Setting validationErrors:', errorObj);
         setValidationErrors([errorObj]);
         setIsUploading(false);
         return;
       }
 
-      // Success — hand the new resume to the caller (SelectSourceModal uses
-      // this to auto-tick it in "Select Applicants to Score") and close
-      // immediately. This used to pause on a "Resume Uploaded Successfully!"
-      // interstitial with a "Score Against a Job" button, but that button's
-      // only caller was already inside a specific job's scoring flow — an
-      // extra "do you want to score this?" click from inside the screen
-      // that's already doing exactly that was redundant, not a real choice.
-      if (activeTab === 'single' && result.resumeId && onScoreResume) {
-        onScoreResume(result.resumeId, result.candidateName || selectedFiles[0]?.name || 'Resume');
-      } else if (activeTab === 'bulk' && result.uploadedResumes?.length && onScoreResumes) {
-        onScoreResumes(result.uploadedResumes);
-      }
+      // Success — the host has the stored resume(s) already; just close.
       onClose();
     } catch (error: any) {
       console.error('Upload error:', error);
@@ -982,12 +927,37 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
             </div>
           )}
 
+          {/* Outside the drop zone, so the file list's "Add more files" still
+              reaches it while the drop zone is hidden. */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple={activeTab === 'bulk'}
+            accept=".pdf,.doc,.docx"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+
+          {/* One fixed slot for the drop zone and the file list: the list takes
+              the drop zone's place, at the drop zone's size, so the popup
+              never changes height (a centred popup that grows or shrinks moves
+              as a whole, which read as a glitch). Both layers share the same
+              grid cell — the drop zone sizes it, the list fills it and scrolls
+              inside — and only cross-fade. */}
+          <div className="grid">
+          <div
+            className={`[grid-area:1/1] transition-[opacity,visibility] duration-150 ease-out motion-reduce:transition-none ${
+              hasSelectedFiles ? 'opacity-0 invisible' : 'opacity-100 visible'
+            }`}
+            inert={hasSelectedFiles}
+            aria-hidden={hasSelectedFiles}
+          >
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-4 sm:p-6 text-center cursor-pointer transition-colors ${
+            className={`h-full border-2 border-dashed rounded-xl p-4 sm:p-6 text-center cursor-pointer transition-colors ${
               isDragging
                 ? 'border-brand-cyan bg-brand-cyan/[0.07]'
                 : 'border-brand-blue/25 dark:border-slate-700 bg-gradient-to-b from-brand-blue/[0.03] via-brand-cyan/[0.03] to-white dark:from-slate-800/50 dark:via-slate-800/30 dark:to-slate-900 hover:border-brand-cyan/50 hover:from-brand-blue/[0.06] hover:via-brand-cyan/[0.05]'
@@ -1030,74 +1000,77 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
               </span>
               {activeTab === 'bulk' && <span>• Max files: 100 resumes</span>}
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple={activeTab === 'bulk'}
-              accept=".pdf,.doc,.docx"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
+          </div>
           </div>
 
-          {selectedFiles.length > 0 && (
-            <div className="mt-4 sm:mt-6">
-              <div className="flex items-center justify-between mb-2 sm:mb-3">
-                <span className="tf-body">
-                  {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
-                </span>
-                <div className="flex items-center gap-1 sm:gap-2">
-                  {/* Only show Add More Files button in bulk upload mode */}
-                  {activeTab === 'bulk' && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        fileInputRef.current?.click();
-                      }}
-                      className="text-sm text-gray-800 dark:text-slate-100 hover:text-gray-900 flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <Upload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                      <span className="hidden sm:inline">Add More Files</span>
-                      <span className="sm:hidden">Add</span>
-                    </button>
-                  )}
+          {/* The picked files, in the drop zone's place. `h-0 min-h-full` keeps
+              this layer from sizing the slot: it takes the drop zone's height
+              and scrolls inside it. Bulk mode still takes more files here. */}
+          <div
+            className={`[grid-area:1/1] h-0 min-h-full flex flex-col rounded-xl border p-2.5 sm:p-3 transition-[opacity,visibility,border-color,background-color] duration-150 ease-out motion-reduce:transition-none ${
+              hasSelectedFiles ? 'opacity-100 visible' : 'opacity-0 invisible'
+            } ${
+              isDragging && activeTab === 'bulk'
+                ? 'border-brand-cyan bg-brand-cyan/[0.05]'
+                : 'border-brand-blue/15 dark:border-slate-700 bg-white dark:bg-slate-900'
+            }`}
+            inert={!hasSelectedFiles}
+            aria-hidden={!hasSelectedFiles}
+            {...(activeTab === 'bulk' ? { onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop } : {})}
+          >
+            <div className="flex-shrink-0 flex items-center justify-between mb-2 px-0.5">
+              <span className="tf-body">
+                {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
+              </span>
+              <button
+                onClick={() => {
+                  setSelectedFiles([]);
+                  setValidationErrors([]);
+                  setTabSwitchWarning(null);
+                }}
+                className="text-sm text-red-600 hover:text-red-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-red-50 transition-colors"
+              >
+                Clear All
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 sm:space-y-2 pr-0.5">
+              {selectedFiles.map((file, index) => (
+                <div
+                  key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+                  className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-brand-teal/10 border border-brand-cyan/20 rounded-lg"
+                >
+                  <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-teal flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="tf-body truncate">{file.name}</div>
+                    <div className="tf-meta">{formatFileSize(file.size)}</div>
+                  </div>
                   <button
-                    onClick={() => {
-                      setSelectedFiles([]);
-                      setValidationErrors([]);
-                      setTabSwitchWarning(null);
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveFile(index);
                     }}
-                    className="text-sm text-red-600 hover:text-red-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-red-50 transition-colors"
+                    className="p-1 text-gray-500 dark:text-slate-500 hover:text-red-600 rounded flex-shrink-0"
+                    aria-label={`Remove ${file.name}`}
                   >
-                    Clear All
+                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
                 </div>
-              </div>
-              <div className="space-y-1.5 sm:space-y-2 max-h-48 sm:max-h-64 overflow-y-auto">
-                {selectedFiles.map((file, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-brand-teal/10 border border-brand-cyan/20 rounded-lg"
-                  >
-                    <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-teal flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="tf-body truncate">{file.name}</div>
-                      <div className="tf-meta">{formatFileSize(file.size)}</div>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemoveFile(index);
-                      }}
-                      className="p-1 text-gray-500 dark:text-slate-500 hover:text-red-600 rounded flex-shrink-0"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              ))}
+              {/* Bulk: add more by click or by dropping onto this panel. */}
+              {activeTab === 'bulk' && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-1.5 p-2 sm:p-2.5 rounded-lg border border-dashed border-brand-blue/30 text-sm text-brand-blue hover:bg-brand-blue/[0.04] hover:border-brand-cyan/50 transition-colors"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Add more files
+                  <span className="hidden sm:inline tf-meta">or drop them here</span>
+                </button>
+              )}
             </div>
-          )}
+          </div>
+          </div>
 
           {validationErrors.length > 0 && (
             <div className="mt-4 sm:mt-6">
@@ -1443,35 +1416,6 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
         </div>
       </div>
 
-      {/* Duplicate Resume Detection Modal */}
-      {duplicateInfo && (
-        <DuplicateResumeDetectedModal
-          isOpen={showDuplicateModal}
-          onClose={() => {
-            setShowDuplicateModal(false);
-            setDuplicateInfo(null);
-          }}
-          fileName={duplicateInfo.fileName}
-          existingResume={duplicateInfo.existingResume}
-          onViewExisting={(resumeId) => {
-            if (onViewResume) {
-              onViewResume(resumeId);
-            }
-            setShowDuplicateModal(false);
-            setDuplicateInfo(null);
-            onClose();
-          }}
-          proceedLabel={duplicateProceedLabel}
-          onProceedWithScoring={(resumeId) => {
-            if (onScoreResume && duplicateInfo.existingResume) {
-              onScoreResume(resumeId, duplicateInfo.existingResume.candidate_name);
-            }
-            setShowDuplicateModal(false);
-            setDuplicateInfo(null);
-            onClose();
-          }}
-        />
-      )}
     </div>
   );
 }

@@ -18,12 +18,10 @@ import { FOLDER_NAME_MAX_LENGTH } from '@/components/FolderTree';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
-import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import VersionHistoryModal from '@/components/VersionHistoryModal';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
 import { Resume, Folder, Job } from '@/lib/types/types';
 import { resumeService, folderService, ResumeSearchParams } from '@/lib/services/resumeService';
@@ -39,7 +37,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
-import { RESUME_VIEW_SOURCE_PARAM } from '@/lib/constants/resumePools';
+import { RESUME_VIEW_SOURCE_PARAM, resumeDatabaseTabHref } from '@/lib/constants/resumePools';
+import { rememberScoringOrigin } from '@/lib/utils/resumeActivityTrail';
+import { useInPageScoringProgress } from '@/components/resumes/useInPageScoringProgress';
+import ScoringStartSummary, { type ScoringStartRequest } from '@/components/resumes/ScoringStartSummary';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 import { usePagedList } from '@/lib/hooks/usePagedList';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
@@ -260,12 +261,14 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const [resumesForApply, setResumesForApply] = useState<Resume[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
 
-  // AI Talent Match modal state
-  const [showAITalentMatchModal, setShowAITalentMatchModal] = useState(false);
 
   // Invite Assessment / Invite AI Interview both open the one shared invite
   // popup (VersionInviteDialog); it asks for the assessment / interview itself.
   const { open: openInvite } = useInviteDialog();
+  // Score Resume's progress popup, on this page (Minimize keeps the recruiter here).
+  const { startScoringProgress, scoringProgressModal } = useInPageScoringProgress('Internal DB');
+  /* The picked job, shown back as a summary (scored / skipped / units) before scoring starts. */
+  const [scoringRequest, setScoringRequest] = useState<ScoringStartRequest | null>(null);
 
   // Version History modal state
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -615,27 +618,6 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     setShowApplyToJobModal(true);
   };
 
-  // Handle AI Talent Match for bulk selected resumes
-  const handleBulkAITalentMatch = () => {
-    const selectedResumesList = selectedRows;
-    if (selectedResumesList.length === 0) {
-      toast.error('Please select at least one resume');
-      return;
-    }
-    const archivedCount = selectedResumesList.filter(isResumeArchived).length;
-    if (archivedCount > 0) {
-      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be used with AI Talent Match. Please select active resumes only.`);
-      return;
-    }
-    const tenantUserCount = selectedResumesList.filter(isTenantUserEmailResume).length;
-    if (tenantUserCount > 0) {
-      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be used with AI Talent Match.`);
-      return;
-    }
-    setResumesForApply(selectedResumesList);
-    fetchJobs();
-    setShowAITalentMatchModal(true);
-  };
 
   const handleBulkAIInterview = () => {
     if (selectedResumes.length === 0) {
@@ -818,7 +800,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   };
 
   // Handle actual apply action from modal - using async Celery scoring
-  const handleApply = async (resumeIds: string[], jobIds: string[], jobRecords?: Job[]) => {
+  const handleApply = (resumeIds: string[], jobIds: string[], jobRecords?: Job[], sourceResumeIds?: string[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setShowApplyToJobModal(false);
@@ -827,61 +809,46 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
        the local list is only a fallback. */
     const jobId = jobIds[0];
     const selectedJob = jobRecords?.[0] || jobs.find(j => j.id === jobId);
+    // A picked older version has its own id: name it from the candidate it came from.
+    const names: Record<string, string> = {};
+    resumeIds.forEach((id, i) => {
+      const resume = rowById(id) || rowById(sourceResumeIds?.[i] ?? '');
+      names[id] = resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown';
+    });
+    // What will happen (scored / skipped / units) is shown before anything starts.
+    setScoringRequest({
+      job: { id: jobId, title: selectedJob?.title || 'Job', jobCode: selectedJob?.job_id, version: selectedJob?.versionNumber },
+      resumeIds,
+      names,
+    });
+  };
 
+  // Start Scoring from the summary: only the resumes it found to score.
+  const startScoring = async (jobId: string, resumeIds: string[], names: Record<string, string>) => {
     try {
-      // Check for already-scored resumes before proceeding
-      const checkResult = await scoringService.checkExistingScores(jobId, resumeIds);
-
-      if (checkResult.existing_count > 0) {
-        const alreadyScoredNames = checkResult.existing_scores
-          .map((s: any) => `${s.candidate_name} (${formatOverallScore(s.overall_rating_10, s.overall_score)})`)
-          .join(', ');
-
-        if (checkResult.new_count === 0) {
-          // ALL resumes already scored - block entirely
-          toast.error(
-            `All ${checkResult.existing_count} resume(s) already scored for "${checkResult.jd_title}": ${alreadyScoredNames}`,
-            { duration: 6000 }
-          );
-          return;
-        }
-
-        // Some already scored, some new - alert and continue with only new ones
-        toast.warning(
-          `${checkResult.existing_count} resume(s) already scored and will be skipped: ${alreadyScoredNames}`,
-          { duration: 5000 }
-        );
-        // Filter to only new (unscored) resume IDs
-        const existingIds = new Set(checkResult.existing_scores.map((s: any) => s.resume_id));
-        resumeIds = resumeIds.filter(id => !existingIds.has(id));
-      }
-
-      // Start async bulk scoring via Celery (only for new/unscored resumes)
+      // Start async bulk scoring via Celery
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
-      // Get candidate names for the selected resumes
-      const resumeItems = resumeIds.map(id => {
-        const resume = rowById(id);
-        return {
-          resumeId: id,
-          candidateName: resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown',
-        };
-      });
+      const resumeItems = resumeIds.map(id => ({ resumeId: id, candidateName: names[id] || 'Unknown' }));
 
-      // Store batch info for the resume-scoring page to poll (including resume items for fallback)
-      const scoringData = {
+      // Clear selection and follow the run here: its progress popup opens on
+      // this page, and Minimize leaves the recruiter on Resume Database.
+      setSelectedResumes([]);
+      setResumesForApply([]);
+      setScoringRequest(null);
+      // Results opened from it keep Resume Database's breadcrumb.
+      rememberScoringOrigin(response.jd_id, [
+        { label: 'Resume Database', href: resumeDatabaseTabHref('internal-db') },
+      ]);
+      startScoringProgress({
         batchId: response.batch_id,
         jobId: response.jd_id,
         jobTitle: response.jd_title,
-        totalResumes: response.total_resumes,
-        resumeItems: resumeItems,
-      };
-      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
-
-      // Clear selection and navigate to resume scoring page
-      setSelectedResumes([]);
-      setResumesForApply([]);
-      router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
+        items: resumeItems,
+        jobCode: scoringRequest?.job.jobCode,
+        jobVersion: scoringRequest?.job.version,
+      });
+      toast.success(`Scoring started for ${resumeItems.length} resume${resumeItems.length !== 1 ? 's' : ''}.`);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
       toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
@@ -1066,9 +1033,6 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             onAIInterview={handleBulkAIInterview}
             onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('internal_db:invite_ai_interview')))}
             onAIInterviewDisabledReason={!(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('internal_db:invite_ai_interview'))) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
-            onAITalentMatch={handleBulkAITalentMatch}
-            onAITalentMatchDisabled={isPlanLocked('ai_talent_match') || !(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match')))}
-            onAITalentMatchDisabledReason={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match'))) ? "You do not have permission to run AI talent match" : PLAN_LOCKED_MESSAGE}
             onDownload={handleBulkDownload}
             onDownloadDisabled={!canDownloadShared}
             onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
@@ -1195,6 +1159,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         />
       )}
 
+      {scoringProgressModal}
+
       {showUploadHistory && (
         <UploadHistoryPanel
           records={uploadHistory}
@@ -1240,34 +1206,15 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         />
       )}
 
-      {/* AI Talent Match Modal */}
-      {showAITalentMatchModal && (
-        <AITalentMatchSelectJobModal
-          resumes={resumesForApply}
-          jobs={jobs}
-          onClose={() => {
-            setShowAITalentMatchModal(false);
-            setResumesForApply([]);
-          }}
-          onMatch={(resumeIds, jobId) => {
-            // Store selected resumes in sessionStorage for the AI Talent Match page
-            const resumeData = resumesForApply.map(r => ({
-              id: r.id,
-              candidateName: r.name,
-              email: r.email,
-            }));
-            sessionStorage.setItem('aiTalentMatchResumes', JSON.stringify(resumeData));
-
-            // Close modal and clear selection
-            setShowAITalentMatchModal(false);
-            setResumesForApply([]);
-            setSelectedResumes([]);
-
-            // Navigate to AI Talent Match page with the selected JD
-            router.push(`/recruitment/ai-talent-match?jdId=${jobId}&view=new`);
-          }}
+      {scoringRequest && (
+        <ScoringStartSummary
+          request={scoringRequest}
+          onBack={() => { setScoringRequest(null); setShowApplyToJobModal(true); }}
+          onCancel={() => { setScoringRequest(null); setResumesForApply([]); }}
+          onStart={(ids) => startScoring(scoringRequest.job.id, ids, scoringRequest.names)}
         />
       )}
+
 
       {/* Version History Modal */}
       {showVersionHistory && selectedResumeForVersion && (

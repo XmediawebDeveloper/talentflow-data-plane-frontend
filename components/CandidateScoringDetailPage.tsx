@@ -229,6 +229,9 @@ interface CandidateScoringDetailPageProps {
    * whose two entries are exactly those two buttons.
    */
   inlineHeaderActions?: boolean;
+  /** View Resume as an eye joined to the resume version badge (no "View
+   *  Resume" button among the header actions) — always so in the flat header. */
+  viewResumeOnVersionBadge?: boolean;
 }
 
 /**
@@ -249,7 +252,7 @@ function byNewestVersion(a: any, b: any): number {
   return bTime - aTime;
 }
 
-export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore, versionReadOnly = false, inlineHeaderActions = false }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore, versionReadOnly = false, inlineHeaderActions = false, viewResumeOnVersionBadge = false }: CandidateScoringDetailPageProps) {
   /* The candidate the page is SHOWING, which lags `resumeProp` while Previous /
      Next loads the next one. The header used to read the new prop at once while
      the score, AI analysis and Score Table still showed the previous
@@ -392,6 +395,8 @@ export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitl
   /* See `inlineHeaderActions`. Each flat button keeps its menu entry's gate,
      and why it is disabled, as a tooltip. */
   const flatHeaderActions = inlineHeaderActions && viaInviteDialog;
+  // View Resume lives on the resume version badge rather than in the header actions.
+  const viewResumeOnBadge = flatHeaderActions || viewResumeOnVersionBadge;
   const inviteBlockedReason = (may: boolean, planLocked: boolean) =>
     !may ? 'You do not have permission to invite candidates' : inviteBlockedByRecord ? inviteBlockedByRecordReason : planLocked ? PLAN_LOCKED_MESSAGE : undefined;
 
@@ -1559,8 +1564,8 @@ Best regards`);
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
                 {resume.resumeVersion && (versionReadOnly || resumeVersions.length === 0 ? (
-                  flatHeaderActions ? (
-                    /* Flat: View Resume as a small eye joined to the version
+                  viewResumeOnBadge ? (
+                    /* View Resume as a small eye joined to the version
                        badge — the resume it opens is that version. */
                     <span className="inline-flex items-stretch shrink-0 whitespace-nowrap rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
                       <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1">
@@ -1578,10 +1583,22 @@ Best regards`);
                      resume: a version scored for this job opens that score; one
                      never scored here opens its preview. */
                   <div className="relative shrink-0" ref={versionMenuRef}>
+                    {/* With viewResumeOnBadge the picker and the View Resume eye
+                        are one badge, as with a plain version; the menu stays
+                        outside it so the badge's rounded clip never cuts it. */}
+                    <span
+                      className={viewResumeOnBadge
+                        ? 'inline-flex items-stretch whitespace-nowrap rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden'
+                        : 'contents'}
+                    >
                     <button
                       type="button"
                       onClick={() => setShowVersionMenu((v) => !v)}
-                      className="inline-flex items-center gap-1 whitespace-nowrap px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+                      className={`inline-flex items-center gap-1 whitespace-nowrap px-2 sm:px-2.5 py-0.5 sm:py-1 text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer ${
+                        viewResumeOnBadge
+                          ? 'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40'
+                          : 'rounded-md border border-blue-200'
+                      }`}
                       aria-label={`Select resume version, currently Version ${resume.resumeVersion}`}
                       aria-haspopup="menu"
                       aria-expanded={showVersionMenu}
@@ -1589,6 +1606,8 @@ Best regards`);
                       Version {resume.resumeVersion}
                       <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showVersionMenu ? 'rotate-180' : ''}`} />
                     </button>
+                    {viewResumeOnBadge && renderViewResumeEye(true)}
+                    </span>
 
                     {showVersionMenu && (
                       <div
@@ -1640,9 +1659,9 @@ Best regards`);
                     )}
                   </div>
                 ))}
-                {/* Flat, with no plain version badge to join: the same eye as
-                    a badge of its own beside the version picker (or title). */}
-                {flatHeaderActions && !(resume.resumeVersion && (versionReadOnly || resumeVersions.length === 0)) && (
+                {/* No version badge to join (no version at all): the same eye
+                    as a badge of its own beside the title. */}
+                {viewResumeOnBadge && !resume.resumeVersion && (
                   <span className="inline-flex items-stretch rounded-md bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
                     {renderViewResumeEye(false)}
                   </span>
@@ -1828,9 +1847,9 @@ Best regards`);
               </div>
               )}
 
-              {/* Flat: View Resume is the eye on the resume version badge
-                  (renderViewResumeEye), not a button here. */}
-              {!flatHeaderActions && (
+              {/* With viewResumeOnBadge, View Resume is the eye on the resume
+                  version badge (renderViewResumeEye), not a button here. */}
+              {!viewResumeOnBadge && (
                 <button
                   type="button"
                   onClick={handleViewResume}
