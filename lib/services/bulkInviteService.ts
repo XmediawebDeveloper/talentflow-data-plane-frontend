@@ -133,7 +133,8 @@ export interface BulkInviteReviewPage {
 }
 
 export type BulkInviteJobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'paused';
-export type BulkInviteItemStatus = 'queued' | 'processing' | 'sent' | 'skipped' | 'failed';
+/** 'cancelled': stopped by a cancel (whole send or that one candidate) before it went out. */
+export type BulkInviteItemStatus = 'queued' | 'processing' | 'sent' | 'skipped' | 'failed' | 'cancelled';
 
 export interface BulkInviteJob {
   job_id: string;
@@ -146,6 +147,8 @@ export interface BulkInviteJob {
   total: number;
   sent: number;
   skipped: number;
+  /** Candidates a cancel stopped before they went out (not in `skipped`). */
+  cancelled?: number;
   failed: number;
   processed: number;
   remaining: number;
