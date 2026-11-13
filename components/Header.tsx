@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, MessageCircle, Monitor, Moon, Sun } from 'lucide-react';
+import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, Lock, X, Building2, Menu, MessageCircle, Monitor, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
@@ -79,9 +79,23 @@ export default function Header(props: HeaderProps) {
   return <HeaderBody {...props} user={props.user} />;
 }
 
+const UNIT_VIEW_CODES = [
+  'usage:read', 'billing:read', 'current_plan:read',   // Subscription & Billing
+  'my_resumes:upload',                                  // Resume Upload (storage)
+  'scoring:score',                                      // Resume Scoring
+  'assessments:create',                                 // Assessments
+  'ai_interview:create',                                // AI Interviews
+];
+const UNITS_BLOCKED_MESSAGE = "Your role doesn't use units. Ask the account owner if you need Subscription & Billing access.";
+
 function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen, subscriptionExpired }: HeaderProps & { user: UserType }) {
   const router = useRouter();
-  const { refreshUser, isTenantAdmin, hasPermission } = useAuth();
+  const { refreshUser, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  // The plan / units pill is for roles that use units (Resume Upload, Resume
+  // Scoring, Assessments, AI Interviews) or see Subscription & Billing. Anyone
+  // else (e.g. a role with every area at No access) gets it greyed with a
+  // tooltip - never the unit balances (2026-11-13).
+  const canSeeUnits = isTenantAdmin || UNIT_VIEW_CODES.some((c) => hasPermissionCode(c));
   // Plan upgrade and add-on purchase need Subscription & Billing Access
   // (Upgrade Plan) — same as the Current Plan page and the add-on API (2026-11-10).
   const canBuyForPlan = isTenantAdmin || hasPermission('canUpgradePlan');
@@ -905,7 +919,22 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
         )}
 
         {/* Plan & Unit Balance Display - Clickable to show breakdown dropdown */}
-        {hasQuotaPermission && (
+        {hasQuotaPermission && !canSeeUnits && (
+          <div
+            title={UNITS_BLOCKED_MESSAGE}
+            aria-disabled="true"
+            className="liquid-glass-card flex min-h-[36px] sm:min-h-[44px] cursor-not-allowed items-center gap-1.5 lg:gap-2 rounded-lg px-1.5 py-1 sm:px-2 sm:py-1.5 lg:px-2.5 opacity-60"
+          >
+            <div className="w-6 h-6 rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center dark:border-slate-700 dark:bg-slate-800">
+              <CreditCard className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.15} />
+            </div>
+            <span className="hidden sm:block text-2xs lg:text-xs font-semibold text-slate-500 dark:text-slate-400 truncate max-w-[90px] md:max-w-[130px] lg:max-w-[170px]">
+              {loadingQuota ? 'Loading...' : planName}
+            </span>
+            <Lock className="w-3 h-3 text-slate-400" />
+          </div>
+        )}
+        {hasQuotaPermission && canSeeUnits && (
           <div className="relative">
             <button
               onClick={() => {
