@@ -290,43 +290,16 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     ],
     // Rule: viewing or creating an AI interview requires Job Description
     // access — every AI interview is tied to a JD
-    // (app/services/permission_dependencies.py: ai_interview:read and
-    // ai_interview:create -> resumes:read, jd:read), matching the same
-    // JD-scoping Assessments already declares. 'jd:read' is declared on both
-    // the view code and Create individually, since a role can hold View
-    // without Create.
+    // (app/services/permission_dependencies.py), matching Assessments.
+    // 'jd:read' is declared on both the view code and Create, since a role can
+    // hold View without Create.
     //
-    // Rule: every AI interview action requires Resume access
-    // (ai_interview:read/create/update/invite/publish/archive/delete all ->
-    // resumes:read server-side). 'my_resumes:read' is the real, UI-tracked
-    // permission that satisfies the legacy 'resumes:read' alias (see
-    // app/services/permission_dependencies.py's _RESUME_READ_SATISFIED_BY;
-    // 'internal_db:read' would satisfy it too, but a single canonical choice
-    // is used here since this dependency system has no OR-group support —
-    // a role granted only Shared Database access will see this warning name
-    // My Resumes even though the backend would also accept it via Shared
-    // Database).
-    //
-    // 'ai_interview:share' has no checkbox here and is never actually
-    // enforced by any endpoint (confirmed: no require_rbac_permission call
-    // references it) — it's vestigial in the backend's dependency dict, so
-    // there is nothing to declare a dependency against.
-    //
-    // Previously only ai_interview:create -> jd:read was declared; the rest
-    // of this module's real dependencies were undeclared, so disabling Job
-    // Description or My Resumes gave no warning that it breaks AI Interview
-    // viewing, editing, inviting, publishing, archiving, or deleting.
+    // 2026-11-12: AI Interviews no longer need resume access (My Resumes view
+    // is not for everyone any more; candidates are invited by email).
     dependencies: {
-      'ai_interview:read': ['jd:read', 'my_resumes:read'],
+      'ai_interview:read': ['jd:read'],
       // Creating picks the HR questions from the bank (2026-10-20).
-      'ai_interview:create': ['jd:read', 'my_resumes:read', 'ai_interview:view_question_bank'],
-      'ai_interview:update': ['my_resumes:read'],
-      'ai_interview:invite': ['my_resumes:read'],
-      'ai_interview:publish': ['my_resumes:read'],
-      'ai_interview:archive': ['my_resumes:read'],
-      'ai_interview:delete': ['my_resumes:read'],
-      'ai_interview:export': ['my_resumes:read'],
-      'ai_interview:download_report': ['my_resumes:read'],
+      'ai_interview:create': ['jd:read', 'ai_interview:view_question_bank'],
       // Adding a question edits the interview (mirrors assessments:add_question).
       'ai_interview:add_question': ['ai_interview:update', 'ai_interview:view_question_bank'],
       'ai_interview:edit_question': ['ai_interview:view_question_bank'],
@@ -523,10 +496,18 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
  * count matches what its users actually get (a role with nothing ticked still has the always-on codes).
  */
 export const ALWAYS_ON_PERMISSION_CODES = [
-  'analytics:read', 'support:read', 'my_resumes:read',
+  'analytics:read', 'support:read',
   // Own security settings (password, 2FA, sessions) — for everyone, 2026-11-06.
   'security_settings:read', 'support:security_settings',
 ] as const;
+
+/**
+ * Set by the server, never picked in the role editor (2026-11-12): My Resumes
+ * (view only) comes with Resume Upload or Shared Database, and stays for a
+ * person who uploaded resumes under an earlier role
+ * (app/config/mandatory_permissions.py apply_my_resumes_view_rule).
+ */
+export const SERVER_SET_PERMISSION_CODES = ['my_resumes:read'] as const;
 
 export interface PermissionDisplayItem {
   code: string;
