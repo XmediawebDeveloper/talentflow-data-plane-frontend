@@ -231,25 +231,16 @@ export default function BulkInviteProgressIndicator() {
   // All finished and the mini popup closed: no icon left on the page.
   const iconVisible = !(shown.length === 0 || widget === 'hidden' || (!miniOpen && !hasUnfinished && !keepIcon));
   useEffect(() => { setIconShown(iconVisible); }, [iconVisible, setIconShown]);
-  /* A new send brings the widget back (hidden → shown): batches that had
-     already finished before it — e.g. ones that finished while minimized, so
-     the icon went away on its own without clearing them — are cleared, so
-     only what is being sent now shows. "Show earlier" still brings them back. */
-  const wasVisible = useRef(iconVisible);
+  /* Nothing is cleared on its own: finished batches stay in the list (next
+     to new sends) until the user presses ✕ Close — after that, the next send
+     shows only itself. A new send only drops the "kept after finish" icon
+     state, so the icon again goes away once everything has finished. */
   const wasUnfinished = useRef(hasUnfinished);
   useEffect(() => {
-    const was = wasVisible.current;
     const hadUnfinished = wasUnfinished.current;
-    wasVisible.current = iconVisible;
     wasUnfinished.current = hasUnfinished;
-    /* Back from hidden, or — with the icon kept after a finish — a new send
-       starting while it shows. */
-    const newSend = (!was && iconVisible) || (was && iconVisible && !hadUnfinished && hasUnfinished);
-    if (!newSend) return;
-    setKeepIcon(false);
-    const old = shown.filter((j) => !isBulkInviteActive(j) && j.status !== 'paused' && !j.stalled).map((j) => j.job_id);
-    if (old.length > 0 && old.length < shown.length) dismiss(old);
-  }, [iconVisible, hasUnfinished, shown, dismiss]);
+    if (!hadUnfinished && hasUnfinished) setKeepIcon(false);
+  }, [hasUnfinished]);
   useEffect(() => () => setIconShown(false), [setIconShown]);
   if (!iconVisible) {
     return <>{results}{cancelDialog}</>;
