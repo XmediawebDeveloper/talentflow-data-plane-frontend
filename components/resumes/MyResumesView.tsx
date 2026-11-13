@@ -3443,6 +3443,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 )}
                 <ResumeTable
                   flushCards
+                  /* Tablets: the table beside the folder sidebar, as on laptop — the
+                     tall phone cards stretched the sidebar into empty space. */
+                  tableFrom="md"
                   showTeamMemberBadge
                   resumes={filteredResumes}
                   selectedResumes={selectedResumes}

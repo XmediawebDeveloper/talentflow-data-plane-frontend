@@ -1067,7 +1067,9 @@ export default function SelectSourceModal({
             the provider only satisfies the hooks. */}
         {(hasMyResumesScoreAccess || hasInternalDBAccess) ? (
         <DndProvider backend={HTML5Backend}>
-        <div className="flex flex-1 overflow-hidden">
+        {/* Phones: the folders are a band above the list (as on My Resumes)
+            and the whole area scrolls as one; from md they sit side by side. */}
+        <div className="flex flex-col md:flex-row flex-1 min-h-0 max-md:overflow-y-auto md:overflow-hidden">
           {/* Left Sidebar — the My Resumes page's own FolderTree, so the
               hierarchy, System Folders / My Folders grouping, labels, icons,
               colours, spacing and selected state are identical to that page
@@ -1083,7 +1085,7 @@ export default function SelectSourceModal({
             /* `flex` (not `block`) so the panel stretches to the row's height —
                FolderTree lays its content out with `md:absolute md:inset-0`
                and would otherwise collapse to its 360px floor. */
-            <div className="hidden lg:flex flex-shrink-0">
+            <div className="flex flex-shrink-0">
               <FolderTree
                 folders={folderTree}
                 selectedFolder={selectedFolder}
@@ -1110,7 +1112,7 @@ export default function SelectSourceModal({
 
 
           {/* Main Content */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col max-md:flex-none md:overflow-hidden">
             {/* Search and Bulk Actions */}
             <div className="px-3 sm:px-6 py-3 sm:py-4 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
@@ -1224,6 +1226,8 @@ export default function SelectSourceModal({
                   onSelectResume={handleToggleResume}
                   onSelectAll={handleTableSelectAll}
                   hideHeaderSelectAll
+                  /* Tablets get the desktop table, not the phone cards. */
+                  tableFrom="md"
                   onPageItemsChange={setPageResumeIds}
                   /* Clicking a row picks the applicant, as this list has
                      always done — the page uses this hook to navigate, but

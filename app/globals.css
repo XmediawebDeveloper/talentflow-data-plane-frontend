@@ -3255,6 +3255,11 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   /* The vN chip doubles as the version-history dropdown when a job has earlier versions. */
   .tf-jd-card-version-btn  { @apply cursor-pointer hover:border-brand-blue/40 hover:text-brand-blue; }
   .tf-jd-card-version-open { @apply !border-brand-blue/30 !bg-brand-sky !text-brand-blue; }
+  /* Phones / tablets: the version chip is a box (6px corners, like the Edit / View / ⋮
+     buttons beside it), not a round pill. Laptop / desktop keep the pill. */
+  @media (width < theme(--breakpoint-lg)) {
+    .tf-jd-card-version { border-radius: 0.375rem; }
+  }
 
   /* Version history on phones + tablets: one compact card per version. */
   /* No outer border or padding: just the version cards, stacked. */
