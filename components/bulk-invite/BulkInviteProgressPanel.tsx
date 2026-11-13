@@ -586,6 +586,17 @@ export default function BulkInviteProgressPanel({
                       </button>
                     )}
                   </>
+                ) : canManage && r.can_cancel ? (
+                  <button
+                    type="button"
+                    onClick={() => void actions.cancelItem(job, r.id, r.name || r.email || undefined)}
+                    disabled={actions.busy === `cancel-item:${r.id}`}
+                    aria-label={`Cancel the invite to ${r.name || r.email || 'this candidate'}`}
+                    title="Cancel this candidate — the rest keep sending"
+                    className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-destructive-line text-xs font-medium text-destructive hover:bg-destructive-subtle disabled:opacity-50"
+                  >
+                    {actions.busy === `cancel-item:${r.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />} Cancel
+                  </button>
                 ) : r.status === 'failed' ? (
                   <span className="tf-meta text-warning-strong" title="Sending again unchanged would fail again — fix the address first">Fix first</span>
                 ) : (

@@ -242,6 +242,8 @@ export default function SelectSourceModal({
   // Progress modal state
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressItems, setProgressItems] = useState<ProgressItem[]>([]);
+  /* The scoring batch behind the progress popup (Cancel / Retry act on it). */
+  const [progressBatchId, setProgressBatchId] = useState<string | undefined>(undefined);
   const [scoringStats, setScoringStats] = useState({ queued: 0, processing: 0, completed: 0, failed: 0 });
 
   // Minimized state for the bulk-scoring progress popup. Kept here (not inside
@@ -684,10 +686,11 @@ export default function SelectSourceModal({
         jobId: jobId,
         source: (activeTab === 'my-resumes' ? 'My Resumes' : 'Internal DB') as 'My Resumes' | 'Internal DB',
       }));
-      startScoringJob(jobId, jobTitle, contextItems, typeof window !== 'undefined' ? window.location.pathname + window.location.search : undefined);
+      const batchId = response.batch_id;
+      setProgressBatchId(batchId);
+      startScoringJob(jobId, jobTitle, contextItems, typeof window !== 'undefined' ? window.location.pathname + window.location.search : undefined, { batchId });
 
       // Poll batch status until all items are done
-      const batchId = response.batch_id;
       const poll = async () => {
         try {
           const batchStatus = await scoringService.getBatchStatus(batchId);
@@ -1381,6 +1384,7 @@ export default function SelectSourceModal({
       {/* Progress Modal - Using BulkScoringProgressModal */}
       {showProgressModal && (
         <BulkScoringProgressModal
+          batchId={progressBatchId}
           onClose={handleCloseProgress}
           progressData={progressItems.map((item): ScoringProgressItem => ({
             id: item.resumeId,

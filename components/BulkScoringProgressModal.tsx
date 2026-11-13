@@ -1,6 +1,6 @@
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, SlidersHorizontal, ChevronDown, Eye, ClipboardList } from 'lucide-react';
+import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, SlidersHorizontal, ChevronDown, Eye, ClipboardList, Ban } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import ListPagination from '@/components/ListPagination';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,8 @@ import { ToolbarResetButton } from '@/components/ui/list-toolbar';
 import { FilterChipsHover, FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
+import AppModal from '@/components/ui/app-modal';
+import { scoringService, type BatchScoringStatus } from '@/lib/services/scoringService';
 import api from '@/lib/services/api';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -70,7 +72,7 @@ export interface ScoringProgressItem {
    *  `jobVersion`, which is the JD's. */
   resumeVersion?: number;
   source: 'Internal DB' | 'My Resumes';
-  status: 'Queued' | 'Scoring in progress' | 'Scored successfully' | 'Failed' | 'Already Scored - Skipped';
+  status: 'Queued' | 'Scoring in progress' | 'Scored successfully' | 'Failed' | 'Already Scored - Skipped' | 'Cancelled';
   errorReason?: string;
   scoredDateTime?: Date;
   matchResult?: 'Exact Match' | 'Partial Match' | 'No Match';
@@ -128,7 +130,35 @@ interface BulkScoringProgressModalProps {
    *  whose progress lives in the page). The app-wide popup passes a
    *  same-tab navigation — its progress lives in context and survives it. */
   onOpenResume?: (resumeId: string) => void;
+  /**
+   * The Celery scoring batch behind these rows. When given, the popup polls
+   * the batch itself while open (the batch is the source of truth for each
+   * row's status) and offers Cancel / Retry — for all waiting / failed rows
+   * at once, and per row.
+   */
+  batchId?: string;
+  /** Every batch snapshot the popup reads or gets back from Cancel / Retry,
+   *  so the host can keep its own state (e.g. the corner widget) in step. */
+  onBatchStatus?: (status: BatchScoringStatus) => void;
 }
+
+/** Backend match_status ('exact_match', 'Partial Match', …) → the popup's verdict. */
+function batchMatchResult(status?: string): ScoringProgressItem['matchResult'] {
+  if (!status) return undefined;
+  const s = status.toLowerCase().replace(/_/g, ' ').trim();
+  if (s === 'exact match' || s === 'excellent') return 'Exact Match';
+  if (s === 'partial match' || s === 'partial') return 'Partial Match';
+  return 'No Match';
+}
+
+const BATCH_ROW_STATUS: Record<string, ScoringProgressItem['status']> = {
+  queued: 'Queued',
+  pending: 'Queued',
+  processing: 'Scoring in progress',
+  completed: 'Scored successfully',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+};
 
 export default function BulkScoringProgressModal({
   onClose,
@@ -144,8 +174,75 @@ export default function BulkScoringProgressModal({
   minimized = false,
   onViewResult,
   onOpenResume,
+  batchId,
+  onBatchStatus,
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
+
+  /* The batch, polled while this popup is open: fast while anything is
+     waiting or running, slowly once settled (a Retry from another tab still
+     shows). `batchKick` restarts it right after Cancel / Retry. */
+  const [batchStatus, setBatchStatus] = useState<BatchScoringStatus | null>(null);
+  const [batchKick, setBatchKick] = useState(0);
+  const [batchBusy, setBatchBusy] = useState<string | null>(null);
+  const [confirmCancelAll, setConfirmCancelAll] = useState(false);
+  useEffect(() => {
+    if (!batchId) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      try {
+        const s = await scoringService.getBatchStatus(batchId);
+        if (stopped) return;
+        setBatchStatus(s);
+        onBatchStatus?.(s);
+        timer = setTimeout(tick, s.queued > 0 || s.processing > 0 ? 2000 : 10000);
+      } catch {
+        if (!stopped) timer = setTimeout(tick, 5000);
+      }
+    };
+    void tick();
+    return () => { stopped = true; if (timer) clearTimeout(timer); };
+    // onBatchStatus is read fresh on each tick; a new callback must not restart the poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchId, batchKick]);
+
+  const applyBatch = (s: BatchScoringStatus) => {
+    setBatchStatus(s);
+    onBatchStatus?.(s);
+    setBatchKick(k => k + 1);
+  };
+  const cancelBatchRows = async (resumeIds?: string[], label?: string) => {
+    if (!batchId) return;
+    const key = resumeIds?.length === 1 ? `cancel:${resumeIds[0]}` : 'cancel:all';
+    setBatchBusy(key);
+    try {
+      const s = await scoringService.cancelBatch(batchId, resumeIds);
+      applyBatch(s);
+      toast.success(resumeIds?.length === 1
+        ? `${label || 'Resume'} cancelled — it will not be scored or charged`
+        : `${s.cancelled_now} waiting resume${s.cancelled_now === 1 ? '' : 's'} cancelled — nothing more is charged`);
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Could not cancel. Please try again.');
+    } finally {
+      setBatchBusy(null);
+      setConfirmCancelAll(false);
+    }
+  };
+  const retryBatchRows = async (resumeIds?: string[]) => {
+    if (!batchId) return;
+    const key = resumeIds?.length === 1 ? `retry:${resumeIds[0]}` : 'retry:all';
+    setBatchBusy(key);
+    try {
+      const s = await scoringService.retryBatch(batchId, resumeIds);
+      applyBatch(s);
+      toast.success(`Scoring ${s.requeued} resume${s.requeued === 1 ? '' : 's'} again`);
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Could not retry. Please try again.');
+    } finally {
+      setBatchBusy(null);
+    }
+  };
 
   /* Rows without a `jobCode` get their job's code from the JD itself, so the
      Job ID column and header chip show "JD-0042" instead of the JD's uuid. */
@@ -162,9 +259,39 @@ export default function BulkScoringProgressModal({
     if (missingCodeKey) loadJobCodes(missingCodeKey.split(','));
   }, [missingCodeKey]);
   const fillsCode = (item: ScoringProgressItem) => !item.jobCode && jobCodeCache.has(item.jobId);
-  const progressData = rawProgressData.some(fillsCode)
+  const codedProgressData = rawProgressData.some(fillsCode)
     ? rawProgressData.map(item => (fillsCode(item) ? { ...item, jobCode: jobCodeCache.get(item.jobId) } : item))
     : rawProgressData;
+  /* The batch's own row statuses win over the host's: the host's poll may
+     have stopped (a settled run) or only moves rows forward, while Cancel and
+     Retry move rows sideways and back. Rows the batch does not hold (already
+     scored, skipped) keep the host's state. */
+  const batchItemByResume = new Map((batchStatus?.items || []).map(i => [i.resume_id, i]));
+  const progressData: ScoringProgressItem[] = batchStatus
+    ? codedProgressData.map(item => {
+        const b = batchItemByResume.get(item.resumeId);
+        if (!b || item.status === 'Already Scored - Skipped') return item;
+        const status = BATCH_ROW_STATUS[(b.status || '').toLowerCase()] ?? item.status;
+        if (status === item.status && status !== 'Scored successfully') return item;
+        if (status === 'Scored successfully') {
+          return {
+            ...item,
+            status,
+            score: b.overall_score ?? item.score,
+            overallRating10: b.overall_rating_10 ?? item.overallRating10,
+            matchResult: batchMatchResult(b.match_status) ?? item.matchResult,
+            scoredDateTime: item.scoredDateTime ?? new Date(),
+            errorReason: undefined,
+          };
+        }
+        return {
+          ...item,
+          status,
+          errorReason: status === 'Failed' || status === 'Cancelled' ? (b.error_message || item.errorReason) : undefined,
+        };
+      })
+    : codedProgressData;
+  const canManageBatch = !!batchId && batchStatus?.can_manage !== false;
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
@@ -351,6 +478,10 @@ export default function BulkScoringProgressModal({
   const completedCount = progressData.filter(item => item.status === 'Scored successfully').length;
   const skippedCount = progressData.filter(item => item.status === 'Already Scored - Skipped').length;
   const failedCount = progressData.filter(item => item.status === 'Failed').length;
+  const cancelledCount = progressData.filter(item => item.status === 'Cancelled').length;
+  /* What the batch buttons act on — counted from the batch rows only. */
+  const batchWaitingCount = batchId ? progressData.filter(item => item.status === 'Queued' && batchItemByResume.has(item.resumeId)).length : 0;
+  const batchRetryCount = batchId ? progressData.filter(item => (item.status === 'Failed' || item.status === 'Cancelled') && batchItemByResume.has(item.resumeId)).length : 0;
 
   const isAllComplete = queuedCount === 0 && inProgressCount === 0 && totalResumes > 0;
 
@@ -374,7 +505,7 @@ export default function BulkScoringProgressModal({
   /* Active filter tags: Status and Source, then one per filter the Filters
      button's badge counts (Scored From / Scored To are counted apart there, so
      they are two tags here). Search shows in its own box. */
-  const STATUS_CHIP_LABELS: Record<string, string> = { queued: 'Queued', 'in-progress': 'In Progress', completed: 'Completed', skipped: 'Skipped', failed: 'Failed' };
+  const STATUS_CHIP_LABELS: Record<string, string> = { queued: 'Queued', 'in-progress': 'In Progress', completed: 'Completed', skipped: 'Skipped', failed: 'Failed', cancelled: 'Cancelled' };
   const SOURCE_CHIP_LABELS: Record<string, string> = { 'internal-db': 'Shared Database', 'my-resumes': 'My Resumes' };
   const formatChipDate = (v: string) => {
     const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
@@ -412,7 +543,8 @@ export default function BulkScoringProgressModal({
       (statusFilter === 'in-progress' && item.status === 'Scoring in progress') ||
       (statusFilter === 'completed' && item.status === 'Scored successfully') ||
       (statusFilter === 'skipped' && item.status === 'Already Scored - Skipped') ||
-      (statusFilter === 'failed' && item.status === 'Failed');
+      (statusFilter === 'failed' && item.status === 'Failed') ||
+      (statusFilter === 'cancelled' && item.status === 'Cancelled');
 
     const matchesSource = sourceFilter === 'all' ||
       (sourceFilter === 'internal-db' && item.source === 'Internal DB') ||
@@ -465,6 +597,46 @@ export default function BulkScoringProgressModal({
   const safePage = Math.min(page, totalPages);
   const pagedData = filteredData.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
 
+  /* Per-row batch action: Cancel a waiting resume, Retry a failed or
+     cancelled one. Null when the row has none (or there is no batch). */
+  const batchRowAction = (item: ScoringProgressItem, className = '') => {
+    if (!canManageBatch || !item.resumeId || !batchItemByResume.has(item.resumeId)) return null;
+    const label = item.candidateName || 'Resume';
+    if (item.status === 'Queued') {
+      const busy = batchBusy === `cancel:${item.resumeId}`;
+      return (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={(e) => { e.stopPropagation(); void cancelBatchRows([item.resumeId], label); }}
+          disabled={batchBusy !== null}
+          className={`${className} !text-destructive !border-destructive-line`}
+          aria-label={`Cancel scoring for ${label}`}
+          title="Cancel this resume — the rest keep scoring"
+        >
+          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Ban className="w-3 h-3" />}Cancel
+        </Button>
+      );
+    }
+    if (item.status === 'Failed' || item.status === 'Cancelled') {
+      const busy = batchBusy === `retry:${item.resumeId}`;
+      return (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={(e) => { e.stopPropagation(); void retryBatchRows([item.resumeId]); }}
+          disabled={batchBusy !== null}
+          className={className}
+          aria-label={`Score ${label} again`}
+          title="Score this resume again"
+        >
+          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}Retry
+        </Button>
+      );
+    }
+    return null;
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'Queued':
@@ -477,6 +649,8 @@ export default function BulkScoringProgressModal({
         return <CheckCircle2 className="w-4 h-4 text-brand-cyan" />;
       case 'Failed':
         return <XCircle className="w-4 h-4 text-destructive" />;
+      case 'Cancelled':
+        return <Ban className="w-4 h-4 text-gray-500 dark:text-slate-400" />;
       default:
         return <Clock className="w-4 h-4 text-gray-500 dark:text-slate-500" />;
     }
@@ -498,6 +672,8 @@ export default function BulkScoringProgressModal({
         return 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20';
       case 'Failed':
         return 'bg-destructive-subtle text-destructive border-destructive-line';
+      case 'Cancelled':
+        return 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600';
       default:
         return 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
     }
@@ -731,6 +907,7 @@ export default function BulkScoringProgressModal({
               { key: 'completed', label: 'Done', count: completedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-success' },
               { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-warning' },
               { key: 'failed', label: 'Failed', count: failedCount, icon: <XCircle className="w-4 h-4" />, tone: 'text-destructive' },
+              ...(cancelledCount > 0 || batchId ? [{ key: 'cancelled', label: 'Cancelled', count: cancelledCount, icon: <Ban className="w-4 h-4" />, tone: 'text-gray-500 dark:text-slate-400' }] : []),
             ].map(stat => {
               const isActive = statusFilter === stat.key;
               return (
@@ -753,8 +930,39 @@ export default function BulkScoringProgressModal({
             })}
           </div>
 
-          {/* Bulk Retry Button */}
-          {filterByJobId && onRetryFailed && failedCount > 0 && (
+          {/* Batch controls — Cancel all waiting / Retry all failed + cancelled */}
+          {canManageBatch && (batchWaitingCount > 0 || batchRetryCount > 0) && (
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              {batchWaitingCount > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setConfirmCancelAll(true)}
+                  disabled={batchBusy !== null}
+                  className="!text-destructive !border-destructive-line"
+                  title="Stop every resume still waiting — the ones being scored now finish, finished scores stay"
+                >
+                  {batchBusy === 'cancel:all' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+                  <span>Cancel all waiting ({batchWaitingCount})</span>
+                </Button>
+              )}
+              {batchRetryCount > 0 && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => void retryBatchRows()}
+                  disabled={batchBusy !== null}
+                  title="Score every failed and cancelled resume again"
+                >
+                  {batchBusy === 'retry:all' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                  <span>Retry all ({batchRetryCount})</span>
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Bulk Retry Button (hosts without a batch) */}
+          {!batchId && filterByJobId && onRetryFailed && failedCount > 0 && (
             <div className="mt-3 flex justify-end">
               <Button
                 variant="primary"
@@ -814,6 +1022,7 @@ export default function BulkScoringProgressModal({
                   { value: 'completed', label: 'Completed' },
                   { value: 'skipped', label: 'Skipped' },
                   { value: 'failed', label: 'Failed' },
+                  { value: 'cancelled', label: 'Cancelled' },
                 ]}
               />
             </div>
@@ -1134,7 +1343,8 @@ export default function BulkScoringProgressModal({
                                 <Eye className="w-4 h-4" />
                               </Button>
                             )}
-                            {onRetryFailed && item.status === 'Failed' && (
+                            {batchRowAction(item, '!h-8')}
+                            {!batchId && onRetryFailed && item.status === 'Failed' && (
                               <Button
                                 variant="secondary"
                                 size="sm"
@@ -1253,7 +1463,7 @@ export default function BulkScoringProgressModal({
                       )}
                     </dl>
                     {/* Footer: View / Retry */}
-                    {(item.resumeId || (onRetryFailed && item.status === 'Failed')) && (
+                    {(item.resumeId || (onRetryFailed && item.status === 'Failed') || batchRowAction(item)) && (
                     <div className="flex items-center justify-between gap-2 pt-1 mt-2">
                       {item.resumeId && (
                         <Button
@@ -1267,7 +1477,8 @@ export default function BulkScoringProgressModal({
                           View
                         </Button>
                       )}
-                      {onRetryFailed && item.status === 'Failed' && (
+                      {batchRowAction(item)}
+                      {!batchId && onRetryFailed && item.status === 'Failed' && (
                         <Button
                           variant="secondary"
                           size="sm"
@@ -1375,6 +1586,25 @@ export default function BulkScoringProgressModal({
             its own repeated it while taking height off the table — which is
             what pushed the rows and the overlay scrollbar under it. */}
       </div>
+      <AppModal
+        open={confirmCancelAll}
+        onCancel={() => { if (batchBusy !== 'cancel:all') setConfirmCancelAll(false); }}
+        cancelLabel="Keep scoring"
+        size="sm"
+        tone="warning"
+        title="Cancel the waiting resumes?"
+        actions={[{
+          label: `Cancel ${batchWaitingCount} waiting`,
+          variant: 'destructive',
+          onClick: () => void cancelBatchRows(),
+          loading: batchBusy === 'cancel:all',
+        }]}
+      >
+        <p className="tf-body-secondary">
+          {completedCount} already scored stay scored, and any resume being scored right now finishes.
+          The {batchWaitingCount} still waiting will not be scored and are not charged — you can score them later with Retry.
+        </p>
+      </AppModal>
     </div>
   );
 }
