@@ -83,6 +83,9 @@ const getReasonLabel = (reason: string) => {
   return REASON_OPTIONS.find(r => r.value === reason)?.label || reason;
 };
 
+// Must match DISPUTABLE_UNIT_TYPES in the backend disputes router.
+const DISPUTABLE_UNIT_TYPES: string[] = ['RS', 'AS', 'AIU'];
+
 const UNIT_TYPE_LABELS: Record<string, string> = {
   RU: 'Resume Storage',
   RS: 'Resume Scoring',
@@ -362,9 +365,15 @@ export default function UnitDisputesPage() {
     return { total: disputes.length, pending, resolved };
   }, [disputes]);
 
-  // Consumption records that already have a dispute — the API refuses a second one.
+  // Consumption records with an open or approved dispute — the API refuses another
+  // one. A record whose disputes were all rejected can be disputed again.
   const disputedLogIds = useMemo(
-    () => new Set(disputes.map(d => d.consumption_log_id).filter((id): id is string => !!id)),
+    () => new Set(
+      disputes
+        .filter(d => d.status === 'PENDING_REVIEW' || d.status === 'APPROVED')
+        .map(d => d.consumption_log_id)
+        .filter((id): id is string => !!id)
+    ),
     [disputes]
   );
 
@@ -1118,19 +1127,26 @@ export default function UnitDisputesPage() {
                         <div className="mb-4 space-y-2">
                           {consumptionLogs.map(log => {
                             const alreadyDisputed = disputedLogIds.has(log.id);
+                            // RU / Max Users are freed by deleting the resume / removing the user, not by a dispute.
+                            const notDisputable = !DISPUTABLE_UNIT_TYPES.includes(log.unit_type);
+                            const blocked = alreadyDisputed || notDisputable;
                             return (
                             <button
                               key={log.id}
                               onClick={() => {
-                                if (alreadyDisputed) return;
+                                if (blocked) return;
                                 setSelectedLog(log);
                                 setDisputeUnits(log.units_consumed.toString());
                                 setFileStep(2);
                               }}
-                              aria-disabled={alreadyDisputed}
-                              title={alreadyDisputed ? 'A dispute has already been filed for this record' : undefined}
+                              aria-disabled={blocked}
+                              title={
+                                notDisputable
+                                  ? 'Resume Storage and Max Users units cannot be disputed'
+                                  : alreadyDisputed ? 'A dispute is already open or approved for this record' : undefined
+                              }
                               className={`group w-full rounded-xl border p-3 text-left transition-all ${
-                                alreadyDisputed
+                                blocked
                                   ? 'cursor-not-allowed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 opacity-60'
                                   : selectedLog?.id === log.id
                                     ? 'hover:-translate-y-0.5 border-brand-blue/30 bg-brand-blue/[0.04] shadow-sm shadow-brand-blue/10'
@@ -1144,8 +1160,8 @@ export default function UnitDisputesPage() {
                                     {log.units_consumed} unit{log.units_consumed !== 1 ? 's' : ''}
                                   </span>
                                 </div>
-                                {alreadyDisputed ? (
-                                  <span className="tf-meta">Dispute filed</span>
+                                {blocked ? (
+                                  <span className="tf-meta">{notDisputable ? 'Not disputable' : 'Dispute filed'}</span>
                                 ) : (
                                   <ChevronRight className="h-4 w-4 text-gray-400 dark:text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
                                 )}
