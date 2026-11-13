@@ -1542,6 +1542,16 @@ Best regards`);
                           <Database className="w-3.5 h-3.5" />
                           {resume.source}
                         </span>
+                        {/* View — top right, beside the source badge, in its
+                            own size, height and radius. */}
+                        <button
+                          type="button"
+                          onClick={() => handleVersionPreview(resumeId, resume?.name || 'Resume')}
+                          className="tf-badge flex-shrink-0 gap-1.5 bg-white/70 text-brand-blue ring-1 ring-brand-blue/20 hover:bg-white hover:ring-brand-blue/40 transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          View
+                        </button>
                       </div>
                     </div>
 
