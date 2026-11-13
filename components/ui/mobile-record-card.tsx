@@ -377,6 +377,9 @@ function JdRecordCard({
       } : rest.onKeyDown}
       className={cn(
         'tf-record-card tf-jdv-card',
+        // No version chip beside the name: icon actions (⋮) sit at the right end of the
+        // name line instead of on a near-empty line of their own under it.
+        actionsEl && !titleAddon && !actionsBelow && !actionsInFooter && 'tf-jdv-actions-inline',
         onClick && 'tf-record-card-clickable',
         selected && 'tf-record-card-selected',
         className,

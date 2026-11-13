@@ -212,7 +212,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
     <>
       {job.experience && (
         <span className="flex items-center gap-1.5">
-          <TrendingUp className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <TrendingUp className="w-4 h-4 text-gray-900 dark:text-slate-100" />
           {job.experience}
         </span>
       )}
@@ -220,7 +220,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
           hidden — on a wrapped two-line card it read as a stray dash, not
           as "not set". From sm the placeholders show as before. */}
       <span className={`flex items-center gap-1.5 ${job.industry_type ? '' : 'max-sm:hidden'}`}>
-        <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+        <Building2 className="w-4 h-4 text-gray-900 dark:text-slate-100" />
         {formatIndustryType(job.industry_type)}
       </span>
       {/* Location — under `hideEmpty` (Job Openings cards) it is omitted entirely
@@ -229,7 +229,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
           with every name available in a hover tooltip rather than overflowing the row. */}
       {(!hideEmpty || hasLocation) && (
         <span className={`flex items-center gap-1.5 ${hasLocation ? '' : 'max-sm:hidden'}`}>
-          <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <MapPin className="w-4 h-4 text-gray-900 dark:text-slate-100" />
           {locationNames.length > 1 ? (
             <Tooltip
               content={
@@ -252,7 +252,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
       {/* Salary — same conditional treatment: shown only when there is a value. */}
       {(!hideEmpty || hasSalary) && (
         <span className={`flex items-center gap-1.5 ${hasSalary ? '' : 'max-sm:hidden'}`}>
-          <Coins className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <Coins className="w-4 h-4 text-gray-900 dark:text-slate-100" />
           Salary {salaryText || '-'}
           {(job.salary_min || job.salary_max) && job.compensation_type
             ? ` / ${formatCompensationPeriod(job.compensation_type)}`
@@ -261,12 +261,12 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
       )}
       {breakBeforeType && <span aria-hidden="true" className="tf-line-break" />}
       <span className="flex items-center gap-1.5">
-        <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+        <Briefcase className="w-4 h-4 text-gray-900 dark:text-slate-100" />
         {formatEmploymentType(job.employmentType)}
       </span>
       {job.workMode && (
         <span className="flex items-center gap-1.5">
-          <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <Users className="w-4 h-4 text-gray-900 dark:text-slate-100" />
           <span className="capitalize">{job.workMode}</span>
         </span>
       )}

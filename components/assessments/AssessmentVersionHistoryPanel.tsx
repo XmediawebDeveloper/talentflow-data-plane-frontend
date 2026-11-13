@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import { scrollHandoffRef } from '@/lib/scrollHandoff';
 import { ChevronDown, Eye, FileText, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/Pagination';
@@ -1588,11 +1589,12 @@ export default function AssessmentVersionHistoryPanel({
           )}
 
           <div
+            ref={scrollHandoffRef}
             /* Without `jdStyle` there is no phone card list above, so the
                table is desktop-only here and the cards below stand in for it. */
             className={`${jdStyle ? '' : DESKTOP_TABLE_ONLY} overflow-x-auto ${
               groups.length > 4 && expandedJobVersions.size === 0
-                ? 'overflow-y-auto max-h-[320px] overscroll-contain'
+                ? 'overflow-y-auto max-h-[320px]'
                 : ''
             }`}
           >

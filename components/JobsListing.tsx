@@ -2013,7 +2013,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                    (the phone/tablet card and the desktop row), so the two can
                    never drift apart. Only one layout is visible at a time. */
                 const rowActions = (
-                  <div className={`order-last ml-auto flex flex-nowrap items-center gap-2 ${hasVersionHistory ? 'lg:ml-0' : ''}`}>
+                  <div className={`order-last ml-auto flex flex-nowrap items-center gap-2 ${hasVersionHistory ? 'md:ml-0' : ''}`}>
                     {/* Edit Button - icon only. Shown on every row except
                         Archived/Disabled ones — those are already retired,
                         so there is nothing on them to edit in place.
@@ -2286,14 +2286,14 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     {/* flex-wrap: checkbox + job info (+ the counts column from
                         md) share the first row, so the checkbox sits on the Job
                         ID / Job Name line; the footer wraps under at full width. */}
-                    {/* ── Phones and tablets (below lg): the JD card ─────────────────────
+                    {/* ── Phones (below md): the JD card ─────────────────────
                         Dense flow, no column gaps:
                         1. checkbox · JD ID · source · status
                         2. job name (one line, "…") · version · Edit / View / ⋮ on the right
                         3. experience · industry · type · work mode (flowing)
                         4. Created | Posted / By | Last Updated — two aligned columns
                         5. divider, then Scored / Assessed / Interviewed — three tiles */}
-                    <div className="lg:hidden">
+                    <div className="md:hidden">
                       <div className="tf-jd-card-top">
                         {job.job_id && <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.job_id}>{job.job_id}</JobIdBadge>}
                         {(() => {
@@ -2392,7 +2392,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     </div>
 
                     {/* ── Laptop / desktop (lg and up): the row layout, unchanged ── */}
-                    <div className="hidden lg:flex flex-wrap items-start gap-3 md:gap-x-4">
+                    <div className="hidden md:flex flex-wrap items-start gap-3 md:gap-x-4">
                       {/* Individual Select — just the checkbox (the Briefcase
                           job icon that used to sit beside it was removed).
                           h-5 / sm:h-6 give the checkbox the title row's own
@@ -2496,7 +2496,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                               toggleVersions(versionKey, job.id);
                             }}
                             aria-expanded={versionsExpanded}
-                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all duration-200 lg:order-[9998] lg:ml-auto ${
+                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all duration-200 md:order-[9998] md:ml-auto ${
                               versionsExpanded
                                 ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50 dark:ring-brand-blue/30 dark:shadow-black/20 dark:hover:bg-slate-700'
                                 : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2 dark:bg-brand-blue dark:text-white dark:border-brand-blue dark:hover:bg-brand-blue-2'
