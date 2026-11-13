@@ -66,6 +66,8 @@ export function useNotificationWebSocket({
   const reconnectAttemptsRef = useRef(0);
   const isConnectingRef = useRef(false);
   const isCleaningUpRef = useRef(false);
+  // Notification ids already handled (see the new_notification case).
+  const seenNotificationIdsRef = useRef<Set<string>>(new Set());
 
   // Store callbacks in refs to avoid dependency issues
   const onNewNotificationRef = useRef(onNewNotification);
@@ -181,11 +183,25 @@ export function useNotificationWebSocket({
             console.log('[WebSocket] Received:', message.type);
 
             switch (message.type) {
-              case 'new_notification':
+              case 'new_notification': {
+                /* The server sends each notification straight to this socket
+                   when it holds it AND relays it over Redis for the other
+                   workers — so the same one can arrive twice. Act on it once
+                   (two toasts, badge +2 otherwise). */
+                const id = message.data?.id ? String(message.data.id) : null;
+                if (id) {
+                  if (seenNotificationIdsRef.current.has(id)) break;
+                  seenNotificationIdsRef.current.add(id);
+                  if (seenNotificationIdsRef.current.size > 200) {
+                    const oldest = seenNotificationIdsRef.current.values().next().value;
+                    if (oldest !== undefined) seenNotificationIdsRef.current.delete(oldest);
+                  }
+                }
                 if (onNewNotificationRef.current && message.data) {
                   onNewNotificationRef.current(message.data);
                 }
                 break;
+              }
 
               case 'notification_count':
                 if (onCountUpdateRef.current && message.data?.unread_count !== undefined) {

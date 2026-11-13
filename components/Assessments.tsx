@@ -117,6 +117,7 @@ import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/se
 import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search, ChevronLeft, ArrowUpDown, Timer } from 'lucide-react';
 import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import TrackInvitesModal from '@/components/TrackInvitesModal';
+import InviteProgressDialog from '@/components/bulk-invite/InviteProgressDialog';
 import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
@@ -638,6 +639,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [expandedJobVersionsByJob, setExpandedJobVersionsByJob] =
     useState<Record<string, number[]>>({});
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  /* ⋯ View Progress: the version whose invite sends are shown. */
+  const [progressFor, setProgressFor] = useState<any | null>(null);
   // The open ⋮ dropdown. Only one exists at a time (grid and list views never
   // render together), so a single ref covers both.
   const openMenuRef = useRef<HTMLDivElement | null>(null);
@@ -6325,6 +6328,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
               );
             })()}
+            {/* View Progress — this version's invite sends (Resume Scoring's View Progress). */}
+            <button
+              onClick={() => {
+                setOpenMenuId(null);
+                setProgressFor(assessment);
+              }}
+              className="group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
+            >
+              <TrendingUp className="w-4 h-4 flex-shrink-0 text-brand-blue" />
+              <span className={MENU_ITEM_SCALE_CLASS}>View Progress</span>
+            </button>
             <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
             {/* Draft assessments hide Activate/Archive — drafts
                 go through the configure-page Publish button,
@@ -7496,11 +7510,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             tables sit straight on the page with their own borders — no outer
             box around them. Settings is a form, not a list, so it alone keeps
             the card. */}
-        {/* min-height: keeps a short list (a few rows, an empty result) at
-            least a screen tall. A tab click scrolls the toolbar card to the
-            top; a list that loaded shorter than its skeleton shrank the page
-            under that scroll and the browser snapped back to the stat cards. */}
-        <div className={activeTab === 'settings' ? 'tf-card-soft' : 'min-h-[calc(100dvh-11rem)]'}>
+        {/* No min-height: the list is as tall as its rows, like Job Openings,
+            so one or two rows don't leave a screen of empty space below. */}
+        <div className={activeTab === 'settings' ? 'tf-card-soft' : ''}>
           {/* Assessment List */}
           <div className={activeTab === 'settings' ? 'p-3 sm:p-6' : ''}>
 
@@ -7765,7 +7777,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {/* No title-strip skeleton either — the loaded card has
                           no title strip to stand in for. */}
                       <div className="tf-card overflow-hidden">
-                        <div className="min-h-[320px] overflow-auto tf-table-shell">
+                        <div className="overflow-auto tf-table-shell">
                           {/* Same floor as the loaded table below, so the rows
                               do not shift sideways when the skeleton swaps
                               out. */}
@@ -7901,7 +7913,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       ) : (
                       <>
                       <div className={`${DESKTOP_TABLE_ONLY} tf-card overflow-hidden`}>
-                        <div className="min-h-[320px] max-h-[calc(100dvh-24rem)] overflow-auto tf-table-shell">
+                        <div className="max-h-[calc(100dvh-24rem)] overflow-auto tf-table-shell">
                         {/* 1500 -> 1720 for the two version columns, then
                             1720 -> 1830 for Assessment Version, then
                             1830 -> 1930 for Job ID. The shell
@@ -8732,7 +8744,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
                       {/* Invitations card */}
                       <div className="tf-card overflow-hidden">
-                        <div className="min-h-[320px] overflow-auto tf-table-shell">
+                        <div className="overflow-auto tf-table-shell">
                           <table className="w-full table-auto">
                             <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
@@ -9051,7 +9063,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           )
                         ) : (
                         <>
-                        <div className={`${DESKTOP_TABLE_ONLY} min-h-[320px] max-h-[calc(100dvh-28rem)] overflow-auto tf-table-shell`}>
+                        <div className={`${DESKTOP_TABLE_ONLY} max-h-[calc(100dvh-28rem)] overflow-auto tf-table-shell`}>
                           {/* 1200 -> 1400 for the two score columns. The shell
                               already scrolls sideways, so this only moves where
                               that scroll starts; leaving it at 1200 would have
@@ -10308,6 +10320,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           />
         );
       })()}
+
+      {progressFor?.jd_id && (
+        <InviteProgressDialog
+          kind="assessment"
+          jdId={progressFor.jd_id}
+          versionId={progressFor.id}
+          jdCode={progressFor.jd_short_id}
+          jdTitle={progressFor.jd_title || progressFor.job?.title || stripVersionFromTitle(progressFor.title || '')}
+          versionLabel={`${progressFor.jd_version ? `Job V${progressFor.jd_version} · ` : ''}Assessment V${progressFor.version ?? 1}`}
+          onClose={() => setProgressFor(null)}
+        />
+      )}
 
       {/* Resend confirmation — regenerates token, invalidates old link */}
       <ResendLinkModal

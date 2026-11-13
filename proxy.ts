@@ -22,7 +22,11 @@ const publicRoutes = [
   '/verify', // Candidate mobile environment verification portal (public)
 ];
 
-// Define protected dashboard routes (authentication required)
+// Define protected dashboard routes (authentication required).
+// Every app/(dashboard) page MUST be listed: on a tenant subdomain this list is
+// also the allow-list, and any path missing from it is sent to /login — which,
+// with a token, bounces to /dashboard. That is how /help (User Guide),
+// /notifications, /reports and /unauthorized "only worked on localhost".
 const protectedRoutes = [
   '/dashboard',
   '/recruitment',
@@ -30,10 +34,14 @@ const protectedRoutes = [
   '/subscription',
   '/settings',
   '/analytics',
+  '/reports',
   '/audits',
   '/support-tickets',
   '/masters',
   '/help-desk',
+  '/help',
+  '/notifications',
+  '/unauthorized',
 ];
 
 const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';

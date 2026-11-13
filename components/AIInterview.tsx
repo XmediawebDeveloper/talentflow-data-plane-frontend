@@ -46,6 +46,7 @@ const AIInterviewCandidateResults = dynamic(() => import('@/components/ai-interv
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState, type InviteStatusOption } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import AIInterviewTrackInvitesModal from '@/components/AIInterviewTrackInvitesModal';
+import InviteProgressDialog from '@/components/bulk-invite/InviteProgressDialog';
 import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore, matchesInviteResultFilter, inviteResult, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
 import ExportColumnsModal from '@/components/ExportColumnsModal';
 import { downloadSessionReports, canTryReport } from '@/components/ai-interview/evaluation-dashboard/downloadSessionReport';
@@ -502,6 +503,8 @@ export default function AIInterview() {
 
   // 3-dot menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  /* ⋯ View Progress: the interview version whose invite sends are shown. */
+  const [progressFor, setProgressFor] = useState<AIInterviewResponse | null>(null);
   /* Which row has its JD version history open — one at a time, keyed by config
      id, exactly as the Assessments Job List holds its own. Persisted with the
      rest of the list state below so coming back from an interview page finds
@@ -2778,6 +2781,14 @@ export default function AIInterview() {
                 <Radar className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-brand-cyan' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Track{hasBeenShared ? ` (${invitations})` : ''}</span>
               </button>
+              {/* View Progress — this version's invite sends (Resume Scoring's View Progress). */}
+              <button
+                onClick={() => { setProgressFor(config); setOpenMenuId(null); }}
+                className={VERSION_MENU_ITEM_CLASS}
+              >
+                <TrendingUp className="w-4 h-4 flex-shrink-0 text-brand-blue" />
+                <span className={MENU_ITEM_SCALE_CLASS}>View Progress</span>
+              </button>
               <button
                 onClick={() => { if (!hasCompletedSessions) return; router.push(interviewDetailsHref(config.id, 'results')); setOpenMenuId(null); }}
                 disabled={!hasCompletedSessions}
@@ -3712,14 +3723,11 @@ export default function AIInterview() {
             wrapper kept for that box, so the rows line up with the toolbar
             card above. Settings is a form, not a list, so it alone keeps the
             card.
-            The min-height keeps a short list (a few Archived rows, an empty
-            result) at least a screen tall: a tab click scrolls the toolbar card
-            to the top, and when the loaded list came in shorter than the
-            loading skeleton the page shrank under that scroll and the browser
-            snapped back up to the stat cards. */}
+            No min-height: the list is as tall as its rows, like Job Openings,
+            so a short list doesn't leave a screen of empty space below. */}
         <div className={activeTab === 'settings'
           ? 'tf-card-soft'
-          : '[&>div]:p-0 min-h-[calc(100dvh-11rem)]'}>
+          : '[&>div]:p-0'}>
           {/* All Interviews — flat, one row per interview config/version,
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
@@ -5247,6 +5255,18 @@ export default function AIInterview() {
 
       {/* Invite Status Tracking — the shared tracker popup (the one Job Details
           opens): one interview, or every interview of a job from its job row. */}
+      {progressFor?.jd_id && (
+        <InviteProgressDialog
+          kind="interview"
+          jdId={progressFor.jd_id}
+          versionId={progressFor.id}
+          jdCode={(progressFor as { jd_short_id?: string }).jd_short_id}
+          jdTitle={progressFor.jd_title || progressFor.position}
+          versionLabel={`${progressFor.jd_version ? `Job V${progressFor.jd_version} · ` : ''}AI Interview V${progressFor.interview_version ?? 1}`}
+          onClose={() => setProgressFor(null)}
+        />
+      )}
+
       {viewInvitationsConfig && (() => {
         const config = viewInvitationsConfig;
         const jdLockReason = jdActionLockReason(config.jd_status);

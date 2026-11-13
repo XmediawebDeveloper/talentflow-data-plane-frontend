@@ -15,7 +15,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { resumeService, folderService, archiveResumeToArchivedFolder, Resume, Folder as FolderType } from '@/lib/services/resumeService';
 import type { Folder as TableFolder } from '@/lib/types/types';
 import ResumeTable from './ResumeTable';
-import DeleteResumeDialog from '@/components/resumes/DeleteResumeDialog';
+import DeleteResumeDialog, { type DeleteResumeVersionTarget } from '@/components/resumes/DeleteResumeDialog';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH } from './FolderTree';
 import NoResumesEmptyState from '@/components/resumes/NoResumesEmptyState';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
@@ -30,8 +30,7 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
-import UploadModal from './UploadModal';
-import { uploadResumeFiles } from '@/lib/utils/uploadResumeFiles';
+import { useResumeUploadFlow } from './resumes/useResumeUploadFlow';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import { canDownloadResume } from '@/lib/permissions/resumeDownload';
@@ -69,6 +68,7 @@ const flattenFolders = (list: FolderType[]): FolderType[] => {
 // Progress item interface (internal)
 interface ProgressItem {
   resumeId: string;
+  resumeVersion?: number;
   candidateName: string;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
   score?: number;
@@ -243,11 +243,6 @@ export default function SelectSourceModal({
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressItems, setProgressItems] = useState<ProgressItem[]>([]);
   const [scoringStats, setScoringStats] = useState({ queued: 0, processing: 0, completed: 0, failed: 0 });
-  // Upload modal state
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  /* Set only by a folder's "Upload to Folder": the upload's folder dropdown
-     then lists just that folder and its subfolders. */
-  const [uploadScopeFolderId, setUploadScopeFolderId] = useState<string | undefined>();
 
   // Minimized state for the bulk-scoring progress popup. Kept here (not inside
   // BulkScoringProgressModal) so "expand" from the floating indicator can bring
@@ -425,6 +420,35 @@ export default function SelectSourceModal({
     [folders],
   );
 
+  /* Uploading here runs the same flow as My Resumes — upload dialog,
+     duplicate resolution, Upload History for bulk — and every resume it
+     stores is ticked for scoring. */
+  const selectUploadedResumes = (ids: string[]) =>
+    setSelectedResumes(prev => [...prev, ...ids.filter(id => !prev.includes(id))]);
+  const { openUploadToFolder, uploadFlowElements } = useResumeUploadFlow({
+    /* resumeService.Folder (resume_count) vs types.Folder (count) - two shapes,
+       same name. Cast only; the same array is passed. */
+    folders: tableFolders as any,
+    tenant,
+    // "all" is a UI filter (not a real folder), so the dialog defaults to root.
+    defaultTargetFolder: selectedFolder !== 'all' ? selectedFolder : undefined,
+    canUpload: canUploadResumes,
+    onCreateFolder: (name, parentId) => { void handleCreateFolder(name, parentId); },
+    onRootFolderCreated: () => {
+      folderService.list().then(data => setFolders(flattenFolders(data || []))).catch(() => {});
+    },
+    onRefresh: () => {
+      fetchData();
+      refreshTabCounts();
+    },
+    onResumeStored: (resume) => selectUploadedResumes([resume.id]),
+    onBatchFinished: (stored) => {
+      selectUploadedResumes(stored.map(r => r.id));
+      toast.success(`${stored.length} resume${stored.length !== 1 ? 's' : ''} uploaded and selected. Add more or click "Score Resumes" to continue.`);
+    },
+    successHint: 'It is now selected. Add more or click "Score Resumes" to continue.',
+  });
+
   /* The nested shape `FolderTree` renders from. This modal keeps `folders`
      flat (it filters resumes by a single id), but the tree draws its
      hierarchy from `children`, so re-link parents to children here and
@@ -478,7 +502,7 @@ export default function SelectSourceModal({
               ? 'No resumes are available in this folder yet. Add a resume to get started.'
               : 'No resumes are available in this folder yet.'
         }
-        onAction={isArchivedResumesFolder ? undefined : () => setShowUploadModal(true)}
+        onAction={isArchivedResumesFolder ? undefined : () => openUploadToFolder()}
         actionDisabledReason={!canUploadResumes ? 'You do not have permission to upload resumes' : undefined}
       />
     );
@@ -528,14 +552,20 @@ export default function SelectSourceModal({
     }
   };
 
-  const handleConfirmDeleteResume = async () => {
+  const handleConfirmDeleteResume = async (version?: DeleteResumeVersionTarget) => {
     if (!deleteResumeTarget) return;
     const { id } = deleteResumeTarget;
     setDeleteResumeTarget(null);
     try {
-      await resumeService.delete(id);
-      setSelectedResumes(prev => prev.filter(rid => rid !== id));
-      toast.success('Resume deleted');
+      if (version) {
+        // Just one version: the candidate stays, another version becomes the latest.
+        await resumeService.delete(version.id, { onlyThisVersion: true });
+        toast.success(`Version ${version.version} deleted`);
+      } else {
+        await resumeService.delete(id);
+        setSelectedResumes(prev => prev.filter(rid => rid !== id));
+        toast.success('Resume deleted');
+      }
       await fetchData();
       refreshTabCounts();
     } catch (error: any) {
@@ -577,7 +607,7 @@ export default function SelectSourceModal({
   };
 
   // Submit for scoring with progress tracking
-  const handleSubmitForScoring = async (reviewedIds?: string[]) => {
+  const handleSubmitForScoring = async (reviewedIds?: string[], reviewedVersions?: (number | undefined)[]) => {
     // From the review step: the resumes still ticked, each on its chosen version.
     const idsToScore = reviewedIds ?? selectedResumes;
     if (idsToScore.length === 0) return;
@@ -621,18 +651,22 @@ export default function SelectSourceModal({
       // Use async Celery-based bulk scoring (same as Resume Scoring module)
       const response = await scoringService.startBulkScoringAsync(jobId, resumesToScore);
 
-      // Build resume items for progress display
+      // Build resume items for progress display. The version is the one picked
+      // in the review step (parallel to `reviewedIds`), else the row's own.
       const resumeItems = resumesToScore.map(resumeId => {
         const resume = resumes.find(r => r.id === resumeId);
+        const reviewedIndex = reviewedIds ? reviewedIds.indexOf(resumeId) : -1;
         return {
           resumeId,
           candidateName: resume?.candidate_name || 'Unknown',
+          resumeVersion: (reviewedIndex >= 0 ? reviewedVersions?.[reviewedIndex] : undefined) ?? resume?.version,
         };
       });
 
       // Initialize progress items and show modal
       const initialItems: ProgressItem[] = resumeItems.map(item => ({
         resumeId: item.resumeId,
+        resumeVersion: item.resumeVersion,
         candidateName: item.candidateName,
         status: 'queued' as const,
       }));
@@ -644,6 +678,7 @@ export default function SelectSourceModal({
       const contextItems = resumeItems.map(item => ({
         id: `${jobId}-${item.resumeId}`,
         resumeId: item.resumeId,
+        resumeVersion: item.resumeVersion,
         candidateName: item.candidateName,
         jobTitle: jobTitle,
         jobId: jobId,
@@ -790,9 +825,6 @@ export default function SelectSourceModal({
     onClose();
   };
 
-  // Handle resume upload — shared with the invite popup's My Resumes.
-  const handleUpload = (files: File[], folderId?: string) => uploadResumeFiles(files, folderId, fetchData);
-
   /* Rename from a folder's (+) menu — the Resume Database page's rules:
      no markup, the length cap, Archived Resumes keeps its name, and no two
      folders of one parent share a name. */
@@ -866,46 +898,6 @@ export default function SelectSourceModal({
     }
   };
 
-  // Handle auto-select after upload
-  const handleAutoSelectAfterUpload = async (resumeId: string, candidateName: string) => {
-    // Close upload modal
-    setShowUploadModal(false);
-
-    // Refresh the list to include the new resume
-    await fetchData();
-    refreshTabCounts();
-
-    // Auto-select the uploaded resume
-    setSelectedResumes(prev => {
-      if (!prev.includes(resumeId)) {
-        return [...prev, resumeId];
-      }
-      return prev;
-    });
-
-    // Show success message
-    toast.success(`Resume uploaded! "${candidateName}" is now selected. Add more or click "Score Resumes" to continue.`);
-  };
-
-  // Bulk counterpart: tick every resume the bulk upload stored
-  const handleAutoSelectManyAfterUpload = async (uploaded: { id: string; candidateName: string }[]) => {
-    setShowUploadModal(false);
-
-    await fetchData();
-    refreshTabCounts();
-
-    setSelectedResumes(prev => {
-      const next = [...prev];
-      uploaded.forEach(u => { if (!next.includes(u.id)) next.push(u.id); });
-      return next;
-    });
-
-    toast.success(
-      uploaded.length === 1
-        ? `Resume uploaded! "${uploaded[0].candidateName}" is now selected. Add more or click "Score Resumes" to continue.`
-        : `${uploaded.length} resumes uploaded and selected. Add more or click "Score Resumes" to continue.`
-    );
-  };
 
   return (
     // While the progress popup is minimized this component stays mounted (it owns
@@ -1102,8 +1094,7 @@ export default function SelectSourceModal({
                   if (!canUploadResumes) return;
                   // The upload targets the selected folder (UploadModal's targetFolder).
                   setSelectedFolder(folderId);
-                  setUploadScopeFolderId(folderId);
-                  setShowUploadModal(true);
+                  openUploadToFolder(folderId, true);
                 }}
                 hideDeleteFolder
                 resumes={[]}
@@ -1134,7 +1125,7 @@ export default function SelectSourceModal({
                   {/* Upload Resume button - only for My Resumes tab + canUploadResumes RBAC */}
                   {activeTab === 'my-resumes' && (
                     <button
-                      onClick={() => { if (!canUploadResumes) return; setShowUploadModal(true); }}
+                      onClick={() => { if (!canUploadResumes) return; openUploadToFolder(); }}
                       aria-disabled={!canUploadResumes}
                       title={!canUploadResumes ? 'You do not have permission to upload resumes' : undefined}
                       className={`h-9 px-3 sm:px-4 text-sm whitespace-nowrap rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
@@ -1394,6 +1385,7 @@ export default function SelectSourceModal({
           progressData={progressItems.map((item): ScoringProgressItem => ({
             id: item.resumeId,
             resumeId: item.resumeId,
+            resumeVersion: item.resumeVersion,
             candidateName: item.candidateName,
             jobTitle: jobTitle,
             jobId: jobId,
@@ -1438,27 +1430,7 @@ export default function SelectSourceModal({
         />
       )}
 
-      {/* Upload Modal — pre-selects the currently-viewed folder so the user
-          doesn't have to re-pick. "all" is a UI filter (not a real folder),
-          so we leave it unset and let the modal default to root. */}
-      {showUploadModal && (
-        <UploadModal
-          /* The UI-shaped folders (count/parentId), same conversion the
-             table uses — this was previously handed the raw API shape. */
-          /* resumeService.Folder (resume_count) vs types.Folder (count) - two shapes,
-             same name. Cast only; the same array is passed. */
-          folders={tableFolders as any}
-          tenant={tenant}
-          uploadSection="my-resumes"
-          targetFolder={selectedFolder !== 'all' ? selectedFolder : undefined}
-          scopeFolderId={uploadScopeFolderId}
-          onClose={() => { setShowUploadModal(false); setUploadScopeFolderId(undefined); }}
-          onUpload={handleUpload}
-          onCreateFolder={handleCreateFolder}
-          onScoreResume={handleAutoSelectAfterUpload}
-          onScoreResumes={handleAutoSelectManyAfterUpload}
-        />
-      )}
+      {uploadFlowElements}
 
       {/* Delete confirmation for the table's ⋮ menu. The table fires
           `onDelete` immediately (unlike Archive, which it confirms itself),
@@ -1467,6 +1439,7 @@ export default function SelectSourceModal({
       <DeleteResumeDialog
         open={!!deleteResumeTarget}
         names={deleteResumeTarget ? [deleteResumeTarget.name] : []}
+        resumeId={deleteResumeTarget?.id}
         onCancel={() => setDeleteResumeTarget(null)}
         onConfirm={handleConfirmDeleteResume}
       />
@@ -1495,9 +1468,9 @@ export default function SelectSourceModal({
             versionNumber: jobVersion ?? undefined,
           } as SharedJob}
           onClose={() => setShowScoreReview(false)}
-          onApply={(resumeIds) => {
+          onApply={(resumeIds, _jobIds, _jobs, _sourceIds, resumeVersions) => {
             setShowScoreReview(false);
-            void handleSubmitForScoring(resumeIds);
+            void handleSubmitForScoring(resumeIds, resumeVersions);
           }}
         />
       )}

@@ -27,6 +27,12 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { isRouteAuthorized, UNAUTHORIZED_PATH } from '@/lib/navigation/routeAccess';
 
+/* Where a refused page sends you, when somewhere better than the Dashboard
+   fits: Teams without View Teams → its sibling Chat, which everyone can use. */
+const UNAUTHORIZED_FALLBACKS: { prefix: string; to: string }[] = [
+  { prefix: '/organization/team-management', to: '/organization/team-chat' },
+];
+
 export default function RouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -39,9 +45,10 @@ export default function RouteGuard({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     if (!authorized) {
-      router.replace(UNAUTHORIZED_PATH);
+      const fallback = UNAUTHORIZED_FALLBACKS.find((f) => (pathname || '').startsWith(f.prefix));
+      router.replace(fallback?.to ?? UNAUTHORIZED_PATH);
     }
-  }, [authorized, router]);
+  }, [authorized, router, pathname]);
 
   // Never mount the protected page component when the check fails — the
   // effect above kicks off the redirect in the same tick.

@@ -132,6 +132,21 @@ class ChatService {
   }
 
   /**
+   * Delete a direct chat for the current user only (the other person keeps it)
+   */
+  async clearDirectChat(channelId: string): Promise<void> {
+    await api.post(`/chat/channels/${channelId}/clear`);
+  }
+
+  /**
+   * Unread messages across every conversation (header chat badge)
+   */
+  async getUnreadCount(): Promise<number> {
+    const response = await api.get('/chat/unread-count');
+    return Number(response.data?.total_unread) || 0;
+  }
+
+  /**
    * Get a specific channel
    */
   async getChannel(channelId: string): Promise<Channel> {
@@ -269,9 +284,14 @@ class ChatService {
   /**
    * Delete a message
    */
-  async deleteMessage(messageId: string): Promise<void> {
+  /**
+   * Delete a message. 'everyone': gone for all, image removed from storage
+   * (own message, within 24h of sending). 'me': gone from my view only.
+   */
+  async deleteMessage(messageId: string, scope: 'everyone' | 'me' = 'everyone'): Promise<string> {
     try {
-      await api.delete(`/chat/messages/${messageId}`);
+      const response = await api.delete(`/chat/messages/${messageId}`, { params: { scope } });
+      return response.data?.outcome ?? 'deleted';
     } catch (error) {
       console.error('Error deleting message:', error);
       throw error;

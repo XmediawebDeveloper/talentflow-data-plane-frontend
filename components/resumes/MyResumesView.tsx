@@ -2,14 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, HelpCircle } from 'lucide-react';
+import { Plus, Upload, Loader2, Search, History, X, AlertCircle, ChevronRight, ChevronDown, ArrowLeft, FileText, LayoutGrid, List, Folder, FolderOpen, MapPin, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, UserPlus, Sparkles, Brain, Edit2 } from 'lucide-react';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import dynamic from 'next/dynamic';
 import ResumeTable, { ResumeTableSkeleton } from '@/components/ResumeTable';
-import DeleteResumeDialog from '@/components/resumes/DeleteResumeDialog';
+import DeleteResumeDialog, { type DeleteResumeVersionTarget } from '@/components/resumes/DeleteResumeDialog';
 import NoResumesEmptyState from '@/components/resumes/NoResumesEmptyState';
-import UploadHistoryEmptyState from '@/components/resumes/UploadHistoryEmptyState';
 import SkillsList from '@/components/ui/SkillsList';
 import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import ListPagination from '@/components/ListPagination';
@@ -21,20 +19,9 @@ import FilterSelect from '@/components/ui/filter-select';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import BulkActionsBar from '@/components/BulkActionsBar';
-import UploadModal from '@/components/UploadModal';
-import type { DuplicateFile, ExistingResume } from '@/components/DuplicateResumeModal';
-
-// Dynamic import to avoid SSR issues with docx-preview dependency
-const DuplicateResumeModal = dynamic(() => import('@/components/DuplicateResumeModal'), {
-  ssr: false,
-  loading: () => <div>Loading...</div>
-});
+import { useResumeUploadFlow } from '@/components/resumes/useResumeUploadFlow';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
-import UploadHistoryDetailModal, { UploadHistoryItem } from '@/components/UploadHistoryDetailModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
-import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
-import BulkVersionResolutionModal from '@/components/BulkVersionResolutionModal';
-import type { VersionedBatchItem } from '@/components/BulkVersionResolutionModal';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { useListSearch } from '@/lib/hooks/useListSearch';
@@ -64,13 +51,14 @@ import {
 import FeatureGate from '@/components/shared/FeatureGate';
 import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
-import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import { formatOverallScore } from '@/lib/utils/matchStatus';
-import { RESUME_VIEW_SOURCE_PARAM } from '@/lib/constants/resumePools';
+import { formatISTDate } from '@/lib/utils/dateUtils';
+import { RESUME_VIEW_SOURCE_PARAM, resumeDatabaseTabHref } from '@/lib/constants/resumePools';
+import { rememberScoringOrigin } from '@/lib/utils/resumeActivityTrail';
+import { useInPageScoringProgress } from '@/components/resumes/useInPageScoringProgress';
+import ScoringStartSummary, { type ScoringStartRequest } from '@/components/resumes/ScoringStartSummary';
 import { NoFoldersState, NoFoldersMatchState, NoMatchingResumesState } from '@/components/resumes/ResumeEmptyStates';
 
 const formatDateIST = formatISTDate;
-const formatDateTimeIST = formatIST;
 
 // Drag item type for resumes (must match ResumeTable and FolderTree)
 const RESUME_DRAG_TYPE = 'RESUME';
@@ -916,7 +904,7 @@ function CardFolderNameInput({
 export default function MyResumesView({ header }: { header?: ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isTenantAdmin, hasPermission, hasPermissionCode, isLoading: authLoading } = useAuth();
+  const { isTenantAdmin, hasPermission, hasPermissionCode, isLoading: authLoading } = useAuth();
   const canViewMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:read');
   const canUploadMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
   // my_resumes:update isn't a role-editor code; Resume Upload Access (my_resumes:upload)
@@ -975,70 +963,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [cardRenamingFolderId, setCardRenamingFolderId] = useState<string | null>(null);
   const [cardRenameValue, setCardRenameValue] = useState('');
   const [cardFolderFilter, setCardFolderFilter] = useState<CardFolderFilter>('all');
-  const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string | undefined>();
-  /* Set only by a folder's "Upload to Folder": the upload's folder dropdown
-     then lists just that folder and its subfolders. */
-  const [uploadScopeFolderId, setUploadScopeFolderId] = useState<string | undefined>();
 
   // Modal states
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [uploadHistory, setUploadHistory] = useState<any[]>([]);
   const [quickViewResume, setQuickViewResume] = useState<Resume | null>(null);
 
-  // Duplicate detection state
-  const [duplicateFiles, setDuplicateFiles] = useState<DuplicateFile[]>([]);
-  const [pendingUploadFolderId, setPendingUploadFolderId] = useState<string | undefined>();
-  /* Destination of the refused upload, as the upload dialog itself named it.
-     Authoritative — it is the label the user picked. Only when it is missing
-     (an upload started somewhere with no folder picker) does the id below get
-     resolved against the folder tree instead. */
-  const [pendingUploadFolderLabel, setPendingUploadFolderLabel] = useState<string | undefined>();
-  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
-
-  // Upload history modal state
-  const [isUploadHistoryModalOpen, setIsUploadHistoryModalOpen] = useState(false);
-  const [isUploadHistoryMinimized, setIsUploadHistoryMinimized] = useState(false);
-  const [uploadHistoryTab, setUploadHistoryTab] = useState<'current' | 'completed'>('current');
   const [allResumesTotal, setAllResumesTotal] = useState(0);
   // Mirror of the above that overlapping fetches can read without going through
   // a stale render closure — see the `isUnfiltered` block in fetchData.
   const allResumesTotalRef = useRef(0);
-  // Flipped the moment an upload starts here, so the Upload History button goes
-  // live for a first-time user immediately instead of waiting for the resume
-  // list to come back.
-  const [uploadStartedThisSession, setUploadStartedThisSession] = useState(false);
-  const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
-  const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | 'cancelled' | null>(null);
-  // When the last in-flight batch finishes while the user is watching the
-  // Currently Processing tab, move them to Completed instead of leaving them
-  // on the "No uploads in progress" empty state.
-  const activeUploadCount = useMemo(
-    () => uploadHistory.filter(
-      r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)
-    ).length,
-    [uploadHistory]
-  );
-  const prevActiveUploadCountRef = useRef(activeUploadCount);
-  useEffect(() => {
-    const prev = prevActiveUploadCountRef.current;
-    prevActiveUploadCountRef.current = activeUploadCount;
-    if (prev > 0 && activeUploadCount === 0 && isUploadHistoryModalOpen && uploadHistoryTab === 'current') {
-      setUploadHistoryTab('completed');
-      setUploadHistoryFilter(null);
-    }
-  }, [activeUploadCount, isUploadHistoryModalOpen, uploadHistoryTab]);
-  const [retryingBatches, setRetryingBatches] = useState<Set<string>>(new Set());
-  const [cancellingBatches, setCancellingBatches] = useState<Set<string>>(new Set());
-  const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
-  const [cancellingItems, setCancellingItems] = useState<Set<string>>(new Set());
-  const [cancelBatchConfirm, setCancelBatchConfirm] = useState<{ isOpen: boolean; batchId: string; pendingCount: number }>({ isOpen: false, batchId: '', pendingCount: 0 });
-  const [cancelItemConfirm, setCancelItemConfirm] = useState<{ isOpen: boolean; batchId: string; itemId: string; fileName: string }>({ isOpen: false, batchId: '', itemId: '', fileName: '' });
-
-  // Bulk version resolution state
-  const [selectedVersionedItems, setSelectedVersionedItems] = useState<Map<string, VersionedBatchItem>>(new Map());
-  // Upload History: batches whose file list dropdown is open (collapsed by default).
-  const [expandedUploadBatches, setExpandedUploadBatches] = useState<Set<string>>(new Set());
-  const [isBulkResolveModalOpen, setIsBulkResolveModalOpen] = useState(false);
 
   // Apply to Job modal state
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
@@ -1047,24 +979,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [uploadedResumeToScore, setUploadedResumeToScore] = useState<{ id: string; candidateName: string } | null>(null);
   const [singleResumeToApply, setSingleResumeToApply] = useState<Resume | null>(null);
 
-  // Duplicate scoring warning state
-  const [duplicateScoringWarning, setDuplicateScoringWarning] = useState<{
-    isOpen: boolean;
-    jobId: string;
-    jobTitle: string;
-    resumeIds: string[];
-    existingScores: Array<{
-      resume_id: string;
-      candidate_name: string;
-      overall_score: number;
-      // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10
-      // Overall Rating for the duplicate-scoring warning list.
-      overall_rating_10?: number;
-      match_status: string;
-      scored_at: string | null;
-    }>;
-    newCount: number;
-  }>({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 });
+  /* The picked job, shown back as a summary (scored / skipped / units) before
+     scoring starts. */
+  const [scoringRequest, setScoringRequest] = useState<ScoringStartRequest | null>(null);
 
   // ZIP download confirmation modal state
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
@@ -1077,9 +994,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   // Invite Assessment / Invite AI Interview both open the one shared invite
   // popup (VersionInviteDialog); it asks for the assessment / interview itself.
   const { open: openInvite } = useInviteDialog();
+  // Score Resume's progress popup, on this page (Minimize keeps the recruiter here).
+  const { startScoringProgress, scoringProgressModal } = useInPageScoringProgress('My Resumes');
 
-  // AI Talent Match modal state
-  const [isAITalentMatchModalOpen, setIsAITalentMatchModalOpen] = useState(false);
 
 
   // Delete resume confirmation state
@@ -1181,24 +1098,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     resumeService.reconcileUsage();
     hasMountedRef.current = true; // Mark as mounted
 
-    // Cleanup: Stop all polling intervals when component unmounts
-    return () => {
-      pollingIntervalsRef.current.forEach(interval => {
-        clearInterval(interval);
-      });
-      pollingIntervalsRef.current.clear();
-      console.log('[MyResumes] Cleaned up all polling intervals on unmount');
-    };
   }, []);
 
-  // The mount fetch can land before AuthProvider has resolved the user, and the
-  // ownership filter below needs an identity to match against — so refetch once
-  // the user arrives, otherwise a real history would stay filtered out.
-  useEffect(() => {
-    if (!user?.id) return;
-    fetchUploadHistory();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
 
   // Refetch when filters or folder selection changes
   useEffect(() => {
@@ -1293,363 +1194,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     }
   }, [searchParams, router]);
 
-  // Single mapper for every batch payload the API returns. The cancel/retry
-  // handlers used to spread the raw snake_case batch instead (`statuses: b.items`),
-  // which silently blanked out file names, candidate names and error messages
-  // until the next full refresh.
-  const mapBatchRecord = (batch: any) => ({
-    id: batch.id,
-    date: batch.date ?? batch.created_at,
-    completedAt: batch.completed_at,
-    fileName: batch.batch_name,
-    totalFiles: batch.total_files,
-    completed: batch.completed ?? 0,
-    pending: batch.pending ?? 0,
-    duplicated: batch.duplicates ?? 0,
-    versioned: batch.versions ?? 0,
-    errors: batch.errors ?? 0,
-    cancelled: batch.cancelled ?? 0,
-    status: batch.status,
-    source: 'my-resumes' as const,
-    statuses: batch.items?.map((item: any) => ({
-      id: item.id,
-      fileName: item.file_name,
-      status: item.status === 'duplicated' ? 'duplicate' : item.status,
-      errorMessage: item.error_message,
-      candidateName: item.candidate_name,
-      resumeId: item.resume_id,
-    })) || [],
-  });
-
-  /* `/resumes/upload/batches` is tenant-scoped — it takes no owner filter and
-     its payload doesn't say who created a batch — so a second account in the
-     same tenant was shown everybody else's uploads. Ownership is therefore
-     established two ways, in order:
-
-       1. An owner field on the payload, if the API ever sends one. Authoritative.
-       2. A local ledger of the batch ids THIS account created, kept per user in
-          localStorage and written the moment an upload starts here.
-
-     A batch that matches neither is another account's and is dropped. That
-     means uploads made before this ledger existed, or from another browser,
-     won't be listed — the endpoint gives the client nothing to recognise them
-     by. Scoping the endpoint server-side is the real fix. */
-  const BATCH_OWNER_FIELDS = [
-    'user_id', 'uploaded_by', 'uploaded_by_id', 'uploaded_by_name',
-    'created_by', 'created_by_id', 'owner_id',
-  ];
-
-  const batchLedgerKey = user?.id ? `tf:upload-batches:${user.id}` : null;
-
-  const readBatchLedger = useCallback((): string[] => {
-    if (!batchLedgerKey || typeof window === 'undefined') return [];
-    try {
-      const stored = JSON.parse(localStorage.getItem(batchLedgerKey) || '[]');
-      return Array.isArray(stored) ? stored.map(String) : [];
-    } catch {
-      return [];
-    }
-  }, [batchLedgerKey]);
-
-  const rememberBatchIds = useCallback((ids: string[]) => {
-    if (!batchLedgerKey || typeof window === 'undefined') return;
-    const fresh = ids.filter(Boolean).map(String);
-    if (fresh.length === 0) return;
-    try {
-      // Newest first, capped — a ledger is only useful for recent history.
-      const next = Array.from(new Set([...fresh, ...readBatchLedger()])).slice(0, 200);
-      localStorage.setItem(batchLedgerKey, JSON.stringify(next));
-    } catch {
-      // Private mode / quota — ownership just falls back to the payload check.
-    }
-  }, [batchLedgerKey, readBatchLedger]);
-
-  const batchOwnerValue = (batch: any) =>
-    BATCH_OWNER_FIELDS
-      .map(field => batch?.[field])
-      .find(value => value !== undefined && value !== null && value !== '');
-
-  const isOwnBatch = (batch: any, ledger: string[]) => {
-    const owner = batchOwnerValue(batch);
-    if (owner !== undefined) {
-      const identities = [user?.id, user?.email, user?.name]
-        .filter(Boolean)
-        .map(v => String(v).toLowerCase());
-      return identities.includes(String(owner).toLowerCase());
-    }
-    return ledger.includes(String(batch?.id));
-  };
-
-  const hasBatchFiles = (batch: any) =>
-    (batch?.total_files ?? 0) > 0 || (batch?.items?.length ?? 0) > 0;
-
-  const ownBatchRecords = (batches: any[]) => {
-    const ledger = readBatchLedger();
-    return batches.filter(b => isOwnBatch(b, ledger) && hasBatchFiles(b)).map(mapBatchRecord);
-  };
-
-  /* Single-file uploads go through `/resumes/upload`, which returns a resume
-     and never tells us the batch it landed in. So we snapshot the batch ids
-     before the upload and claim whatever is new afterwards. */
-  const snapshotBatchIds = async (): Promise<string[]> => {
-    try {
-      const response = await resumeService.listUploadBatches(50);
-      return (response?.batches ?? []).map((b: any) => String(b.id));
-    } catch {
-      return [];
-    }
-  };
-
-  /* The batch row for a single upload isn't always written by the time the
-     upload call returns, so one look is not enough — retry with a widening gap
-     before giving up. */
-  const adoptNewBatchIds = async (priorIds: string[], attempts = 4): Promise<string[]> => {
-    const prior = new Set(priorIds);
-    for (let attempt = 0; attempt < attempts; attempt++) {
-      try {
-        const response = await resumeService.listUploadBatches(50);
-        const fresh = (response?.batches ?? [])
-          .map((b: any) => String(b.id))
-          .filter((id: string) => !prior.has(id));
-        if (fresh.length > 0) {
-          rememberBatchIds(fresh);
-          return fresh;
-        }
-      } catch {
-        // Ignore and retry — a transient failure shouldn't lose the batch.
-      }
-      await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
-    }
-    return [];
-  };
-
-  /* Fallback record for an upload the server never gave us a batch for (single
-     uploads may not create one at all). Kept per user in localStorage so the
-     upload still appears in history after a reload, and dropped as soon as a
-     real batch turns up carrying the same resume. */
-  const localUploadsKey = user?.id ? `tf:upload-local:${user.id}` : null;
-
-  const readLocalUploads = useCallback((): any[] => {
-    if (!localUploadsKey || typeof window === 'undefined') return [];
-    try {
-      const stored = JSON.parse(localStorage.getItem(localUploadsKey) || '[]');
-      return Array.isArray(stored) ? stored : [];
-    } catch {
-      return [];
-    }
-  }, [localUploadsKey]);
-
-  const rememberLocalUpload = useCallback((record: any) => {
-    if (!localUploadsKey || typeof window === 'undefined') return;
-    try {
-      localStorage.setItem(localUploadsKey, JSON.stringify([record, ...readLocalUploads()].slice(0, 50)));
-    } catch {
-      // Private mode / quota — the record just won't survive a reload.
-    }
-  }, [localUploadsKey, readLocalUploads]);
-
-  // Server records win: a local stand-in is hidden once a real batch reports
-  // the same resume, so an upload is never listed twice.
-  const withLocalUploads = (records: any[]) => {
-    const claimed = new Set(
-      records.flatMap(r => (r.statuses ?? []).map((s: any) => s.resumeId).filter(Boolean)),
-    );
-    const locals = readLocalUploads().filter(
-      local => !(local.statuses ?? []).some((s: any) => s.resumeId && claimed.has(s.resumeId)),
-    );
-    return [...locals, ...records].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-    );
-  };
-
-  // Refresh from the server and replace only the my-resumes records.
-  const refreshMyResumesBatches = async () => {
-    const response = await resumeService.listUploadBatches(50);
-    if (!response?.batches) return;
-    const updated = withLocalUploads(ownBatchRecords(response.batches));
-    setUploadHistory(prev => [...prev.filter(r => r.source !== 'my-resumes'), ...updated]);
-  };
-
-  const fetchUploadHistory = async () => {
-    try {
-      const response = await resumeService.listUploadBatches(50);
-      if (response?.batches) {
-        setUploadHistory(withLocalUploads(ownBatchRecords(response.batches)));
-      }
-    } catch (error) {
-      console.error('Failed to fetch upload history:', error);
-    }
-  };
-
-  const openUploadHistoryModal = () => {
-    const hasActive = uploadHistory.some(
-      r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)
-    );
-    setUploadHistoryTab(hasActive ? 'current' : 'completed');
-    setUploadHistoryFilter(null);
-    setIsUploadHistoryModalOpen(true);
-    setIsUploadHistoryMinimized(false);
-  };
-
-  const handleCloseUploadHistory = async () => {
-    // Note: completed batches are intentionally retained so the Completed
-    // tab stays useful as a history view. If the user wants to clear it
-    // they can call deleteCompletedBatches() explicitly elsewhere.
-    setIsUploadHistoryModalOpen(false);
-    setIsUploadHistoryMinimized(false);
-    setUploadHistoryFilter(null);
-  };
-
-  const handleRetryBatch = async (batchId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setRetryingBatches(prev => new Set(prev).add(batchId));
-    try {
-      const res = await resumeService.retryBatchItems(batchId);
-      const deducted = res?.units_deducted ?? 0;
-      toast.success(
-        deducted > 0
-          ? `Retrying items. ${deducted} unit(s) deducted for quota-exceeded files.`
-          : 'Retrying stuck items. No additional units deducted.'
-      );
-      // Refresh upload history so items show as "pending" and start polling for progress
-      await refreshMyResumesBatches();
-      startBatchPolling(batchId);
-    } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't retry batch items. Please try again."));
-    } finally {
-      setRetryingBatches(prev => { const s = new Set(prev); s.delete(batchId); return s; });
-    }
-  };
-
-  // Cancelling a batch is destructive and irreversible for files already in
-  // flight, so it always goes through a confirmation step. It used to fire on a
-  // single click — and a focused button also fires on Space/Enter, which is an
-  // easy way to lose most of a 100-file upload without realising it.
-  const handleCancelBatch = (batchId: string, pendingCount: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCancelBatchConfirm({ isOpen: true, batchId, pendingCount });
-  };
-
-  const confirmCancelBatch = async () => {
-    const { batchId, pendingCount } = cancelBatchConfirm;
-    setCancelBatchConfirm({ isOpen: false, batchId: '', pendingCount: 0 });
-    if (!batchId) return;
-    setCancellingBatches(prev => new Set(prev).add(batchId));
-    try {
-      const res = await resumeService.cancelBatch(batchId);
-      const refunded = res?.refunded_units ?? pendingCount;
-      toast.success(`Cancelled ${res?.cancelled ?? pendingCount} file(s). ${refunded} unit(s) refunded.`);
-      // Refresh upload history to reflect the cancellation
-      await refreshMyResumesBatches();
-    } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't cancel batch. Please try again."));
-    } finally {
-      setCancellingBatches(prev => { const s = new Set(prev); s.delete(batchId); return s; });
-    }
-  };
-
-  const handleRetryItem = async (batchId: string, itemId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setRetryingItems(prev => new Set(prev).add(itemId));
-    try {
-      const res = await resumeService.retryItem(batchId, itemId);
-      const deducted = res?.units_deducted ?? 0;
-      toast.success(
-        deducted > 0
-          ? 'Retrying file. 1 Resume Storage unit deducted.'
-          : 'Retrying file. No additional units deducted.'
-      );
-      // Refresh upload history so the item shows as "pending/queued" and start polling for progress
-      await refreshMyResumesBatches();
-      startBatchPolling(batchId);
-    } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't retry file. Please try again."));
-    } finally {
-      setRetryingItems(prev => { const s = new Set(prev); s.delete(itemId); return s; });
-    }
-  };
-
-  const handleCancelItem = (batchId: string, itemId: string, fileName: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCancelItemConfirm({ isOpen: true, batchId, itemId, fileName });
-  };
-
-  const confirmCancelItem = async () => {
-    const { batchId, itemId, fileName } = cancelItemConfirm;
-    setCancelItemConfirm({ isOpen: false, batchId: '', itemId: '', fileName: '' });
-    if (!batchId || !itemId) return;
-    setCancellingItems(prev => new Set(prev).add(itemId));
-    try {
-      const res = await resumeService.cancelItem(batchId, itemId);
-      toast.success(
-        res?.refunded_units
-          ? `'${fileName}' cancelled. 1 unit refunded.`
-          : `'${fileName}' cancelled.`
-      );
-      await refreshMyResumesBatches();
-    } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't cancel file. Please try again."));
-    } finally {
-      setCancellingItems(prev => { const s = new Set(prev); s.delete(itemId); return s; });
-    }
-  };
-
-  // Ref to store active polling intervals for cleanup
-  const pollingIntervalsRef = useRef<Set<NodeJS.Timeout>>(new Set());
-
-  // Start (or restart) polling for a batch — used after retry so items progress in real-time
-  const startBatchPolling = (batchId: string) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const status = await resumeService.getBatchStatus(batchId);
-        setUploadHistory(prev => prev.map(record =>
-          record.id === batchId
-            ? {
-                ...record,
-                completed: status.completed,
-                pending: status.pending,
-                duplicated: status.duplicates,
-                versioned: status.versions,
-                errors: status.errors,
-                cancelled: status.cancelled ?? 0,
-                completedAt: status.completed_at,
-                status: status.status,
-                statuses: status.items?.map((item: any) => ({
-                  id: item.id,
-                  fileName: item.file_name,
-                  status: item.status === 'duplicated' ? 'duplicate' : item.status,
-                  errorMessage: item.error_message,
-                  candidateName: item.candidate_name,
-                  resumeId: item.resume_id,
-                })) || [],
-              }
-            : record
-        ));
-        const hasActiveItems = status.items?.some((item: any) =>
-          item.status === 'pending' || item.status === 'processing'
-        ) ?? false;
-        if (status.status === 'completed' || !hasActiveItems) {
-          clearInterval(pollInterval);
-          pollingIntervalsRef.current.delete(pollInterval);
-          fetchUploadHistory();
-          // Stay in whatever folder/search the user is looking at — an
-          // unfiltered refresh here swapped the table and the header count for
-          // the whole library mid-view.
-          fetchData(appliedSearchQuery, filters, selectedFolder, true);
-          refreshAllResumesTotal();
-        }
-      } catch {
-        clearInterval(pollInterval);
-        pollingIntervalsRef.current.delete(pollInterval);
-      }
-    }, 3000);
-    pollingIntervalsRef.current.add(pollInterval);
-    // Safety: stop polling after 10 minutes regardless
-    setTimeout(() => {
-      clearInterval(pollInterval);
-      pollingIntervalsRef.current.delete(pollInterval);
-    }, 600000);
-  };
 
   /* The "All Resumes" badge is the only count not served by the folders API,
      so a refresh that stays inside a folder can't update it. One page_size=1
@@ -2278,9 +1822,20 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     setDeleteResumeConfirm({ isOpen: true, ids, names });
   };
 
-  const confirmDeleteResumes = async () => {
+  const confirmDeleteResumes = async (version?: DeleteResumeVersionTarget) => {
     const { ids } = deleteResumeConfirm;
     setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] });
+    /* One version of a multi-version resume: the row stays (another version
+       becomes the latest) — the RESUMES_CHANGED refetch redraws it. */
+    if (version) {
+      try {
+        await resumeService.delete(version.id, { onlyThisVersion: true });
+        toast.success(`Version ${version.version} deleted`);
+      } catch {
+        toast.error(`Couldn't delete version ${version.version}. Please try again.`);
+      }
+      return;
+    }
     // Where they were, so their folders can be decremented. Read before the
     // rows leave state.
     const deletedFrom = ids
@@ -2797,32 +2352,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     });
   };
 
-  const handleAITalentMatch = async () => {
-    if (selectedResumes.length === 0) {
-      toast.error('Please select at least one resume');
-      return;
-    }
-    // An archived resume can't be matched against a job, same rule Score,
-    // Assessment and AI Interview apply.
-    const archivedCount = resumes
-      .filter(r => selectedResumes.includes(r.id))
-      .filter(r => isResumeArchived(r)).length;
-    if (archivedCount > 0) {
-      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be used with AI Talent Match. Please select active resumes only.`);
-      return;
-    }
-    const tenantUserCount = resumes
-      .filter(r => selectedResumes.includes(r.id))
-      .filter(r => isTenantUserEmailResume(r)).length;
-    if (tenantUserCount > 0) {
-      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be used with AI Talent Match.`);
-      return;
-    }
-    /* The dialog loads the job list itself now, so this no longer gates the
-       open — it just warms the local copy the submit handler falls back on. */
-    if (publishedJobs.length === 0) void fetchPublishedJobs();
-    setIsAITalentMatchModalOpen(true);
-  };
 
   // Fetch published jobs for the Apply to Job modal
   const fetchPublishedJobs = async () => {
@@ -2933,7 +2462,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   };
 
   // Handle applying resumes to selected jobs (scoring) - using async Celery
-  const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[], jobRecords?: Job[]) => {
+  const handleApplyToJobSubmit = (resumeIds: string[], jobIds: string[], jobRecords?: Job[], sourceResumeIds?: string[], resumeVersions?: (number | undefined)[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setIsApplyToJobModalOpen(false);
@@ -2943,85 +2472,61 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
        fetched list is only a fallback. */
     const jobId = jobIds[0];
     const selectedJob = jobRecords?.[0] || publishedJobs.find(j => j.id === jobId);
-
-    try {
-      // Check for existing scores (duplicate check)
-      const duplicateCheck = await scoringService.checkExistingScores(jobId, resumeIds);
-
-      // If there are existing scores, show warning
-      if (duplicateCheck.existing_count > 0) {
-        setDuplicateScoringWarning({
-          isOpen: true,
-          jobId: jobId,
-          jobTitle: duplicateCheck.jd_title,
-          resumeIds: resumeIds,
-          existingScores: duplicateCheck.existing_scores,
-          newCount: duplicateCheck.new_count,
-        });
-        return; // Stop here and wait for user decision
-      }
-
-      // No duplicates - proceed with scoring
-      await proceedWithScoring(jobId, resumeIds, selectedJob?.title || duplicateCheck.jd_title);
-    } catch (error: any) {
-      console.error('Failed to check duplicates or start scoring:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
-    }
+    // A picked older version has its own id: name it from the candidate it came from.
+    const names: Record<string, string> = {};
+    const versions: Record<string, number> = {};
+    resumeIds.forEach((id, i) => {
+      const resume: any = resumes.find(r => r.id === id) || resumes.find(r => r.id === sourceResumeIds?.[i]);
+      names[id] = resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown';
+      const version = resumeVersions?.[i];
+      if (version) versions[id] = version;
+    });
+    // What will happen (scored / skipped / units) is shown before anything starts.
+    setScoringRequest({
+      job: { id: jobId, title: selectedJob?.title || 'Job', jobCode: selectedJob?.job_id, version: selectedJob?.versionNumber },
+      resumeIds,
+      names,
+      versions,
+    });
   };
 
-  // Proceed with scoring (extracted for reuse in duplicate confirmation)
-  const proceedWithScoring = async (jobId: string, resumeIds: string[], jobTitle: string) => {
+  // Start Scoring from the summary: only the resumes it found to score.
+  const proceedWithScoring = async (jobId: string, resumeIds: string[], names: Record<string, string>) => {
     try {
       // Start async bulk scoring via Celery (resumeIds already have correct version IDs)
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
-      // Get candidate names for the selected resumes
-      const resumeItems = resumeIds.map(id => {
-        const resume = resumes.find(r => r.id === id);
-        return {
-          resumeId: id,
-          candidateName: resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown',
-        };
-      });
+      const resumeItems = resumeIds.map(id => ({
+        resumeId: id,
+        candidateName: names[id] || 'Unknown',
+        resumeVersion: scoringRequest?.versions?.[id],
+      }));
 
-      // Store batch info for the resume-scoring page to poll (including resume items for fallback)
-      const scoringData = {
+      // Clear selection and follow the run here: its progress popup opens on
+      // this page, and Minimize leaves the recruiter on Resume Database.
+      setSelectedResumes([]);
+      setScoringRequest(null);
+      setSingleResumeToApply(null);
+      setUploadedResumeToScore(null);
+      // Results opened from it keep Resume Database's breadcrumb.
+      rememberScoringOrigin(response.jd_id, [
+        { label: 'Resume Database', href: resumeDatabaseTabHref('my-resumes') },
+      ]);
+      startScoringProgress({
         batchId: response.batch_id,
         jobId: response.jd_id,
         jobTitle: response.jd_title,
-        totalResumes: response.total_resumes,
-        resumeItems: resumeItems,
-      };
-      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
-
-      // Clear selection and navigate to resume scoring page
-      setSelectedResumes([]);
-      router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
+        items: resumeItems,
+        jobCode: scoringRequest?.job.jobCode,
+        jobVersion: scoringRequest?.job.version,
+      });
+      toast.success(`Scoring started for ${resumeItems.length} resume${resumeItems.length !== 1 ? 's' : ''}.`);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
       toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
     }
   };
 
-  // Handle scoring only new candidates (remove duplicates)
-  const handleScoreOnlyNew = async () => {
-    const { jobId, resumeIds, jobTitle, existingScores } = duplicateScoringWarning;
-
-    // Filter out already scored resumes
-    const alreadyScoredIds = existingScores.map(s => s.resume_id);
-    const newResumeIds = resumeIds.filter(id => !alreadyScoredIds.includes(id));
-
-    setDuplicateScoringWarning({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 });
-
-    if (newResumeIds.length === 0) {
-      toast.error('All selected candidates are already scored');
-      return;
-    }
-
-    // Proceed with scoring only new candidates
-    await proceedWithScoring(jobId, newResumeIds, jobTitle);
-    toast.success(`Scoring ${newResumeIds.length} new candidate(s), skipped ${alreadyScoredIds.length} duplicate(s)`);
-  };
 
   const handleCreateFolder = async (name: string, rawParentId?: string) => {
     /* Trim before anything else. The tree passes its input straight through,
@@ -3172,12 +2677,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     if (!name) return;
     await handleRenameFolder(folderId, name);
     closeCardFolderRename();
-  };
-
-  const openUploadToFolder = (folderId?: string, scoped = false) => {
-    setUploadTargetFolderId(folderId);
-    setUploadScopeFolderId(scoped ? folderId : undefined);
-    setIsUploadModalOpen(true);
   };
 
   const handleRenameFolder = async (id: string, name: string) => {
@@ -3417,438 +2916,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null, hasSubfolders: false, subfolderCount: 0, subfolderDetails: [], totalResumeCount: 0, subfolderResumeCount: 0, loading: false });
   };
 
-  // Helper function to find or create "root" folder
-  const getOrCreateRootFolder = async (): Promise<string> => {
-    // Check if "root" folder already exists
-    const existingRoot = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
-    if (existingRoot) {
-      return existingRoot.id;
-    }
-
-    // Create "root" folder
-    try {
-      const newFolder = await folderService.create('root');
-      const converted: FolderType = {
-        id: newFolder.id,
-        name: newFolder.name,
-        count: 0,
-        parentId: newFolder.parent_id,
-      };
-      setFolders(prev => [...prev, converted]);
-      return newFolder.id;
-    } catch (error: any) {
-      console.error('Failed to create root folder:', error);
-      throw error;
-    }
-  };
-
-  // Return type mirrors UploadModalProps['onUpload'] (components/UploadModal.tsx). This
-  // local annotation had drifted narrower than both what the body actually returns
-  // (resumeId / candidateName) and what the modal declares (the richer existingResume).
-  const handleUploadResumes = async (files: File[], folderId?: string): Promise<{
-    success: boolean;
-    error?: string;
-    resumeId?: string;
-    candidateName?: string;
-    existingResume?: {
-      id: string;
-      candidateName: string;
-      uploadedAt?: string;
-      email?: string;
-      currentTitle?: string;
-      folderName?: string;
-      version?: number;
-    };
-    duplicateData?: {
-      file: File;
-      existingResume: {
-        id: string;
-        candidate_name: string;
-        email: string;
-        folder_name?: string;
-        folder_path?: string;
-        upload_date: string;
-        file_size: number;
-        file_name: string;
-        version: number;
-        // sent by the my-resumes duplicate path alongside `version`
-        version_count?: number;
-      };
-      contentDifferences: string[];
-      isDuplicate: boolean;
-      targetFolderId?: string;
-    };
-  }> => {
-    setUploadStartedThisSession(true);
-
-    // Which batches existed before this upload — anything new afterwards is
-    // ours, which is the only way to claim a single-file upload's batch.
-    const priorBatchIds = await snapshotBatchIds();
-
-    // If no folder is selected or "All Resumes" is selected, use or create "root" folder
-    let targetFolderId = folderId;
-    if (!targetFolderId || targetFolderId === 'all') {
-      try {
-        targetFolderId = await getOrCreateRootFolder();
-      } catch (error) {
-        return { success: false, error: 'Failed to create root folder for upload' };
-      }
-    }
-
-    // Auto-open upload history panel immediately when upload starts (for multiple files)
-    if (files.length > 1) {
-      console.log('[UPLOAD] Auto-opening upload history panel for', files.length, 'files');
-      // New batch is about to start processing — land on Currently Processing tab
-      setUploadHistoryTab('current');
-      setIsUploadHistoryModalOpen(true);
-      setIsUploadHistoryMinimized(false);
-      /* Close the upload dialog NOW, not when the bulk request returns — it
-         used to linger behind Upload History for the 3–5 s that took. A bulk
-         upload reports everything in Upload History; a failure to even start
-         it is toasted below, since the dialog is no longer there to show it. */
-      setIsUploadModalOpen(false);
-      setUploadTargetFolderId(undefined);
-
-      // Show "Uploading..." record immediately BEFORE API call
-      const tempId = `temp-${Date.now()}`;
-      const uploadingRecord = {
-        id: tempId,
-        date: new Date().toISOString(),
-        fileName: `Uploading ${files.length} files...`,
-        totalFiles: files.length,
-        completed: 0,
-        pending: files.length,
-        duplicated: 0,
-        versioned: 0,
-        errors: 0,
-        cancelled: 0,
-        status: 'uploading',
-        source: 'my-resumes' as const,
-        statuses: files.map((f, idx) => ({
-          id: `temp-file-${idx}`,
-          fileName: f.name,
-          status: 'pending',
-          errorMessage: null,
-          candidateName: null,
-        })),
-      };
-      setUploadHistory(prev => [uploadingRecord, ...prev]);
-    }
-
-    // For single file, use single upload endpoint
-    if (files.length === 1) {
-      try {
-        const r = await resumeService.upload(files[0], targetFolderId);
-        // Optimistic update for instant UI feedback
-        const converted = convertApiResume(r);
-        setResumes(prev => [converted, ...prev]);
-        toast.success('Resume uploaded successfully');
-
-        /* Record it in history right away. The single-upload endpoint returns
-           a resume, not a batch, and the server may not create a batch row for
-           it at all — without this the upload would never appear in the
-           history. If a real batch does turn up carrying this resume id, the
-           merge in `withLocalUploads` hides this stand-in. */
-        const localRecord = {
-          id: `local-${r.id}`,
-          date: new Date().toISOString(),
-          completedAt: new Date().toISOString(),
-          fileName: files[0].name,
-          totalFiles: 1,
-          completed: 1,
-          pending: 0,
-          duplicated: 0,
-          versioned: 0,
-          errors: 0,
-          cancelled: 0,
-          status: 'completed',
-          source: 'my-resumes' as const,
-          statuses: [{
-            id: `local-item-${r.id}`,
-            fileName: files[0].name,
-            status: 'completed',
-            errorMessage: null,
-            candidateName: r.candidate_name || null,
-            resumeId: r.id,
-          }],
-        };
-        rememberLocalUpload(localRecord);
-        setUploadHistory(prev => [localRecord, ...prev]);
-
-        // Background refresh to get correct uploaded_by_name, version counts, etc.
-        setTimeout(async () => {
-          // Queued behind any in-flight fetch rather than forced past it (see
-          // the folder-delete refresh above).
-          // Refresh the view the user is actually on, and update the pinned
-          // All Resumes count separately — an unfiltered refresh here made the
-          // folder view and its badge jump to the whole library for a moment.
-          fetchData(appliedSearchQuery, filters, selectedFolder, true);
-          refreshAllResumesTotal();
-          // Claim the batch this upload created before reading history back,
-          // otherwise the ownership filter would treat it as somebody else's.
-          await adoptNewBatchIds(priorBatchIds);
-          fetchUploadHistory();
-        }, 500);
-        return {
-          success: true,
-          resumeId: r.id,
-          candidateName: r.candidate_name || files[0].name
-        };
-      } catch (error: any) {
-        console.log('[UPLOAD-ERROR] Caught error:', error);
-        console.log('[UPLOAD-ERROR] Response status:', error?.response?.status);
-        console.log('[UPLOAD-ERROR] Response data:', error?.response?.data);
-
-        // Check for duplicate error (409 Conflict)
-        if (error?.response?.status === 409) {
-          const detail = error?.response?.data?.detail;
-          console.log('[UPLOAD-ERROR] 409 detail:', detail);
-          const existingResume = detail?.existing_resume;
-          const isExactDuplicate = detail?.is_exact_duplicate ?? true;
-          const contentDifferences = detail?.content_differences || [];
-          console.log('[UPLOAD-ERROR] existingResume:', existingResume);
-
-          if (existingResume) {
-            // Return existing resume info - UploadModal will decide how to handle it
-            // If onScoreResume is provided, UploadModal shows DuplicateResumeDetectedModal
-            // Otherwise, show the full duplicate resolution modal here
-            return {
-              success: false,
-              error: `A resume for ${existingResume.candidate_name || 'this candidate'} already exists in your Shared Resume Database.`,
-              existingResume: {
-                id: existingResume.id,
-                candidateName: existingResume.candidate_name || existingResume.file_name || 'Unknown',
-                email: existingResume.email || '',
-                currentTitle: existingResume.current_title || '',
-                folderName: existingResume.folder_name || '',
-                uploadedAt: existingResume.upload_date || '',
-                version: existingResume.version || 1,
-              },
-              // Also include full data for the old duplicate modal fallback
-              duplicateData: {
-                file: files[0],
-                existingResume: {
-                  id: existingResume.id,
-                  candidate_name: existingResume.candidate_name || existingResume.file_name || 'Unknown',
-                  email: existingResume.email || '',
-                  folder_name: existingResume.folder_name,
-                  folder_path: existingResume.folder_path || 'My Resumes',
-                  upload_date: existingResume.upload_date || '',
-                  file_size: existingResume.file_size || 0,
-                  file_name: existingResume.file_name || '',
-                  version: existingResume.version || 1,
-                  version_count: existingResume.version_count || existingResume.version || 1,
-                },
-                contentDifferences: contentDifferences,
-                isDuplicate: isExactDuplicate,
-                targetFolderId: targetFolderId,
-              }
-            };
-          }
-
-          return {
-            success: false,
-            error: 'This resume already exists in the system.',
-          };
-        }
-        // Check for validation errors (400 Bad Request)
-        else if (error?.response?.status === 400) {
-          const detail = error?.response?.data?.detail;
-
-          // Handle INVALID_RESUME error
-          if (detail?.error === 'INVALID_RESUME') {
-            return {
-              success: false,
-              error: detail?.message || 'The uploaded file does not appear to be a valid resume. It may be a scorecard, invoice, or other document type.',
-            };
-          }
-
-          // Handle NO_CONTENT error
-          if (detail?.error === 'NO_CONTENT') {
-            return {
-              success: false,
-              error: detail?.message || 'The resume file has no readable content. The file may be blank, image-only, or heavily formatted.',
-            };
-          }
-
-          // Handle other 400 errors
-          return {
-            success: false,
-            error: detail?.message || `Failed to upload ${files[0].name}`,
-          };
-        }
-        // Check for read-only mode (403 Forbidden)
-        else if (error?.response?.status === 403) {
-          const detail = error?.response?.data?.detail;
-          if (detail?.error === 'READ_ONLY_MODE') {
-            return {
-              success: false,
-              error: 'Uploads are disabled because your account is in read-only mode. Please contact your administrator.',
-            };
-          }
-          return {
-            success: false,
-            error: 'You do not have permission to upload resumes. Please contact your administrator.',
-          };
-        }
-        // Check for AI parsing service unavailable (503 Service Unavailable) -
-        // e.g. RU_OPENAI_API_KEY not configured on the backend.
-        else if (error?.response?.status === 503) {
-          const detail = error?.response?.data?.detail;
-          return {
-            success: false,
-            error: detail?.message || 'Resume upload is temporarily unavailable. Please try again later or contact your administrator.',
-          };
-        }
-        else {
-          // Fall back to whatever reason the backend gave, even for status
-          // codes not explicitly handled above, instead of a generic message
-          // that hides why the upload actually failed.
-          const detail = error?.response?.data?.detail;
-          const backendMessage = typeof detail === 'string' ? detail : detail?.message;
-          return { success: false, error: backendMessage || `Failed to upload ${files[0].name}` };
-        }
-      }
-    }
-
-    // For multiple files, use bulk upload with async processing
-    try {
-      // Note: previous completed batches are intentionally kept — the
-      // Completed tab in the Upload History modal serves as the history
-      // view, so wiping on every new upload would defeat its purpose.
-
-      // Start bulk upload - returns immediately with batch info
-      const batch = await resumeService.uploadBulk(files, targetFolderId);
-      // Claim it straight away — every later refresh filters on this ledger.
-      rememberBatchIds([batch.id]);
-
-      // Fetch full status with items immediately
-      let initialStatuses: any[] = [];
-      try {
-        const fullStatus = await resumeService.getBatchStatus(batch.id);
-        initialStatuses = fullStatus.items?.map((item: any) => ({
-          id: item.id,
-          fileName: item.file_name,
-          status: item.status === 'duplicated' ? 'duplicate' : item.status,
-          errorMessage: item.error_message,
-          candidateName: item.candidate_name,
-          resumeId: item.resume_id,
-        })) || [];
-      } catch (e) {
-        console.error('Error fetching initial batch status:', e);
-      }
-
-      // Replace temp "Uploading..." record with real batch data
-      const newBatchRecord = {
-        id: batch.id,
-        date: new Date().toISOString(),
-        fileName: `Bulk Upload (${batch.total_files} files)`,
-        totalFiles: batch.total_files,
-        completed: batch.completed || 0,
-        pending: batch.pending || batch.total_files,
-        duplicated: batch.duplicates || 0,
-        versioned: batch.versions || 0,
-        errors: batch.errors || 0,
-        cancelled: batch.cancelled || 0,
-        status: batch.status || 'processing',
-        source: 'my-resumes' as const,
-        statuses: initialStatuses,
-      };
-      // Remove temp record and add real one
-      setUploadHistory(prev => [newBatchRecord, ...prev.filter(r => !r.id.startsWith('temp-'))]);
-
-      // Poll for batch status until complete (REDUCED: every 3 seconds instead of 1)
-      const pollInterval = setInterval(async () => {
-        try {
-          const status = await resumeService.getBatchStatus(batch.id);
-
-          const processed = status.completed + status.errors + status.duplicates;
-          const total = status.total_files;
-          const percentage = Math.round((processed / total) * 100);
-
-          // Update upload history to show progress including individual file statuses
-          setUploadHistory(prev => prev.map(record =>
-            record.id === batch.id
-              ? {
-                  ...record,
-                  completed: status.completed,
-                  pending: status.pending,
-                  duplicated: status.duplicates,
-                  versioned: status.versions,
-                  errors: status.errors,
-                  cancelled: status.cancelled ?? 0,
-                  completedAt: status.completed_at,
-                  status: status.status,
-                  statuses: status.items?.map((item: any) => ({
-                    id: item.id,
-                    fileName: item.file_name,
-                    status: item.status === 'duplicated' ? 'duplicate' : item.status,
-                    errorMessage: item.error_message,
-                    candidateName: item.candidate_name,
-                    resumeId: item.resume_id,
-                  })) || [],
-                }
-              : record
-          ));
-
-          // Check if batch is complete.
-          // IMPORTANT: Do NOT stop on status.pending === 0 alone — the backend uses
-          // 'pending' only for queued items. Once a file moves to 'processing',
-          // pending drops to 0 but the file is still running. Stopping here causes
-          // it to freeze at "⚡ Processing..." forever.
-          const hasActiveItems = status.items?.some((item: any) =>
-            item.status === 'pending' || item.status === 'processing'
-          ) ?? false;
-
-          if (status.status === 'completed' || !hasActiveItems) {
-            clearInterval(pollInterval);
-            pollingIntervalsRef.current.delete(pollInterval); // Remove from tracking
-
-            // Refresh upload history and resume list — keeping the user's
-            // folder/search in place, with the global count refreshed on its own.
-            fetchUploadHistory();
-            fetchData(appliedSearchQuery, filters, selectedFolder, true);
-            refreshAllResumesTotal();
-          }
-        } catch (pollError) {
-          console.error('Error polling batch status:', pollError);
-          // On error, stop polling this batch to prevent infinite errors
-          clearInterval(pollInterval);
-          pollingIntervalsRef.current.delete(pollInterval);
-        }
-      }, 3000); // FIXED: Poll every 3 seconds (was 1 second) = 3x fewer requests
-
-      // Track interval for cleanup
-      pollingIntervalsRef.current.add(pollInterval);
-
-      // Set a timeout to stop polling after 10 minutes
-      const stopTimeout = setTimeout(() => {
-        clearInterval(pollInterval);
-        pollingIntervalsRef.current.delete(pollInterval);
-        console.log('[Upload] Polling stopped after 10 minutes timeout');
-      }, 600000);
-
-      return { success: true };
-    } catch (error: any) {
-      let message = 'Failed to start bulk upload';
-      // Check for read-only mode (403 Forbidden)
-      if (error?.response?.status === 403) {
-        const detail = error?.response?.data?.detail;
-        message = detail?.error === 'READ_ONLY_MODE'
-          ? 'Uploads are disabled because your account is in read-only mode. Please contact your administrator.'
-          : 'You do not have permission to upload resumes. Please contact your administrator.';
-      } else if (error?.response?.status === 409) {
-        // Duplicate error (409 Conflict)
-        message = error?.response?.data?.detail?.message || 'All files are duplicates';
-      }
-      // The upload dialog closed when this started, so say it here, and drop
-      // the optimistic "Uploading N files..." placeholder that will never fill.
-      toast.error(message);
-      setUploadHistory(prev => prev.filter(r => !(String(r.id).startsWith('temp-') && r.status === 'uploading')));
-      return { success: false, error: message };
-    }
-  };
-
   // Helper function to convert API resume to component type
   const convertApiResume = (r: ApiResume): Resume => ({
     id: r.id,
@@ -3959,18 +3026,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     );
   };
 
-  /* Display path of the folder the refused upload was aimed at, for the
-     "New Resume (Uploading)" card in the duplicate dialog. `pendingUploadFolderId`
-     is the id the upload actually used, which `handleUploadResumes` has already
-     resolved to the root folder when the user picked "All Resumes" or nothing —
-     so an empty breadcrumb means root, not "unknown". The "My Resumes /" prefix
-     matches the shape the backend returns in `folder_path` for the other card. */
-  const pendingUploadFolderPath = useMemo(() => {
-    if (pendingUploadFolderLabel) return `My Resumes / ${pendingUploadFolderLabel}`;
-    const segments = buildBreadcrumbPath(pendingUploadFolderId ?? null).map(f => f.name);
-    return ['My Resumes', ...(segments.length > 0 ? segments : ['root'])].join(' / ');
-  }, [pendingUploadFolderLabel, pendingUploadFolderId, buildBreadcrumbPath]);
-
   const selectedCardFolderFilterLabel = CARD_FOLDER_FILTER_OPTIONS.find(option => option.value === cardFolderFilter)?.label;
   // Active filter tags for the toolbar: the grid's Folder Filters pick (grid
   // view only — that's the only view with the control) plus one per filter the
@@ -3982,72 +3037,42 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     ...getResumeFilterChips(filters, (newFilters: any) => search.setFilters(newFilters)),
   ];
 
-  // Handle duplicate resolution
-  const handleResolveDuplicates = async (resolutions: { fileIndex: number; action: 'discard' | 'overwrite' | 'version' }[]) => {
-    /* No "Processing duplicate resolution..." loading toast here — the
-       DuplicateResumeModal's Confirm All/Continue button shows its own
-       loading state while this runs, so a floating toast on top of it was
-       redundant. Only the final outcome gets a toast. */
-    // Same as a plain upload: whatever batch this creates has to be claimed,
-    // or the ownership filter will read it as another account's.
-    const priorBatchIds = await snapshotBatchIds();
-
-    try {
-      let discardedCount = 0;
-      let overwrittenCount = 0;
-      let versionedCount = 0;
-
-      for (const resolution of resolutions) {
-        const duplicateFile = duplicateFiles[resolution.fileIndex];
-        if (!duplicateFile) continue;
-
-        if (resolution.action === 'discard') {
-          // Just skip this file
-          discardedCount += 1;
-        } else {
-          // Use the resolve duplicate and upload endpoint
-          await resumeService.resolveDuplicateAndUpload(
-            duplicateFile.file,
-            duplicateFile.existingResume.id,
-            resolution.action,
-            pendingUploadFolderId
-          );
-
-          if (resolution.action === 'overwrite') {
-            overwrittenCount += 1;
-          } else {
-            versionedCount += 1;
-          }
-        }
-      }
-
-      const summaryParts = [
-        discardedCount > 0 && `${discardedCount} discarded`,
-        overwrittenCount > 0 && `${overwrittenCount} overwritten`,
-        versionedCount > 0 && `${versionedCount} saved as new version${versionedCount > 1 ? 's' : ''}`,
-      ].filter(Boolean);
-      if (summaryParts.length > 0) {
-        toast.success(`Duplicate resolution complete: ${summaryParts.join(', ')}`);
-      }
-
-      // Refresh full list from server to get correct data
-      setTimeout(async () => {
-        fetchData(appliedSearchQuery, filters, selectedFolder, true);
-        refreshAllResumesTotal();
-        await adoptNewBatchIds(priorBatchIds);
-        fetchUploadHistory();
-      }, 500);
-    } catch (error: any) {
-      console.error('Error resolving duplicates:', error);
-      toast.error('Failed to resolve duplicate');
-    } finally {
-      setDuplicateFiles([]);
-      setPendingUploadFolderId(undefined);
-      setPendingUploadFolderLabel(undefined);
-      setIsDuplicateModalOpen(false);
-    }
-  };
-
+  /* Upload dialog, duplicate resolution and Upload History — the shared flow
+     every resume upload in the app runs through. */
+  const {
+    openUploadToFolder,
+    openUploadHistoryModal,
+    uploadHistory,
+    uploadStartedThisSession,
+    uploadFlowElements,
+  } = useResumeUploadFlow({
+    folders,
+    // Pre-select whichever folder the user is currently browsing.
+    // Card view uses `cardViewFolder` (drill-down navigation), list view
+    // uses `selectedFolder`. Skip the synthetic 'all' value — it's a
+    // filter, not a real folder the API knows about. When no folder is
+    // selected, the backend routes the upload to the user's root folder.
+    defaultTargetFolder: (cardViewFolder && cardViewFolder !== 'all' ? cardViewFolder : null)
+      || (selectedFolder && selectedFolder !== 'all' ? selectedFolder : null)
+      || undefined,
+    canUpload: canUploadMyResumes,
+    onCreateFolder: handleCreateFolder,
+    onViewResume: (resumeId) => {
+      sessionStorage.setItem('resumeNavSource', 'my-resumes');
+      router.push(`/recruitment/resume-view/${resumeId}?${RESUME_VIEW_SOURCE_PARAM}=my-resumes`);
+    },
+    onRootFolderCreated: (folder) => setFolders(prev => [...prev, folder]),
+    // Refresh the view the user is actually on, and update the pinned
+    // All Resumes count separately.
+    onRefresh: () => {
+      fetchData(appliedSearchQuery, filters, selectedFolder, true);
+      refreshAllResumesTotal();
+    },
+    // Optimistic update for instant UI feedback
+    onResumeStored: (resume, via) => {
+      if (via === 'upload') setResumes(prev => [convertApiResume(resume), ...prev]);
+    },
+  });
   if (loading) {
     // Structure-matched skeleton mirroring the real My Resumes page: same
     // outer wrapper / white card, the same header block (icon box, title +
@@ -4219,9 +3244,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             onUnarchive={isArchivedContext ? () => handleUnarchiveResumes(selectedResumes) : undefined}
             onUnarchiveDisabled={!canArchiveMyResumes}
             onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
-            onAITalentMatch={!isArchivedContext ? handleAITalentMatch : undefined}
-            onAITalentMatchDisabled={isPlanLocked('ai_talent_match') || !(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match')))}
-            onAITalentMatchDisabledReason={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? "You do not have permission to run AI talent match" : PLAN_LOCKED_MESSAGE}
             // No `my_resumes:ai_interview` action code exists yet, so this
             // follows the AI Interviews module's own share permission.
             onAIInterview={!isArchivedContext ? handleAIInterview : undefined}
@@ -5054,52 +4076,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         )}
       </div>
 
-      {isUploadModalOpen && (
-        <UploadModal
-          folders={folders.filter(f => f.id !== 'all' && !(f.name === 'Archived Resumes' && !f.parentId))}
-          tenant={null}
-          // Pre-select whichever folder the user is currently browsing.
-          // Card view uses `cardViewFolder` (drill-down navigation), list view
-          // uses `selectedFolder`. Skip the synthetic 'all' value — it's a
-          // filter, not a real folder the API knows about. When no folder is
-          // selected, the backend routes the upload to the user's root folder.
-          targetFolder={(() => {
-            if (uploadTargetFolderId) return uploadTargetFolderId;
-            const card = cardViewFolder && cardViewFolder !== 'all'
-              ? cardViewFolder
-              : null;
-            const list = selectedFolder && selectedFolder !== 'all' ? selectedFolder : null;
-            return card || list || undefined;
-          })()}
-          scopeFolderId={uploadScopeFolderId}
-          onClose={() => {
-            setIsUploadModalOpen(false);
-            setUploadTargetFolderId(undefined);
-            setUploadScopeFolderId(undefined);
-          }}
-          onUpload={handleUploadResumes}
-          onCreateFolder={handleCreateFolder}
-          onViewResume={(resumeId) => {
-            setIsUploadModalOpen(false);
-            sessionStorage.setItem('resumeNavSource', 'my-resumes');
-            router.push(`/recruitment/resume-view/${resumeId}?${RESUME_VIEW_SOURCE_PARAM}=my-resumes`);
-          }}
-          onDuplicateDetected={(duplicateData) => {
-            // Set duplicate files for the DuplicateResumeModal
-            setDuplicateFiles([{
-              file: duplicateData.file,
-              existingResume: duplicateData.existingResume,
-              contentDifferences: duplicateData.contentDifferences || [],
-              isDuplicate: duplicateData.isDuplicate,
-            }]);
-            setPendingUploadFolderId(duplicateData.targetFolderId);
-            setPendingUploadFolderLabel(duplicateData.targetFolderPath);
-            setIsUploadModalOpen(false);
-            setIsDuplicateModalOpen(true);
-          }}
-        />
-      )}
+      {uploadFlowElements}
 
+      {scoringProgressModal}
       {/* The eye in the Actions column reads the resume in the same document
           preview the version lists use, so viewing a resume looks the same
           wherever it is opened from. */}
@@ -5110,21 +4089,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           title={quickViewResume.name}
           subtitle={quickViewResume.fileName}
           onClose={() => setQuickViewResume(null)}
-        />
-      )}
-
-      {/* Duplicate Resume Modal */}
-      {isDuplicateModalOpen && duplicateFiles.length > 0 && (
-        <DuplicateResumeModal
-          duplicates={duplicateFiles}
-          onClose={() => {
-            setIsDuplicateModalOpen(false);
-            setDuplicateFiles([]);
-            setPendingUploadFolderId(undefined);
-            setPendingUploadFolderLabel(undefined);
-          }}
-          onResolve={handleResolveDuplicates}
-          targetFolderPath={pendingUploadFolderPath}
         />
       )}
 
@@ -5152,98 +4116,18 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         />
       )}
 
-      {/* Duplicate Scoring Warning Modal */}
-      {duplicateScoringWarning.isOpen && (
-        <>
-          {/* Backdrop */}
-          <div className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200" />
-          {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-              {/* Header */}
-              <div className="flex-shrink-0 flex items-center gap-4 p-6 border-b border-gray-200">
-                <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
-                  <AlertCircle className="w-6 h-6 text-yellow-600" />
-                </div>
-                <div>
-                  <h3 className="tf-section-title">Already Scored - Duplicate Warning</h3>
-                  <p className="tf-body-muted">{duplicateScoringWarning.jobTitle}</p>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-6">
-                <p className="text-gray-700 mb-4">
-                  <span className="font-semibold text-red-600">{duplicateScoringWarning.existingScores.length} candidate(s)</span> have already been scored for this job description.
-                </p>
-
-                {/* List of duplicate candidates */}
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                  <h4 className="tf-row-title mb-3 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-red-600" />
-                    Already Scored - Will NOT be Re-scored:
-                  </h4>
-                  <div className="space-y-2">
-                    {duplicateScoringWarning.existingScores.map((score, idx) => (
-                      <div key={idx} className="flex items-center justify-between gap-3 bg-white rounded-lg p-3 border border-red-200">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                            <X className="w-4 h-4 text-red-600" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-medium text-gray-900 truncate">{score.candidate_name}</div>
-                            {score.scored_at && (
-                              <div className="tf-meta">
-                                Scored on {formatDateTimeIST(score.scored_at)}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <div className="tf-row-title">{formatOverallScore(score.overall_rating_10, score.overall_score)}</div>
-                          <div className="tf-meta capitalize">{score.match_status}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {duplicateScoringWarning.newCount > 0 ? (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <p className="tf-body">
-                      <span className="font-semibold text-green-700">{duplicateScoringWarning.newCount} new candidate(s)</span> will be scored if you continue.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <p className="tf-body-secondary">
-                      All selected candidates are already scored. No new candidates to score.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="flex-shrink-0 flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200">
-                <button
-                  onClick={() => setDuplicateScoringWarning({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 })}
-                  className="tf-btn tf-btn-secondary px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors whitespace-normal gap-0 font-normal"
-                >
-                  Cancel
-                </button>
-                {duplicateScoringWarning.newCount > 0 && (
-                  <button
-                    onClick={handleScoreOnlyNew}
-                    className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Score Only New ({duplicateScoringWarning.newCount})
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </>
+      {/* Before scoring starts: what will be scored, what is skipped, units. */}
+      {scoringRequest && (
+        <ScoringStartSummary
+          request={scoringRequest}
+          onBack={() => { setScoringRequest(null); setIsApplyToJobModalOpen(true); }}
+          onCancel={() => {
+            setScoringRequest(null);
+            setSingleResumeToApply(null);
+            setUploadedResumeToScore(null);
+          }}
+          onStart={(ids) => proceedWithScoring(scoringRequest.job.id, ids, scoringRequest.names)}
+        />
       )}
 
       {/* ZIP Download Confirmation Modal */}
@@ -5410,1096 +4294,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         </>
       )}
 
-      {/* Upload History Sheet (Slide-in Panel) */}
-      {/* Minimized Upload History Floating Indicator */}
-      {isUploadHistoryMinimized && (
-        <div
-          onClick={() => {
-            setIsUploadHistoryMinimized(false);
-            setIsUploadHistoryModalOpen(true);
-          }}
-          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 bg-brand-blue hover:bg-brand-blue-2 text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-all cursor-pointer flex items-center gap-2 sm:gap-3 animate-in slide-in-from-bottom duration-300"
-        >
-          <div className="relative">
-            <History className="w-5 h-5" />
-            {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-brand-orange rounded-full animate-pulse" />
-            )}
-          </div>
-          <div>
-            <p className="text-sm font-medium">Upload History</p>
-            <p className="text-xs text-blue-100">
-              {(() => {
-                const processing = uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length;
-                return processing > 0 ? `${processing} processing...` : 'Click to expand';
-              })()}
-            </p>
-          </div>
-          <Maximize2 className="w-4 h-4 ml-2" />
-        </div>
-      )}
 
-      {isUploadHistoryModalOpen && !isUploadHistoryMinimized && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-300"
-            onClick={() => {
-              setIsUploadHistoryMinimized(true);
-              setIsUploadHistoryModalOpen(false);
-            }}
-          />
-          {/* Centered Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-4xl max-h-[85dvh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-              {/* Header — plain, one hairline under it */}
-              <div className="bg-white border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0">
-                    <h2 className="tf-section-title sm:text-xl tracking-tight">Upload History</h2>
-                    <p className="tf-body-secondary mt-0.5">View all past bulk upload reports</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => {
-                        setIsUploadHistoryMinimized(true);
-                        setIsUploadHistoryModalOpen(false);
-                      }}
-                      className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-xl font-medium"
-                      aria-label="Minimize" title="Minimize"
-                    >
-                      −
-                    </button>
-                    <button
-                      onClick={handleCloseUploadHistory}
-                      className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                      aria-label="Close"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 bg-gray-50/70">
-                {(() => {
-                  const myResumesHistory = uploadHistory.filter(r => r.source === 'my-resumes');
-                  const isActive = (r: any) => r.status === 'processing' || r.pending > 0;
-                  const activeRecords = myResumesHistory.filter(isActive);
-                  const completedRecords = myResumesHistory.filter(r => !isActive(r));
-
-                  // Stats are scoped to the records in the active tab — when a
-                  // batch finishes its numbers move from Currently Processing
-                  // into Completed automatically.
-                  const displayRecords = uploadHistoryTab === 'current' ? activeRecords : completedRecords;
-                  const completedCount = displayRecords.reduce((sum, r) => sum + (r.completed || 0), 0);
-                  const duplicatedCount = displayRecords.reduce((sum, r) => sum + (r.duplicated || 0), 0);
-                  const versionedCount = displayRecords.reduce((sum, r) => sum + (r.versioned || 0), 0);
-                  const failedCount = displayRecords.reduce((sum, r) => sum + (r.errors || 0), 0);
-                  const pendingCount = displayRecords.reduce((sum, r) => sum + (r.pending || 0), 0);
-                  // Fall back to the item list for batches whose row predates the `cancelled` column.
-                  const cancelledTotal = displayRecords.reduce((sum, r) => sum + Math.max(
-                    r.cancelled || 0,
-                    r.statuses?.filter((s: any) => s.status === 'cancelled' || s.status === 'discarded').length || 0,
-                  ), 0);
-                  const totalFiles = displayRecords.reduce((sum, r) => sum + (r.totalFiles || 0), 0);
-                  // Cancelled files were never attempted, so they must not count against
-                  // the success rate — that is what turned a cancelled batch into "23%".
-                  const attemptedFiles = Math.max(0, totalFiles - cancelledTotal);
-                  const successRate = attemptedFiles > 0 ? Math.round((completedCount / attemptedFiles) * 100) : 0;
-
-                  /* A tab holding no batches at all gets one illustrated empty
-                     state and nothing else. Previously it stacked three blocks
-                     that each said the same thing — the all-zero stats card, the
-                     "0 batches" list header, and the list's own placeholder. */
-                  const showFullEmptyState = displayRecords.length === 0;
-
-                  return (
-                    <>
-                      {/* Tabs */}
-                      <div className="tf-card-soft inline-flex items-center p-1 mb-4 sm:mb-6">
-                        <button
-                          onClick={() => setUploadHistoryTab('current')}
-                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-sm font-medium transition-all ${
-                            uploadHistoryTab === 'current'
-                              ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                              : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
-                          }`}
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeRecords.length > 0 && uploadHistoryTab !== 'current' ? 'text-brand-blue animate-spin' : ''}`} />
-                          Currently Processing
-                          {activeRecords.length > 0 && (
-                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold ${
-                              uploadHistoryTab === 'current' ? 'bg-white text-brand-blue' : 'bg-brand-blue/10 text-brand-blue'
-                            }`}>
-                              {activeRecords.length}
-                            </span>
-                          )}
-                        </button>
-                        <button
-                          onClick={() => setUploadHistoryTab('completed')}
-                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-sm font-medium transition-all ${
-                            uploadHistoryTab === 'completed'
-                              ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                              : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
-                          }`}
-                        >
-                          <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                          Completed
-                          {completedRecords.length > 0 && (
-                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold ${
-                              uploadHistoryTab === 'completed' ? 'bg-white text-brand-blue' : 'bg-gray-100 text-gray-700'
-                            }`}>
-                              {completedRecords.length}
-                            </span>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* 7-card stats grid — same layout in both tabs, scoped to
-                          the tab's records. Brand palette throughout, except the
-                          neutral Cancelled card. When
-                          every number is zero the grid is replaced by a single
-                          "nothing here" card, so a wall of zeros never shows.
-                          Skipped entirely when the tab has no batches — the
-                          illustrated empty state below speaks for it. */}
-                      {!showFullEmptyState && (() => {
-                        const statCards = [
-                          // Labelled "Files Completed" (not "Completed") because it sums completed
-                          // files across every batch in this tab, while the tab badge and the
-                          // "N batches" header below count batches — a batch with several files
-                          // can push this past that batch count, which used to read as a bug.
-                          { key: 'completed', label: 'Files Completed', value: completedCount, icon: CheckCircle, tone: 'brand-blue' },
-                          { key: 'duplicated', label: 'Duplicates', value: duplicatedCount, icon: Copy, tone: 'brand-orange' },
-                          { key: 'versioned', label: 'Versioned', value: versionedCount, icon: GitBranch, tone: 'brand-blue-2' },
-                          { key: 'error', label: 'Failed', value: failedCount, icon: AlertCircle, tone: 'brand-orange-deep' },
-                          { key: 'pending', label: 'Pending', value: pendingCount, icon: Clock, tone: 'brand-teal' },
-                          { key: 'cancelled', label: 'Cancelled', value: cancelledTotal, icon: Ban, tone: 'gray' },
-                        ] as const;
-
-                        // Tailwind needs whole class names, so map tone → classes.
-                        const TONE_CLASS: Record<string, { card: string; active: string; idle: string; tile: string; value: string }> = {
-                          'brand-blue': {
-                            card: 'from-brand-blue/[0.08] to-brand-blue/[0.03]',
-                            active: 'border-brand-blue/50 ring-2 ring-brand-blue/30 shadow-md',
-                            idle: 'border-brand-blue/20',
-                            tile: 'bg-brand-blue/10 text-brand-blue',
-                            value: 'text-brand-blue',
-                          },
-                          'brand-blue-2': {
-                            card: 'from-brand-blue-2/[0.08] to-brand-blue-2/[0.03]',
-                            active: 'border-brand-blue-2/50 ring-2 ring-brand-blue-2/30 shadow-md',
-                            idle: 'border-brand-blue-2/20',
-                            tile: 'bg-brand-blue-2/10 text-brand-blue-2',
-                            value: 'text-brand-blue-2',
-                          },
-                          'brand-cyan': {
-                            card: 'from-brand-cyan/[0.08] to-brand-cyan/[0.03]',
-                            active: 'border-brand-cyan/50 ring-2 ring-brand-cyan/30 shadow-md',
-                            idle: 'border-brand-cyan/20',
-                            tile: 'bg-brand-cyan/10 text-brand-cyan',
-                            value: 'text-brand-cyan',
-                          },
-                          'brand-teal': {
-                            card: 'from-brand-teal/[0.08] to-brand-teal/[0.03]',
-                            active: 'border-brand-teal/50 ring-2 ring-brand-teal/30 shadow-md',
-                            idle: 'border-brand-teal/20',
-                            tile: 'bg-brand-teal/10 text-brand-teal',
-                            value: 'text-brand-teal',
-                          },
-                          'brand-orange': {
-                            card: 'from-brand-orange/[0.08] to-brand-orange/[0.03]',
-                            active: 'border-brand-orange/50 ring-2 ring-brand-orange/30 shadow-md',
-                            idle: 'border-brand-orange/20',
-                            tile: 'bg-brand-orange/10 text-brand-orange',
-                            value: 'text-brand-orange-deep',
-                          },
-                          'brand-orange-deep': {
-                            card: 'from-brand-orange-deep/[0.08] to-brand-orange-deep/[0.03]',
-                            active: 'border-brand-orange-deep/50 ring-2 ring-brand-orange-deep/30 shadow-md',
-                            idle: 'border-brand-orange-deep/20',
-                            tile: 'bg-brand-orange-deep/10 text-brand-orange-deep',
-                            value: 'text-brand-orange-deep',
-                          },
-                          // Cancelled is deliberately off-palette: it's an
-                          // absence of work, not a result.
-                          'gray': {
-                            card: 'from-gray-100 to-gray-200/50',
-                            active: 'border-gray-700 ring-2 ring-gray-400 shadow-md',
-                            idle: 'border-gray-300',
-                            tile: 'bg-gray-100 text-gray-600',
-                            value: 'text-gray-800',
-                          },
-                        };
-
-                        const allZero = statCards.every(card => (card.value || 0) === 0) && totalFiles === 0;
-
-                        if (allZero) {
-                          return (
-                            <div className="flex items-center gap-3 mb-4 sm:mb-6 tf-panel p-4">
-                              <div className="w-9 h-9 bg-brand-blue/10 text-brand-blue rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Clock className="w-4 h-4" />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="tf-row-name">
-                                  {uploadHistoryTab === 'current' ? 'No uploads in progress' : 'No completed uploads yet'}
-                                </p>
-                                <p className="tf-meta">
-                                  {uploadHistoryTab === 'current'
-                                    ? 'Upload resumes to see live progress and status counts here.'
-                                    : 'Finished upload batches and their status counts will appear here.'}
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        // Only outcomes that actually happened get a card — a
-                        // batch with no duplicates or failures shouldn't spend
-                        // grid space saying so. The active filter's card stays
-                        // even at zero, otherwise clicking a card could make it
-                        // vanish with the filter still applied and no way to
-                        // toggle it back off.
-                        const visibleCards = statCards.filter(
-                          card => (card.value || 0) > 0 || uploadHistoryFilter === card.key
-                        );
-
-                        return (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
-                            {visibleCards.map(({ key, label, value, icon: Icon, tone }) => {
-                              const t = TONE_CLASS[tone];
-                              const isActive = uploadHistoryFilter === key;
-                              return (
-                                <div
-                                  key={key}
-                                  onClick={() => setUploadHistoryFilter(isActive ? null : key)}
-                                  className={`bg-white border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-colors ${isActive ? t.active : 'border-gray-200 hover:border-gray-300'}`}
-                                >
-                                  <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 mb-1.5 sm:mb-2">
-                                    <div className={`w-6 h-6 sm:w-7 sm:h-7 ${t.tile} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                                      <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                    </div>
-                                    <span className="tf-meta truncate">{label}</span>
-                                  </div>
-                                  <div className={`text-lg sm:text-xl lg:text-2xl font-bold tracking-tight ${t.value}`}>{value}</div>
-                                </div>
-                              );
-                            })}
-
-                            {/* Success Rate — not a filter, so it stays static.
-                                Hidden when nothing was attempted: 0% would read
-                                as a total failure rather than "no data". */}
-                            {attemptedFiles > 0 && (
-                            <div className="tf-panel p-2.5 sm:p-3 lg:p-4">
-                              <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 mb-1.5 sm:mb-2">
-                                <div className="w-6 h-6 sm:w-7 sm:h-7 bg-brand-cyan/10 text-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
-                                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                </div>
-                                <span className="tf-meta truncate">Success Rate</span>
-                              </div>
-                              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
-                            </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Active Filter Indicator */}
-                      {uploadHistoryFilter && (
-                        <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-white rounded-lg shadow-sm shadow-black/[0.03]">
-                          <span className="tf-meta">Filtering by:</span>
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                            uploadHistoryFilter === 'completed' ? 'bg-brand-blue/10 text-brand-blue' :
-                            uploadHistoryFilter === 'duplicated' ? 'bg-brand-orange/15 text-brand-orange-deep' :
-                            uploadHistoryFilter === 'versioned' ? 'bg-brand-blue-2/10 text-brand-blue-2' :
-                            uploadHistoryFilter === 'error' ? 'bg-brand-orange-deep/10 text-brand-orange-deep' :
-                            uploadHistoryFilter === 'cancelled' ? 'bg-gray-200 text-gray-800' :
-                            'bg-brand-teal/10 text-brand-teal'
-                          }`}>
-                            {uploadHistoryFilter === 'completed' ? 'Files Completed' :
-                             uploadHistoryFilter === 'duplicated' ? 'Duplicates' :
-                             uploadHistoryFilter === 'versioned' ? 'Versioned' :
-                             uploadHistoryFilter === 'error' ? 'Failed' :
-                             uploadHistoryFilter === 'cancelled' ? 'Cancelled' :
-                             'Pending'}
-                          </span>
-                          <button
-                            onClick={() => setUploadHistoryFilter(null)}
-                            className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                           aria-label="Close">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Overall ETA Banner — only relevant on the Currently Processing tab */}
-                      {uploadHistoryTab === 'current' && (() => {
-                        // Only show for batches that still have genuinely active items
-                        const activeBatches = myResumesHistory.filter(r =>
-                          r.pending > 0 && r.date &&
-                          r.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing')
-                        );
-                        if (activeBatches.length === 0) return null;
-                        const totalPending = activeBatches.reduce((sum: number, r: any) => sum + r.pending, 0);
-                        const totalProcessed = activeBatches.reduce((sum: number, r: any) => sum + r.completed + r.errors + r.duplicated + (r.versioned || 0), 0);
-                        if (totalProcessed <= 0) {
-                          return (
-                            <div className="flex items-center gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/[0.07] rounded-xl">
-                              <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue animate-spin flex-shrink-0" />
-                              <span className="text-sm text-brand-blue">Processing {totalPending} resume{totalPending !== 1 ? 's' : ''}... Estimating time remaining</span>
-                            </div>
-                          );
-                        }
-                        // Cap elapsed at 10 minutes so a batch that started hours ago with a
-                        // stuck file doesn't produce an absurd ETA (e.g. "233–433 mins remaining").
-                        const earliestStart = Math.min(...activeBatches.map((r: any) => new Date(r.date).getTime()));
-                        const elapsed = Math.min(Date.now() - earliestStart, 10 * 60 * 1000);
-                        const avgTimePerFile = elapsed / totalProcessed;
-                        const remainingMs = totalPending * avgTimePerFile;
-                        const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
-                        const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
-                        const etaText = lowMins === highMins
-                          ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
-                          : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
-                        return (
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/[0.07] rounded-xl">
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0" />
-                              <span className="text-sm font-medium text-brand-blue">{etaText}</span>
-                            </div>
-                            <span className="text-xs text-brand-blue/60 sm:ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
-                          </div>
-                        );
-                      })()}
-
-                      {/* Upload History List */}
-                      {!showFullEmptyState && (
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="tf-row-title">
-                            {uploadHistoryTab === 'current' ? 'Active Uploads' : 'Recent Uploads'}
-                          </h3>
-                          <span className="tf-meta">{displayRecords.length} batch{displayRecords.length !== 1 ? 'es' : ''}</span>
-                        </div>
-                      )}
-
-                      {showFullEmptyState ? (
-                        <>
-                          <UploadHistoryEmptyState
-                            title={
-                              uploadHistoryTab === 'current'
-                                ? 'No uploads in progress'
-                                : myResumesHistory.length === 0 ? 'No upload history yet' : 'Nothing here yet'
-                            }
-                            lines={
-                              uploadHistoryTab === 'current'
-                                ? ['All your uploads are processed.', 'Start a new bulk upload to see live progress here.']
-                                : myResumesHistory.length === 0
-                                  ? ['Bulk upload reports will appear here.', 'Upload multiple resumes to see detailed status reports.']
-                                  : ['Your uploads are still running.', 'Their reports will appear here once they finish.']
-                            }
-                            /* Straight from history into the upload dialog — the
-                               modal has to close first or the two would stack. */
-                            onAction={() => {
-                              handleCloseUploadHistory();
-                              openUploadToFolder(undefined);
-                            }}
-                            actionDisabledReason={!canUploadMyResumes ? 'You do not have permission to upload resumes' : undefined}
-                          />
-
-                          {/* The Upload Resume popup's own Tip — the brand's amber,
-                              so it reads as guidance rather than a warning. */}
-                          <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
-                            <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
-                            <p className="tf-body">
-                              <span className="font-semibold">Tip:</span> You can upload a single resume or bulk upload multiple resumes at once.
-                            </p>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="space-y-4">
-                          {displayRecords
-                            .slice(0, 20)
-                            .map(record => {
-                              // Prefer the server counter, but fall back to the item list so an
-                              // older batch row (written before `cancelled` existed) still adds up.
-                              const cancelledFromItems = record.statuses?.filter(
-                                (s: any) => s.status === 'cancelled' || s.status === 'discarded'
-                              ).length ?? 0;
-                              const cancelledCount = Math.max(record.cancelled ?? 0, cancelledFromItems);
-                              const processed = record.completed + record.errors + record.duplicated + (record.versioned || 0) + cancelledCount;
-                              // Files the batch counters can't explain. If this is ever non-zero the
-                              // summary is under-reporting, and we say so instead of hiding it.
-                              const unaccountedCount = Math.max(0, (record.totalFiles || 0) - processed - (record.pending || 0));
-                              // Success is measured against files that were actually attempted —
-                              // cancelling 77 of 100 is not a 23% failure of the upload.
-                              const attempted = Math.max(0, (record.totalFiles || 0) - cancelledCount);
-                              const percentage = attempted > 0 ? Math.round((record.completed / attempted) * 100) : 100;
-                              const isUploading = record.status === 'uploading';
-                              const isProcessing = record.status === 'processing' || record.pending > 0;
-                              const isCancelled = cancelledCount > 0;
-                              // Optimistic pre-API record: its id and item ids are `temp-*`
-                              // placeholders, not UUIDs. Every retry/cancel endpoint takes UUID
-                              // path params, so any action fired against it 422s on uuid_parsing.
-                              // `local-*` records are the client-side stand-ins for single
-                              // uploads the server gave us no batch for — same story, no UUID.
-                              const isTempRecord = record.id.startsWith('temp-') || record.id.startsWith('local-');
-                              const hasErrors = record.errors > 0;
-                              const hasIssues = record.duplicated > 0 || (record.versioned || 0) > 0 || record.errors > 0 || cancelledCount > 0;
-
-                              return (
-                                <div
-                                  key={record.id}
-                                  /* One subtle border, nothing else: the card is not
-                                     clickable, so no hover lift or chevron either. */
-                                  className="tf-panel pb-4 sm:pb-5"
-                                >
-                                  {/* Header Row */}
-                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 sm:px-5 pt-4 sm:pt-5">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="w-9 h-9 bg-brand-blue/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <FileText className="w-4 h-4 text-brand-blue" />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <span className="tf-row-title block truncate">{record.fileName}</span>
-                                        {record.date && (
-                                          <span className="tf-meta flex items-center gap-1 mt-0.5">
-                                            <Calendar className="w-3 h-3 flex-shrink-0" />
-                                            <span className="truncate">Started {formatDateTimeIST(record.date)}</span>
-                                          </span>
-                                        )}
-                                        {record.completedAt && record.pending === 0 && (() => {
-                                          const start = new Date(record.date).getTime();
-                                          const end = new Date(record.completedAt).getTime();
-                                          const ms = Math.max(0, end - start);
-                                          const totalSec = Math.round(ms / 1000);
-                                          const h = Math.floor(totalSec / 3600);
-                                          const m = Math.floor((totalSec % 3600) / 60);
-                                          const s = totalSec % 60;
-                                          const duration = h > 0
-                                            ? `${h}h ${m}m ${s}s`
-                                            : m > 0
-                                              ? `${m}m ${s}s`
-                                              : `${s}s`;
-                                          return (
-                                            <span className="tf-meta flex items-center gap-1 mt-0.5">
-                                              <CheckCircle className="w-3 h-3 flex-shrink-0 text-brand-blue" />
-                                              <span className="truncate">
-                                                Finished {formatDateTimeIST(record.completedAt)}
-                                                <span className="ml-1.5 text-gray-400">·</span>
-                                                <span className="ml-1.5 text-gray-700 font-medium">{duration}</span>
-                                              </span>
-                                            </span>
-                                          );
-                                        })()}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 ml-12 sm:ml-0">
-                                      {isUploading && (
-                                        <span className="tf-badge gap-1.5 bg-brand-blue/10 text-brand-blue">
-                                          <Loader2 className="w-3 h-3 animate-spin" />
-                                          Uploading…
-                                        </span>
-                                      )}
-                                      {!isUploading && hasIssues && (
-                                        <span className="tf-badge gap-1.5 bg-brand-orange/10 text-brand-orange-deep">
-                                          <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                                          Needs review
-                                        </span>
-                                      )}
-                                      {!isUploading && (
-                                        <div className="text-right">
-                                          <div className={`text-xl font-bold tracking-tight leading-none tabular-nums ${
-                                            percentage === 100 ? 'text-brand-blue' :
-                                            percentage >= 90 ? 'text-brand-cyan' :
-                                            percentage >= 70 ? 'text-brand-orange' :
-                                            'text-brand-orange-deep'
-                                          }`}>
-                                            {percentage}%
-                                          </div>
-                                          <div className="tf-micro-hint mt-1 uppercase tracking-wide">Success</div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Outcome strip — one soft panel split by hairlines instead
-                                      of six separately bordered tiles; a number is coloured
-                                      only when something actually landed in it. */}
-                                  <div className="mx-4 sm:mx-5 mt-4 grid grid-cols-3 sm:grid-cols-6 gap-y-2 rounded-lg bg-gray-50 py-2.5 sm:divide-x sm:divide-gray-200/80">
-                                    {[
-                                      { label: 'Done', value: record.completed, tone: 'text-brand-blue' },
-                                      { label: 'Duplicates', value: record.duplicated, tone: 'text-brand-orange-deep' },
-                                      { label: 'Version', value: record.versioned || 0, tone: 'text-brand-blue-2' },
-                                      { label: 'Failed', value: record.errors, tone: 'text-destructive' },
-                                      { label: 'Pending', value: record.pending, tone: 'text-brand-teal' },
-                                      { label: 'Cancelled', value: cancelledCount, tone: 'text-gray-700' },
-                                    ].map(({ label, value, tone }) => (
-                                      <div key={label} className="text-center px-1">
-                                        <div className={`text-base font-semibold tabular-nums leading-tight ${value > 0 ? tone : 'text-gray-300'}`}>{value}</div>
-                                        <div className="tf-micro-hint mt-0.5">{label}</div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                  {unaccountedCount > 0 && (
-                                    <div className="mx-4 sm:mx-5 mt-3 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                                      <AlertCircle className="mt-px h-3.5 w-3.5 flex-shrink-0" />
-                                      <span>
-                                        {unaccountedCount} file{unaccountedCount !== 1 ? 's' : ''} in this batch {unaccountedCount !== 1 ? 'are' : 'is'} not
-                                        reflected in the totals above — open the file list below for their actual state.
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {/* Progress, with the time estimate right under the bar */}
-                                  <div className="px-4 sm:px-5 mt-4">
-                                    <div className="flex items-center justify-between text-xs mb-1.5">
-                                      <span className="font-medium text-gray-700">Progress</span>
-                                      <span className="text-gray-500 tabular-nums">{processed} of {record.totalFiles}</span>
-                                    </div>
-                                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                      <div
-                                        className={`h-full rounded-full transition-all ${
-                                          percentage === 100 ? 'bg-brand-blue' :
-                                          percentage >= 90 ? 'bg-brand-cyan' :
-                                          percentage >= 70 ? 'bg-brand-orange' :
-                                          'bg-brand-orange-deep'
-                                        }`}
-                                        style={{ width: `${Math.min((processed / record.totalFiles) * 100, 100)}%` }}
-                                      />
-                                    </div>
-                                    {/* Estimated Time Remaining — only when items are genuinely active */}
-                                    {record.pending > 0 && record.date &&
-                                     record.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing') &&
-                                     (() => {
-                                      // Cap elapsed at 10 minutes to prevent absurd ETAs when a file
-                                      // is stuck at 'processing' and the batch started hours ago.
-                                      const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
-                                      if (processed <= 0 || elapsed <= 0) {
-                                        return (
-                                          <div className="flex items-center gap-1.5 mt-2 tf-meta">
-                                            <Clock className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue" />
-                                            <span>Estimating time remaining…</span>
-                                          </div>
-                                        );
-                                      }
-                                      const avgTimePerFile = elapsed / processed;
-                                      const remainingMs = record.pending * avgTimePerFile;
-                                      const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
-                                      const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
-                                      const etaText = lowMins === highMins
-                                        ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
-                                        : `Approx. ${lowMins}–${highMins} mins remaining`;
-                                      return (
-                                        <div className="flex items-center gap-1.5 mt-2 tf-meta">
-                                          <Clock className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue" />
-                                          <span>{etaText}</span>
-                                          <span className="text-gray-300">·</span>
-                                          <span>{record.pending} file{record.pending !== 1 ? 's' : ''} left</span>
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
-
-                                  {/* Retry / Cancel Batch — borderless tinted buttons. Hidden
-                                      until the optimistic temp record is swapped for the real
-                                      server batch_id, since both endpoints take a UUID. */}
-                                  {(isProcessing || hasErrors || isCancelled) && !isTempRecord && (
-                                    <div className="flex items-center gap-2 px-4 sm:px-5 mt-4" onClick={e => e.stopPropagation()}>
-                                      {(isProcessing || hasErrors || isCancelled) && (
-                                        <button
-                                          type="button"
-                                          disabled={retryingBatches.has(record.id)}
-                                          onClick={(e) => handleRetryBatch(record.id, e)}
-                                          className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-lg transition-colors text-brand-blue bg-brand-blue/[0.08] hover:bg-brand-blue/[0.14] disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                        >
-                                          <RefreshCw className={`w-3.5 h-3.5 ${retryingBatches.has(record.id) ? 'animate-spin' : ''}`} />
-                                          {retryingBatches.has(record.id)
-                                            ? 'Retrying…'
-                                            : isCancelled && !isProcessing ? `Re-queue ${cancelledCount} cancelled` : 'Retry'}
-                                        </button>
-                                      )}
-                                      {/* Cancel — only while items are still pending. type="button"
-                                          so a stray Enter can't activate it; it opens a confirmation. */}
-                                      {isProcessing && record.pending > 0 && (
-                                        <button
-                                          type="button"
-                                          disabled={cancellingBatches.has(record.id)}
-                                          onClick={(e) => handleCancelBatch(record.id, record.pending, e)}
-                                          onKeyDown={(e) => {
-                                            // Space scrolls the file list; it must not double as "cancel 77 files".
-                                            if (e.key === ' ') e.preventDefault();
-                                          }}
-                                          className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-lg transition-colors text-destructive bg-destructive-subtle hover:brightness-95 disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                        >
-                                          <X className="w-3.5 h-3.5" />
-                                          {cancellingBatches.has(record.id) ? 'Cancelling…' : `Cancel batch (${record.pending} pending)`}
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  {/* Individual File Statuses */}
-                                  {record.statuses && record.statuses.length > 0 && (() => {
-                                    const filteredStatuses = uploadHistoryFilter
-                                      ? record.statuses.filter((f: any) => {
-                                          if (uploadHistoryFilter === 'completed') return f.status === 'completed';
-                                          if (uploadHistoryFilter === 'duplicated') return f.status === 'duplicate' || f.status === 'duplicated';
-                                          if (uploadHistoryFilter === 'versioned') return f.status === 'versioned' || f.status === 'version';
-                                          if (uploadHistoryFilter === 'error') return f.status === 'error';
-                                          if (uploadHistoryFilter === 'pending') return f.status === 'pending' || f.status === 'processing';
-                                          if (uploadHistoryFilter === 'cancelled') return f.status === 'cancelled' || f.status === 'discarded';
-                                          return true;
-                                        })
-                                      : record.statuses;
-                                    /* The file list is a dropdown — collapsed by default so a
-                                       batch reads as its summary first. A status filter opens
-                                       it, since filtering is asking to see those files. */
-                                    const filesOpen = !!uploadHistoryFilter || expandedUploadBatches.has(record.id);
-                                    return filteredStatuses.length > 0 ? (
-                                    <div className="mt-4 border-t border-gray-100 pt-3 px-4 sm:px-5">
-                                      <div className={`flex items-center justify-between ${filesOpen ? 'mb-2' : ''}`}>
-                                        <div className="flex items-center gap-3">
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setExpandedUploadBatches((prev) => {
-                                                const next = new Set(prev);
-                                                if (next.has(record.id)) next.delete(record.id);
-                                                else next.add(record.id);
-                                                return next;
-                                              });
-                                            }}
-                                            disabled={!!uploadHistoryFilter}
-                                            aria-expanded={filesOpen}
-                                            className="-ml-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:hover:bg-transparent disabled:cursor-default transition-colors"
-                                          >
-                                            <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${filesOpen ? '' : '-rotate-90'}`} />
-                                            Files ({filteredStatuses.length}{uploadHistoryFilter ? ` of ${record.statuses.length}` : ''})
-                                          </button>
-                                          {/* Select All checkbox for versioned items */}
-                                          {uploadHistoryFilter === 'versioned' && filteredStatuses.length > 0 && (() => {
-                                            const versionedInBatch = filteredStatuses.filter((f: any) => f.status === 'versioned' || f.status === 'version');
-                                            if (versionedInBatch.length === 0) return null;
-                                            const allSelected = versionedInBatch.every((f: any) => selectedVersionedItems.has(f.id));
-                                            return (
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const newSelected = new Map(selectedVersionedItems);
-                                                  if (allSelected) {
-                                                    versionedInBatch.forEach((f: any) => newSelected.delete(f.id));
-                                                  } else {
-                                                    versionedInBatch.forEach((f: any) => {
-                                                      newSelected.set(f.id, {
-                                                        id: f.id,
-                                                        fileName: f.fileName,
-                                                        candidateName: f.candidateName || '',
-                                                        resumeId: f.resumeId,
-                                                      });
-                                                    });
-                                                  }
-                                                  setSelectedVersionedItems(newSelected);
-                                                }}
-                                                className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-brand-blue-2 bg-brand-blue-2/10 border border-brand-blue-2/20 rounded-md hover:bg-brand-blue-2/15 transition-colors"
-                                              >
-                                                <input
-                                                  type="checkbox"
-                                                  checked={allSelected}
-                                                  readOnly
-                                                  className="tf-checkbox w-3 h-3 pointer-events-none"
-                                                />
-                                                Select All
-                                              </button>
-                                            );
-                                          })()}
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs">
-                                          <span className="flex items-center gap-1 text-success tabular-nums" title="Done">
-                                            <CheckCircle className="w-3 h-3" />
-                                            {record.statuses.filter((f: any) => f.status === 'completed' || f.status === 'versioned').length}
-                                          </span>
-                                          <span className="flex items-center gap-1 text-brand-blue tabular-nums" title="In progress or queued">
-                                            <Clock className="w-3 h-3" />
-                                            {record.statuses.filter((f: any) => f.status === 'processing' || f.status === 'pending').length}
-                                          </span>
-                                          <span className="flex items-center gap-1 text-destructive tabular-nums" title="Failed or duplicate">
-                                            <AlertCircle className="w-3 h-3" />
-                                            {record.statuses.filter((f: any) => f.status === 'error' || f.status === 'duplicate' || f.status === 'duplicated').length}
-                                          </span>
-                                          {/* Cancelled files had no counter at all, so they were invisible here too */}
-                                          {record.statuses.some((f: any) => f.status === 'cancelled' || f.status === 'discarded') && (
-                                            <span className="flex items-center gap-1 text-gray-500 tabular-nums" title="Cancelled">
-                                              <Ban className="w-3 h-3" />
-                                              {record.statuses.filter((f: any) => f.status === 'cancelled' || f.status === 'discarded').length}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                      {filesOpen && (<>
-                                      {/* Short note: cancel only for queued items */}
-                                      {record.statuses.some((f: any) => f.status === 'pending' || f.status === 'error' || f.status === 'cancelled') && (
-                                        <p className="flex items-center gap-1.5 tf-micro-hint mb-2.5">
-                                          <Info className="w-3 h-3 flex-shrink-0 text-gray-400" />
-                                          Retry is available for queued, failed &amp; cancelled files. Cancel is only available for queued files.
-                                        </p>
-                                      )}
-                                      <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 max-h-72 overflow-y-auto">
-                                        {filteredStatuses.map((file: any, idx: number) => {
-                                          const isClickable = ['completed', 'versioned', 'duplicate', 'error'].includes(file.status);
-                                          const isVersioned = file.status === 'versioned' || file.status === 'version';
-                                          const isSelected = selectedVersionedItems.has(file.id);
-                                          const isCancelledFile = file.status === 'cancelled' || file.status === 'discarded';
-                                          // Anything the UI has no case for. Surfaced explicitly rather than
-                                          // being absorbed by the "Queued" fallback, so a new backend status
-                                          // can never masquerade as "still waiting in the queue".
-                                          const isUnknownStatusFile = ![
-                                            'completed', 'versioned', 'version', 'processing',
-                                            'pending', 'duplicate', 'duplicated', 'error',
-                                            'cancelled', 'discarded',
-                                          ].includes(file.status);
-                                          return (
-                                          <div
-                                            key={file.id || idx}
-                                            onClick={() => {
-                                              if (isVersioned) {
-                                                // Open resolution modal for this single versioned file
-                                                setSelectedVersionedItems(new Map([[file.id, {
-                                                  id: file.id,
-                                                  fileName: file.fileName,
-                                                  candidateName: file.candidateName || '',
-                                                  resumeId: file.resumeId,
-                                                }]]));
-                                                setIsBulkResolveModalOpen(true);
-                                              } else if (isClickable) {
-                                                setSelectedHistoryItem({
-                                                  id: file.id,
-                                                  fileName: file.fileName,
-                                                  status: file.status,
-                                                  errorMessage: file.errorMessage,
-                                                  candidateName: file.candidateName,
-                                                  resumeId: file.resumeId,
-                                                });
-                                              }
-                                            }}
-                                            className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${
-                                              isVersioned && isSelected ? 'bg-brand-blue-2/[0.06]' :
-                                              isUnknownStatusFile ? 'bg-amber-50/70' :
-                                              'bg-white'
-                                            } ${isClickable ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                                          >
-                                            {/* Checkbox for versioned items */}
-                                            {isVersioned && (
-                                              <input
-                                                type="checkbox"
-                                                checked={isSelected}
-                                                onClick={(e) => e.stopPropagation()}
-                                                onChange={(e) => {
-                                                  e.stopPropagation();
-                                                  const newSelected = new Map(selectedVersionedItems);
-                                                  if (isSelected) {
-                                                    newSelected.delete(file.id);
-                                                  } else {
-                                                    newSelected.set(file.id, {
-                                                      id: file.id,
-                                                      fileName: file.fileName,
-                                                      candidateName: file.candidateName || '',
-                                                      resumeId: file.resumeId,
-                                                    });
-                                                  }
-                                                  setSelectedVersionedItems(newSelected);
-                                                }}
-                                                className="tf-checkbox focus:ring-brand-blue-2/40"
-                                              />
-                                            )}
-                                            {/* Status Icon */}
-                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                              file.status === 'completed' ? 'bg-success-subtle text-success' :
-                                              file.status === 'versioned' ? 'bg-brand-blue-2/10 text-brand-blue-2' :
-                                              file.status === 'processing' ? 'bg-brand-blue/10 text-brand-blue' :
-                                              file.status === 'duplicate' ? 'bg-brand-orange/10 text-brand-orange-deep' :
-                                              file.status === 'error' ? 'bg-destructive-subtle text-destructive' :
-                                              isUnknownStatusFile ? 'bg-amber-100 text-amber-700' :
-                                              'bg-gray-100 text-gray-500'
-                                            }`}>
-                                              {file.status === 'completed' && <CheckCircle className="w-3.5 h-3.5" />}
-                                              {file.status === 'versioned' && <GitBranch className="w-3.5 h-3.5" />}
-                                              {file.status === 'processing' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                                              {file.status === 'duplicate' && <Copy className="w-3.5 h-3.5" />}
-                                              {file.status === 'error' && <AlertCircle className="w-3.5 h-3.5" />}
-                                              {file.status === 'pending' && <Clock className="w-3.5 h-3.5" />}
-                                              {isCancelledFile && <Ban className="w-3.5 h-3.5" />}
-                                              {isUnknownStatusFile && <HelpCircle className="w-3.5 h-3.5" />}
-                                            </div>
-                                            {/* File Info */}
-                                            <div className="flex-1 min-w-0">
-                                              <div className="tf-row-name truncate">{file.fileName}</div>
-                                              <div className="tf-meta mt-0.5 truncate">
-                                                {file.status === 'completed' && (file.candidateName || 'Uploaded successfully')}
-                                                {file.status === 'versioned' && (file.candidateName ? `${file.candidateName} · version update detected` : 'Version update detected · pending resolution')}
-                                                {file.status === 'processing' && 'Processing…'}
-                                                {file.status === 'pending' && 'Waiting in queue…'}
-                                                {file.status === 'duplicate' && (file.errorMessage || 'Duplicate · already exists')}
-                                                {file.status === 'error' && (file.errorMessage || 'Failed to process')}
-                                                {isCancelledFile && (file.errorMessage || 'Cancelled before processing')}
-                                                {isUnknownStatusFile && `Unrecognised status: ${String(file.status)}`}
-                                              </div>
-                                            </div>
-                                            {/* Status Badge */}
-                                            <span className={`hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium flex-shrink-0 ${
-                                              file.status === 'completed' ? 'bg-success-subtle text-success' :
-                                              file.status === 'versioned' ? 'bg-brand-blue-2/10 text-brand-blue-2' :
-                                              file.status === 'processing' ? 'bg-brand-blue/10 text-brand-blue' :
-                                              file.status === 'duplicate' ? 'bg-brand-orange/10 text-brand-orange-deep' :
-                                              file.status === 'error' ? 'bg-destructive-subtle text-destructive' :
-                                              isUnknownStatusFile ? 'bg-amber-100 text-amber-800' :
-                                              'bg-gray-100 text-gray-600'
-                                            }`}>
-                                              {file.status === 'completed' ? 'Done' :
-                                               file.status === 'versioned' ? 'Version' :
-                                               file.status === 'processing' ? 'Running' :
-                                               file.status === 'duplicate' ? 'Duplicate' :
-                                               file.status === 'error' ? 'Failed' :
-                                               file.status === 'cancelled' ? 'Cancelled' :
-                                               file.status === 'discarded' ? 'Discarded' :
-                                               file.status === 'pending' ? 'Queued' :
-                                               /* Never claim "Queued" for a status we don't understand —
-                                                  that is exactly how 77 cancelled files read as queued. */
-                                               String(file.status ?? 'unknown')}
-                                            </span>
-                                            {/* Per-item Retry / Cancel — same temp-record guard as the
-                                                batch-level actions above. Without it the optimistic
-                                                record renders these buttons over `temp-file-N` ids and
-                                                the request 422s on uuid_parsing for both path params. */}
-                                            {file.id && !isTempRecord && !String(file.id).startsWith('temp-')
-                                              && (file.status === 'pending' || file.status === 'error' || file.status === 'cancelled') && (
-                                              <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                                                <button
-                                                  disabled={retryingItems.has(file.id)}
-                                                  onClick={(e) => handleRetryItem(record.id, file.id, e)}
-                                                  className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10'}`}
-                                                  aria-label="Retry this file" title={file.status === 'cancelled' ? 'Re-queue this cancelled file' : 'Retry this file'}
-                                                >
-                                                  <RefreshCw className={`w-3.5 h-3.5 ${retryingItems.has(file.id) ? 'animate-spin' : ''}`} />
-                                                </button>
-                                                {file.status === 'pending' && (
-                                                  <button
-                                                    disabled={cancellingItems.has(file.id)}
-                                                    onClick={(e) => handleCancelItem(record.id, file.id, file.fileName, e)}
-                                                    className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors ${cancellingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-destructive hover:bg-destructive-subtle'}`}
-                                                    aria-label="Cancel this file (queued only)" title="Cancel this file (queued only)"
-                                                  >
-                                                    <X className="w-3.5 h-3.5" />
-                                                  </button>
-                                                )}
-                                              </div>
-                                            )}
-                                          </div>
-                                        );
-                                        })}
-                                      </div>
-                                      </>)}
-                                    </div>
-                                    ) : uploadHistoryFilter ? (
-                                      <div className="mt-4 border-t border-gray-100 pt-4 px-4 sm:px-5">
-                                        <p className="tf-hint text-center py-3">No {
-                                          uploadHistoryFilter === 'completed' ? 'completed' :
-                                          uploadHistoryFilter === 'duplicated' ? 'duplicate' :
-                                          uploadHistoryFilter === 'versioned' ? 'versioned' :
-                                          uploadHistoryFilter === 'error' ? 'failed' :
-                                          uploadHistoryFilter === 'cancelled' ? 'cancelled' :
-                                          'pending'
-                                        } files in this batch</p>
-                                      </div>
-                                    ) : null;
-                                  })()}
-                                </div>
-                              );
-                            })}
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-
-              {/* Floating Resolve Selected Bar */}
-              {selectedVersionedItems.size > 0 && (
-                <div className="border-t border-brand-blue-2/20 px-3 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-brand-blue-2/[0.07] to-brand-blue/[0.04] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10">
-                      <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-sm font-semibold text-brand-blue-2">
-                        {selectedVersionedItems.size} versioned resume{selectedVersionedItems.size !== 1 ? 's' : ''} selected
-                      </span>
-                      <p className="text-xs text-brand-blue-2/80">Choose how to resolve these version conflicts</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setSelectedVersionedItems(new Map())}
-                      className="px-2.5 sm:px-3 py-1.5 sm:py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors"
-                    >
-                      Clear
-                    </button>
-                    <button
-                      onClick={() => setIsBulkResolveModalOpen(true)}
-                      className="tf-btn tf-btn-primary flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex gap-1.5 sm:gap-2 whitespace-normal"
-                    >
-                      <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      Resolve ({selectedVersionedItems.size})
-                    </button>
-                  </div>
-                </div>
-              )}
-
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Upload History Item Detail Modal */}
-      {selectedHistoryItem && (
-        <UploadHistoryDetailModal
-          item={selectedHistoryItem}
-          onClose={() => setSelectedHistoryItem(null)}
-        />
-      )}
-
-      {/* Bulk Version Resolution Modal */}
-      {isBulkResolveModalOpen && selectedVersionedItems.size > 0 && (
-        <BulkVersionResolutionModal
-          items={Array.from(selectedVersionedItems.values())}
-          onClose={() => setIsBulkResolveModalOpen(false)}
-          onResolved={() => {
-            setIsBulkResolveModalOpen(false);
-            setSelectedVersionedItems(new Map());
-            // Refresh batch data, without pulling the view out of its folder
-            fetchUploadHistory();
-            fetchData(appliedSearchQuery, filters, selectedFolder, true);
-            refreshAllResumesTotal();
-          }}
-        />
-      )}
-
-      {/* AI Talent Match Modal */}
-      {isAITalentMatchModalOpen && (
-        <AITalentMatchSelectJobModal
-          resumes={resumes.filter(r => selectedResumes.includes(r.id))}
-          jobs={publishedJobs}
-          onClose={() => setIsAITalentMatchModalOpen(false)}
-          onMatch={(resumeIds, jobId) => {
-            // Store selected resumes in sessionStorage for the AI Talent Match page
-            const resumeData = resumes
-              .filter(r => resumeIds.includes(r.id))
-              .map(r => ({
-                id: r.id,
-                candidateName: r.name,
-                email: r.email,
-              }));
-            sessionStorage.setItem('aiTalentMatchResumes', JSON.stringify(resumeData));
-
-            // Close modal
-            setIsAITalentMatchModalOpen(false);
-            setSelectedResumes([]);
-
-            // Navigate to AI Talent Match page with the selected JD
-            router.push(`/recruitment/ai-talent-match?jdId=${jobId}&view=new`);
-          }}
-        />
-      )}
-
-      {/* Cancel Batch Confirmation Dialog.
-          The confirmation dialogs below pass only `sm:max-w-lg`: a bare
-          `max-w-md` used to replace the base `max-w-[calc(100%-2rem)]`, so on a
-          phone they ran edge to edge with no gutter. */}
-      <AlertDialog
-        open={cancelBatchConfirm.isOpen}
-        onOpenChange={(open) => {
-          if (!open) setCancelBatchConfirm({ isOpen: false, batchId: '', pendingCount: 0 });
-        }}
-      >
-        <AlertDialogContent className="sm:max-w-lg" hideClose>
-          <AlertDialogHeader>
-            <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
-                <Ban className="h-6 w-6 text-red-600" />
-              </div>
-              <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-2xl font-bold text-gray-900">
-                  Cancel {cancelBatchConfirm.pendingCount} queued file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''}?
-                </AlertDialogTitle>
-                <p className="mt-1 tf-body-muted">
-                  This stops {cancelBatchConfirm.pendingCount} file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''} that
-                  {cancelBatchConfirm.pendingCount !== 1 ? ' have' : ' has'} not finished processing.
-                </p>
-              </div>
-            </div>
-            <AlertDialogDescription asChild>
-              <div className="mt-2 space-y-1.5 rounded-xl border border-red-100 bg-red-50/60 p-4 tf-body">
-                <p>Files already completed are kept</p>
-                <p>Their Resume Storage units are refunded</p>
-                <p>You can re-queue cancelled files later with Retry</p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="border-t border-gray-100 pt-4">
-            <AlertDialogCancel>Keep processing</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmCancelBatch}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              Cancel {cancelBatchConfirm.pendingCount} file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Cancel Single File Confirmation Dialog */}
-      <AlertDialog
-        open={cancelItemConfirm.isOpen}
-        onOpenChange={(open) => {
-          if (!open) setCancelItemConfirm({ isOpen: false, batchId: '', itemId: '', fileName: '' });
-        }}
-      >
-        <AlertDialogContent className="sm:max-w-lg" hideClose>
-          <AlertDialogHeader>
-            <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
-                <Ban className="h-6 w-6 text-red-600" />
-              </div>
-              <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-2xl font-bold text-gray-900">
-                  Cancel this file?
-                </AlertDialogTitle>
-                <AlertDialogDescription asChild>
-                  <p className="mt-1 tf-body-muted">
-                    <span className="font-medium text-gray-900">{cancelItemConfirm.fileName}</span> will not
-                    be processed. Its unit is refunded and you can re-queue it later with Retry.
-                  </p>
-                </AlertDialogDescription>
-              </div>
-            </div>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="border-t border-gray-100 pt-4">
-            <AlertDialogCancel>Keep processing</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmCancelItem}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              Cancel file
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Delete Resume Confirmation Dialog */}
       <DeleteResumeDialog
         open={deleteResumeConfirm.isOpen}
         names={deleteResumeConfirm.names}
+        resumeId={deleteResumeConfirm.ids.length === 1 ? deleteResumeConfirm.ids[0] : undefined}
         onCancel={() => setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] })}
         onConfirm={confirmDeleteResumes}
       />

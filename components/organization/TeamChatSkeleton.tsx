@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export default function TeamChatSkeleton() {
   return (
-    <div className="flex flex-1 min-h-[480px] overflow-hidden tf-panel">
+    <div className="flex flex-1 min-h-[480px] overflow-hidden bg-white dark:bg-slate-900">
       <div className="hidden w-72 shrink-0 flex-col gap-3 border-r border-gray-200 p-3 md:flex lg:w-80 dark:border-slate-700">
         <Skeleton className="h-5 w-24" />
         <Skeleton className="h-9 w-full rounded-lg" />

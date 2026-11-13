@@ -19,6 +19,7 @@ import { TeamMemberEmailBadge } from './ui/team-member-badge';
 import Pagination from './Pagination';
 import { usePagination } from '@/lib/hooks/usePagination';
 import ResumeVersionsModal from './ResumeVersionsModal';
+import VersionEyeBadge from '@/components/ui/version-eye-badge';
 import ShareResumeModal from './ShareResumeModal';
 import { toast } from 'sonner';
 import { resumeService, archiveResumeToArchivedFolder } from '@/lib/services/resumeService';
@@ -669,7 +670,7 @@ export default function ResumeTable({
           grew to fit every row and never scrolled — `sticky top-0` had nothing
           to stick to, and the header scrolled away with the page. Capping the
           height makes the rows scroll inside it and pins the header. */}
-      <div className={`hidden lg:block overflow-auto min-h-[320px] max-h-[calc(100dvh-24rem)] tf-table-shell ${tableShellClassName}`}>
+      <div className={`hidden lg:block overflow-auto max-h-[calc(100dvh-24rem)] tf-table-shell ${tableShellClassName}`}>
         <table className="w-full min-w-[1200px] table-auto">
         {/* Background goes on the cells, not just <thead>: with separate cell
             backgrounds the rows would otherwise show through as they pass under. */}
@@ -929,23 +930,26 @@ export default function ResumeTable({
                 <span className="tf-body">{resume.uploadedBy}</span>
               </td>
               <td className="tf-td whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => handleShowVersionHistory(resume)}
-                  disabled={isLoadingVersions}
-                  className="flex items-center gap-2 text-sm text-gray-700 hover:text-brand-blue transition-colors group disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleShowVersionHistory(resume)}
+                    disabled={isLoadingVersions}
+                    title="Version history"
+                    className="flex items-center gap-1 text-sm text-gray-700 hover:text-brand-blue transition-colors disabled:opacity-50"
+                  >
                     <Paperclip className="w-4 h-4" />
                     <span>{resume.attachments}</span>
-                  </div>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ring-1 group-hover:bg-brand-blue/15 transition-colors ${
-                    (resume.versionCount && resume.versionCount > 1) || (resume.versions && resume.versions.length > 1)
-                      ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
-                      : 'bg-slate-100 text-gray-600 ring-gray-200'
-                  }`}>
-                    v{resume.version || 1}
-                  </span>
-                </button>
+                  </button>
+                  {/* The version (opens its history) with Preview Resume
+                      joined to it as an eye — the candidate page's badge. */}
+                  <VersionEyeBadge
+                    label={`v${resume.version || 1}`}
+                    onLabelClick={isLoadingVersions ? undefined : () => handleShowVersionHistory(resume)}
+                    labelTitle="Version history"
+                    onView={() => onQuickView(resume)}
+                    viewLabel="Preview Resume"
+                  />
+                </div>
               </td>
               <td
                 /* No z-index lift while the menu is open: the menu is
@@ -1211,14 +1215,16 @@ export default function ResumeTable({
                   No actions available
                 </span>
               ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => onQuickView(resume)}
-                  icon={<Eye className="w-4 h-4" />}
-                >
-                  View
-                </Button>
+                /* The version (opens its history) with the view eye joined to
+                   it, as in the table's Files column. */
+                <VersionEyeBadge
+                  label={`v${resume.version || 1}`}
+                  onLabelClick={() => handleShowVersionHistory(resume)}
+                  labelTitle="Version history"
+                  onView={() => onQuickView(resume)}
+                  viewLabel="Preview Resume"
+                  size="md"
+                />
               )
             }
           >
