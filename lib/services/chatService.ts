@@ -132,6 +132,14 @@ class ChatService {
   }
 
   /**
+   * Unread messages across every conversation (header chat badge)
+   */
+  async getUnreadCount(): Promise<number> {
+    const response = await api.get('/chat/unread-count');
+    return Number(response.data?.total_unread) || 0;
+  }
+
+  /**
    * Get a specific channel
    */
   async getChannel(channelId: string): Promise<Channel> {

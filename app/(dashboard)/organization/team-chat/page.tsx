@@ -74,6 +74,11 @@ export default function TeamChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  // Keep the header's chat badge in step (once the list has loaded — the
+  // initial 0 isn't a real count).
+  useEffect(() => {
+    if (!isLoading) window.dispatchEvent(new CustomEvent('chatUnreadChanged', { detail: totalUnread }));
+  }, [totalUnread, isLoading]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showMembersSidebar, setShowMembersSidebar] = useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
