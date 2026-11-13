@@ -167,7 +167,8 @@ export interface AsyncBulkScoringResponse {
 export interface BatchScoringItem {
   resume_id: string;
   candidate_name?: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  /** 'cancelled': it was still waiting when Cancel was pressed — never scored, never charged. */
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
   score_id?: string;
   overall_score?: number;
   // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
@@ -187,6 +188,10 @@ export interface BatchScoringStatus {
   processing: number;
   completed: number;
   failed: number;
+  /** Resumes cancelled before their scoring started. */
+  cancelled?: number;
+  /** This user may cancel / retry it (who started it, or the admin). */
+  can_manage?: boolean;
   created_at?: string;
   started_at?: string;
   completed_at?: string;
@@ -529,6 +534,39 @@ export const scoringService = {
   async getBatchStatus(batchId: string): Promise<BatchScoringStatus> {
     try {
       const response = await api.get<BatchScoringStatus>(`/scoring/batch/${batchId}/status`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Cancel the resumes of a batch that are still WAITING. No ids: every
+   * waiting resume (Cancel all); ids: just those (the per-row Cancel). Resumes
+   * already being scored finish, and finished scores stay.
+   */
+  async cancelBatch(batchId: string, resumeIds?: string[]): Promise<BatchScoringStatus & { cancelled_now: number }> {
+    try {
+      const response = await api.post<BatchScoringStatus & { cancelled_now: number }>(
+        `/scoring/batch/${batchId}/cancel`,
+        { resume_ids: resumeIds?.length ? resumeIds : undefined },
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Put failed and cancelled resumes back into the same batch. No ids: all of
+   * them (Retry all); ids: just those (the per-row Retry).
+   */
+  async retryBatch(batchId: string, resumeIds?: string[]): Promise<BatchScoringStatus & { requeued: number }> {
+    try {
+      const response = await api.post<BatchScoringStatus & { requeued: number }>(
+        `/scoring/batch/${batchId}/retry`,
+        { resume_ids: resumeIds?.length ? resumeIds : undefined },
+      );
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

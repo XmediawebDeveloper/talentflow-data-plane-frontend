@@ -51,7 +51,7 @@ export function trackScoringBatch(
       source,
     })),
     returnUrl,
-    meta,
+    { ...meta, batchId },
   );
 
   const poll = setInterval(async () => {
@@ -60,7 +60,11 @@ export function trackScoringBatch(
       (status.items || []).forEach(item => {
         const itemId = `${batchId}-${item.resume_id}`;
         const itemStatus = normalizeScoringStatus(item.status);
-        if (itemStatus === 'completed') {
+        if (item.status === 'cancelled') {
+          progress.updateItemStatus(batchId, itemId, 'Cancelled', {
+            errorReason: item.error_message || 'Cancelled before scoring started',
+          });
+        } else if (itemStatus === 'completed') {
           // Verdict + 0-10 rating too, so the popup shows Match Status and
           // Score as Resume Scoring's does (it read "Pending" without them).
           progress.updateItemStatus(batchId, itemId, 'Scored successfully', {

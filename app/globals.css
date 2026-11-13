@@ -2116,10 +2116,21 @@ button:has(.menu-item-label):focus-visible {
    competes with a component's own classes. */
 :where(.fixed.inset-0):where(.overflow-y-auto, .overflow-auto, .overflow-y-scroll, .overflow-scroll),
 :where(.fixed.inset-0)
-  :where(.overflow-y-auto, .overflow-auto, .overflow-y-scroll, .overflow-scroll, .tf-table-shell, .modal-body),
+  :where(.overflow-y-auto, .overflow-auto, .overflow-y-scroll, .overflow-scroll, .modal-body),
 [data-slot="dialog-content"],
-[data-slot="dialog-content"] :where(.overflow-y-auto, .overflow-auto, .tf-table-shell) {
+[data-slot="dialog-content"] :where(.overflow-y-auto, .overflow-auto) {
   overscroll-behavior: contain;
+}
+/* A table shell in a dialog contains only SIDEWAYS overscroll. Its vertical
+   overscroll must chain to the dialog body: a shell that fits its rows (or is
+   at its end) is still a scroll container — it scrolls horizontally — and
+   with `contain` on both axes Chrome swallowed the wheel there, so scrolling
+   over the Invite to Assessment table moved nothing. The dialog body above
+   is `contain`, so the page behind still never scrolls. */
+:where(.fixed.inset-0) :where(.tf-table-shell),
+[data-slot="dialog-content"] :where(.tf-table-shell) {
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
 }
 @media (width < theme(--breakpoint-sm)) {
   [data-slot="dialog-content"] {

@@ -13,6 +13,7 @@ import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressCont
 const WIDGET_HINT = 'scoring-widget';
 import dynamic from 'next/dynamic';
 import type { ScoringProgressItem } from '@/components/BulkScoringProgressModal';
+import type { BatchScoringStatus } from '@/lib/services/scoringService';
 
 /* On demand: mounted from the dashboard layout, opened only while scoring runs. */
 const BulkScoringProgressModal = dynamic(() => import('@/components/BulkScoringProgressModal'), { ssr: false, loading: () => null });
@@ -31,6 +32,7 @@ export default function GlobalScoringProgressIndicator() {
     isMainPanelOpen,
     setMinimized,
     clearJob,
+    updateItemStatus,
     onRestorePanel
   } = useScoringProgress();
   /* The invite icon owns the bottom-right corner; while it is on screen this
@@ -252,6 +254,25 @@ export default function GlobalScoringProgressIndicator() {
       <BulkScoringProgressModal
         progressData={toModalItems(modalJob)}
         showScoreColumn
+        batchId={modalJob.batchId}
+        onBatchStatus={(status: BatchScoringStatus) => {
+          /* Keep the corner widget's counts in step with Cancel / Retry —
+             the run's own poller may already have stopped. Only rows whose
+             status actually changed are written. */
+          const STATUS: Record<string, ScoringProgressItem['status']> = {
+            queued: 'Queued', pending: 'Queued', processing: 'Scoring in progress',
+            completed: 'Scored successfully', failed: 'Failed', cancelled: 'Cancelled',
+          };
+          const byResume = new Map(modalJob.items.map(i => [i.resumeId, i]));
+          for (const b of status.items || []) {
+            const row = byResume.get(b.resume_id);
+            const next = STATUS[(b.status || '').toLowerCase()];
+            if (!row || !next || row.status === next) continue;
+            updateItemStatus(modalJob.jobId, row.id, next as typeof row.status, next === 'Scored successfully'
+              ? { score: b.overall_score, overallRating10: b.overall_rating_10, scoredDateTime: new Date().toISOString() }
+              : next === 'Failed' || next === 'Cancelled' ? { errorReason: b.error_message } : {});
+          }
+        }}
         onClose={() => {
           setModalJobId(null);
           // A settled run goes; one still queued/processing keeps running and

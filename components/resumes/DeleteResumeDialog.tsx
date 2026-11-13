@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Trash2, Lock, AlertCircle, HelpCircle, Layers, Loader2 } from 'lucide-react';
+import { Trash2, Lock, AlertCircle, HelpCircle, Layers, Loader2, Eye } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
 import {
   AlertDialog,
@@ -153,10 +153,24 @@ export default function DeleteResumeDialog({ open, names, resumeId, onCancel, on
                         onChange={() => setChoice(o.id)}
                         className="mt-1 accent-red-600"
                       />
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="block text-sm font-medium text-gray-900">{o.title}</span>
                         {o.sub && <span className="block text-xs text-gray-500 [overflow-wrap:anywhere]">{o.sub}</span>}
                       </span>
+                      {/* Look at this version before deciding — new tab, so
+                          this dialog (and the pick) stays as it is. */}
+                      {o.id !== 'all' && (
+                        <a
+                          href={`/recruitment/resume-view/${encodeURIComponent(o.id)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="View this version in a new tab"
+                          className="ml-auto inline-flex h-7 shrink-0 items-center gap-1 self-center rounded-md border border-gray-200 bg-white px-2 text-xs font-medium text-brand-blue hover:bg-brand-blue/5"
+                        >
+                          <Eye className="h-3.5 w-3.5" /> View
+                        </a>
+                      )}
                     </label>
                   ))}
                 </fieldset>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, ChevronRight, Clock, ClipboardList, Hourglass, Info, Loader2, Minus, Pause,
+  AlertTriangle, CheckCircle2, ChevronRight, Clock, ClipboardList, Hourglass, Info, Loader2, Maximize2, Minus, Pause,
   RotateCcw, Send, SkipForward, Video, X, XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -12,6 +12,7 @@ import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { useBulkInviteProgress, type BulkInviteResultsTab, type TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
 import { bulkInviteNeedsLook, formatTimeLeft, isBulkInviteActive } from '@/lib/services/bulkInviteService';
 import BulkInviteResultsDialog from './BulkInviteResultsDialog';
+import BulkInviteOverviewDialog from './BulkInviteOverviewDialog';
 import { useBulkInviteActions } from './useBulkInviteActions';
 
 /**
@@ -124,7 +125,15 @@ export default function BulkInviteProgressIndicator() {
   /* Groups opened / closed by hand; the rest follow the default (running or
      needing a look → open). */
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  /* Merged rows (same job, kind and version sent more than once) opened to
+     show their separate sends. */
+  const [sendsOpen, setSendsOpen] = useState<Record<string, boolean>>({});
   const [legendOpen, setLegendOpen] = useState(false);
+  /* Hovering the round icon previews a small card (same as the scoring
+     widget's): what is sending and how far it got. Click opens the popup. */
+  const [hovering, setHovering] = useState(false);
+  /* The header's View: every candidate of the listed sends in one table. */
+  const [overviewOpen, setOverviewOpen] = useState(false);
 
   /* First time the icon appears: a one-off tip saying what it is. */
   const [coachSeen, setCoachSeen] = useState(true);
@@ -142,19 +151,24 @@ export default function BulkInviteProgressIndicator() {
   /* Close (✕ / Esc): back to the icon while something is unfinished; once
      everything has finished the widget goes away and the finished batches
      are cleared (the finished toast still opens their results). */
+  /* Minimized after everything finished: the icon stays (it normally goes
+     away once nothing is left to send) until Close or the next send. */
+  const [keepIcon, setKeepIcon] = useState(false);
   const closeWidget = () => {
     if (hasUnfinished) { setWidget('icon'); return; }
+    setKeepIcon(false);
     dismiss(shown.map((j) => j.job_id));
     setWidget('hidden');
   };
   const closeRef = useRef(closeWidget);
   useEffect(() => { closeRef.current = closeWidget; });
   useEffect(() => {
-    if (!miniOpen) return;
+    // Esc while the View window is open closes only that window.
+    if (!miniOpen || overviewOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [miniOpen]);
+  }, [miniOpen, overviewOpen]);
 
   /* A toast for EACH send that finishes — even while others still run —
      with sends finishing within a few seconds of each other sharing one
@@ -215,8 +229,27 @@ export default function BulkInviteProgressIndicator() {
     />
   ) : null;
   // All finished and the mini popup closed: no icon left on the page.
-  const iconVisible = !(shown.length === 0 || widget === 'hidden' || (!miniOpen && !hasUnfinished));
+  const iconVisible = !(shown.length === 0 || widget === 'hidden' || (!miniOpen && !hasUnfinished && !keepIcon));
   useEffect(() => { setIconShown(iconVisible); }, [iconVisible, setIconShown]);
+  /* A new send brings the widget back (hidden → shown): batches that had
+     already finished before it — e.g. ones that finished while minimized, so
+     the icon went away on its own without clearing them — are cleared, so
+     only what is being sent now shows. "Show earlier" still brings them back. */
+  const wasVisible = useRef(iconVisible);
+  const wasUnfinished = useRef(hasUnfinished);
+  useEffect(() => {
+    const was = wasVisible.current;
+    const hadUnfinished = wasUnfinished.current;
+    wasVisible.current = iconVisible;
+    wasUnfinished.current = hasUnfinished;
+    /* Back from hidden, or — with the icon kept after a finish — a new send
+       starting while it shows. */
+    const newSend = (!was && iconVisible) || (was && iconVisible && !hadUnfinished && hasUnfinished);
+    if (!newSend) return;
+    setKeepIcon(false);
+    const old = shown.filter((j) => !isBulkInviteActive(j) && j.status !== 'paused' && !j.stalled).map((j) => j.job_id);
+    if (old.length > 0 && old.length < shown.length) dismiss(old);
+  }, [iconVisible, hasUnfinished, shown, dismiss]);
   useEffect(() => () => setIconShown(false), [setIconShown]);
   if (!iconVisible) {
     return <>{results}{cancelDialog}</>;
@@ -315,6 +348,101 @@ export default function BulkInviteProgressIndicator() {
   );
 
   /* One send: name, details, progress, counts, actions. */
+  /* Sends of the same kind + version (and mode) under one job show as ONE
+     row with their counts added up — sending V1 again adds to the V1 row
+     instead of a second V1 row. Its separate sends open below it, each with
+     its own View / Cancel / Send again. */
+  const mergeSends = (items: TrackedBulkInvite[]) => {
+    const out: { key: string; items: TrackedBulkInvite[] }[] = [];
+    for (const j of items) {
+      const key = `${kindOf(j)}|${versionOf(j) ?? j.version_label ?? ''}|${j.mode ?? 'send'}`;
+      const m = out.find((o) => o.key === key);
+      if (m) m.items.push(j); else out.push({ key, items: [j] });
+    }
+    return out;
+  };
+
+  const mergedRow = (groupKey: string, key: string, items: TrackedBulkInvite[], indent: boolean) => {
+    const j = items[0];
+    const v = versionOf(j);
+    const isInterview = j.kind !== 'assessment';
+    const id = `${groupKey}::${key}`;
+    const isOpen = sendsOpen[id] ?? false;
+    const act = items.filter(isBulkInviteActive);
+    const failed = sum((x) => x.failed, items);
+    const skipped = sum((x) => x.skipped, items);
+    const st = act.length > 0
+      ? (act.some((x) => x.is_sending !== false)
+        ? { label: 'Sending', tone: 'run', icon: <Loader2 className="w-3 h-3 animate-spin" /> }
+        : { label: 'Waiting to send', tone: 'wait', icon: <Hourglass className="w-3 h-3" /> })
+      : items.some((x) => x.status === 'paused' || x.stalled) ? { label: 'Paused', tone: 'warn', icon: <Pause className="w-3 h-3" /> }
+      : failed > 0 ? { label: 'Done with failures', tone: 'warn', icon: <AlertTriangle className="w-3 h-3" /> }
+      : { label: 'Done', tone: 'ok', icon: <CheckCircle2 className="w-3 h-3" /> };
+    const last = timeOf([...items].map((x) => x.created_at ?? x.trackedAt).sort().pop());
+    const details = [
+      `${sum((x) => x.total, items)} candidates`,
+      `${items.length} sends`,
+      last ? `last sent ${last}` : null,
+    ].filter(Boolean).join(' · ');
+    return (
+      <li key={id} className={`py-2.5 pr-3.5 ${indent ? 'pl-9' : 'pl-3.5'}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="flex flex-wrap items-center gap-1.5 text-xs">
+              {isInterview
+                ? <Video className="w-3.5 h-3.5 shrink-0 text-violet-600 dark:text-violet-300" aria-hidden="true" />
+                : <ClipboardList className="w-3.5 h-3.5 shrink-0 text-brand-cyan" aria-hidden="true" />}
+              <span className="font-medium text-gray-800 dark:text-slate-200">{kindLabel(j)}</span>
+              {v ? (isInterview
+                ? <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 text-violet-700 bg-violet-50 ring-violet-200 dark:text-violet-200 dark:bg-violet-500/15 dark:ring-violet-400/30">V{v}</span>
+                : <VersionPill kind="assessment" version={v} />) : null}
+              {j.mode === 'resend' && <span className="rounded-md bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-2xs font-medium text-gray-700 dark:text-slate-300">Resend</span>}
+            </p>
+            {j.version_label && (
+              <p className="mt-0.5 text-2xs text-gray-700 dark:text-slate-300 line-clamp-2 [overflow-wrap:anywhere]">{j.version_label}</p>
+            )}
+            <p className="mt-0.5 tf-micro-hint [overflow-wrap:anywhere]">{details}</p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSendsOpen((o) => ({ ...o, [id]: !isOpen }))}
+              aria-expanded={isOpen}
+              title={isOpen ? 'Hide the separate sends' : 'Show each send — to view, cancel or send again'}
+              className="h-6 px-2 inline-flex items-center gap-0.5 rounded-md text-2xs font-medium text-brand-blue hover:bg-brand-blue/5"
+            >
+              View <ChevronRight className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+            </button>
+            {act.length === 0 && (
+              <button
+                type="button"
+                onClick={() => dismiss(items.map((x) => x.job_id))}
+                aria-label={`Remove ${kindLabel(j)}${v ? ` V${v}` : ''} from this list`}
+                title="Remove from this list"
+                className="h-6 w-6 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+        {bar(sum((x) => x.processed, items), sum((x) => x.total, items), failed > 0 && act.length === 0 ? 'bg-warning-strong' : 'bg-brand-blue')}
+        <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-2xs">
+          <span className={`inline-flex items-center gap-1 font-medium ${TONE[st.tone]}`}>{st.icon}{st.label}</span>
+          {act.length > 0 && <span className="text-gray-600 dark:text-slate-300" title={HINT.queue}>Queue {sum(queuedOf, items)}</span>}
+          <span className="text-success" title={HINT.sent}>Sent {sum((x) => x.sent, items)}</span>
+          {skipped > 0 && <span className="text-gray-500 dark:text-slate-400" title={HINT.skipped}>Skipped {skipped}</span>}
+          {failed > 0 && <span className="text-destructive font-medium" title={HINT.failed}>Failed {failed}</span>}
+        </p>
+        {isOpen && (
+          <ul className="mt-2 -mr-3.5 border-t border-gray-100 dark:border-slate-700/60 divide-y divide-gray-100 dark:divide-slate-700/60">
+            {items.map((x) => sendRow(x, true))}
+          </ul>
+        )}
+      </li>
+    );
+  };
+
   const sendRow = (j: TrackedBulkInvite, indent: boolean) => {
     const v = versionOf(j);
     const st = stateOf(j);
@@ -434,7 +562,7 @@ export default function BulkInviteProgressIndicator() {
         <div
           role="dialog"
           aria-label="Invitation sending status"
-          className={`fixed bottom-20 ${side} z-40 w-[calc(100vw-1.5rem)] sm:w-[28rem] max-h-[calc(100dvh-7rem)] flex flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200`}
+          className={`fixed bottom-20 ${side} z-[60] w-[calc(100vw-1.5rem)] sm:w-[28rem] max-h-[calc(100dvh-7rem)] flex flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200`}
         >
           {/* Header: what is going on and the time left; Clear finished; ✕ to the icon. */}
           <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
@@ -447,6 +575,14 @@ export default function BulkInviteProgressIndicator() {
               </span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setOverviewOpen(true)}
+                title="View every candidate of these sends — status, source and date"
+                className="h-7 px-2.5 inline-flex items-center rounded-md border border-brand-blue/30 text-2xs font-semibold text-brand-blue hover:bg-brand-blue/5 whitespace-nowrap"
+              >
+                View
+              </button>
               {finishedIds.length > 0 && (
                 <button
                   type="button"
@@ -462,9 +598,14 @@ export default function BulkInviteProgressIndicator() {
                   <Minus className="w-3.5 h-3.5" />
                 </Button>
               ) : (
-                <Button variant="secondary" size="sm" onClick={closeWidget} className="w-7 h-7 !px-0" aria-label="Close" title="Close — everything has finished">
-                  <X className="w-3.5 h-3.5" />
-                </Button>
+                <>
+                  <Button variant="secondary" size="sm" onClick={() => { setKeepIcon(true); setWidget('icon'); }} className="w-7 h-7 !px-0" aria-label="Minimize" title="Minimize — keep the icon to look at these sends again">
+                    <Minus className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={closeWidget} className="w-7 h-7 !px-0" aria-label="Close" title="Close — everything has finished">
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -625,7 +766,9 @@ export default function BulkInviteProgressIndicator() {
                   </div>
                   {isOpen && (
                     <ul className={`divide-y divide-gray-100 dark:divide-slate-700/60 ${single ? '' : 'border-t border-gray-100 dark:border-slate-700/60'}`}>
-                      {g.items.map((j) => sendRow(j, !single))}
+                      {mergeSends(g.items).map((m) => (m.items.length === 1
+                        ? sendRow(m.items[0], !single)
+                        : mergedRow(g.key, m.key, m.items, !single)))}
                     </ul>
                   )}
                 </li>
@@ -668,7 +811,7 @@ export default function BulkInviteProgressIndicator() {
 
       {/* First time only: what the icon is. */}
       {!coachSeen && widget === 'icon' && (
-        <div role="note" className={`fixed bottom-[5.25rem] ${side} z-40 w-64 rounded-xl bg-gray-900 text-white shadow-xl p-3 animate-in fade-in slide-in-from-bottom-2 duration-200`}>
+        <div role="note" className={`fixed bottom-[5.25rem] ${side} z-[60] w-64 rounded-xl bg-gray-900 text-white shadow-xl p-3 animate-in fade-in slide-in-from-bottom-2 duration-200`}>
           <p className="text-xs font-semibold">Your invitations keep sending here</p>
           <p className="mt-1 text-2xs text-white/80 leading-relaxed">Click the icon any time to see each send’s progress. You can keep working meanwhile.</p>
           <div className="mt-2 flex justify-end">
@@ -678,14 +821,52 @@ export default function BulkInviteProgressIndicator() {
         </div>
       )}
 
+      {/* Hover preview: the icon grows into a card, like the scoring widget. */}
+      {hovering && !miniOpen && (() => {
+        const noun = kindNoun(shown);
+        const sentAll = sum((j) => j.sent, shown);
+        const failedN = sum((j) => j.failed, shown);
+        const sub = iconStats.running > 0
+          ? `${iconStats.runDone}/${iconStats.runTotal} (${iconStats.pct}%)${iconStats.eta ? ` · ${iconStats.eta}` : ''}`
+          : `Complete: ${sentAll} sent${failedN > 0 ? `, ${failedN} failed` : ''}`;
+        return (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => { seeCoach(); setHovering(false); setWidget('mini'); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setHovering(false); setWidget('mini'); } }}
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
+            className={`fixed bottom-6 ${side} z-[10060] max-w-xs flex items-center gap-3 rounded-xl border px-4 py-3 text-white shadow-2xl cursor-pointer transition-all animate-in fade-in zoom-in-95 duration-150 ${iconStats.look.length > 0
+              ? 'bg-warning-strong border-white/10'
+              : 'bg-brand-blue hover:bg-brand-blue-2 border-white/10 shadow-brand-blue/25'}`}
+          >
+            <div className="relative flex-shrink-0">
+              <Send className="w-5 h-5" />
+              {iconStats.running > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-brand-cyan rounded-full animate-pulse" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate">{iconStats.running > 0 ? `Sending ${noun.replace(/^Assessment/, 'assessment').replace(/^Invitations/, 'invitations')}` : `${noun} sent`}</p>
+              <p className="text-xs text-white/70 truncate">{sub}</p>
+            </div>
+            <div className="w-12 h-1.5 bg-white/20 rounded-full overflow-hidden flex-shrink-0">
+              <div className={`h-full transition-[width] duration-300 ease-out ${iconStats.running > 0 ? 'bg-white' : 'bg-brand-cyan'}`} style={{ width: `${iconStats.pct}%` }} />
+            </div>
+            <Maximize2 className="w-4 h-4 text-white/70 flex-shrink-0" />
+          </div>
+        );
+      })()}
+
       {/* The round icon. */}
       <button
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
         type="button"
         onClick={() => { seeCoach(); setWidget(miniOpen ? 'icon' : 'mini'); }}
         aria-label={`${iconStats.title}${iconStats.eta && iconStats.running > 0 ? `, ${iconStats.eta}` : ''}${iconStats.look.length > 0 ? `, ${iconStats.look.length} need a look` : ''}. ${miniOpen ? 'Hide' : 'Show'} status.`}
         aria-expanded={miniOpen}
         title={`${iconStats.title}${iconStats.running > 0 ? ` · ${iconStats.runDone}/${iconStats.runTotal}${iconStats.eta ? ` · ${iconStats.eta}` : ''}` : ''}${iconStats.look.length > 0 ? ` · ${iconStats.look.length} need a look` : ''}`}
-        className={`fixed bottom-6 ${side} z-40 h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 focus-visible:ring-offset-2`}
+        className={`fixed bottom-6 ${side} z-[60] h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 focus-visible:ring-offset-2`}
         style={{ background: `conic-gradient(${ringColour} ${iconStats.pct * 3.6}deg, rgba(255,255,255,0.25) 0deg)` }}
       >
         <span className="relative flex h-full w-full items-center justify-center rounded-full bg-brand-blue text-white">
@@ -700,6 +881,7 @@ export default function BulkInviteProgressIndicator() {
           )}
         </span>
       </button>
+      {overviewOpen && <BulkInviteOverviewDialog jobs={scoped} onClose={() => setOverviewOpen(false)} />}
       {results}
       {cancelDialog}
     </>

@@ -11,7 +11,8 @@ export interface ScoringProgressItem {
   jobTitle: string;
   jobId: string;
   source: 'Internal DB' | 'My Resumes';
-  status: 'Queued' | 'Scoring in progress' | 'Scored successfully' | 'Failed';
+  /** 'Cancelled': stopped while still waiting (Cancel / Cancel all) — settled, never charged. */
+  status: 'Queued' | 'Scoring in progress' | 'Scored successfully' | 'Failed' | 'Cancelled';
   errorReason?: string;
   scoredDateTime?: string;
   matchResult?: 'Exact Match' | 'Partial Match' | 'No Match';
@@ -38,6 +39,9 @@ export interface ScoringJob {
   /** Say when the run finishes (toast + View Results) — a run started in the
    *  background from a page that keeps the recruiter where they are. */
   announce?: boolean;
+  /** The Celery scoring batch behind the run (latest one, for a JD-keyed
+   *  job) — lets the popup Cancel / Retry it. */
+  batchId?: string;
 }
 
 /** Optional details a run can be started with. */
@@ -45,6 +49,7 @@ export interface ScoringJobMeta {
   jobCode?: string;
   jobVersion?: number;
   announce?: boolean;
+  batchId?: string;
 }
 
 interface ScoringProgressContextType {
@@ -225,6 +230,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
          would keep pushing that expiry forward. */
       const next: ScoringJob = {
         ...incoming,
+        batchId: incoming.batchId ?? existing?.batchId,
         startedAt: existing?.startedAt || incoming.startedAt || new Date().toISOString(),
       };
       if (!existing) return [...prev, next];
