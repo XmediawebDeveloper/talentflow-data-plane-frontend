@@ -3691,7 +3691,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               scoring={{
                 allowOverqualified: job.allowOverqualified,
                 jobHoppingEnabled: job.jobHoppingEnabled,
-                overqualifiedNoNote: 'Experience well above the range scores lower',
+                overqualifiedNoNote: 'Experience more than 3 years above the maximum fails Experience',
               }}
               aiExtracted={job.creation_method === 'ai_generated'}
             />
