@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Headphones, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
   FileText, Search, ArrowLeft, Filter, CheckCircle2, Circle, Clock3, XCircle,
-  User, Calendar, Loader2, HelpCircle, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal
+  User, Calendar, Loader2, HelpCircle, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal, Shield, Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -21,6 +21,8 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import FilterSelect from '@/components/ui/filter-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { useAuth } from '@/lib/hooks/useAuth';
+import UnitDisputesView from '@/components/subscription/unit-disputes/UnitDisputesView';
 
 type ViewType = 'overview' | 'submit' | 'tickets' | 'detail';
 
@@ -60,6 +62,12 @@ export default function InternalHelpDesk() {
   const ticketIdFromUrl = searchParams.get('ticket');
 
   const [view, setView] = useState<ViewType>('overview');
+  // 'unit-disputes' = the shared Unit Disputes screen (also under Subscription).
+  // Same rule as there: View Usage (the API re-checks); without it the tab is
+  // visible, greyed, with a tooltip.
+  const [tab, setTab] = useState<'requests' | 'unit-disputes'>('requests');
+  const { user: authUser, hasPermission } = useAuth();
+  const canViewUnitDisputes = hasPermission('canViewUsage');
   const [selectedTicket, setSelectedTicket] = useState<InternalTicket | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -96,14 +104,26 @@ export default function InternalHelpDesk() {
   const rootRef = useScrollRestoration<HTMLElement>('help-desk', !loading);
   useListStatePersistence(
     'help-desk',
-    { view, searchQuery, filterStatus, filterPriority },
+    { tab, view, searchQuery, filterStatus, filterPriority },
     (s) => {
+      if (s.tab === 'requests' || s.tab === 'unit-disputes') setTab(s.tab);
       if (s.view === 'overview' || s.view === 'tickets') setView(s.view);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.filterStatus === 'string') setFilterStatus(s.filterStatus);
       if (typeof s.filterPriority === 'string') setFilterPriority(s.filterPriority);
     },
   );
+
+  // Deep link: /support-tickets?tab=unit-disputes (wins over the restored tab).
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t === 'unit-disputes' || t === 'requests') setTab(t);
+  }, [searchParams]);
+
+  // A restored / linked Unit Disputes tab the user can't see → back to My Requests.
+  useEffect(() => {
+    if (tab === 'unit-disputes' && authUser && !canViewUnitDisputes) setTab('requests');
+  }, [tab, authUser, canViewUnitDisputes]);
 
   useEffect(() => {
     if (hasFetched.current) return;
@@ -327,7 +347,11 @@ export default function InternalHelpDesk() {
     <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="tf-page-sheet">
-      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Desk' }]} />
+      <PageBreadcrumb className="mb-4 md:mb-6" items={
+        tab === 'unit-disputes'
+          ? [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Desk', onClick: () => setTab('requests') }, { label: 'Unit Disputes' }]
+          : [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Desk' }]
+      } />
       {/* Header */}
       {/* No inner padding: the page panel already insets content 16/32px
           (px-8/p-8 here doubled it to 48px). */}
@@ -340,11 +364,11 @@ export default function InternalHelpDesk() {
               </div>
               <div>
                 <h1 className="tf-page-title">Help Desk</h1>
-                <p className="tf-body-secondary">Request help from your administrator</p>
+                <p className="tf-body-secondary">{tab === 'requests' ? 'Request help from your administrator' : 'Ask for units back when a session failed because of a platform problem.'}</p>
               </div>
             </div>
 
-            {view !== 'overview' && view !== 'submit' && (
+            {tab === 'requests' && view !== 'overview' && view !== 'submit' && (
               <button
                 onClick={() => setView('submit')}
                 className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
@@ -357,7 +381,49 @@ export default function InternalHelpDesk() {
         </div>
       </div>
 
+      <div role="tablist" aria-label="Help Desk views" className="mt-4 flex gap-1 border-b border-gray-200 dark:border-slate-700">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'requests'}
+          onClick={() => setTab('requests')}
+          className={`tf-tab-line -mb-px ${tab === 'requests' ? 'tf-tab-line-active' : ''}`}
+        >
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <User className="h-4 w-4 flex-shrink-0" />
+            <span className="hidden sm:inline">My Requests</span>
+            <span className="sm:hidden">Requests</span>
+          </div>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'unit-disputes'}
+          aria-disabled={!canViewUnitDisputes}
+          title={canViewUnitDisputes ? undefined : 'You do not have permission to view unit disputes'}
+          onClick={() => { if (canViewUnitDisputes) setTab('unit-disputes'); }}
+          className={`tf-tab-line -mb-px ${
+            tab === 'unit-disputes'
+              ? 'tf-tab-line-active'
+              : canViewUnitDisputes ? '' : 'cursor-not-allowed text-gray-400 opacity-60'
+          }`}
+        >
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Shield className="h-4 w-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Unit Disputes</span>
+            <span className="sm:hidden">Disputes</span>
+            {!canViewUnitDisputes && <Lock className="h-3.5 w-3.5 flex-shrink-0" />}
+          </div>
+        </button>
+      </div>
+
+      {/* Unit Disputes — the shared screen, without its own page shell. */}
+      {tab === 'unit-disputes' && canViewUnitDisputes && (
+        <div className="pt-4 sm:pt-6"><UnitDisputesView embedded /></div>
+      )}
+
       {/* Content */}
+      {tab === 'requests' && (
       <div className="pt-4 sm:pt-6">
         {/* Overview */}
         {view === 'overview' && (
@@ -937,6 +1003,7 @@ export default function InternalHelpDesk() {
           </div>
         )}
       </div>
+      )}
       </div>
       </div>
     </main>

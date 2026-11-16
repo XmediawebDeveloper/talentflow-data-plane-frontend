@@ -19,6 +19,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -34,6 +35,8 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
 
   // Persist scroll + filter state so returning to this page restores it exactly.
   const rootRef = useScrollRestoration<HTMLElement>('notifications', !loading);
@@ -128,6 +131,38 @@ export default function NotificationsPage() {
       window.dispatchEvent(new CustomEvent('notificationTrigger'));
     } catch (error) {
       console.error('Error deleting notification:', error);
+    }
+  };
+
+  // Clears everything the current filter shows (All/Unread + category).
+  const handleClearAll = async () => {
+    setConfirmClearAll(false);
+    setClearingAll(true);
+    try {
+      await notificationService.deleteAllNotifications({
+        unreadOnly: filter === 'unread',
+        category: categoryFilter,
+      });
+      window.dispatchEvent(new CustomEvent('notificationTrigger'));
+      if (filter === 'all' && !categoryFilter) {
+        // Everything is gone — no need to refetch.
+        ++fetchSeqRef.current;
+        setNotifications([]);
+        setHasMore(false);
+        setUnreadCount(0);
+        setTotal(0);
+      } else {
+        // Only a subset was removed; refetch for accurate counts.
+        await fetchNotifications(true);
+        if (filter !== 'all') {
+          const all = await notificationService.getNotifications(1, 0);
+          setTotal(all.total);
+        }
+      }
+    } catch (error) {
+      console.error('Error clearing notifications:', error);
+    } finally {
+      setClearingAll(false);
     }
   };
 
@@ -229,6 +264,16 @@ export default function NotificationsPage() {
             >
               <Check className="w-4 h-4" />
               Mark All Read
+            </button>
+          )}
+          {notifications.length > 0 && (
+            <button
+              onClick={() => setConfirmClearAll(true)}
+              disabled={clearingAll}
+              className="tf-btn px-4 py-2 text-sm text-red-600 bg-white border border-red-200 hover:bg-red-50 hover:border-red-300 transition-colors flex gap-1.5 items-center disabled:opacity-50"
+            >
+              {clearingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Clear All
             </button>
           )}
         </div>
@@ -392,6 +437,21 @@ export default function NotificationsPage() {
       </div>
       </div>
       </div>
+      <ConfirmationDialog
+        isOpen={confirmClearAll}
+        onClose={() => setConfirmClearAll(false)}
+        onConfirm={handleClearAll}
+        title="Clear notifications?"
+        description={
+          filter === 'all' && !categoryFilter
+            ? 'This will permanently delete all your notifications. This cannot be undone.'
+            : `This will permanently delete all ${filter === 'unread' ? 'unread ' : ''}${
+                categoryFilter ? `${categories.find(c => c.value === categoryFilter)?.label ?? categoryFilter} ` : ''
+              }notifications matching the current filter. This cannot be undone.`
+        }
+        confirmText="Delete"
+        variant="danger"
+      />
     </main>
   );
 }

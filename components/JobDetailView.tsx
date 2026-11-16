@@ -19,7 +19,7 @@ import SkillsList from '@/components/ui/SkillsList';
 import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
+import { MobileRecordCard } from '@/components/ui/mobile-record-card';
 import ListToolbar from '@/components/ui/list-toolbar';
 import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
@@ -29,6 +29,7 @@ import { SortByControl } from '@/components/ui/select-all-menu';
 import ListPagination from '@/components/ListPagination';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import { useIsMobile } from '@/components/ui/use-mobile';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import AITalentMatchConfirmModal from './AITalentMatchConfirmModal';
 import { JobActionLockProvider } from '@/components/jobs/JobActionLock';
@@ -5362,6 +5363,9 @@ function AIMatchTabContent({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
+  // Phones (<768px): list only - the toggle is hidden and grid is never used there
+  const isMobile = useIsMobile();
+  const effectiveDisplayMode: ListDisplayMode = isMobile ? 'list' : displayMode;
   /* The secondary filters (phone / location / experience range) collapse behind
      a "More Filters" toggle so this tab's toolbar reads as one row like the Job
      Openings master and the sibling tabs, rather than an always-expanded second
@@ -5709,7 +5713,10 @@ function AIMatchTabContent({
           onClearFilters={clearAiMatchFilters}
           /* h-9 on the List/Grid switch at every width so it lines up with
              Select All on phones too (36px, 16px icons), not only from sm. */
-          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" />}
+          /* Always passed: `trailing` is what switches ListToolbar to its even,
+             stacked tab-card layout on narrow widths. Below md (useIsMobile's
+             768px) the switch itself is hidden and the list is forced. */
+          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4 max-md:!hidden" />}
           beforeSearch={
             <>
               {/* Select All — the shared ToolbarSelectAll (this page / all /
@@ -5997,7 +6004,7 @@ function AIMatchTabContent({
 
       {/* Table / Grid */}
       <div className="tf-card overflow-hidden">
-        {displayMode === 'grid' ? (
+        {effectiveDisplayMode === 'grid' ? (
           <div className="max-h-[calc(100dvh-20rem)] overflow-auto p-4">
             {filteredCandidates.length === 0 ? (
               <div className="px-4 py-12 text-center tf-body-muted">
@@ -6129,7 +6136,7 @@ function AIMatchTabContent({
               email, pills, icon checkboxes and ⋮ row-action button. Same data,
               same handlers: the row opens the candidate, ⋮ offers that and the
               Attachments the old column held. */}
-          <table className={`w-full table-auto ${filteredCandidates.length === 0 ? '' : 'min-w-[880px]'}`}>
+          <table className={`w-full table-auto ${filteredCandidates.length === 0 ? '' : 'min-w-[1000px]'}`}>
             {filteredCandidates.length > 0 && (
             <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
@@ -6138,6 +6145,7 @@ function AIMatchTabContent({
                 <th className="tf-th-cell w-10 tf-sticky-col-left tf-th" aria-label="Select" />
                 <th className="tf-th-cell text-center tf-th">Rating</th>
                 <th className="tf-th-cell text-left tf-th">Candidate</th>
+                <th className="tf-th-cell text-left tf-th">Role</th>
                 <th className="tf-th-cell text-left tf-th">Experience</th>
                 <th className="tf-th-cell text-center tf-th">Resume Version</th>
                 <th className="tf-th-cell text-left tf-th">Scored Status</th>
@@ -6148,7 +6156,7 @@ function AIMatchTabContent({
             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
               {filteredCandidates.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-0">
+                  <td colSpan={8} className="p-0">
                     <div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 dark:text-slate-500`}>
                       No candidates match the current filters.
                     </div>
@@ -6219,6 +6227,9 @@ function AIMatchTabContent({
                           </div>
                           {candidate.email && <p className="tf-meta truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
                         </div>
+                      </td>
+                      <td className="tf-td tf-body">
+                        <p className="truncate max-w-[14rem]" title={candidate.title || undefined}>{candidate.title || '—'}</p>
                       </td>
                       <td className="tf-td tf-body whitespace-nowrap">{candidate.experience || '-'}</td>
                       <td className="tf-td text-center whitespace-nowrap">
@@ -6354,7 +6365,7 @@ function AIMatchTabContent({
                         AI Talent Match page's expanded-row panel. */}
                     {isExpanded && (
                       <tr className="bg-gray-50/60 dark:bg-slate-800/30">
-                        <td colSpan={7} className="tf-td" onClick={(e) => e.stopPropagation()}>
+                        <td colSpan={8} className="tf-td" onClick={(e) => e.stopPropagation()}>
                           <div className="tf-panel overflow-x-auto">
                             <table className="w-full min-w-[760px]">
                               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
@@ -6452,12 +6463,9 @@ function AIMatchTabContent({
                       className="rounded border-gray-300 flex-shrink-0"
                     />
                   }
-                  title={
-                    <span className="flex min-w-0 items-center gap-2">
-                      <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
-                      <span className="min-w-0 truncate">{formatCandidateFirstName(candidate.name)}</span>
-                    </span>
-                  }
+                  /* Job role sits tight under the name (meta's default mt-2 → mt-1). */
+                  className="[&_.tf-record-meta]:mt-1"
+                  title={<span className="block min-w-0 truncate">{formatCandidateFirstName(candidate.name)}</span>}
                   /* Resume Archived sits with the status on the top row, never on
                      the name line, where it squeezed the name to a letter. */
                   badges={<>
@@ -6471,22 +6479,28 @@ function AIMatchTabContent({
                         <XCircle className="w-3 h-3" />Not Scored
                       </span>
                     )}
+                    {/* Rating: a compact badge beside the scored status (was a footer chip). */}
+                    <span
+                      title={`Rating ${candidate.rank || '-'}`}
+                      className={`tf-badge tabular-nums ${
+                        rank >= 7 ? 'bg-success-subtle text-success'
+                        : rank >= 4 ? 'bg-warning-subtle text-warning-strong'
+                        : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500'
+                      }`}
+                    >
+                      <Star className="w-3 h-3" />Rating {candidate.rank || '-'}
+                    </span>
                   </>}
                   meta={[
                     { icon: <Briefcase className="w-3.5 h-3.5 shrink-0" />, label: candidate.title },
-                    { label: candidate.email || '—' },
                   ]}
                   fields={[
+                    { label: 'Email', value: candidate.email || '—' },
                     { label: 'Experience', value: candidate.experience || '—' },
                     { label: 'Location', value: candidate.location || '—' },
                     { label: 'Phone', value: splitPhoneNumbers(candidate.phone, 1)[0] || '—' },
                     { label: 'Uploaded', value: uploadDate },
                   ]}
-                  footer={
-                    <MobileStatChip tone={rank >= 7 ? 'success' : rank >= 4 ? 'warning' : 'neutral'} icon={<Star className="w-3 h-3" />}>
-                      Rank {candidate.rank || '-'}
-                    </MobileStatChip>
-                  }
                   actions={
                     <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(candidate); }} icon={<Paperclip className="w-3.5 h-3.5" />}>
                       {candidate.attachmentCount ?? 1}
@@ -6497,6 +6511,7 @@ function AIMatchTabContent({
                     <div className="mt-2 flex flex-wrap items-center gap-1">
                       <SkillsList
                         skills={candidate.skills}
+                        max={1}
                         expandInline
                         chipClassName="max-w-full px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 [overflow-wrap:anywhere]"
                         moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap"
