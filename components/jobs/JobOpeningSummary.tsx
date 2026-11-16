@@ -277,12 +277,14 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
 /* On small mobile the meta WRAPS (flex-wrap) — forcing it onto one nowrap row
    there made the row wider than the phone screen, which pushed the whole card
    past the viewport (clipping the title/status too, not just the meta). From
-   sm: up it returns to the intended single scrollable line.
+   lg (laptop / desktop) up it returns to the intended single scrollable line.
+   Tablets (sm–lg) wrap too, each item kept whole — the one line ran past the
+   card there and scrolled sideways under a visible bar, clipping the counts.
    [&>span]:flex-shrink-0 matters at sm+: a flex item can shrink below its own
    content width even under flex-nowrap, which with nowrap text would push the
    label out of its box instead of scrolling the row. */
 const SINGLE_LINE_ROW =
-  'flex-wrap gap-x-3 gap-y-1.5 sm:flex-nowrap sm:gap-y-0 sm:whitespace-nowrap sm:overflow-x-auto sm:scrollbar-hide sm:[&>span]:flex-shrink-0';
+  'flex-wrap gap-x-3 gap-y-1.5 sm:max-lg:[&>span]:whitespace-nowrap lg:flex-nowrap lg:gap-y-0 lg:whitespace-nowrap lg:overflow-x-auto lg:scrollbar-hide lg:[&>span]:flex-shrink-0';
 
 /* `phoneGrid` (compact phone layout): below sm the row's fields are drawn at
    text-xs with 14px icons and tighter gaps, and each field stays whole on one
