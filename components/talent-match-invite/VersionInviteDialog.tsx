@@ -1732,11 +1732,15 @@ export default function VersionInviteDialog({
           </div>
 
           {confirm && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-[1px] p-4 sm:p-6">
+            /* Phones: the dialog panel is the scroll container there, so an
+               absolute overlay would sit at the top of the scrolled content
+               (popup clipped, half the page undimmed). Fixed covers the screen
+               the user is actually looking at; sm+ keeps the in-panel overlay. */
+            <div className="absolute max-sm:fixed inset-0 z-20 max-sm:z-[60] flex items-center max-sm:items-start justify-center max-sm:overflow-y-auto overscroll-contain bg-white/80 dark:bg-slate-900/80 max-sm:bg-gray-900/40 max-sm:dark:bg-black/60 backdrop-blur-[1px] p-4 sm:p-6">
               {confirm.discard ? (
                 /* Discard: no corner X — Cancel keeps editing, the red button
                    discards and closes. */
-                <div role="alertdialog" aria-modal="true" aria-labelledby="version-invite-confirm" aria-describedby="version-invite-confirm-desc" className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-5 sm:p-6 text-left">
+                <div role="alertdialog" aria-modal="true" aria-labelledby="version-invite-confirm" aria-describedby="version-invite-confirm-desc" className="w-full max-w-md max-sm:my-auto rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-4 sm:p-6 text-left">
                   {/* Icon and title on one line. */}
                   <div className="flex items-center gap-3">
                     <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-500/10 ring-1 ring-red-100 dark:ring-red-500/20">
