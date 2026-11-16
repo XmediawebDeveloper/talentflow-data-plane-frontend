@@ -514,10 +514,11 @@ export const resumeService = {
   /**
    * Get single resume by ID.
    *
-   * `logView` is a no-op now — viewing a resume is no longer recorded in the
-   * Audit Log at all, by any caller. The parameter (and the `log_view` query
-   * param it sends) is kept only so existing call sites — Resume Details, the
-   * scoring detail page's "View Resume" — don't need to change.
+   * `logView` opts in to audit logging: when true the backend records a
+   * RESUME_VIEWED row in the Audit Log. Pass true only where the user
+   * explicitly opens a resume to read it (the Resume View page, "View Resume"
+   * / version viewers); incidental lookups and prefetches leave it false so
+   * they don't log a view.
    */
   async get(id: string, logView: boolean = false): Promise<Resume> {
     try {
@@ -856,10 +857,15 @@ export const resumeService = {
    * Candidate Activity for the Resume View page: scores, AI Talent Match,
    * AI Assessment and AI Interview invites across all the candidate's
    * versions. Sections the user may not read come back `allowed: false`.
+   *
+   * `logView` opts in to a CANDIDATE_TIMELINE_VIEWED audit row — only the
+   * Candidate Activity card passes true; other lookups leave it false.
    */
-  async getActivity(resumeId: string): Promise<ResumeActivity> {
+  async getActivity(resumeId: string, logView: boolean = false): Promise<ResumeActivity> {
     try {
-      const response = await api.get<ResumeActivity>(`/resumes/${resumeId}/activity`);
+      const response = await api.get<ResumeActivity>(`/resumes/${resumeId}/activity`, {
+        params: logView ? { log_view: true } : undefined,
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

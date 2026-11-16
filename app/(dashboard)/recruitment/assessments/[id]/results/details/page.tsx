@@ -302,6 +302,7 @@ function DetailsContent() {
         onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
         onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
         showRecordPager={false}
+        logView
         onCandidateLoaded={setCandidateName}
         onResumeViewChange={(viewing, close) => setResumeView({ viewing, close })}
       />

@@ -7,6 +7,7 @@ import { OverallSummary } from '../evaluation-dashboard/OverallSummary';
 import { buildDashboardData } from '../evaluation-dashboard/adapter';
 import { generateEvaluationPDF } from '../evaluation-dashboard/generatePDF';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import api from '@/lib/services/api';
 import { useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from '../ResultRowActions';
 import { toast } from 'sonner';
 
@@ -75,6 +76,8 @@ export default function EvaluationReportTab({
             autoTerminated: !!proct.auto_terminated,
           },
         });
+        // Audit the browser-built PDF; fire-and-forget so the download never breaks.
+        api.post(`/ai-interview/${sessionId}/log-client-download`, { kind: 'evaluation_pdf' }).catch(() => {});
       } else {
         const blob = await aiInterviewService.downloadReport(sessionId, 'evaluation', format);
         const ext = format === 'excel' ? 'xlsx' : format;
