@@ -597,7 +597,7 @@ export default function JobOpeningPickerList({
                       details, not the card: the eye and the expanded Version
                       History (whose Published versions stay pickable) keep
                       their normal colours. */}
-                  <div className="flex flex-wrap sm:flex-nowrap items-start gap-3 sm:gap-4">
+                  <div className="flex flex-wrap lg:flex-nowrap items-start gap-3 sm:gap-4">
                     {/* A radio, because exactly one job is picked at a time.
                         Wrapped in its own label rather than the whole card:
                         the card now carries links and a versions toggle,
@@ -689,7 +689,7 @@ export default function JobOpeningPickerList({
                         Phones: three controls don't fit one row, so once the
                         job is picked the next-step button + eye share the row
                         and View Versions drops to its own line below. */}
-                    <div className="flex flex-wrap items-center gap-2 flex-shrink-0 basis-full sm:flex-nowrap sm:basis-auto">
+                    <div className="flex flex-wrap items-center gap-2 flex-shrink-0 basis-full sm:max-lg:flex-nowrap sm:max-lg:justify-end sm:max-lg:pt-3 sm:max-lg:border-t sm:max-lg:border-gray-200 dark:sm:max-lg:border-slate-700 lg:flex-nowrap lg:basis-auto">
                       {lineageSelected && onProceed && (
                         <button
                           type="button"
@@ -703,7 +703,7 @@ export default function JobOpeningPickerList({
                              permission tooltip still shows on hover. */
                           aria-disabled={proceedDisabled || undefined}
                           title={proceedDisabled ? 'You do not have permission to proceed' : undefined}
-                          className={`h-7 px-2.5 max-sm:flex-1 max-sm:h-9 rounded-md transition-all text-xs font-medium flex items-center justify-center gap-1 whitespace-nowrap ${
+                          className={`h-7 px-2.5 max-sm:flex-1 max-lg:h-9 max-lg:px-3 rounded-md transition-all text-xs font-medium flex items-center justify-center gap-1 whitespace-nowrap ${
                             proceedDisabled
                               ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-slate-700 dark:text-slate-500'
                               : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30'
@@ -733,7 +733,7 @@ export default function JobOpeningPickerList({
                         <Eye className="w-4 h-4" />
                       </button>
                       {viewVersionsButton && (
-                        <div className={`sm:hidden ${lineageSelected && onProceed ? 'basis-full [&>button]:w-full [&>button]:justify-center [&>button]:h-9' : 'ml-auto'}`}>{viewVersionsButton}</div>
+                        <div className={`lg:hidden sm:order-first sm:mr-auto sm:ml-0 sm:basis-auto sm:[&>button]:w-auto [&>button]:h-9 [&>button]:px-3 ${lineageSelected && onProceed ? 'max-sm:basis-full [&>button]:w-full [&>button]:justify-center' : 'ml-auto'}`}>{viewVersionsButton}</div>
                       )}
                     </div>
                   </div>
@@ -742,7 +742,7 @@ export default function JobOpeningPickerList({
                       own single horizontal row so it clears the details
                       above it whatever they wrap to. */}
                   {hasVersionHistory && (
-                    <div className="mt-3 hidden sm:flex items-center justify-end gap-2">
+                    <div className="mt-3 hidden lg:flex items-center justify-end gap-2">
                       {viewVersionsButton}
                     </div>
                   )}
