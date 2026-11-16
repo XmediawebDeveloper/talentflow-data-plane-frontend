@@ -29,7 +29,7 @@ import PaymentMethodsPage from '@/app/(dashboard)/subscription/payment-methods/p
 import BillingHistoryPage from '@/app/(dashboard)/subscription/billing-history/page';
 import RefundHistoryPage from '@/app/(dashboard)/subscription/refund-history/page';
 import DisputeHistoryPage from '@/app/(dashboard)/subscription/dispute-history/page';
-import UnitDisputesPage from '@/app/(dashboard)/subscription/unit-disputes/page';
+import UnitDisputesView from '@/components/subscription/unit-disputes/UnitDisputesView';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -2624,7 +2624,7 @@ function CurrentPlanContent() {
             {activeSection === 'billing-history' && <BillingHistoryPage />}
             {activeSection === 'refund-history' && <RefundHistoryPage />}
             {activeSection === 'dispute-history' && <DisputeHistoryPage />}
-            {activeSection === 'unit-disputes' && <UnitDisputesPage />}
+            {activeSection === 'unit-disputes' && <UnitDisputesView />}
           </section>
         )}
 

@@ -170,7 +170,8 @@ export default function FileDisputeModal({ open, onClose, onSubmitted, disputeSt
         }
         throw new Error(detail || 'submit failed');
       }
-      toast.success("Dispute sent. We'll review it within 2–3 business days.");
+      // The decision (and any units back) comes only from the Control Plane — the list shows its status.
+      toast.success('Dispute sent. You can follow its status in the list.');
       reset();
       onSubmitted();
     } catch (e) {
