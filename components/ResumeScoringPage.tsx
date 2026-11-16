@@ -3851,7 +3851,7 @@ export default function ResumeScoringPage({
               View by [ Job | Candidates ]
               [☐ Select All ▾]          [⇅ Sort ▾] [⇕]
             From lg the toolbar is unchanged. */}
-        <div className="tf-jobs-toolbar tf-toolbar-card max-lg:mb-4">
+        <div className="tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card max-lg:mb-4">
         {/* Search and Filter Bar — only when there's a list to filter */}
         {scoredHistory.length > 0 && (
           <div className="tf-jobs-contents mb-3">

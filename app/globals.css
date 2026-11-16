@@ -3945,3 +3945,45 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   .dark .tf-source-tabs [role="tab"] { background: var(--color-slate-900); border-color: var(--color-slate-700); color: var(--color-slate-300); }
   .dark .tf-source-tabs [role="tab"][aria-selected="true"] { border-color: var(--brand-blue); background: color-mix(in srgb, var(--brand-blue) 15%, transparent); color: #fff; }
 }
+
+/* Resume Scoring toolbar on tablets (640–1023px). Without this every control wrapped
+   wherever it ran out of room: Select All alone with a stray divider, the match pills,
+   another divider, View by, and Expand all on a line of its own. Fixed lines instead:
+     ( search ................... ) Sort by [ Last Scored ▾ ⇅ ] [≡ ⊞]
+     [ All Locations ▾ ][ Industry ▾ ][ More Filters ][ Reset ]      ← selects fill
+     ────────────────────────────────────────────────────────────────
+     [☐ Select All ▾]   View by [ Job | Candidates ]     [⇕ Expand all]
+     [All 582] [Exact Match 61] [Partial Match 17] [No Match 504]
+   Phones keep their own line layout (.tf-jobs-toolbar rules below sm). */
+@media (width >= theme(--breakpoint-sm)) and (width < theme(--breakpoint-lg)) {
+  .tf-rs-toolbar .tf-tb-row { flex-direction: row !important; flex-wrap: wrap !important; align-items: center !important; column-gap: 0.5rem !important; row-gap: 0 !important; }
+  .tf-rs-toolbar .tf-tb-controls { display: contents !important; }
+  /* Line 1: search (takes what is left) · Sort by · list / grid. */
+  .tf-rs-toolbar .tf-tb-search { order: 1; flex: 1 1 0% !important; min-width: 0 !important; width: auto !important; }
+  .tf-rs-toolbar .tf-tb-row [data-toolbar-sort] { order: 2; flex: none; }
+  .tf-rs-toolbar .tf-tb-controls > .tf-jobs-viewtoggle { order: 3; flex: none; margin-left: 0 !important; margin-top: 0; }
+  .tf-rs-toolbar .tf-tb-row::after { content: ''; order: 4; flex: 1 1 100%; height: 0; }
+  /* Line 2: the two dropdowns fill, then More Filters and Reset. */
+  /* Every gap in this card is 12px: line 1 → line 2 here, the row's own mb-3 → divider,
+     pt-3 → Select All line, and the lines below (row-gap) → Actions (mt-3). */
+  .tf-rs-toolbar .tf-tb-controls > *, .tf-rs-toolbar .tf-tb-controls > .tf-jobs-filter-pills > * { order: 5; margin-top: 0.75rem; }
+  .tf-rs-toolbar .tf-tb-controls > .tf-jobs-filter-pills > * { flex: 1 1 10rem; width: auto !important; min-width: 0; }
+  /* Selection Actions (AI Talent Match results) go to line 2 with the rest; its divider hides. */
+  .tf-rs-toolbar .tf-tb-controls > .tf-jobs-actions-line > * { order: 5; margin-top: 0.75rem; }
+  .tf-rs-toolbar .tf-tb-controls > .tf-jobs-actions-line > span[aria-hidden].w-px { display: none !important; }
+  /* No Sort by in the toolbar (AI Talent Match results): More Filters and Reset stay on
+     line 1 with the search and list / grid — on a line of their own they'd sit alone. */
+  .tf-rs-toolbar .tf-tb-row:not(:has([data-toolbar-sort])) > .tf-tb-controls > :is([data-tb-filters], [data-tb-reset]) { order: 2; margin-top: 0; }
+  .tf-rs-toolbar .tf-jobs-row2 { row-gap: 0.75rem !important; }
+  .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-contents { display: contents !important; }
+  .tf-rs-toolbar .tf-jobs-row2 span[aria-hidden].w-px { display: none !important; }
+  /* Select All · View by · Expand all fill the line: each keeps its own width and the
+     spare room is shared out, so the line ends flush (not three equal thirds). */
+  .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-select { order: 1; flex: 1 1 auto; min-width: 0; display: flex; }
+  .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-select > * { flex: 1 1 auto; min-width: 0; }
+  .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-select .tf-jobs-selectall { width: 100%; justify-content: center; }
+  .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-method { order: 2; flex: 1 1 auto; min-width: 0; width: auto !important; }
+  .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-method > div { flex: 1 1 auto !important; }
+  .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-refresh { order: 3; flex: 1 1 auto; min-width: 0; margin-left: 0 !important; justify-content: center; }
+  .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-status-tabs { order: 4; flex: 1 1 100%; }
+}
