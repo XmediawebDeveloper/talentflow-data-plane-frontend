@@ -1,11 +1,11 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { Shield, Search, Clock, CheckCircle2, XCircle, AlertCircle, Download, ExternalLink, RefreshCw, Filter, Plus, Copy } from 'lucide-react';
+import { Shield, Search, Clock, CheckCircle2, XCircle, AlertCircle, Download, ExternalLink, RefreshCw, Plus, Copy } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
-import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
 import { RowActions } from '@/components/subscription/RowActionsMenu';
@@ -353,12 +353,37 @@ export default function UnitDisputesPage() {
     },
   ].filter(Boolean) as FilterChip[];
 
-  const unitsCell = (d: UnitDispute) => (
-    <span className="tf-body">
-      <span className="font-semibold text-brand-blue">{d.units_to_refund}</span>
-      {d.status === 'APPROVED' && (d.units_restored ?? 0) > 0 && (
-        <span className="block tf-meta text-success-strong">{d.units_restored} returned</span>
-      )}
+  /** Consumed → what happened to the units asked back: Returned / Rejected / Pending. */
+  const unitsCell = (d: UnitDispute) => {
+    const consumed = d.record?.units_consumed ?? d.units_to_refund;
+    const asked = d.units_to_refund;
+    const result =
+      d.status === 'APPROVED'
+        ? { label: 'Returned', value: d.units_restored || asked, cls: 'text-success-strong' }
+        : d.status === 'REJECTED'
+          ? { label: 'Rejected', value: asked, cls: 'text-destructive' }
+          : { label: 'Pending', value: asked, cls: 'text-warning-strong' };
+    return (
+      <dl className="inline-grid grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-xs tabular-nums">
+        <dt className="text-gray-500 dark:text-slate-400">Consumed</dt>
+        <dd className="text-right font-semibold text-gray-800 dark:text-slate-200">{consumed}</dd>
+        {asked !== consumed && (
+          <>
+            <dt className="text-gray-500 dark:text-slate-400">Asked back</dt>
+            <dd className="text-right font-semibold text-gray-800 dark:text-slate-200">{asked}</dd>
+          </>
+        )}
+        <dt className={result.cls}>{result.label}</dt>
+        <dd className={`text-right font-semibold ${result.cls}`}>{result.value}</dd>
+      </dl>
+    );
+  };
+
+  /** Date with the time underneath. */
+  const filedOnCell = (d: UnitDispute) => (
+    <span className="whitespace-nowrap">
+      <span className="block tf-body">{formatDate(d.created_at)}</span>
+      <span className="block tf-meta">{formatISTTime(d.created_at)}</span>
     </span>
   );
 
@@ -403,14 +428,10 @@ export default function UnitDisputesPage() {
       <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Unit Disputes' }]} />
 
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="tf-page-title">Unit Disputes</h1>
-            <p className="mt-1 tf-body-muted">
-              Ask for units back when an interview, assessment or scoring failed because of a platform problem. Each request is reviewed within 2&ndash;3 business days.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <h1 className="min-w-0 tf-page-title">Unit Disputes</h1>
+          <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={() => { if (canExportDisputes) setShowExportModal(true); }}
               disabled={loading || filteredDisputes.length === 0 || !canExportDisputes}
@@ -451,6 +472,10 @@ export default function UnitDisputesPage() {
             </button>
           </div>
         </div>
+        <p className="mt-1 max-w-3xl tf-body-muted">
+          Ask for units back when an interview, assessment or scoring failed because of a platform problem. Each request is reviewed within 2&ndash;3 business days.
+        </p>
+        </div>
 
         {/* Stat cards — clicking one opens the list with that filter */}
         <div className="tf-grid-3 mb-5">
@@ -466,22 +491,9 @@ export default function UnitDisputesPage() {
           <>
         {/* Filters */}
         <div className="tf-card-soft mb-6 p-4 sm:p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
-              <Filter className="h-3.5 w-3.5 text-brand-blue" />
-            </span>
-            <span className="tf-row-title">Filters</span>
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="ml-auto inline-flex items-center gap-1 rounded-full bg-brand-blue/[0.06] px-3 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10 transition-colors hover:bg-brand-blue/[0.12]"
-              >
-                Clear all
-              </button>
-            )}
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="relative lg:col-span-1">
+          {/* 1 col on phones, 2 on tablets, 3 on laptops / zoomed-in, all 5 in one row on wide screens */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+            <div className="relative min-w-0 sm:col-span-2 lg:col-span-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
               <input
                 type="text"
@@ -508,7 +520,17 @@ export default function UnitDisputesPage() {
             <DateField aria-label="Filed from" value={startDate} onChange={setStartDate} />
             <DateField aria-label="Filed until" value={endDate} onChange={setEndDate} />
           </div>
-          {activeFilterChips.length > 0 && <FilterChips className="mt-3" chips={activeFilterChips} />}
+          {hasActiveFilters && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {activeFilterChips.length > 0 && <FilterChips chips={activeFilterChips} />}
+              <button
+                onClick={clearFilters}
+                className="ml-auto inline-flex items-center gap-1 rounded-full bg-brand-blue/[0.06] px-3 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10 transition-colors hover:bg-brand-blue/[0.12]"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -583,14 +605,14 @@ export default function UnitDisputesPage() {
               </div>
             </div>
             <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
-              <table className="w-full min-w-[980px]">
+              <table className="w-full min-w-[900px]">
                 <thead className="bg-white dark:bg-slate-900">
                   <tr className="text-left">
-                    <th className="tf-th-cell tf-th">Disputed item</th>
-                    <th className="tf-th-cell tf-th w-[110px]">Filed on</th>
-                    <th className="tf-th-cell tf-th w-[170px]">Reason</th>
+                    <th className="tf-th-cell tf-th w-[34%] min-w-[260px]"><span className="pl-12">Disputed item</span></th>
+                    <th className="tf-th-cell tf-th w-[120px]">Filed on</th>
+                    <th className="tf-th-cell tf-th">Reason</th>
                     <th className="tf-th-cell tf-th w-[140px]" title="From the activity log">Error came from</th>
-                    <th className="tf-th-cell text-right tf-th w-[90px]">Units</th>
+                    <th className="tf-th-cell text-right tf-th w-[130px]">Units</th>
                     <th className="tf-th-cell text-center tf-th w-[140px]">Status</th>
                     <th className="tf-th-cell text-right tf-th w-[90px] tf-sticky-col">Actions</th>
                   </tr>
@@ -611,7 +633,7 @@ export default function UnitDisputesPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="tf-td whitespace-nowrap tf-body">{formatDate(d.created_at)}</td>
+                      <td className="tf-td">{filedOnCell(d)}</td>
                       <td className="tf-td"><span className="block truncate tf-body-secondary">{reasonLabel(d.reason)}</span></td>
                       <td className="tf-td">{d.record ? <ErrorOriginBadge origin={d.record.error_origin} /> : <span className="tf-meta">—</span>}</td>
                       <td className="tf-td text-right">{unitsCell(d)}</td>
@@ -637,7 +659,7 @@ export default function UnitDisputesPage() {
                   fields={[
                     ...(candidateLine(d) ? [{ label: 'Candidate', value: candidateLine(d) }] : []),
                     { label: 'For', value: d.record?.title || '—' },
-                    { label: 'Filed on', value: formatDate(d.created_at) },
+                    { label: 'Filed on', value: formatDateTime(d.created_at) },
                     { label: 'Reason', value: reasonLabel(d.reason) },
                     { label: 'Units', value: unitsCell(d) },
                   ]}
