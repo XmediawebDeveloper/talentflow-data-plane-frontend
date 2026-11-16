@@ -1,6 +1,6 @@
 'use client';
 
-import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, CheckCircle2, RefreshCw, Info } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -16,7 +16,7 @@ import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import ListPagination from '@/components/ListPagination';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { lineageKey, isSelectableVersion, mapJDToJob, jobSearchMatcher, sortJobs, buildAssessmentJobList, needsVersionPicker, groupByLineage } from '@/lib/utils/jobOpeningDisplay';
+import { lineageKey, isSelectableVersion, mapJDToJob, jobSearchMatcher, sortJobs, buildAssessmentJobList, needsVersionPicker, newerVersionsNote, groupByLineage } from '@/lib/utils/jobOpeningDisplay';
 import type { Job } from '@/lib/types/types';
 import { publishedJdToJob } from '@/lib/utils/publishedJdToJob';
 import { jdService } from '@/lib/services';
@@ -163,10 +163,10 @@ export default function AIInterviewJDSelection() {
 
   /* ONE CARD PER JOB, on the Assessments picker's own rule and through its
      own helper, so the two lists cannot drift: each job is listed on its
-     newest Published version, even when that version already has an AI
-     interview (the card is then unselectable and View Versions offers the
-     free one). A job with no published version free of an interview gets no
-     card. Newest job first. */
+     newest Published / Republished version that does not already have an AI
+     interview (v4 taken → the card shows v3, with a note saying why). A job
+     with no published version free of an interview gets no card. Newest job
+     first. */
   const buildableJobs = buildAssessmentJobList(selectableJds.map(toJob), version => versionHasInterview(version.id));
   /* Disabled and Archived jobs stay visible exactly as before the status
      changed — one card per job, on its newest non-draft version, read-only
@@ -182,7 +182,11 @@ export default function AIInterviewJDSelection() {
   groupByLineage(fullJobsById.size > 0 ? [...fullJobsById.values()] : jds.map(toJob)).forEach((bucket, key) => {
     if (buildableLineages.has(key)) return;
     const latestNonDraft = bucket.find(job => job.status !== 'Draft');
-    if (latestNonDraft && (isJobDisabled(latestNonDraft) || isJobArchived(latestNonDraft))) {
+    /* A single-version job whose only version already has an AI interview has
+       nothing left to show — hidden. With more versions the grey card stays,
+       taken or not. */
+    const onlyVersionTaken = bucket.length === 1 && !!latestNonDraft && versionHasInterview(latestNonDraft.id);
+    if (latestNonDraft && !onlyVersionTaken && (isJobDisabled(latestNonDraft) || isJobArchived(latestNonDraft))) {
       inactiveJobs.set(key, latestNonDraft);
     }
   });
@@ -396,6 +400,15 @@ export default function AIInterviewJDSelection() {
                          card version is its one available version is picked
                          straight from the card. */
                       const showVersionPicker = needsVersionPicker(job, allVersions, version => versionHasInterview(version.id));
+                      /* Why the card is not on the job's newest version (taken,
+                         Disabled, Archived…). The full rows carry every status;
+                         until they land, the slim interview rows stand in. */
+                      const skippedNote = newerVersionsNote(
+                        job,
+                        allVersions.length > 0 ? allVersions : jds.map(toJob),
+                        version => versionHasInterview(version.id),
+                        'an AI interview',
+                      );
                       /* The card's + builds against this job's picked version
                          when one is ticked, otherwise the latest. */
                       const cardTarget = lineageSelected ? jdPick!.job : job;
@@ -422,11 +435,11 @@ export default function AIInterviewJDSelection() {
                             blockedByOtherPick
                               ? otherPickReason
                               : jobDisabled
-                                ? `${JD_DISABLED_ACTION_MESSAGE} View Versions still shows this job's version history.`
+                                ? `${JD_DISABLED_ACTION_MESSAGE}${showVersionPicker ? " View Versions still shows this job's version history." : ''}`
                               : jobArchived
-                                ? `${JD_ARCHIVED_ACTION_MESSAGE} View Versions still shows this job's version history.`
+                                ? `${JD_ARCHIVED_ACTION_MESSAGE}${showVersionPicker ? " View Versions still shows this job's version history." : ''}`
                               : !latestSelectableStatus
-                                ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
+                                ? (showVersionPicker ? `${latestUnpublishedReason}. View Versions opens this job's full version history.` : `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()}`)
                                 : showVersionPicker
                                   ? 'View Versions opens this job’s version history — every version of this job, and the one to build the AI interview against.'
                                   : `v${job.versionNumber ?? 1} is this job’s only available version — select it to build the AI interview against it.`
@@ -456,7 +469,7 @@ export default function AIInterviewJDSelection() {
                                     ? `v${job.versionNumber ?? 1} already has an AI interview — open View Versions to build against another version`
                                     : !latestSelectableStatus
                                       ? latestUnpublishedReason
-                                      : `Select the latest version (v${job.versionNumber ?? 1})`
+                                      : `Select v${job.versionNumber ?? 1}`
                               }
                             >
                               <input
@@ -468,7 +481,7 @@ export default function AIInterviewJDSelection() {
                                 onClick={() => isPicked && pickJdVersion(job, versionKey)}
                                 className="tf-radio focus:ring-brand-blue/40"
                               />
-                              <span className="sr-only">Select the latest version of {job.title}</span>
+                              <span className="sr-only">Select v{job.versionNumber ?? 1} of {job.title}</span>
                             </label>
 
                             <div className={`flex-1 min-w-0 ${jobArchived && !blockedByOtherPick ? 'opacity-60' : ''}`}>
@@ -507,6 +520,12 @@ export default function AIInterviewJDSelection() {
                                 <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-brand-blue/10 px-2 py-1 text-xs font-medium text-brand-blue max-w-full">
                                   <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
                                   v{pickedVersionOfThisJob.versionNumber ?? 1} selected, chosen from Version History
+                                </p>
+                              )}
+                              {skippedNote && (
+                                <p className="mt-2 flex items-start gap-1.5 tf-meta">
+                                  <Info className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+                                  <span>{skippedNote}</span>
                                 </p>
                               )}
                             </div>

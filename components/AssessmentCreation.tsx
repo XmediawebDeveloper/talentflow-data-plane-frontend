@@ -51,6 +51,7 @@ import {
   lineageKey,
   mapJDStatus,
   needsVersionPicker,
+  newerVersionsNote,
   mapJDToJob,
   sortJobs,
 } from '@/lib/utils/jobOpeningDisplay';
@@ -3337,7 +3338,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   const inactiveJobs: Job[] = [];
   groupByLineage(allJdVersions).forEach((bucket, key) => {
     if (buildableLineages.has(key)) return;
-    const inactiveRep = inactiveAssessmentRepresentative(bucket);
+    const inactiveRep = inactiveAssessmentRepresentative(bucket, version =>
+      versionHasAssessment(key, version.id),
+    );
     if (inactiveRep) inactiveJobs.push(inactiveRep);
   });
   const availableJobs = [...buildableJobs, ...inactiveJobs];
@@ -3778,6 +3781,11 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   const showVersionPicker = needsVersionPicker(job, allJdVersions, version =>
                     versionHasAssessment(versionKey, version.id),
                   );
+                  /* The card sits on the newest FREE published version, so
+                     when a newer one was skipped (already assessed, Disabled,
+                     Archived…) say so — otherwise "where did v4 go?". */
+                  const skippedNote = newerVersionsNote(job, allJdVersions, version =>
+                    versionHasAssessment(versionKey, version.id), 'an assessment');
 
                   return (
                     <div
@@ -3800,7 +3808,11 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         blockedByOtherPick
                           ? otherPickReason
                           : !latestSelectableStatus
-                            ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
+                            ? (showVersionPicker
+                              ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
+                              : isJobVersionLocked(job.status)
+                                ? ASSESSMENT_JOB_LOCK_MESSAGE
+                                : `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()}`)
                             : showVersionPicker
                               ? 'View Versions opens this job’s version history — every version of this job, and the one to build the assessment against.'
                               : `v${job.versionNumber ?? 1} is this job’s only available version — select it to build the assessment against it.`
@@ -3837,7 +3849,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                 ? `v${job.versionNumber ?? 1} already has an assessment — open View Versions to build against another version`
                                 : !latestSelectableStatus
                                   ? latestUnpublishedReason
-                                  : `Select the latest version (v${job.versionNumber ?? 1})`
+                                  : `Select v${job.versionNumber ?? 1}`
                           }
                         >
                           <input
@@ -3850,7 +3862,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             onClick={() => isPicked && pickJdVersion(job, versionKey)}
                             className="tf-radio focus:ring-brand-blue/40"
                           />
-                          <span className="sr-only">Select the latest version of {job.title}</span>
+                          <span className="sr-only">Select v{job.versionNumber ?? 1} of {job.title}</span>
                         </label>
 
                         <div className={`flex-1 min-w-0 ${!latestSelectableStatus && !blockedByOtherPick ? 'opacity-60' : ''}`}>
@@ -3885,6 +3897,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-brand-blue/10 px-2 py-1 text-xs font-medium text-brand-blue max-w-full">
                               <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
                               v{pickedVersionOfThisJob.versionNumber ?? 1} selected, chosen from Version History
+                            </p>
+                          )}
+                          {skippedNote && (
+                            <p className="mt-2 flex items-start gap-1.5 tf-meta">
+                              <Info className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+                              <span>{skippedNote}</span>
                             </p>
                           )}
                         </div>

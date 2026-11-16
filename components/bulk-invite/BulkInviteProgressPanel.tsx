@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { AlertCircle, AlertTriangle, Check, CheckCircle2, Copy, Hourglass, Loader2, Pause, Pencil, RotateCcw, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Ban, Check, CheckCircle2, Copy, Hourglass, Loader2, Pause, Pencil, RotateCcw, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
@@ -16,12 +16,32 @@ import {
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
 import { formatTimeLeft } from '@/lib/services/bulkInviteService';
 import { useBulkInviteActions } from './useBulkInviteActions';
+import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
+import { ClipboardList, FolderOpen, Video } from 'lucide-react';
+
+/* Where a candidate came from, as the View window names it. */
+const SOURCE_LABEL: Record<string, string> = {
+  'talent-match': 'AI Talent Match',
+  'score-resume': 'Resume Scoring',
+  'my-resumes': 'My Resumes',
+  'internal-db': 'Shared Database',
+  extra: 'Added by email',
+};
+const sentWhen = (iso?: string | null) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return {
+    day: d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }),
+    time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase(),
+  };
+};
 
 const POLL_MS = 2000;
 /* Rows per page, from the standard pager's ladder. */
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
-type Tab = 'all' | 'sent' | 'skipped' | 'failed' | 'remaining';
+type Tab = 'all' | 'sent' | 'skipped' | 'cancelled' | 'failed' | 'remaining';
 
 const CHIP: Record<BulkInviteItemStatus, { label: string; className: string }> = {
   queued: { label: 'Queued', className: 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 ring-gray-200 dark:ring-slate-700' },
@@ -29,6 +49,7 @@ const CHIP: Record<BulkInviteItemStatus, { label: string; className: string }> =
   sent: { label: 'Sent', className: 'bg-success-subtle text-success ring-success-line' },
   skipped: { label: 'Skipped', className: 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 ring-gray-200 dark:ring-slate-700' },
   failed: { label: 'Failed', className: 'bg-destructive-subtle text-destructive ring-destructive-line' },
+  cancelled: { label: 'Cancelled', className: 'bg-warning-subtle text-warning-strong ring-warning-line' },
 };
 
 async function copyText(text: string, what: string) {
@@ -44,7 +65,7 @@ export const bulkInviteStatusLine = (job: BulkInviteJob) => {
   switch (job.status) {
     case 'queued': return 'Waiting to start…';
     case 'running': return `Sending ${job.processed} of ${job.total}…`;
-    case 'done': return `${job.sent} sent · ${job.skipped} skipped · ${job.failed} failed`;
+    case 'done': return `${job.sent} sent · ${job.skipped} skipped${job.cancelled ? ` · ${job.cancelled} cancelled` : ''} · ${job.failed} failed`;
     case 'cancelled': return `Cancelled — ${job.sent} sent before stopping`;
     case 'paused': return job.paused_reason || 'Paused';
     case 'failed': return job.error_message || 'The send stopped with an error';
@@ -243,7 +264,7 @@ export default function BulkInviteProgressPanel({
   const canManage = job.can_manage !== false;
   const againCount = (job.retryable_failed ?? 0) + (job.cancelled_unsent ?? 0);
   const pickable = rows.filter((r) => r.can_retry);
-  const showPick = canManage && (tab === 'failed' || tab === 'skipped') && pickable.length > 0;
+  const showPick = canManage && (tab === 'failed' || tab === 'skipped' || tab === 'cancelled') && pickable.length > 0;
   const allPicked = showPick && pickable.every((r) => picked.has(r.id));
   const togglePick = (id: string) => setPicked((prev) => {
     const next = new Set(prev);
@@ -257,6 +278,7 @@ export default function BulkInviteProgressPanel({
   const finished = job.status === 'done';
 
   const heading = finished ? (job.failed > 0 ? 'Finished — some need a look' : 'Invitation process completed')
+    : job.status === 'cancelled' && job.remaining > 0 ? 'Cancelling…'
     : job.status === 'cancelled' ? 'Invitation process cancelled'
     : job.status === 'paused' ? 'Sending paused'
     : job.status === 'failed' ? 'Invitation process stopped'
@@ -268,7 +290,8 @@ export default function BulkInviteProgressPanel({
     ? `${job.total} candidate${job.total === 1 ? ' was' : 's were'} processed. Review the status and reasons below.`
     : job.status === 'paused' ? (job.paused_reason || 'Press Resume to carry on.')
     : job.status === 'failed' ? (job.error_message || 'The send stopped with an error.')
-    : job.status === 'cancelled' ? `${job.sent} sent before it was stopped. Nothing more goes out.`
+    : job.status === 'cancelled' && job.remaining > 0 ? 'Finishing the email already going out — nothing else will be sent.'
+    : job.status === 'cancelled' ? `${job.sent} sent before it was stopped${job.cancelled ? `, ${job.cancelled} cancelled` : ''}. Nothing more goes out.`
     : job.waiting_turn ? `Another batch is going out first — one batch goes out at a time.${timeLeft ? ` Done in ${timeLeft.replace(/ left$/, '')}.` : ''}`
     : `${job.processed} of ${job.total} processed${timeLeft ? ` · ${timeLeft}` : ''}${job.version_label ? ` · ${job.version_label}` : ''}`;
 
@@ -278,9 +301,14 @@ export default function BulkInviteProgressPanel({
     { key: 'failed', label: 'Failed', n: job.failed, icon: AlertCircle, card: 'bg-destructive-subtle/60 border-destructive-line', iconBox: 'bg-destructive-subtle text-destructive' },
     { key: 'remaining', label: 'Remaining', n: job.remaining, icon: Users, card: 'bg-brand-blue/5 border-brand-blue/20', iconBox: 'bg-brand-blue/10 text-brand-blue' },
   ];
+  /* Cancelled gets its own card once anything was cancelled. */
+  if ((job.cancelled ?? 0) > 0) {
+    stats.splice(2, 0, { key: 'cancelled', label: 'Cancelled', n: job.cancelled ?? 0, icon: Ban, card: 'bg-warning-subtle/60 border-warning-line', iconBox: 'bg-warning-subtle text-warning-strong' });
+  }
   const segments = [
     { key: 'sent', label: 'Sent', n: job.sent, bar: 'bg-success', dot: 'bg-success' },
     { key: 'skipped', label: 'Skipped', n: job.skipped, bar: 'bg-gray-400 dark:bg-slate-500', dot: 'bg-gray-400 dark:bg-slate-500' },
+    { key: 'cancelled', label: 'Cancelled', n: job.cancelled ?? 0, bar: 'bg-warning-strong', dot: 'bg-warning-strong' },
     { key: 'failed', label: 'Failed', n: job.failed, bar: 'bg-destructive', dot: 'bg-destructive' },
     { key: 'remaining', label: 'Remaining', n: job.remaining, bar: 'bg-gray-300 dark:bg-slate-600', dot: 'bg-gray-400 dark:bg-slate-500' },
   ].filter((seg) => seg.n > 0);
@@ -288,6 +316,7 @@ export default function BulkInviteProgressPanel({
     { key: 'all', label: 'All', n: job.total },
     { key: 'sent', label: 'Sent', n: job.sent, icon: CheckCircle2, iconClass: 'text-success' },
     { key: 'skipped', label: 'Skipped', n: job.skipped, icon: SkipForward, iconClass: 'text-gray-500 dark:text-slate-400' },
+    { key: 'cancelled', label: 'Cancelled', n: job.cancelled ?? 0, icon: Ban, iconClass: 'text-warning-strong' },
     { key: 'failed', label: 'Failed', n: job.failed, icon: AlertCircle, iconClass: 'text-destructive' },
     { key: 'remaining', label: 'Remaining', n: job.remaining, icon: Users, iconClass: 'text-brand-blue' },
   ];
@@ -298,12 +327,19 @@ export default function BulkInviteProgressPanel({
   };
   const reasonText = (r: BulkInviteResultRow) => {
     if (r.status === 'sent') return job.delivery === 'link' ? 'Invitation link created successfully.' : 'Invitation sent successfully.';
+    if (r.status === 'cancelled') return 'Cancelled before it was sent. Press Send to send it now.';
     if (r.status === 'skipped') return `Skipped: ${r.reason || 'Not sent.'}`;
     if (r.status === 'failed') return `Failed: ${r.reason || 'The invitation could not be sent.'}`;
     if (r.status === 'processing') return 'Sending now…';
     return 'Waiting in the queue.';
   };
-  const GRID = 'sm:grid-cols-[2rem_minmax(0,1.2fr)_minmax(0,1.3fr)_7rem_minmax(0,2fr)_8.5rem]';
+  /* # · Candidate (name + email) · Status (+ reason) · Sent For · Source · Sent Date · Action
+     — the same details as the widget's View window. */
+  /* Minimum widths so nothing overlaps in the narrower results window; the
+     list scrolls sideways (below) when the window is narrower still. */
+  const GRID = 'sm:grid-cols-[2rem_minmax(11rem,1.5fr)_minmax(10rem,1.4fr)_9rem_minmax(9rem,1fr)_6.5rem_8.5rem]';
+  const isInterviewSend = job.kind !== 'assessment';
+  const sendVersion = job.version_number ?? (Number(/version\s*(\d+)/i.exec(job.version_label ?? '')?.[1]) || undefined);
 
   return (
     <div className={compact ? 'space-y-3' : 'space-y-4'}>
@@ -476,15 +512,16 @@ export default function BulkInviteProgressPanel({
       {/* Table */}
       {/* A whole page shows at once (no scroll box of its own); the popup
           around it scrolls, and a page change brings the table's top back. */}
-      <div ref={listRef} className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden scroll-mt-4">
-      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
+      <div ref={listRef} className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-x-auto overflow-y-hidden scroll-mt-4">
+      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 sm:min-w-[58rem]">
         {rows.length > 0 && (
           <li aria-hidden="true" className={`hidden sm:grid ${GRID} gap-3 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-gray-700 dark:text-slate-300 sticky top-0 z-[1]`}>
             <span>{showPick ? '' : '#'}</span>
             <span>Candidate</span>
-            <span>Email</span>
             <span>Status</span>
-            <span>Reason</span>
+            <span>Sent For</span>
+            <span>Source</span>
+            <span>Sent Date</span>
             <span className="text-right">Action</span>
           </li>
         )}
@@ -498,10 +535,12 @@ export default function BulkInviteProgressPanel({
           const isSent = r.status === 'sent';
           const avatar = isSent ? 'bg-brand-blue/10 text-brand-blue'
             : r.status === 'skipped' ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400'
+            : r.status === 'cancelled' ? 'bg-warning-subtle text-warning-strong'
             : r.status === 'failed' ? 'bg-destructive-subtle text-destructive'
             : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300';
           const reasonColor = r.status === 'failed' ? 'text-destructive'
             : r.status === 'skipped' ? 'text-gray-500 dark:text-slate-400'
+            : r.status === 'cancelled' ? 'text-warning-strong'
             : 'text-gray-700 dark:text-slate-300';
           return (
             <li key={r.id} className={`grid grid-cols-1 ${GRID} gap-x-3 gap-y-1.5 px-3 py-2.5 sm:items-center`}>
@@ -524,27 +563,55 @@ export default function BulkInviteProgressPanel({
                 <span className={`h-8 w-8 shrink-0 rounded-full inline-flex items-center justify-center text-xs font-bold ${avatar}`} aria-hidden="true">{initials(r)}</span>
                 <span className="min-w-0">
                   <span className="block text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{r.name || '—'}</span>
-                  <span className="block sm:hidden tf-meta truncate">{r.email || 'No email'}</span>
+                  <span className="block text-xs text-gray-500 dark:text-slate-400 truncate" title={r.email || undefined}>{r.email || 'No email'}</span>
+                  {r.original_email && r.original_email !== r.email && (
+                    <span className="block tf-micro-hint truncate" title={`Changed from ${r.original_email}${r.edited_by_name ? ` by ${r.edited_by_name}` : ''}`}>
+                      Changed from {r.original_email}{r.edited_by_name ? ` by ${r.edited_by_name}` : ''}
+                    </span>
+                  )}
                 </span>
               </div>
-              <span className="hidden sm:block min-w-0">
-                <span className="block text-sm text-gray-700 dark:text-slate-300 truncate" title={r.email || undefined}>{r.email || 'No email'}</span>
-                {r.original_email && r.original_email !== r.email && (
-                  <span className="block tf-micro-hint truncate" title={`Changed from ${r.original_email}${r.edited_by_name ? ` by ${r.edited_by_name}` : ''}`}>
-                    Changed from {r.original_email}{r.edited_by_name ? ` by ${r.edited_by_name}` : ''}
-                  </span>
-                )}
-              </span>
-              <span>
+              <span className="min-w-0">
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ring-1 ${chip.className}`}>
                   {isSent ? <CheckCircle2 className="w-3.5 h-3.5" />
                     : r.status === 'skipped' ? <SkipForward className="w-3.5 h-3.5" />
+                    : r.status === 'cancelled' ? <Ban className="w-3.5 h-3.5" />
                     : r.status === 'failed' ? <AlertCircle className="w-3.5 h-3.5" />
                     : r.status === 'processing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   {chip.label}
                 </span>
+                <span className={`mt-1 block text-xs [overflow-wrap:anywhere] ${reasonColor}`}>{reasonText(r)}</span>
               </span>
-              <p className={`text-xs [overflow-wrap:anywhere] ${reasonColor}`}>{reasonText(r)}</p>
+              {/* Sent For — what this send invites to */}
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-gray-700 dark:text-slate-300">
+                {isInterviewSend
+                  ? <Video className="w-3.5 h-3.5 shrink-0 text-violet-600" aria-hidden="true" />
+                  : <ClipboardList className="w-3.5 h-3.5 shrink-0 text-brand-cyan" aria-hidden="true" />}
+                {isInterviewSend ? 'AI Interview' : 'Assessment'}
+                {sendVersion ? (isInterviewSend
+                  ? <span className="rounded-md px-1.5 py-0.5 text-xs font-semibold ring-1 text-violet-700 bg-violet-50 ring-violet-200">V{sendVersion}</span>
+                  : <VersionPill kind="assessment" version={sendVersion} />) : null}
+              </span>
+              {/* Source — where the candidate was picked from */}
+              <span className="min-w-0">
+                {r.source ? (
+                  <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-gray-200 dark:border-slate-700 px-2 py-1 text-xs text-gray-700 dark:text-slate-300">
+                    <FolderOpen className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{SOURCE_LABEL[r.source] ?? r.source}</span>
+                  </span>
+                ) : <span className="text-xs text-gray-400">—</span>}
+              </span>
+              {/* Sent Date — when this candidate was processed */}
+              <span className="text-xs">
+                {(() => {
+                  const w = sentWhen(r.processed_at);
+                  return w ? (
+                    <>
+                      <span className="block text-gray-900 dark:text-slate-100">{w.day}</span>
+                      <span className="block text-gray-500 dark:text-slate-400">{w.time}</span>
+                    </>
+                  ) : <span className="text-gray-400">—</span>;
+                })()}
+              </span>
               {/* Action — a sent invite only offers its link */}
               <div className="flex items-center gap-1.5 sm:justify-end">
                 {isSent ? (
@@ -582,7 +649,7 @@ export default function BulkInviteProgressPanel({
                         title="Send again"
                         className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 bg-brand-blue/5 text-xs font-medium text-brand-blue hover:bg-brand-blue/10 disabled:opacity-50"
                       >
-                        <RotateCcw className="w-3.5 h-3.5" /> {r.status === 'skipped' ? 'Send' : 'Retry'}
+                        <RotateCcw className="w-3.5 h-3.5" /> {r.status === 'skipped' || r.status === 'cancelled' ? 'Send' : 'Retry'}
                       </button>
                     )}
                   </>

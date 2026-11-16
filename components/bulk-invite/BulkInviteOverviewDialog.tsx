@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  CheckCircle2, ChevronLeft, ChevronRight, Clock, ClipboardList, Eye, FolderOpen, Loader2, RefreshCw, Search,
+  Ban, CheckCircle2, ChevronLeft, ChevronRight, Clock, ClipboardList, Eye, FolderOpen, Loader2, RefreshCw, Search,
   Send, SkipForward, Video, X, XCircle,
 } from 'lucide-react';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { Button } from '@/components/ui/button';
+import { useBulkInviteActions } from './useBulkInviteActions';
+import FilterSelect from '@/components/ui/filter-select';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import type { TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
 import {
@@ -33,6 +36,7 @@ const STATUS: Record<BulkInviteItemStatus, { label: string; cls: string; icon: R
   sent: { label: 'Sent successfully', cls: 'bg-success-subtle text-success ring-success/30', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
   skipped: { label: 'Skipped', cls: 'bg-warning-subtle text-warning-strong ring-warning-line', icon: <SkipForward className="w-3.5 h-3.5" /> },
   failed: { label: 'Failed', cls: 'bg-destructive-subtle text-destructive ring-destructive-line', icon: <XCircle className="w-3.5 h-3.5" /> },
+  cancelled: { label: 'Cancelled', cls: 'bg-warning-subtle text-warning-strong ring-warning-line', icon: <Ban className="w-3.5 h-3.5" /> },
 };
 
 const SOURCE: Record<string, string> = {
@@ -52,7 +56,7 @@ const dateParts = (iso?: string | null) => {
   if (Number.isNaN(d.getTime())) return null;
   return {
     day: d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }),
-    time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }).toLowerCase(),
+    time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase(),
   };
 };
 
@@ -81,6 +85,11 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
 
   const jobKey = jobs.map((j) => j.job_id).join(',');
   const anyActive = jobs.some(isBulkInviteActive);
+  /* Cancel: the whole of every send still going (header), or one waiting
+     candidate (row). Reload the rows after either. */
+  const actions = useBulkInviteActions(() => setTick((n) => n + 1));
+  const cancellable = jobs.filter((j) => isBulkInviteActive(j) && j.can_manage !== false);
+  const cancelOpen = actions.cancelOpen;
 
   /* Load (and, while anything sends, keep reloading) every send's rows. */
   useEffect(() => {
@@ -110,10 +119,12 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
   const refresh = useCallback(() => setTick((n) => n + 1), []);
 
   useEffect(() => {
+    // Esc while the cancel confirm is open closes only the confirm.
+    if (cancelOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, cancelOpen]);
 
   /* Header: one job → its badge and name; several → how many. */
   const jds = useMemo(() => {
@@ -128,7 +139,7 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
   const mixed = jobs.some((j) => j.kind === 'assessment') && jobs.some((j) => j.kind !== 'assessment');
 
   const counts = useMemo(() => {
-    const c: Record<BulkInviteItemStatus, number> = { queued: 0, processing: 0, sent: 0, skipped: 0, failed: 0 };
+    const c: Record<BulkInviteItemStatus, number> = { queued: 0, processing: 0, sent: 0, skipped: 0, failed: 0, cancelled: 0 };
     for (const r of rows ?? []) c[r.status] += 1;
     return c;
   }, [rows]);
@@ -152,7 +163,8 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
     { key: 'queued', label: 'Queue', icon: <Clock className="w-4 h-4 text-brand-blue" /> },
     { key: 'processing', label: 'Sending', icon: <Loader2 className={`w-4 h-4 text-brand-blue ${counts.processing > 0 ? 'animate-spin' : ''}`} /> },
     { key: 'sent', label: 'Sent', icon: <CheckCircle2 className="w-4 h-4 text-success" /> },
-    { key: 'skipped', label: 'Skipped', icon: <SkipForward className="w-4 h-4 text-warning-strong" /> },
+    { key: 'skipped', label: 'Skipped', icon: <SkipForward className="w-4 h-4 text-gray-500" /> },
+    { key: 'cancelled', label: 'Cancelled', icon: <Ban className="w-4 h-4 text-warning-strong" /> },
     { key: 'failed', label: 'Failed', icon: <XCircle className="w-4 h-4 text-destructive" /> },
   ];
 
@@ -180,6 +192,7 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
                   <>
                     {(oneJd.jdCode ?? oneJd.jd_code) && <JobIdBadge>{oneJd.jdCode ?? oneJd.jd_code}</JobIdBadge>}
                     <span className="[overflow-wrap:anywhere]">{oneJd.jdTitle ?? oneJd.jd_title ?? 'Job'}</span>
+                    {(oneJd.jobVersion ?? oneJd.job_version) ? <VersionPill kind="job" version={(oneJd.jobVersion ?? oneJd.job_version) as number} /> : null}
                   </>
                 ) : `${jds.length} jobs`}
               </p>
@@ -197,6 +210,11 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
               {anyActive ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
               {anyActive ? 'Sending' : 'Complete'}
             </span>
+            {cancellable.length > 0 && (
+              <Button variant="secondary" size="sm" onClick={() => actions.askCancel(cancellable)}>
+                Cancel sending
+              </Button>
+            )}
             <button type="button" onClick={refresh} title="Refresh" aria-label="Refresh"
               className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 hover:bg-gray-50 dark:hover:bg-slate-800">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -244,23 +262,36 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
           </label>
           <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
             Status
-            <select value={status} onChange={(e) => { setStatus(e.target.value as StatusFilter); setPage(1); }} className={selectCls}>
-              <option value="all">All Status</option>
-              <option value="queued">In queue</option>
-              <option value="processing">Sending</option>
-              <option value="sent">Sent</option>
-              <option value="skipped">Skipped</option>
-              <option value="failed">Failed</option>
-            </select>
+            <FilterSelect
+              value={status}
+              onChange={(v) => { setStatus(v as StatusFilter); setPage(1); }}
+              ariaLabel="Status"
+              className="w-36 h-9 px-2.5 rounded-lg text-sm"
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'queued', label: 'In queue' },
+                { value: 'processing', label: 'Sending' },
+                { value: 'sent', label: 'Sent' },
+                { value: 'skipped', label: 'Skipped' },
+                { value: 'cancelled', label: 'Cancelled' },
+                { value: 'failed', label: 'Failed' },
+              ]}
+            />
           </label>
           {mixed && (
             <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
               Type
-              <select value={kind} onChange={(e) => { setKind(e.target.value as KindFilter); setPage(1); }} className={selectCls}>
-                <option value="all">All Types</option>
-                <option value="assessment">Assessment</option>
-                <option value="interview">AI Interview</option>
-              </select>
+              <FilterSelect
+                value={kind}
+                onChange={(v) => { setKind(v as KindFilter); setPage(1); }}
+                ariaLabel="Type"
+                className="w-36 h-9 px-2.5 rounded-lg text-sm"
+                options={[
+                  { value: 'all', label: 'All Types' },
+                  { value: 'assessment', label: 'Assessment' },
+                  { value: 'interview', label: 'AI Interview' },
+                ]}
+              />
             </label>
           )}
         </div>
@@ -319,7 +350,14 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
                     </td>
                     {!oneJd && (
                       <td className="px-3 py-3">
-                        {(r.job.jdCode ?? r.job.jd_code) && <JobIdBadge>{r.job.jdCode ?? r.job.jd_code}</JobIdBadge>}
+                        <span className="flex flex-col items-start gap-0.5">
+                          {/* JD ID and the job version sent from */}
+                          <span className="inline-flex items-center gap-1">
+                            {(r.job.jdCode ?? r.job.jd_code) && <JobIdBadge>{r.job.jdCode ?? r.job.jd_code}</JobIdBadge>}
+                            {(r.job.jobVersion ?? r.job.job_version) ? <VersionPill kind="job" version={(r.job.jobVersion ?? r.job.job_version) as number} /> : null}
+                          </span>
+                          <span className="text-xs text-gray-700 dark:text-slate-300 [overflow-wrap:anywhere]">{r.job.jdTitle ?? r.job.jd_title ?? ''}</span>
+                        </span>
                       </td>
                     )}
                     <td className="px-3 py-3">
@@ -338,6 +376,19 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
                       ) : <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-3 py-3 text-center">
+                      <span className="inline-flex items-center justify-center gap-2">
+                      {r.job.can_manage !== false && r.can_cancel && (
+                        <button
+                          type="button"
+                          onClick={() => void actions.cancelItem(r.job, r.id, r.name || r.email || undefined)}
+                          disabled={actions.busy === `cancel-item:${r.id}`}
+                          aria-label={`Cancel the invite to ${r.name || r.email || 'this candidate'}`}
+                          title="Cancel this candidate — the rest keep sending"
+                          className="h-9 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-destructive-line text-xs font-medium text-destructive hover:bg-destructive-subtle disabled:opacity-50"
+                        >
+                          {actions.busy === `cancel-item:${r.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />} Cancel
+                        </button>
+                      )}
                       {r.resume_id ? (
                         <a
                           href={`/recruitment/resume-view/${encodeURIComponent(r.resume_id)}`}
@@ -350,6 +401,7 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
                           <Eye className="w-4 h-4" />
                         </a>
                       ) : <span className="text-gray-300">—</span>}
+                      </span>
                     </td>
                   </tr>
                 );
@@ -363,9 +415,13 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2">
               Show:
-              <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }} className={`${selectCls} h-9`}>
-                {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
+              <FilterSelect
+                value={String(perPage)}
+                onChange={(v) => { setPerPage(Number(v)); setPage(1); }}
+                ariaLabel="Rows per page"
+                className="w-20 h-9 px-2.5 rounded-lg text-sm"
+                options={[10, 25, 50, 100].map((n) => ({ value: String(n), label: String(n) }))}
+              />
               per page
             </label>
             <span className="hidden sm:inline text-gray-300">|</span>
@@ -384,6 +440,7 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
           </div>
         </div>
       </div>
+      {actions.cancelDialog}
     </div>
   );
 }
