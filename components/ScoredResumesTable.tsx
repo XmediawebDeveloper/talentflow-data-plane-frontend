@@ -1,7 +1,7 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, History, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
+import { Mail, Briefcase, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, History, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useJobActionLock } from '@/components/jobs/JobActionLock';
@@ -30,6 +30,7 @@ import ListPagination from './ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { MobileRecordCard, MobileStatChip, type MobileStatTone } from '@/components/ui/mobile-record-card';
+import SkillsList from '@/components/ui/SkillsList';
 import VersionEyeBadge from '@/components/ui/version-eye-badge';
 import FilterSelect from '@/components/ui/filter-select';
 import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
@@ -3645,8 +3646,11 @@ Best regards`);
             idBadge={showJdId && cardJobCode
               ? <JobIdBadge className="min-w-0 truncate" title={cardJobCode}>{cardJobCode}</JobIdBadge>
               : undefined}
+            /* Role sits tight under the name (meta's default mt-2 → mt-1), as on
+               the AI Talent Match cards. */
+            className="[&_.tf-record-meta]:mt-1"
             title={<span className="[overflow-wrap:anywhere]">{showName(resume.candidateName)}</span>}
-            badges={(resume.isArchived || !hiddenColumnIds?.includes('matchStatus')) ? (
+            badges={(resume.isArchived || !hiddenColumnIds?.includes('matchStatus') || !hiddenColumnIds?.includes('scorePercentage')) ? (
               <>
                 {resume.isArchived && <ResumeArchivedBadge />}
                 {!hiddenColumnIds?.includes('matchStatus') && (
@@ -3654,14 +3658,27 @@ Best regards`);
                     {resume.matchStatus}
                   </span>
                 )}
+                {/* Score: a compact badge beside the match status (was a footer
+                    chip). Same three colours as the Match Status badge - see
+                    lib/utils/matchStatus.ts; not a threshold on the number. */}
+                {!hiddenColumnIds?.includes('scorePercentage') && (
+                  <span className={`tf-badge tabular-nums ${
+                    scoreVerdict === 'Exact Match' ? 'bg-success-subtle text-success'
+                    : scoreVerdict === 'Partial Match' ? 'bg-warning-subtle text-warning-strong'
+                    : 'bg-destructive-subtle text-destructive'
+                  }`}>
+                    <Award className="w-3 h-3" />Score {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
+                  </span>
+                )}
               </>
             ) : undefined}
-            meta={[{ icon: <Mail className="w-3.5 h-3.5" />, label: resume.email }]}
+            meta={[{ icon: <Briefcase className="w-3.5 h-3.5 shrink-0" />, label: resume.title }]}
             /* The table's columns as Label: value (phone, experience and
                education are export-only; see ScoredResumesExportModal). Each
                hides with its column (hiddenColumnIds). Job Title reads
                "Applied for" in the cross-job (global) list. */
             fields={[
+              { label: 'Email', value: resume.email || '-' },
               ...(showJdId && !cardJobCode ? [{ label: 'JD ID', value: '-' }] : []),
               ...(!hiddenColumnIds?.includes('jobTitle') ? [{
                 label: isGlobalView ? 'Applied for' : 'Job Title',
@@ -3674,16 +3691,6 @@ Best regards`);
                 { label: 'Date', value: <>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></> },
               ] : []),
             ]}
-            /* Same three colours as the Match Status badge, from the one palette in
-               lib/utils/matchStatus.ts - green / brand orange / red. Not a score
-               threshold: Exact and Partial share the 60-100 range and are told
-               apart by the Required average, so any cut-off on the number would
-               contradict the badge beside it. */
-            footer={!hiddenColumnIds?.includes('scorePercentage') ? (
-              <MobileStatChip tone={scoreVerdict === 'Exact Match' ? 'success' : scoreVerdict === 'Partial Match' ? 'warning' : 'danger'}>
-                Score {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
-              </MobileStatChip>
-            ) : undefined}
             /* Invite / Share, then the table row's ⋮ menu (renderRowMenuItems),
                so phones reach the same per-row actions (Create / Send AI
                Interview etc.). Download Scorecard and View Resume live in the
@@ -3772,7 +3779,24 @@ Best regards`);
               </DropdownMenu>
               </>
             }
-          />
+          >
+            {/* Skills: one chip, then "+N more" (expands in place) — as on the
+                AI Talent Match cards. */}
+            {(() => {
+              const cardSkills = resume.skills?.length ? resume.skills : resume.technicalSkills;
+              return cardSkills && cardSkills.length > 0 ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1">
+                  <SkillsList
+                    skills={cardSkills}
+                    max={1}
+                    expandInline
+                    chipClassName="max-w-full px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 [overflow-wrap:anywhere]"
+                    moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap"
+                  />
+                </div>
+              ) : null;
+            })()}
+          </MobileRecordCard>
           );
         })}
 
