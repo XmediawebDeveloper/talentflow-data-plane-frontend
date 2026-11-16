@@ -161,6 +161,23 @@ class NotificationService {
   }
 
   /**
+   * Delete all notifications, optionally only those matching the
+   * list's unread/category filter.
+   */
+  async deleteAllNotifications(options?: { unreadOnly?: boolean; category?: string }): Promise<{ deleted_count: number }> {
+    try {
+      const params: any = {};
+      if (options?.unreadOnly) params.unread_only = true;
+      if (options?.category) params.category = options.category;
+      const response = await api.delete('/notifications', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Delete a notification
    */
   async deleteNotification(notificationId: string): Promise<void> {

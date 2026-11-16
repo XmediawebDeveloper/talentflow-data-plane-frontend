@@ -1,7 +1,7 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, History, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useJobActionLock } from '@/components/jobs/JobActionLock';
@@ -2360,7 +2360,7 @@ Best regards`);
         /* Standalone (Resume Scoring's View by Candidates and job page): the Job
            Openings list's toolbar card below lg, and its phone line layout
            (globals.css, `.tf-jobs-toolbar`) — the same toolbar as View by Job. */
-        <div className={toolbarPortal ? undefined : embedded ? 'mb-4 space-y-3' : 'tf-jobs-toolbar tf-toolbar-card mb-4 space-y-3'}>
+        <div className={toolbarPortal ? undefined : embedded ? 'mb-4 space-y-3' : 'tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card mb-4 space-y-3'}>
         {/* Canonical search + filters row (same component as job-openings). The
             previous hand-rolled version used grey focus rings, rounded-md and a
             `palaceholder-gray-500` typo, so it matched no other list in the app. */}
@@ -3360,7 +3360,7 @@ Best regards`);
                   title={onViewCandidate ? (
                     <button
                       onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
-                      className="text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors [overflow-wrap:anywhere]"
+                      className="text-left hover:text-brand-blue hover:underline transition-colors [overflow-wrap:anywhere]"
                     >
                       {primary.candidateName || 'Candidate'}
                     </button>
@@ -3368,23 +3368,16 @@ Best regards`);
                     <span className="[overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</span>
                   )}
                   badges={primary.isArchived ? <ResumeArchivedBadge /> : undefined}
-                  meta={[{ icon: <Mail className="w-3.5 h-3.5" />, label: primary.email }]}
-                  fields={[
+                  /* Card: name with ⋮ on its line · email and scored date on one
+                     line · the three verdict tiles side by side · the job history
+                     toggle (with how many job versions it holds) at the bottom. */
+                  meta={[
+                    { icon: <Mail className="w-3.5 h-3.5" />, label: primary.email },
                     {
-                      label: 'Scored',
-                      value: <>{formatISTDate(primary.scoredDate)} <span className="text-gray-400">{formatISTTime(primary.scoredDate)}</span></>,
+                      icon: <Calendar className="w-3.5 h-3.5" />,
+                      label: <>Scored {formatISTDate(primary.scoredDate)} <span className="text-gray-400">{formatISTTime(primary.scoredDate)}</span></>,
                     },
                   ]}
-                  footer={
-                    <>
-                      <MobileStatChip tone={verdictTone('exact', t.exact)}>Exact Match {t.exact}</MobileStatChip>
-                      <MobileStatChip tone={verdictTone('partial', t.partial)}>Partial Match {t.partial}</MobileStatChip>
-                      <MobileStatChip tone={verdictTone('none', t.none)}>No Match {t.none}</MobileStatChip>
-                      <MobileStatChip tone="info">
-                        {rows.length} Job {rows.length === 1 ? 'Version' : 'Versions'}
-                      </MobileStatChip>
-                    </>
-                  }
                   actions={
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -3402,77 +3395,86 @@ Best regards`);
                     </DropdownMenu>
                   }
                   expanded={isExpanded && (
-                    <div className="mt-2 space-y-2">
+                    /* Job history — joined to the toggle above as one panel. A
+                       row per job: the score in a verdict-coloured box, the job
+                       title with "verdict · scored date" under it, then Open
+                       Match (eye) and ⋮ side by side, all on one line. */
+                    <div className="-mt-3 rounded-b-lg border border-t-0 border-brand-blue/40 divide-y divide-gray-200 dark:divide-slate-700 overflow-hidden">
                       {rows.map((row) => (
                         <div
                           key={row.id}
                           // Opens this job's results, like the list's expanded row.
                           onClick={(e) => handleRowClick(row.id, e)}
-                          className="rounded-lg border border-gray-200 bg-gray-50/60 p-3 cursor-pointer"
+                          className="flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors"
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="tf-label truncate" title={row.jobTitle || undefined}>
-                                {truncateJobTitle(row.jobTitle) || 'Untitled role'}
-                              </div>
-                              <div className="mt-1 flex items-center gap-2 flex-wrap">
-                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(row.matchStatus)}`}>
-                                  {row.matchStatus}
-                                </span>
-                                <span className={`text-sm font-semibold ${MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}`}>
-                                  {formatOverallScore(row.overallRating10, row.scorePercentage)}
-                                </span>
-                              </div>
-                              <div className="mt-1 flex items-center gap-1 tf-meta">
-                                <Calendar className="w-3 h-3" />
-                                <span>{formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span></span>
-                              </div>
+                          <span className={`flex-shrink-0 inline-flex items-center justify-center w-16 h-10 rounded-md border text-sm font-bold tabular-nums ${matchBadgeClass(row.matchStatus)}`}>
+                            {formatOverallScore(row.overallRating10, row.scorePercentage)}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate" title={row.jobTitle || undefined}>
+                              {truncateJobTitle(row.jobTitle) || 'Untitled role'}
                             </div>
-                            <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button
-                                    aria-label="Actions"
-                                    title="Actions"
-                                    className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
-                                  >
-                                    <MoreVertical className="w-4 h-4 text-gray-600" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                                  {renderActionsMenuItems(row)}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                            <div className="mt-0.5 tf-meta truncate">
+                              <span className={MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}>{row.matchStatus}</span>
+                              <span className="mx-1.5 text-gray-300">·</span>
+                              {formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span>
                             </div>
                           </div>
-                          {onViewCandidate && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={(e) => { e.stopPropagation(); onViewCandidate(row); }}
-                              icon={<Eye className="w-3.5 h-3.5" />}
-                              className="mt-2 w-full"
-                            >
-                              Open Match
-                            </Button>
-                          )}
+                          <div className="flex-shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {onViewCandidate && (
+                              <button
+                                type="button"
+                                onClick={() => onViewCandidate(row)}
+                                aria-label="Open Match"
+                                title="Open Match"
+                                className="h-8 w-8 inline-flex items-center justify-center rounded-md text-brand-blue bg-brand-blue/5 border border-brand-blue/20 hover:bg-brand-blue/10 transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  aria-label="Actions"
+                                  title="Actions"
+                                  className="h-8 w-8 inline-flex items-center justify-center rounded-md bg-gray-100 border border-gray-200 hover:bg-gray-200 data-[state=open]:bg-gray-200 transition-colors dark:bg-slate-800 dark:border-slate-700"
+                                >
+                                  <MoreVertical className="w-4 h-4 text-gray-600 dark:text-slate-300" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                                {renderActionsMenuItems(row)}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 >
+                  <div className="tf-jdv-footer" onClick={(e) => e.stopPropagation()}>
+                    <MobileStatChip className="tf-verdict-chip" tone={verdictTone('exact', t.exact)}>Exact Match {t.exact}</MobileStatChip>
+                    <MobileStatChip className="tf-verdict-chip" tone={verdictTone('partial', t.partial)}>Partial Match {t.partial}</MobileStatChip>
+                    <MobileStatChip className="tf-verdict-chip" tone={verdictTone('none', t.none)}>No Match {t.none}</MobileStatChip>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => toggleGroupExpanded(key)}
+                    onClick={(e) => { e.stopPropagation(); toggleGroupExpanded(key); }}
                     aria-label={isExpanded ? 'Collapse job history' : 'Expand job history'}
-                    className={`mt-3 w-full flex items-center justify-between px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    className={`mt-3 w-full flex items-center justify-between gap-2 px-3 h-9 rounded-lg border text-sm font-medium transition-colors ${
                       isExpanded
-                        ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
-                        : 'border-gray-200 text-gray-600 hover:border-brand-blue/30 hover:text-brand-blue'
+                        ? 'rounded-b-none border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
+                        : 'border-gray-200 text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue dark:border-slate-700 dark:text-slate-300'
                     }`}
                   >
-                    <span>{isExpanded ? 'Hide job history' : 'View job history'}</span>
-                    <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                    <span className="inline-flex items-center gap-2 min-w-0">
+                      <History className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">{isExpanded ? 'Hide job history' : 'View job history'}</span>
+                      <span className="px-1.5 py-0.5 rounded-md text-xs font-semibold bg-brand-blue/10 text-brand-blue">
+                        {rows.length} {rows.length === 1 ? 'version' : 'versions'}
+                      </span>
+                    </span>
+                    <ChevronRight className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
                   </button>
 
                 </MobileRecordCard>

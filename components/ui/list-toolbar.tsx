@@ -477,7 +477,7 @@ export function ToolbarResetButton({ onClick, className }: { onClick: () => void
     <button
       type="button"
       onClick={onClick}
-      title="Clear the search and every filter"
+      title="Clear the search and every filter" data-tb-reset=""
       className={cn(
         'h-9 px-3 shrink-0 whitespace-nowrap rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300',
         className,
