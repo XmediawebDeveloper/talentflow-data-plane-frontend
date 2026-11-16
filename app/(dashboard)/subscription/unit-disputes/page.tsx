@@ -81,7 +81,7 @@ const ORIGIN_EXPORT_LABEL: Record<string, string> = {
 };
 
 const EXPORT_HEADERS = [
-  'Filed On', 'Type', 'Candidate', 'Job / Assessment', 'What Happened', 'Error Came From',
+  'Filed On', 'Type', 'Candidate', 'Candidate Email', 'Candidate ID', 'Job / Assessment', 'What Happened', 'Error Came From',
   'Units Requested', 'Reason', 'Description', 'Status', 'Units Returned', 'Reviewed On', 'Review Notes',
 ];
 
@@ -119,6 +119,10 @@ const itemTitle = (d: UnitDispute) => {
   const r = d.record;
   return `${r?.unit_label || unitLabel(d.unit_type)}${r?.candidate_name ? ` · ${r.candidate_name}` : ''}`;
 };
+
+/** "arun@x.com · CID-0013" — whichever is known. */
+const candidateLine = (d: UnitDispute) =>
+  [d.record?.candidate_email, d.record?.candidate_cid].filter(Boolean).join(' · ');
 
 // --- Component ---
 
@@ -237,7 +241,7 @@ export default function UnitDisputesPage() {
     return disputes.filter(d => {
       const r = d.record;
       const matchesSearch = q === '' || [
-        r?.candidate_name, r?.candidate_email, r?.title, r?.unit_label, unitLabel(d.unit_type),
+        r?.candidate_name, r?.candidate_email, r?.candidate_cid, r?.title, r?.unit_label, unitLabel(d.unit_type),
         reasonLabel(d.reason || ''), d.description, shortRef(d.id),
       ].some(v => (v || '').toLowerCase().includes(q));
 
@@ -280,6 +284,8 @@ export default function UnitDisputesPage() {
       formatDate(d.created_at),
       d.record?.unit_label || unitLabel(d.unit_type),
       d.record?.candidate_name || '',
+      d.record?.candidate_email || '',
+      d.record?.candidate_cid || '',
       d.record?.title || '',
       d.record?.outcome || '',
       d.record ? ORIGIN_EXPORT_LABEL[d.record.error_origin] || '' : '',
@@ -479,7 +485,7 @@ export default function UnitDisputesPage() {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
               <input
                 type="text"
-                placeholder="Search candidate, job, reason"
+                placeholder="Search candidate, email, CID, job"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="tf-input pl-9 pr-3"
@@ -597,6 +603,7 @@ export default function UnitDisputesPage() {
                           <UnitTypeIcon unitType={d.unit_type} />
                           <div className="min-w-0">
                             <p className="truncate tf-row-title" title={itemTitle(d)}>{itemTitle(d)}</p>
+                            {candidateLine(d) && <p className="truncate tf-meta" title={candidateLine(d)}>{candidateLine(d)}</p>}
                             <p className="truncate tf-meta" title={d.record?.title || ''}>
                               {d.record?.title || 'Details not available'}
                               {d.record?.consumed_at ? ` · used ${formatDate(d.record.consumed_at)}` : ''}
@@ -628,6 +635,7 @@ export default function UnitDisputesPage() {
                   title={<span className="inline-flex min-w-0 items-center gap-2"><UnitTypeIcon unitType={d.unit_type} className="h-7 w-7" /><span className="truncate">{itemTitle(d)}</span></span>}
                   actions={viewAction(d)}
                   fields={[
+                    ...(candidateLine(d) ? [{ label: 'Candidate', value: candidateLine(d) }] : []),
                     { label: 'For', value: d.record?.title || '—' },
                     { label: 'Filed on', value: formatDate(d.created_at) },
                     { label: 'Reason', value: reasonLabel(d.reason) },

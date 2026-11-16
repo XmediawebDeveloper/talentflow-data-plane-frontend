@@ -255,6 +255,11 @@ export default function FileDisputeModal({ open, onClose, onSubmitted, disputeSt
                       </span>
                       <span className="tf-meta whitespace-nowrap">{r.consumed_at ? formatIST(r.consumed_at) : ''}</span>
                     </span>
+                    {(r.candidate_email || r.candidate_cid) && (
+                      <span className="block truncate tf-meta">
+                        {[r.candidate_email, r.candidate_cid].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
                     {r.title && <span className="block truncate tf-meta">{r.title}</span>}
                     <span className="mt-1 flex flex-wrap items-center gap-2">
                       <span className="tf-body-secondary">{r.outcome}</span>

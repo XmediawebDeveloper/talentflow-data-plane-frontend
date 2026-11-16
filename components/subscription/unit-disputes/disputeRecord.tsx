@@ -23,6 +23,8 @@ export interface DisputeRecord {
   consumed_by: string | null;
   candidate_name: string | null;
   candidate_email: string | null;
+  /** Candidate ID, e.g. "CID-0013". */
+  candidate_cid: string | null;
   title: string | null;
   reference: string | null;
   started_at: string | null;
@@ -149,9 +151,10 @@ export function DisputeRecordSummary({ record, title = 'What happened' }: { reco
           </div>
         </div>
         <dl className="divide-y divide-gray-100 dark:divide-slate-700/60">
-          {(record.candidate_name || record.candidate_email) && (
+          {(record.candidate_name || record.candidate_email || record.candidate_cid) && (
             <Row label="Candidate">
               {record.candidate_name || '—'}
+              {record.candidate_cid && <span className="ml-1.5 font-mono text-xs text-gray-500 dark:text-slate-400">{record.candidate_cid}</span>}
               {record.candidate_email && <span className="block tf-meta">{record.candidate_email}</span>}
             </Row>
           )}
