@@ -2850,6 +2850,7 @@ Best regards`);
       {scoringBatchId && scoringRun && (
         <BulkScoringProgressModal
           progressData={scoringModalItems}
+          headerJobVersion={scoringRun?.jobVersion}
           showScoreColumn
           // A scored row's View: its scorecard; the name opens the resume here.
           onViewResult={(item) => {

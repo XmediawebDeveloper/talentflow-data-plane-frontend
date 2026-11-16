@@ -6,6 +6,7 @@ import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRi
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { useBackgroundWorkRefresh } from '@/lib/backgroundWorkEvents';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
@@ -4694,6 +4695,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (!silent) pending.push(reloadAssessments());
     await Promise.all(pending);
   };
+  /* Invites go out in the background after onSent: re-read the counts as they
+     actually go out, and once more when the send finishes. */
+  useBackgroundWorkRefresh(() => {
+    void reloadAssessments();
+    void refreshInviteSurfaces(true);
+  }, ['invite']);
 
   /* The Total Jobs list's rows (filter → one row per job), computed ABOVE the
      early returns below so the focus effect that reads them is a hook called

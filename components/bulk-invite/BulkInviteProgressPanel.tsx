@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { AlertCircle, AlertTriangle, Ban, Check, CheckCircle2, Copy, Hourglass, Loader2, Pause, Pencil, RotateCcw, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Check, CheckCircle2, CheckSquare, ChevronDown, Clock, Coins, Copy, Hourglass, Info, Layers, Loader2, Pause, Pencil, Play, RotateCcw, SkipForward, Square, X, XCircle } from 'lucide-react';
+import ListToolbar from '@/components/ui/list-toolbar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useModuleQuota } from '@/contexts/QuotaContext';
+import { UNIT_LABELS } from '@/lib/constants/unitColors';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
@@ -111,8 +115,15 @@ export default function BulkInviteProgressPanel({
   const listRef = useRef<HTMLDivElement | null>(null);
   const [loadingRows, setLoadingRows] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  /* Ticked failed / skipped rows for "Send again to selected". */
+  /* Ticked failed / skipped / cancelled rows for "Send again to selected". */
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  /* "Select all candidates": every row that can be sent again, across every
+     page — sent as one retry with no ids (the server's own "all retryable"). */
+  const [pickAll, setPickAll] = useState(false);
+  /* Send again asks first — how many, and the units it uses. */
+  const [confirmSendAgain, setConfirmSendAgain] = useState<{ ids?: string[]; n: number } | null>(null);
+  const asQuota = useModuleQuota('AS');
+  const aiQuota = useModuleQuota('AIU');
   /* Edit & send: the row being fixed, and the form. */
   const [editRow, setEditRow] = useState<BulkInviteResultRow | null>(null);
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '' });
@@ -127,6 +138,7 @@ export default function BulkInviteProgressPanel({
     onJobChange?.(fresh);
     if (fresh.status === 'cancelled') onCancelled?.(fresh);
     setPicked(new Set());
+    setPickAll(false);
     setPollKick((k) => k + 1);
   });
 
@@ -209,7 +221,7 @@ export default function BulkInviteProgressPanel({
     return () => { cancelled = true; controller.abort(); clearTimeout(timer); };
   }, [jobId, tab, search, page, pageSize, processed, status, pollKick]);
 
-  const switchTab = (next: Tab) => { setTab(next); setPage(1); setPicked(new Set()); };
+  const switchTab = (next: Tab) => { setTab(next); setPage(1); setPicked(new Set()); setPickAll(false); };
   const onSearch = (v: string) => { setSearch(v); setPage(1); };
 
   const openEdit = (r: BulkInviteResultRow) => {
@@ -263,19 +275,30 @@ export default function BulkInviteProgressPanel({
 
   const canManage = job.can_manage !== false;
   const againCount = (job.retryable_failed ?? 0) + (job.cancelled_unsent ?? 0);
-  const pickable = rows.filter((r) => r.can_retry);
-  const showPick = canManage && (tab === 'failed' || tab === 'skipped' || tab === 'cancelled') && pickable.length > 0;
-  const allPicked = showPick && pickable.every((r) => picked.has(r.id));
-  const togglePick = (id: string) => setPicked((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
+  /* Rows that can be sent again: the server says so per row (`can_retry`). */
+  const pickable = canManage ? rows.filter((r) => r.can_retry) : [];
+  const allPagePicked = pickable.length > 0 && pickable.every((r) => pickAll || picked.has(r.id));
+  const somePagePicked = !allPagePicked && pickable.some((r) => picked.has(r.id));
+  const pickedCount = pickAll ? againCount : picked.size;
+  const togglePick = (id: string) => {
+    setPickAll(false);
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const selectPage = () => { setPickAll(false); setPicked(new Set(pickable.map((r) => r.id))); };
+  const clearPicked = () => { setPickAll(false); setPicked(new Set()); };
+  const askSendAgain = () => {
+    if (!pickedCount) return;
+    setConfirmSendAgain(pickAll ? { n: againCount } : { ids: [...picked], n: picked.size });
+  };
   /* Time left only while the send is really moving (sending, or next in line). */
   const timeLeft = active && !job.stalled && (job.is_sending !== false || job.waiting_turn) ? formatTimeLeft(job.eta_seconds) : null;
   const share = (n: number) => (job.total > 0 ? (n / job.total) * 100 : 0);
-  const pctLabel = (n: number) => `${Math.round(share(n))}%`;
   const finished = job.status === 'done';
+  const pct = Math.round(share(job.processed));
 
   const heading = finished ? (job.failed > 0 ? 'Finished — some need a look' : 'Invitation process completed')
     : job.status === 'cancelled' && job.remaining > 0 ? 'Cancelling…'
@@ -293,32 +316,29 @@ export default function BulkInviteProgressPanel({
     : job.status === 'cancelled' && job.remaining > 0 ? 'Finishing the email already going out — nothing else will be sent.'
     : job.status === 'cancelled' ? `${job.sent} sent before it was stopped${job.cancelled ? `, ${job.cancelled} cancelled` : ''}. Nothing more goes out.`
     : job.waiting_turn ? `Another batch is going out first — one batch goes out at a time.${timeLeft ? ` Done in ${timeLeft.replace(/ left$/, '')}.` : ''}`
-    : `${job.processed} of ${job.total} processed${timeLeft ? ` · ${timeLeft}` : ''}${job.version_label ? ` · ${job.version_label}` : ''}`;
+    : `Sending to ${job.total} candidate${job.total === 1 ? '' : 's'}${job.version_label ? ` · ${job.version_label}` : ''}`;
+  /* The run's state, for the % colour (same tones as the scoring popup). */
+  const pctTone = active ? 'text-brand-blue'
+    : finished && job.failed === 0 ? 'text-success'
+    : finished && job.sent === 0 && job.failed > 0 ? 'text-destructive'
+    : 'text-warning-strong';
 
-  const stats: { key: Exclude<Tab, 'all'>; label: string; n: number; icon: typeof Send; card: string; iconBox: string }[] = [
-    { key: 'sent', label: 'Sent', n: job.sent, icon: Send, card: 'bg-success-subtle/60 border-success-line', iconBox: 'bg-success-subtle text-success' },
-    { key: 'skipped', label: 'Skipped', n: job.skipped, icon: SkipForward, card: 'bg-slate-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700', iconBox: 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400' },
-    { key: 'failed', label: 'Failed', n: job.failed, icon: AlertCircle, card: 'bg-destructive-subtle/60 border-destructive-line', iconBox: 'bg-destructive-subtle text-destructive' },
-    { key: 'remaining', label: 'Remaining', n: job.remaining, icon: Users, card: 'bg-brand-blue/5 border-brand-blue/20', iconBox: 'bg-brand-blue/10 text-brand-blue' },
-  ];
-  /* Cancelled gets its own card once anything was cancelled. */
-  if ((job.cancelled ?? 0) > 0) {
-    stats.splice(2, 0, { key: 'cancelled', label: 'Cancelled', n: job.cancelled ?? 0, icon: Ban, card: 'bg-warning-subtle/60 border-warning-line', iconBox: 'bg-warning-subtle text-warning-strong' });
-  }
+  /* The bar: one segment per outcome, inside an inset rounded bar. */
   const segments = [
-    { key: 'sent', label: 'Sent', n: job.sent, bar: 'bg-success', dot: 'bg-success' },
-    { key: 'skipped', label: 'Skipped', n: job.skipped, bar: 'bg-gray-400 dark:bg-slate-500', dot: 'bg-gray-400 dark:bg-slate-500' },
-    { key: 'cancelled', label: 'Cancelled', n: job.cancelled ?? 0, bar: 'bg-warning-strong', dot: 'bg-warning-strong' },
-    { key: 'failed', label: 'Failed', n: job.failed, bar: 'bg-destructive', dot: 'bg-destructive' },
-    { key: 'remaining', label: 'Remaining', n: job.remaining, bar: 'bg-gray-300 dark:bg-slate-600', dot: 'bg-gray-400 dark:bg-slate-500' },
+    { key: 'sent', n: job.sent, bar: 'bg-success' },
+    { key: 'skipped', n: job.skipped, bar: 'bg-gray-400 dark:bg-slate-500' },
+    { key: 'cancelled', n: job.cancelled ?? 0, bar: 'bg-warning-strong' },
+    { key: 'failed', n: job.failed, bar: 'bg-destructive' },
+    { key: 'processing', n: active ? Math.min(job.processing ?? 0, job.remaining) : 0, bar: 'bg-brand-blue animate-pulse' },
   ].filter((seg) => seg.n > 0);
-  const tabs: { key: Tab; label: string; n: number; icon?: typeof Send; iconClass?: string }[] = [
-    { key: 'all', label: 'All', n: job.total },
-    { key: 'sent', label: 'Sent', n: job.sent, icon: CheckCircle2, iconClass: 'text-success' },
-    { key: 'skipped', label: 'Skipped', n: job.skipped, icon: SkipForward, iconClass: 'text-gray-500 dark:text-slate-400' },
-    { key: 'cancelled', label: 'Cancelled', n: job.cancelled ?? 0, icon: Ban, iconClass: 'text-warning-strong' },
-    { key: 'failed', label: 'Failed', n: job.failed, icon: AlertCircle, iconClass: 'text-destructive' },
-    { key: 'remaining', label: 'Remaining', n: job.remaining, icon: Users, iconClass: 'text-brand-blue' },
+  /* The pill row — always the same six, in this order (bulk-invite words). */
+  const pills: { key: Tab; label: string; n: number; icon: React.ReactNode; tone: string; hint: string }[] = [
+    { key: 'all', label: 'All', n: job.total, icon: <Layers />, tone: 'text-gray-500 dark:text-slate-400', hint: 'Every candidate in this send.' },
+    { key: 'remaining', label: 'Queue', n: job.remaining, icon: (job.processing ?? 0) > 0 && active ? <Loader2 className="animate-spin" /> : <Clock />, tone: 'text-gray-600 dark:text-slate-300', hint: 'Waiting their turn, or being sent right now.' },
+    { key: 'sent', label: 'Sent', n: job.sent, icon: <CheckCircle2 />, tone: 'text-success', hint: 'The invitation reached the candidate’s mail server.' },
+    { key: 'skipped', label: 'Skipped', n: job.skipped, icon: <SkipForward />, tone: 'text-gray-500 dark:text-slate-400', hint: 'Left out on purpose — e.g. already invited to this version, or no email.' },
+    { key: 'failed', label: 'Failed', n: job.failed, icon: <XCircle />, tone: 'text-destructive', hint: 'Could not be delivered — see why on the row, then Edit or Send again.' },
+    { key: 'cancelled', label: 'Cancelled', n: job.cancelled ?? 0, icon: <XCircle />, tone: 'text-warning-strong', hint: 'Stopped before it was sent — no units used.' },
   ];
   const initials = (r: BulkInviteResultRow) => {
     const src = (r.name || r.email || '?').trim();
@@ -333,24 +353,27 @@ export default function BulkInviteProgressPanel({
     if (r.status === 'processing') return 'Sending now…';
     return 'Waiting in the queue.';
   };
-  /* # · Candidate (name + email) · Status (+ reason) · Sent For · Source · Sent Date · Action
-     — the same details as the widget's View window. */
-  /* Minimum widths so nothing overlaps in the narrower results window; the
-     list scrolls sideways (below) when the window is narrower still. */
-  const GRID = 'sm:grid-cols-[2rem_minmax(11rem,1.5fr)_minmax(10rem,1.4fr)_9rem_minmax(9rem,1fr)_6.5rem_8.5rem]';
+  /* ☐ · S.No · Candidate · Status (+ reason) · Send For · Source · Sent Date · Actions.
+     The checkbox column is there whenever this user can manage the send, so it
+     lines up under the toolbar's Select All. Minimum widths so nothing
+     overlaps; the list scrolls sideways when the window is narrower still. */
+  const GRID = canManage
+    ? 'sm:grid-cols-[1.25rem_2.25rem_minmax(11rem,1.5fr)_minmax(10rem,1.4fr)_9rem_minmax(9rem,1fr)_6.5rem_9rem]'
+    : 'sm:grid-cols-[2.25rem_minmax(11rem,1.5fr)_minmax(10rem,1.4fr)_9rem_minmax(9rem,1fr)_6.5rem_9rem]';
   const isInterviewSend = job.kind !== 'assessment';
   const sendVersion = job.version_number ?? (Number(/version\s*(\d+)/i.exec(job.version_label ?? '')?.[1]) || undefined);
+  const units = isInterviewSend ? aiQuota : asQuota;
 
   return (
     <div className={compact ? 'space-y-3' : 'space-y-4'}>
-      {/* Banner */}
-      <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gradient-to-r from-brand-blue/5 to-transparent px-4 py-2">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className={`h-8 w-8 shrink-0 rounded-full inline-flex items-center justify-center ${
+      {/* Status + progress */}
+      <div className="rounded-xl border border-gray-200 dark:border-slate-700 px-4 py-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className={`mt-0.5 h-8 w-8 shrink-0 rounded-full inline-flex items-center justify-center ${
               job.stalled || job.status === 'paused' ? 'bg-warning-subtle text-warning-strong'
                 : active ? 'bg-brand-blue/10 text-brand-blue'
-                : finished && job.failed === 0 ? 'bg-success text-white'
+                : finished && job.failed === 0 ? 'bg-success-subtle text-success'
                 : 'bg-warning-subtle text-warning-strong'}`}>
               {job.status === 'paused' ? <Pause className="w-4 h-4" />
                 : job.stalled ? <AlertTriangle className="w-4 h-4" />
@@ -360,49 +383,64 @@ export default function BulkInviteProgressPanel({
                 : finished ? <AlertTriangle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
             </span>
             <div className="min-w-0" aria-live="polite">
-              <p className="text-base font-semibold leading-tight text-gray-900 dark:text-slate-50">{heading}</p>
+              <p className="tf-section-title leading-tight">{heading}</p>
               <p className="tf-meta">{subline}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {job.delivery === 'link' && job.sent > 0 && (
-              <button type="button" onClick={() => void copyAllLinks()} className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2">
-                <Copy className="w-3.5 h-3.5" /> Copy all links
-              </button>
+              <Button variant="secondary" size="sm" onClick={() => void copyAllLinks()} icon={<Copy className="w-3.5 h-3.5 text-menu-icon-download" />}>
+                Copy all links
+              </Button>
             )}
             {canManage && job.can_resume && (
               <Button variant="primary" size="sm" onClick={() => void actions.resume(job)} disabled={actions.busy === `resume:${job.job_id}`}
-                icon={actions.busy === `resume:${job.job_id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}>
+                icon={actions.busy === `resume:${job.job_id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}>
                 Resume
               </Button>
             )}
-            {canManage && againCount > 0 && (
-              <Button variant="secondary" size="sm" onClick={() => void actions.retry(job)} disabled={actions.busy === `retry:${job.job_id}`}
-                icon={actions.busy === `retry:${job.job_id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                title="Send again to every candidate that failed for a reason a retry can fix, and to the ones a cancel stopped">
-                Send again ({againCount})
-              </Button>
-            )}
             {canManage && active && (
-              <Button variant="secondary" size="sm" onClick={() => actions.askCancel(job)}>
-                Cancel sending
+              <Button variant="secondary" size="sm" onClick={() => actions.askCancel(job)} icon={<X className="w-3.5 h-3.5" />}
+                title="Stop sending — what has gone out stays sent">
+                Cancel all
               </Button>
             )}
           </div>
         </div>
+
+        {/* Inset bar — processed count on the left, the live % on the right. */}
+        <div className="mt-3">
+          <div className="mb-1.5 flex items-end justify-between gap-3">
+            <span className="tf-meta">
+              {job.processed} of {job.total} processed{timeLeft ? ` · ${timeLeft}` : ''}
+            </span>
+            <span className={`text-sm font-semibold tabular-nums ${pctTone}`} aria-live="polite">{pct}%</span>
+          </div>
+          <div
+            className="flex h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+            role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}
+            aria-label={`${job.processed} of ${job.total} processed`}
+          >
+            {segments.map((seg) => (
+              <div key={seg.key} className={`${seg.bar} h-full transition-[width] duration-500`} style={{ width: `${share(seg.n)}%` }} />
+            ))}
+          </div>
+        </div>
+
         {waitingLong && (
-          <p role="status" className="mt-2 rounded-lg border border-warning-line bg-warning-subtle px-3 py-2 text-xs text-warning-strong">
+          <p role="status" className="mt-3 rounded-lg border border-warning-line bg-warning-subtle px-3 py-2 text-xs text-warning-strong">
             Still waiting for the background sender to pick this up. Nothing has been sent yet. If this persists, the sender service is not running — ask your administrator to check it; the send will continue from here once it is back.
           </p>
         )}
         {job.stalled && (
-          <p role="status" className="mt-2 rounded-lg border border-warning-line bg-warning-subtle px-3 py-2 text-xs text-warning-strong">
+          <p role="status" className="mt-3 rounded-lg border border-warning-line bg-warning-subtle px-3 py-2 text-xs text-warning-strong">
             This batch has not moved for a few minutes. We try to restart it on our own{canManage ? ' — or press Resume now' : ''}. Nothing is sent twice.
           </p>
         )}
         {active && (
-          <p className="mt-2 tf-meta">
-            You can minimize or close this popup — the batch carries on in the background; the round icon at the bottom of the page follows it.
+          <p className="mt-3 flex items-start gap-2 rounded-lg bg-brand-blue/5 px-3 py-2 text-xs text-gray-700 ring-1 ring-brand-blue/15 dark:text-slate-200">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" />
+            You don&apos;t have to wait here. Minimize or close — the batch keeps going and the round button at the bottom-right follows it.
           </p>
         )}
         {!canManage && (
@@ -410,129 +448,158 @@ export default function BulkInviteProgressPanel({
         )}
       </div>
 
-      {/* Stat cards — click to filter */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        {stats.map(({ key, label, n, icon: Icon, card, iconBox }) => (
+      {/* Status pills — always the same six; click to filter. */}
+      <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Results">
+        {pills.map(({ key, label, n, icon, tone, hint }) => (
           <button
             key={key}
             type="button"
+            role="tab"
+            aria-selected={tab === key}
             onClick={() => switchTab(key)}
-            aria-pressed={tab === key}
-            className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-shadow hover:shadow-sm ${card} ${tab === key ? 'ring-2 ring-brand-blue/40' : ''}`}
+            title={hint}
+            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm transition-all [&_svg]:w-3.5 [&_svg]:h-3.5 sm:[&_svg]:w-4 sm:[&_svg]:h-4 ${
+              tab === key
+                ? 'border-brand-blue/40 ring-2 ring-brand-blue/20 bg-brand-blue/[0.05]'
+                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:shadow-sm'
+            }`}
           >
-            <span className={`h-9 w-9 shrink-0 rounded-full inline-flex items-center justify-center ${iconBox}`}>
-              <Icon className="w-4.5 h-4.5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-xl font-bold leading-tight tabular-nums text-gray-900 dark:text-slate-50">{n}</span>
-              <span className="block text-xs font-medium text-gray-700 dark:text-slate-300">{label}</span>
-            </span>
+            <span className={`flex-shrink-0 ${tone}`}>{icon}</span>
+            <span className="text-gray-600 dark:text-slate-400">{label}:</span>
+            <span className="font-bold tabular-nums text-gray-900 dark:text-slate-50">{n}</span>
           </button>
         ))}
       </div>
 
-      {/* Segmented progress */}
-      <div className="rounded-xl border border-gray-200 dark:border-slate-700 px-3 py-1.5 flex flex-col lg:flex-row lg:items-center gap-1.5 lg:gap-4">
-        <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 shrink-0">Invitation progress</span>
-        <div
-          className="flex h-3.5 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700"
-          role="progressbar" aria-valuemin={0} aria-valuemax={100}
-          aria-valuenow={Math.round(share(job.processed))}
-          aria-label={`${job.processed} of ${job.total} processed`}
-        >
-          {segments.map((seg) => (
-            <div key={seg.key} className={`${seg.bar} h-full flex items-center justify-center text-[9px] leading-none font-semibold ${seg.key === 'remaining' ? 'text-gray-700 dark:text-slate-200' : 'text-white'} transition-[width] duration-500`} style={{ width: `${share(seg.n)}%` }}>
-              {share(seg.n) >= 12 ? pctLabel(seg.n) : ''}
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1.5 shrink-0">
-          {segments.map((seg) => (
-            <span key={seg.key} className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-slate-700 px-2 py-0.5 text-2xs text-gray-700 dark:text-slate-300 tabular-nums">
-              <span className={`h-2 w-2 rounded-full ${seg.dot}`} /> {seg.label}: {seg.n} ({pctLabel(seg.n)})
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Tabs + search */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Results">
-          {tabs.map(({ key, label, n, icon: Icon, iconClass }) => (
-            <button
-              key={key}
-              role="tab"
-              aria-selected={tab === key}
-              onClick={() => switchTab(key)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${tab === key
-                ? 'bg-brand-blue border-brand-blue text-white'
-                : 'border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
-            >
-              {Icon && <Icon className={`w-3.5 h-3.5 ${tab === key ? 'text-white' : iconClass}`} />}
-              {label} <span className="tabular-nums">({n})</span>
-            </button>
-          ))}
-        </div>
-        <div className="relative sm:w-64">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder="Search by candidate name or email"
-            aria-label="Search results"
-            className="tf-input h-auto pl-8 pr-2 py-1.5 text-xs"
-          />
-        </div>
-      </div>
-
-      {showPick && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 dark:border-slate-700 px-3 py-1.5">
-          <label className="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-slate-300 cursor-pointer">
+      {/* Toolbar — the shared ListToolbar search, with Select All in front
+          (Job Openings look). The pill's 1px border + 12px padding puts its
+          checkbox exactly over the list's checkbox column (1px border + px-3). */}
+      <ListToolbar
+        searchValue={search}
+        onSearchChange={onSearch}
+        searchDebounceMs={300}
+        searchPlaceholder="Search by candidate name or email..."
+        className="!mb-0"
+        beforeSearch={canManage ? (
+          <div
+            className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border pl-3 pr-1 transition-colors ${
+              pickedCount ? 'bg-brand-blue/10 border-brand-blue/30' : 'bg-brand-blue/5 border-brand-blue/10 hover:bg-brand-blue/10'
+            }`}
+            title={againCount || pickable.length ? undefined : 'Only failed, skipped or cancelled candidates that can be sent again can be selected'}
+          >
             <input
               type="checkbox"
-              className="h-4 w-4 accent-[var(--brand-blue,#2563eb)]"
-              checked={allPicked}
-              onChange={() => setPicked(allPicked ? new Set() : new Set(pickable.map((r) => r.id)))}
+              className="tf-checkbox"
+              aria-label={allPagePicked ? 'Deselect all on this page' : 'Select all on this page'}
+              disabled={!pickable.length}
+              checked={allPagePicked}
+              ref={(el) => { if (el) el.indeterminate = somePagePicked; }}
+              onChange={() => (allPagePicked ? clearPicked() : selectPage())}
             />
-            Select all on this page that can be sent again ({pickable.length})
-          </label>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={picked.size === 0 || actions.busy === `retry:${job.job_id}`}
-            onClick={() => void actions.retry(job, [...picked])}
-            icon={<RotateCcw className="w-3.5 h-3.5" />}
-          >
-            Send again to selected ({picked.size})
-          </Button>
-        </div>
-      )}
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild disabled={!againCount && !pickable.length}>
+                <button
+                  type="button"
+                  className={`inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-sm font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                    pickedCount ? 'text-brand-blue' : 'text-gray-700 hover:text-brand-blue dark:text-slate-300'
+                  }`}
+                >
+                  <span className="tabular-nums">{pickedCount ? `${pickedCount} Selected` : 'Select All'}</span>
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="!z-[10070] w-72 max-w-[calc(100vw-2rem)] !rounded-lg !bg-white !px-0 !py-1 !shadow-lg dark:!bg-slate-900">
+                <DropdownMenuItem
+                  className="!rounded-none !px-3 !py-2 text-sm text-gray-700 dark:text-slate-200"
+                  role="menuitemcheckbox"
+                  aria-checked={allPagePicked && !pickAll}
+                  disabled={!pickable.length}
+                  onSelect={() => (allPagePicked && !pickAll ? clearPicked() : selectPage())}
+                >
+                  {allPagePicked && !pickAll ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                  Select all on this page ({pickable.length})
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="!rounded-none !px-3 !py-2 text-sm text-gray-700 dark:text-slate-200"
+                  role="menuitemcheckbox"
+                  aria-checked={pickAll}
+                  disabled={!againCount}
+                  onSelect={() => { if (pickAll) clearPicked(); else { setPicked(new Set()); setPickAll(true); } }}
+                >
+                  {pickAll ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                  Select all that can be sent again ({againCount})
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="!rounded-none !px-3 !py-2 text-sm text-gray-700 dark:text-slate-200"
+                  disabled={!pickedCount}
+                  onSelect={clearPicked}
+                >
+                  <X className="w-4 h-4 text-gray-500" />
+                  Clear selection
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : undefined}
+        afterFiltersActions={pickedCount > 0 ? (
+          <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+            <span className="tf-meta whitespace-nowrap">
+              <b className="text-gray-900 dark:text-slate-100 tabular-nums">{pickedCount}</b> selected
+            </span>
+            <Button variant="secondary" size="sm" onClick={clearPicked}>Clear</Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={actions.busy === `retry:${job.job_id}`}
+              onClick={askSendAgain}
+              icon={<RotateCcw className="w-3.5 h-3.5" />}
+            >
+              Send again ({pickedCount})
+            </Button>
+          </div>
+        ) : undefined}
+      />
 
       {/* Table */}
       {/* A whole page shows at once (no scroll box of its own); the popup
           around it scrolls, and a page change brings the table's top back. */}
       <div ref={listRef} className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-x-auto overflow-y-hidden scroll-mt-4">
-      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 sm:min-w-[58rem]">
+      <ul className={`divide-y divide-gray-100 dark:divide-slate-700/60 ${canManage ? 'sm:min-w-[60rem]' : 'sm:min-w-[58rem]'}`}>
         {rows.length > 0 && (
           <li aria-hidden="true" className={`hidden sm:grid ${GRID} gap-3 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-gray-700 dark:text-slate-300 sticky top-0 z-[1]`}>
-            <span>{showPick ? '' : '#'}</span>
+            {canManage && (
+              <span className="flex items-center">
+                <input
+                  type="checkbox"
+                  className="tf-checkbox"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  disabled={!pickable.length}
+                  checked={allPagePicked}
+                  ref={(el) => { if (el) el.indeterminate = somePagePicked; }}
+                  onChange={() => (allPagePicked ? clearPicked() : selectPage())}
+                />
+              </span>
+            )}
+            <span>S.No</span>
             <span>Candidate</span>
             <span>Status</span>
-            <span>Sent For</span>
+            <span>Send For</span>
             <span>Source</span>
             <span>Sent Date</span>
-            <span className="text-right">Action</span>
+            <span className="text-right">Actions</span>
           </li>
         )}
         {rows.length === 0 && !loadingRows && (
           <li className="px-3 py-6 text-center tf-body-muted">
-            {tab === 'all' ? 'No candidates in this send.' : `No ${tab} candidates${search ? ' match' : ''}.`}
+            {tab === 'all' ? 'No candidates in this send.' : `No ${tab === 'remaining' ? 'queued' : tab} candidates${search ? ' match' : ''}.`}
           </li>
         )}
         {rows.map((r, i) => {
           const chip = CHIP[r.status] ?? CHIP.queued;
           const isSent = r.status === 'sent';
+          const isPicked = pickAll ? !!r.can_retry : picked.has(r.id);
           const avatar = isSent ? 'bg-brand-blue/10 text-brand-blue'
             : r.status === 'skipped' ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400'
             : r.status === 'cancelled' ? 'bg-warning-subtle text-warning-strong'
@@ -543,23 +610,32 @@ export default function BulkInviteProgressPanel({
             : r.status === 'cancelled' ? 'text-warning-strong'
             : 'text-gray-700 dark:text-slate-300';
           return (
-            <li key={r.id} className={`grid grid-cols-1 ${GRID} gap-x-3 gap-y-1.5 px-3 py-2.5 sm:items-center`}>
-              {showPick ? (
-                <span className="flex items-center">
-                  {r.can_retry ? (
+            <li key={r.id} className={`grid grid-cols-1 ${GRID} gap-x-3 gap-y-1.5 px-3 py-2.5 sm:items-center ${isPicked ? 'bg-brand-blue/[0.04]' : ''}`}>
+              {canManage && (
+                <span className="hidden sm:flex items-center">
+                  {r.can_retry && (
                     <input
                       type="checkbox"
                       aria-label={`Select ${r.name || r.email}`}
-                      className="h-4 w-4 accent-[var(--brand-blue,#2563eb)]"
-                      checked={picked.has(r.id)}
+                      className="tf-checkbox"
+                      checked={isPicked}
                       onChange={() => togglePick(r.id)}
                     />
-                  ) : null}
+                  )}
                 </span>
-              ) : (
-                <span className="hidden sm:block text-sm tabular-nums text-gray-500 dark:text-slate-400">{(page - 1) * pageSize + i + 1}</span>
               )}
+              <span className="hidden sm:block text-sm tabular-nums text-gray-500 dark:text-slate-400">{(page - 1) * pageSize + i + 1}</span>
               <div className="flex items-center gap-2.5 min-w-0">
+                {/* Phones: the checkbox sits in front of the name. */}
+                {canManage && r.can_retry && (
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${r.name || r.email}`}
+                    className="tf-checkbox sm:hidden"
+                    checked={isPicked}
+                    onChange={() => togglePick(r.id)}
+                  />
+                )}
                 <span className={`h-8 w-8 shrink-0 rounded-full inline-flex items-center justify-center text-xs font-bold ${avatar}`} aria-hidden="true">{initials(r)}</span>
                 <span className="min-w-0">
                   <span className="block text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{r.name || '—'}</span>
@@ -575,19 +651,20 @@ export default function BulkInviteProgressPanel({
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ring-1 ${chip.className}`}>
                   {isSent ? <CheckCircle2 className="w-3.5 h-3.5" />
                     : r.status === 'skipped' ? <SkipForward className="w-3.5 h-3.5" />
-                    : r.status === 'cancelled' ? <Ban className="w-3.5 h-3.5" />
+                    : r.status === 'cancelled' ? <XCircle className="w-3.5 h-3.5" />
                     : r.status === 'failed' ? <AlertCircle className="w-3.5 h-3.5" />
-                    : r.status === 'processing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    : r.status === 'processing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Clock className="w-3.5 h-3.5" />}
                   {chip.label}
                 </span>
                 <span className={`mt-1 block text-xs [overflow-wrap:anywhere] ${reasonColor}`}>{reasonText(r)}</span>
               </span>
-              {/* Sent For — what this send invites to */}
+              {/* Send For — what this send invites to */}
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-gray-700 dark:text-slate-300">
                 {isInterviewSend
-                  ? <Video className="w-3.5 h-3.5 shrink-0 text-violet-600" aria-hidden="true" />
-                  : <ClipboardList className="w-3.5 h-3.5 shrink-0 text-brand-cyan" aria-hidden="true" />}
-                {isInterviewSend ? 'AI Interview' : 'Assessment'}
+                  ? <Video className="w-3.5 h-3.5 shrink-0 text-brand-cyan" aria-hidden="true" />
+                  : <ClipboardList className="w-3.5 h-3.5 shrink-0 text-brand-orange" aria-hidden="true" />}
+                {isInterviewSend ? UNIT_LABELS.AIU : UNIT_LABELS.AS}
                 {sendVersion ? (isInterviewSend
                   ? <span className="rounded-md px-1.5 py-0.5 text-xs font-semibold ring-1 text-violet-700 bg-violet-50 ring-violet-200">V{sendVersion}</span>
                   : <VersionPill kind="assessment" version={sendVersion} />) : null}
@@ -612,58 +689,66 @@ export default function BulkInviteProgressPanel({
                   ) : <span className="text-gray-400">—</span>;
                 })()}
               </span>
-              {/* Action — a sent invite only offers its link */}
+              {/* Actions */}
               <div className="flex items-center gap-1.5 sm:justify-end">
                 {isSent ? (
                   r.link ? (
-                      <button
-                        type="button"
-                        onClick={async () => { await copyText(r.link as string, `Link for ${r.name || r.email}`); setCopiedId(r.id); }}
-                        aria-label={`Copy invitation link for ${r.name || r.email}`}
-                        title="Copy link"
-                        className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:text-brand-blue hover:border-brand-blue/30"
-                      >
-                        {copiedId === r.id ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="!h-8 text-xs"
+                      onClick={async () => { await copyText(r.link as string, `Link for ${r.name || r.email}`); setCopiedId(r.id); }}
+                      aria-label={`Copy invitation link for ${r.name || r.email}`}
+                      title="Copy the candidate's invitation link"
+                      icon={copiedId === r.id ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5 text-menu-icon-download" />}
+                    >
+                      {copiedId === r.id ? 'Copied' : 'Copy Link'}
+                    </Button>
                   ) : (
                     <span className="hidden sm:inline tf-meta">—</span>
                   )
                 ) : canManage && (r.can_edit || r.can_retry) ? (
                   <>
                     {r.can_edit && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="!h-8 text-xs"
                         onClick={() => openEdit(r)}
                         aria-label={`Edit and send to ${r.name || r.email || 'this candidate'}`}
-                        className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-700 text-xs font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue hover:border-brand-blue/30"
+                        icon={<Pencil className="w-3.5 h-3.5 text-menu-icon-edit" />}
                       >
-                        <Pencil className="w-3.5 h-3.5" /> Edit
-                      </button>
+                        Edit
+                      </Button>
                     )}
                     {r.can_retry && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="!h-8 text-xs"
                         onClick={() => void actions.retry(job, [r.id])}
                         disabled={actions.busy === `retry:${job.job_id}`}
                         aria-label={`Send again to ${r.name || r.email}`}
-                        title="Send again"
-                        className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 bg-brand-blue/5 text-xs font-medium text-brand-blue hover:bg-brand-blue/10 disabled:opacity-50"
+                        title={r.status === 'failed' ? 'Try again' : 'Send it now'}
+                        icon={<RotateCcw className="w-3.5 h-3.5" />}
                       >
-                        <RotateCcw className="w-3.5 h-3.5" /> {r.status === 'skipped' || r.status === 'cancelled' ? 'Send' : 'Retry'}
-                      </button>
+                        {r.status === 'skipped' || r.status === 'cancelled' ? 'Send' : 'Retry'}
+                      </Button>
                     )}
                   </>
                 ) : canManage && r.can_cancel ? (
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="!h-8 text-xs"
                     onClick={() => void actions.cancelItem(job, r.id, r.name || r.email || undefined)}
                     disabled={actions.busy === `cancel-item:${r.id}`}
                     aria-label={`Cancel the invite to ${r.name || r.email || 'this candidate'}`}
                     title="Cancel this candidate — the rest keep sending"
-                    className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-destructive-line text-xs font-medium text-destructive hover:bg-destructive-subtle disabled:opacity-50"
+                    icon={actions.busy === `cancel-item:${r.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
                   >
-                    {actions.busy === `cancel-item:${r.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />} Cancel
-                  </button>
+                    Cancel
+                  </Button>
                 ) : r.status === 'failed' ? (
                   <span className="tf-meta text-warning-strong" title="Sending again unchanged would fail again — fix the address first">Fix first</span>
                 ) : (
@@ -687,6 +772,51 @@ export default function BulkInviteProgressPanel({
           pageSizeOptions={PAGE_SIZE_OPTIONS}
         />
       </div>
+
+      {/* Send again confirm — how many, and the units. */}
+      {(() => {
+        const n = confirmSendAgain?.n ?? 0;
+        const available = units.availableUnits;
+        const known = !units.isUnlimited && available !== null && available >= 0;
+        const short = known && n > available!;
+        return (
+          <AppModal
+            open={!!confirmSendAgain}
+            onCancel={() => { if (actions.busy !== `retry:${job.job_id}`) setConfirmSendAgain(null); }}
+            cancelLabel="Not now"
+            size="sm"
+            tone="brand"
+            icon={<Coins className="w-5 h-5" />}
+            title={`Send again to ${n} candidate${n === 1 ? '' : 's'}?`}
+            zIndexClass="z-[90]"
+            actions={[{
+              label: `Send again (${n})`,
+              variant: 'primary',
+              disabled: short,
+              loading: actions.busy === `retry:${job.job_id}`,
+              onClick: async () => {
+                await actions.retry(job, confirmSendAgain?.ids);
+                setConfirmSendAgain(null);
+                clearPicked();
+              },
+            }]}
+          >
+            <p className="tf-body-secondary">
+              Failed candidates are tried once more; skipped and cancelled ones are sent now. Candidates already sent are never sent twice.
+            </p>
+            <div className={`mt-4 rounded-lg px-3 py-2.5 ring-1 ${short ? 'bg-destructive-subtle ring-destructive-line' : 'bg-brand-blue/5 ring-brand-blue/15'}`}>
+              <p className="tf-body flex items-center gap-2">
+                <Coins className="w-4 h-4 text-brand-blue" />
+                Uses up to <b>{n}</b> {isInterviewSend ? 'AI Interview' : 'AI Assessment'} unit{n === 1 ? '' : 's'}
+                {units.isUnlimited ? ' · unlimited plan' : known ? ` · ${available} available` : ''}
+              </p>
+              <p className={`tf-meta mt-0.5 ${short ? '!text-destructive' : ''}`}>
+                {short ? `Not enough units — you need ${n - available!} more. Add units from Subscription.` : 'Units are used only for invitations that are sent.'}
+              </p>
+            </div>
+          </AppModal>
+        );
+      })()}
 
       {actions.cancelDialog}
 

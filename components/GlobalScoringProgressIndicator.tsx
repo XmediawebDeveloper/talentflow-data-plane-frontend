@@ -2,10 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useScoringProgress, ScoringJob } from '@/contexts/ScoringProgressContext';
-import { ClipboardList, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock } from 'lucide-react';
+import { CheckCircle2, Loader2, Layers, ChevronDown, Trash2, Sparkles, Play, FileText, ClipboardList, Video, Upload } from 'lucide-react';
+import { useBulkInviteActions } from '@/components/bulk-invite/useBulkInviteActions';
+import { inviteStateOf, inviteVersionOf } from '@/components/bulk-invite/BulkInviteProgressIndicator';
+import { bulkInviteNeedsLook, formatTimeLeft, isBulkInviteActive } from '@/lib/services/bulkInviteService';
+import type { TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
+import { useExternalBackgroundTasks, type ExternalBackgroundTask } from '@/lib/backgroundTasks';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import SuccessAnimation from '@/components/ui/success-animation';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { jdService } from '@/lib/services/jdService';
 import { isResumeDatabaseRun, resumeDatabaseCandidateScoreUrl, runResultsUrl } from '@/lib/utils/scoringLinks';
 import { markHintSeen, wasHintSeen } from '@/components/ui/first-time-hint';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
@@ -27,44 +34,55 @@ export default function GlobalScoringProgressIndicator() {
   const router = useRouter();
   const {
     activeScoringJobs,
-    isMinimized,
-    hasActiveScoring,
     isMainPanelOpen,
     setMinimized,
     clearJob,
     updateItemStatus,
     onRestorePanel
   } = useScoringProgress();
-  /* The invite icon owns the bottom-right corner; while it is on screen this
-     widget sits just to its left, so neither ever jumps sides. */
-  const inviteIconShown = useOptionalBulkInviteProgress()?.iconShown ?? false;
-  const rightCls = inviteIconShown ? 'right-[4.5rem] sm:right-[5.25rem]' : 'right-3 sm:right-6';
+  /* ONE dock for every background task: scoring runs (this context), bulk
+     invite sends (BulkInviteProgressContext) and AI Talent Match runs that
+     were minimized (lib/backgroundTasks). One round button, one list, always
+     bottom-right. */
+  const rightCls = 'right-3 sm:right-6';
+  const invite = useOptionalBulkInviteProgress();
+  const inviteActions = useBulkInviteActions();
+  const externalTasks = useExternalBackgroundTasks();
+  /* Invite sends in the background: not removed, not open in their own popup —
+     unless the recruiter closed them all (widget 'hidden'). */
+  const inviteJobs: TrackedBulkInvite[] = invite && invite.widget !== 'hidden'
+    ? invite.jobs.filter(j => !j.dismissed && !invite.inPopupIds.has(j.job_id))
+    : [];
 
-  /* `isMinimized` only flips true one render AFTER `isMainPanelOpen` flips
-     false — that happens in the effect further down, and effects run after
-     the render they were scheduled in has already committed and PAINTED.
-     In between those two renders, this component sees isMainPanelOpen=false
-     (so it stops returning null) while isMinimized is still false — and with
-     nothing else to render, it fell through to its own full "expanded panel"
-     for exactly one frame before the effect caught up and corrected it. That
-     one frame is the flash: a green "Scoring Complete" panel (or the grey
-     in-progress one) popping up and vanishing on every minimize/maximize.
-
-     `justReleased` reads `wasMainPanelOpen`'s ref DURING RENDER, before the
-     effect below has had a chance to update it — so on the very first render
-     where `isMainPanelOpen` goes true -> false, the ref still holds `true`
-     from the render before, and this evaluates true immediately, in the same
-     render as the flip. `effectiveMinimized` folds that into every render
-     decision below, so this component never renders as if a panel is still
-     open once that panel has actually closed — no gap for the flash to
-     appear in. The `isMinimized` effect further down still runs and persists
-     the real flag (so a later render — or a reload — has an authoritative
-     value to read instead of re-deriving `justReleased` off a ref that reset
-     on mount), it just no longer has to win a race against the browser's
-     paint to avoid being seen doing it. */
+  /* Whether the My Activities list is open. Local, and closed by default:
+     a popup that is minimised lands on the round button only — the list
+     opens when the recruiter clicks it. (The context's `isMinimized` is still
+     kept in step below for anything else that reads it, but this widget no
+     longer derives its shape from it, so there is no frame where a panel
+     flashes up between the popup closing and the flag catching up.) */
+  const [listOpen, setListOpen] = useState(false);
+  /* The list and its button — a click anywhere else, or Escape, closes the
+     list so it never sits over the page the recruiter went back to. */
+  const listRef = useRef<HTMLElement | null>(null);
+  const toggleRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!listOpen) return;
+    const onPointer = (e: PointerEvent) => {
+      const t = e.target as Node | null;
+      if (!t || listRef.current?.contains(t) || toggleRef.current?.contains(t)) return;
+      // A menu / dialog opened from a row is not "outside".
+      if ((t as Element).closest?.('[role="dialog"], [role="alertdialog"], [role="menu"], [data-radix-popper-content-wrapper]')) return;
+      setListOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setListOpen(false); };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [listOpen]);
   const wasMainPanelOpen = useRef(isMainPanelOpen);
-  const justReleased = wasMainPanelOpen.current && !isMainPanelOpen;
-  const effectiveMinimized = isMinimized || justReleased;
 
   /* The full popup, opened right where the recruiter is — no page owns this
      instance, so it's built straight from the shared context's own job data
@@ -136,78 +154,15 @@ export default function GlobalScoringProgressIndicator() {
       overallRating10: item.overallRating10,
     }));
 
-  /* Minimising the main popup hands the run to this widget, which has three
-     forms, smallest last:
+  /* Minimising the main popup hands the run to this widget, which has TWO
+     forms, the same as everywhere a background task is shown:
 
-       expanded  — the white detail panel (`isMinimized === false`)
-       card      — the black progress card, bottom-right
-       shrunk    — a round progress button in the same corner
+       button — a round progress button, bottom-right (`isMinimized`)
+       list   — the "My Activities" panel above it (`!isMinimized`)
 
-     The card is shown for exactly three seconds — but only once per job, right
-     when that job STARTS — long enough to read the counts and register where
-     the run went. Every later minimise of the SAME job (there can be several,
-     if the recruiter re-opens and re-minimises the popup while it's still
-     running) goes straight to the round button instead of replaying the
-     three-second card each time; on the Resume Scoring page especially, where
-     re-opening the popup is routine, that replay made the card feel like it
-     was popping up "again and again" for no new reason.
-     A genuinely NEW job id (one whose three seconds haven't elapsed yet)
-     still gets its own three-second intro.
-
-     Timed off each job's own `startedAt` (persisted with the job in
-     localStorage) rather than a "have I shown this one yet" ref. A ref only
-     lives as long as this component instance, so a full page reload — job
-     still running, already shrunk before the reload — remounted with an
-     empty ref and replayed the whole three-second intro as if the job were
-     brand new. Wall-clock time survives the reload; a ref does not.
-
-     It also can't get stuck open. The ref version depended on ONE scheduled
-     `setTimeout` actually firing to ever flip to shrunk — miss that (a
-     rapid `isMinimized` flicker tearing down and rebuilding the effect, for
-     instance) and the card stayed up until something else changed the job-id
-     set. Deriving `shrunk` from elapsed real time instead means every render
-     re-checks it fresh, so even a missed timer self-corrects on the very next
-     one — and a progress tick lands every couple of seconds while a job is
-     actually active. */
-  const [shrunk, setShrunk] = useState(false);
-  // Number.isFinite guard: a job whose `startedAt` doesn't parse (a stale
-  // localStorage entry from an older build, say) makes `new Date(...).getTime()`
-  // return NaN — and Math.max with ANY NaN in the list returns NaN, poisoning
-  // the whole calculation for every OTHER job too. `elapsed` (Date.now() - NaN)
-  // is then NaN, `NaN >= 3000` is always false, and the fallback setTimeout
-  // below gets a NaN delay — the exact shape of "the card never shrinks, no
-  // matter how long you wait." Falling back to 0 (treat it as infinitely old)
-  // keeps one bad timestamp from wedging the whole widget open.
-  const mostRecentJobStart = Math.max(
-    0,
-    ...activeScoringJobs.map(job => {
-      const t = new Date(job.startedAt).getTime();
-      return Number.isFinite(t) ? t : 0;
-    }),
-  );
-  useEffect(() => {
-    if (!effectiveMinimized) {
-      setShrunk(false);
-      return;
-    }
-    const elapsed = Date.now() - mostRecentJobStart;
-    if (elapsed >= 3000) {
-      setShrunk(true);
-      return;
-    }
-    // A new job arriving while already shrunk (e.g. a run synced in mid-flight
-    // from another tab/page) still gets its card — without this it would stay
-    // on the round button and the timer below would fire into a no-op.
-    setShrunk(false);
-    const timer = setTimeout(() => setShrunk(true), 3000 - elapsed);
-    return () => clearTimeout(timer);
-  }, [effectiveMinimized, mostRecentJobStart]);
-
-  /* Hovering the shrunk round button previews the same card it shrank from —
-     a transient reveal, not a real un-shrink, so it never touches `shrunk`
-     (which the timer above owns) or the "already shown" tracking. Moving off
-     the button snaps straight back to the dot. */
-  const [isHoveringShrunk, setIsHoveringShrunk] = useState(false);
+     The round button toggles the list; a row's Open reopens that run's
+     own popup. No timers, no hover previews — it never changes shape on
+     its own. */
 
   /* The first time a run drops into the corner: a one-time bubble saying the
      run carries on here and the recruiter can keep working. */
@@ -242,9 +197,20 @@ export default function GlobalScoringProgressIndicator() {
      way it goes away — that calls `clearCompletedJobs` — and a run nobody
      returns to is forgotten by the retention window in the context instead. */
 
-  // Don't render if no active or recent jobs
-  if (activeScoringJobs.length === 0) {
-    return null;
+  /* An invite popup's Close, or a "batches finished" toast's View, asks for
+     the invite list ('mini'): that is this dock's list now. */
+  const inviteWidget = invite?.widget;
+  const setInviteWidget = invite?.setWidget;
+  useEffect(() => {
+    if (inviteWidget !== 'mini' || !setInviteWidget) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setListOpen(true);
+    setInviteWidget('icon');
+  }, [inviteWidget, setInviteWidget]);
+
+  // Nothing tracked anywhere: no dock (an invite cancel confirm may still be open).
+  if (activeScoringJobs.length === 0 && inviteJobs.length === 0 && externalTasks.length === 0) {
+    return <>{inviteActions.cancelDialog}</>;
   }
 
   // The standalone popup takes over regardless of anything else — there's
@@ -253,6 +219,7 @@ export default function GlobalScoringProgressIndicator() {
     return (
       <BulkScoringProgressModal
         progressData={toModalItems(modalJob)}
+        headerJobVersion={modalJob.jobVersion}
         showScoreColumn
         batchId={modalJob.batchId}
         onBatchStatus={(status: BatchScoringStatus) => {
@@ -313,343 +280,344 @@ export default function GlobalScoringProgressIndicator() {
     return null;
   }
 
-  // Calculate totals across all jobs
-  const totalStats = activeScoringJobs.reduce((acc, job) => ({
-    total: acc.total + job.total,
-    queued: acc.queued + job.queued,
-    processing: acc.processing + job.processing,
-    completed: acc.completed + job.completed,
-    failed: acc.failed + job.failed
-  }), { total: 0, queued: 0, processing: 0, completed: 0, failed: 0 });
-
-  const overallProgress = totalStats.total > 0
-    ? Math.round(((totalStats.completed + totalStats.failed) / totalStats.total) * 100)
-    : 0;
-
-  const isAllComplete = totalStats.queued === 0 && totalStats.processing === 0;
   const isRunDone = (job: ScoringJob) => job.queued === 0 && job.processing === 0;
-  const runningCount = activeScoringJobs.filter(job => !isRunDone(job)).length;
-  const doneCount = activeScoringJobs.length - runningCount;
-  const runsSummary = [runningCount > 0 && `${runningCount} running`, doneCount > 0 && `${doneCount} done`].filter(Boolean).join(' · ');
-  /* Running first, then finished; newest first within each. */
-  const orderedJobs = [...activeScoringJobs].sort((a, b) =>
-    Number(isRunDone(a)) - Number(isRunDone(b))
-    || new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-  // "Complete" only means every item that finished actually succeeded. If every
-  // finished item failed (e.g. the backend has no OpenAI key configured), calling
-  // it "Complete" with a green checkmark told the user scoring worked when it
-  // didn't — nothing was scored and they'd only find out by opening each result.
-  const isAllFailed = isAllComplete && totalStats.completed === 0 && totalStats.failed > 0;
-  const hasSomeFailures = isAllComplete && totalStats.failed > 0 && totalStats.completed > 0;
+  /* A run's settled rows: scored, failed, and anything else no longer waiting
+     (cancelled / skipped) — so a finished run always reads 100%. */
+  const settledOf = (job: ScoringJob) => Math.max(0, job.total - job.queued - job.processing);
+  /* An invite send is "running" while it sends, waits, is paused or stalled. */
+  const inviteRunning = (j: TrackedBulkInvite) => isBulkInviteActive(j) || j.status === 'paused' || !!j.stalled;
 
-  /* ---- Where this widget sits, and on which layer ---------------------------
-     `bottom-6 right-6` is the Resume Scoring page's own progress button's spot,
-     because in its shrunk form this IS that button — same size, same brand
-     blue, same clock — only now it follows the run across the whole site
-     instead of living on one page.
+  /* Open one run's own popup: the page that owns it reopens it in place;
+     anywhere else this widget builds it from the context. */
+  const openRun = (job: ScoringJob) => {
+    setListOpen(false);
+    if (onRestorePanel) { onRestorePanel(); return; }
+    setModalJobId(job.jobId);
+  };
 
-     `z-[10050]` puts it over the modal layer (`z-[10000]` and `z-[9999]` in
-     this app) so a run stays reachable from anywhere, dialogs included. It is
-     never in the way of its OWN popup: the `isMainPanelOpen` bail-out above
-     hides it whenever that is on screen. */
-  /* Restoring is the same gesture from the card and from the round button, but
-     it means two different things depending on where you are.
+  /* Every task as one list: running first, then finished; newest first. */
+  type DockItem = { key: string; running: boolean; look: boolean; pct: number; at: number; node: React.ReactNode };
+  const items: DockItem[] = [
+    ...activeScoringJobs.map((job): DockItem => ({
+      key: `score:${job.jobId}`,
+      running: !isRunDone(job),
+      look: isRunDone(job) && job.failed > 0,
+      pct: job.total > 0 ? (settledOf(job) / job.total) * 100 : 0,
+      at: new Date(job.startedAt).getTime() || 0,
+      node: (
+        <RunRow
+          key={`score:${job.jobId}`}
+          job={job}
+          settled={settledOf(job)}
+          onOpen={() => openRun(job)}
+          onView={() => openResults(job)}
+          onClear={() => clearJob(job.jobId)}
+        />
+      ),
+    })),
+    ...inviteJobs.map((j): DockItem => ({
+      key: `invite:${j.job_id}`,
+      running: inviteRunning(j),
+      look: bulkInviteNeedsLook(j),
+      pct: j.total > 0 ? (j.processed / j.total) * 100 : 0,
+      at: new Date(j.created_at ?? 0).getTime() || 0,
+      node: (
+        <InviteRow
+          key={`invite:${j.job_id}`}
+          job={j}
+          busy={inviteActions.busy}
+          onOpen={() => { setListOpen(false); invite?.setOpenResultsFor(j.job_id, j.failed > 0 && !isBulkInviteActive(j) ? 'failed' : 'all'); }}
+          onCancel={() => inviteActions.askCancel(j)}
+          onResume={() => void inviteActions.resume(j)}
+          onRemove={() => invite?.dismiss(j.job_id)}
+        />
+      ),
+    })),
+    ...externalTasks.map((t): DockItem => ({
+      key: t.id,
+      running: !t.done,
+      look: false,
+      pct: t.pct,
+      at: Number.MAX_SAFE_INTEGER,
+      node: <MatchRow key={t.id} task={t} onOpen={() => { setListOpen(false); t.onOpen(); }} />,
+    })),
+  ].sort((a, b) => Number(!a.running) - Number(!b.running) || b.at - a.at);
 
-     The full progress popup is `BulkScoringProgressModal`, and whichever
-     screen OWNS the run's data — the Resume Scoring page, or the source
-     picker that dispatched it — registers `onRestorePanel` while it is
-     mounted, so on that screen this simply reopens ITS popup in place.
+  const runningCount = items.filter(i => i.running).length;
+  const lookCount = items.filter(i => i.look).length;
+  /* The ring: how far the running tasks are (each counts the same); all
+     finished → full. */
+  const running = items.filter(i => i.running);
+  const overallProgress = running.length
+    ? Math.round(running.reduce((n, i) => n + i.pct, 0) / running.length)
+    : 100;
+  const finishedScoring = activeScoringJobs.filter(isRunDone);
+  const finishedInvites = inviteJobs.filter(j => !inviteRunning(j));
 
-     Anywhere else, there is no page-owned popup to reopen — but the run's
-     full item list already lives in the shared context, so this widget just
-     builds and shows the same popup itself (`showGlobalModal` below) instead
-     of navigating the recruiter away to go find it. */
-  const widgetHint = !widgetHintSeen && (
+  const expanded = listOpen;
+  const widgetHint = !widgetHintSeen && !expanded && (
     <div
       role="note"
-      className={`fixed bottom-24 ${rightCls} z-[10050] w-64 rounded-lg bg-gray-900 px-3 py-2.5 text-sm text-white shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-300`}
+      className={`fixed bottom-[4.25rem] ${rightCls} z-40 w-52 rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[11px] text-[var(--accent-foreground)] shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-300`}
     >
-      <p>Scoring continues here in the background. You can keep working — click this to see progress.</p>
-      <button
-        type="button"
-        onClick={dismissWidgetHint}
-        className="mt-2 text-xs font-semibold text-brand-cyan hover:underline"
-      >
+      <p>Your scoring, invites and AI matching keep running here. Click to see them all.</p>
+      <button type="button" onClick={dismissWidgetHint} className="mt-1 text-[10px] font-semibold text-brand-cyan hover:underline">
         Got it
       </button>
-      {/* Pointer down to the widget */}
-      <span className="absolute -bottom-1.5 right-6 h-3 w-3 rotate-45 bg-gray-900" aria-hidden="true" />
+      <span className="absolute -bottom-1.5 right-5 h-3 w-3 rotate-45 bg-[var(--accent)]" aria-hidden="true" />
     </div>
   );
 
-  const restore = () => {
-    if (onRestorePanel) {
-      onRestorePanel();
-      return;
-    }
-    // One run: its popup. Several: the list of runs, each opening its own.
-    if (activeScoringJobs.length === 1) {
-      setModalJobId(activeScoringJobs[0].jobId);
-      return;
-    }
-    setMinimized(false);
-  };
-
-  /* Shared between the persistent card (isMinimized && !shrunk) and the
-     hover-preview of it (isMinimized && shrunk && isHoveringShrunk) — same
-     run, same content, so it's built once instead of kept in sync twice. */
-  const cardClassName = `fixed bottom-6 ${rightCls} z-[10050] text-white px-4 py-3 rounded-xl shadow-2xl transition-all cursor-pointer flex items-center gap-3 border max-w-xs ${
-    isAllFailed ? 'bg-destructive hover:bg-destructive border-destructive-line' : 'bg-brand-blue hover:bg-brand-blue-2 border-white/10 shadow-brand-blue/25'
-  }`;
-  const cardBody = (
+  return (
     <>
-      <div className="relative flex-shrink-0">
-        <ClipboardList className="w-5 h-5" />
-        {hasActiveScoring && (
-          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-brand-cyan rounded-full animate-pulse" />
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate">{isAllFailed ? 'Scoring Failed' : 'Scoring Progress'}</p>
-        <p className="text-xs text-white/70">
-          {isAllFailed
-            ? `${totalStats.failed} resume${totalStats.failed !== 1 ? 's' : ''} could not be scored`
-            : activeScoringJobs.length > 1
-            ? `${activeScoringJobs.length} runs · ${runsSummary}`
-            : isAllComplete
-            ? `Complete: ${totalStats.completed} scored${totalStats.failed > 0 ? `, ${totalStats.failed} failed` : ''}`
-            : `${totalStats.completed}/${totalStats.total} (${overallProgress}%)`
-          }
-        </p>
-      </div>
-      <div className="w-12 h-1.5 bg-white/20 rounded-full overflow-hidden flex-shrink-0">
-        <div
-          className={`h-full transition-[width] duration-300 ease-out ${isAllFailed ? 'bg-white' : isAllComplete ? 'bg-brand-cyan' : 'bg-white'}`}
-          style={{ width: `${overallProgress}%` }}
-        />
-      </div>
-      <Maximize2 className="w-4 h-4 text-white/70 flex-shrink-0" />
-      {/* Same close as the expanded panel's header X — clears every active job
-          rather than just hiding this card, so the two "close" gestures agree
-          on what closing the whole run actually means. Stops the click from
-          also bubbling into the card's own onClick, which restores the panel.
-          Hidden while scoring is still running: closing here means "forget
-          this run", and a run still in flight in the background isn't done
-          being tracked yet — same reason it's not offered as `onClear` in
-          `JobProgressItem` below until `isComplete`. */}
-      {isAllComplete && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            activeScoringJobs.forEach(job => clearJob(job.jobId));
-          }}
-          className="flex-shrink-0 p-0.5 -m-0.5 rounded hover:bg-white/10 transition-colors"
-          aria-label="Close"
-        >
-          <X className="w-4 h-4 text-white/70 hover:text-white transition-colors" />
-        </button>
-      )}
-    </>
-  );
-
-  /* Smallest form: the round progress button. The ring IS the progress — a
-     conic gradient rather than a nested SVG, so the whole control is one
-     element and the percentage has no second source of truth.
-
-     Hovering it previews the card it shrank from (`isHoveringShrunk`) — a
-     transient reveal that never touches `shrunk` itself, so moving the
-     pointer away snaps straight back to the dot instead of restarting the
-     three-second auto-shrink. */
-  if (effectiveMinimized && shrunk) {
-    if (isHoveringShrunk) {
-      return (
-        <>
-        {widgetHint}
-        <div
-          className={`${cardClassName} animate-in fade-in zoom-in-95 duration-150`}
-          onClick={restore}
-          onMouseEnter={() => setIsHoveringShrunk(true)}
-          onMouseLeave={() => setIsHoveringShrunk(false)}
-        >
-          {cardBody}
-        </div>
-        </>
-      );
-    }
-    return (
-      <>
       {widgetHint}
+
+      {/* The list — "My Activities": one row per task (scoring run, invite
+          send, AI Talent Match), each with its progress, counts and actions. */}
+      {/* Always mounted so it can animate both ways: it grows out of the
+          round button on open and shrinks back into it on close. */}
+        <section
+          ref={listRef}
+          aria-label="My Activities"
+          aria-hidden={!expanded}
+          inert={!expanded}
+          className={`fixed bottom-16 ${rightCls} z-40 flex max-h-[min(480px,calc(100dvh-6rem))] w-[calc(100vw-1.5rem)] sm:w-[20rem] flex-col overflow-hidden rounded-xl border border-[var(--border-dark)] bg-[var(--muted)] text-[var(--popover-foreground)] shadow-2xl origin-bottom-right motion-reduce:transition-none motion-reduce:animate-none ${expanded ? 'visible opacity-100 animate-in fade-in zoom-in-95 duration-200' : 'invisible pointer-events-none translate-x-2 translate-y-3 scale-[0.12] opacity-0 transition-[translate,scale,opacity,visibility] duration-[260ms] ease-in'}`}
+        >
+          <header className="flex items-center gap-1 border-b border-[var(--info-line)] bg-[var(--info-subtle)] px-2.5 py-1.5">
+            <Layers className="h-3 w-3 text-brand-blue" />
+            <h3 className="flex-1 text-xs font-semibold text-[var(--text-primary)]">My Activities</h3>
+            {runningCount > 0 && <span className={`tf-stat-chip tf-stat-chip-info ${CHIP_SM}`}>{runningCount} running</span>}
+            {lookCount > 0 && <span className={`tf-stat-chip tf-stat-chip-warning ${CHIP_SM}`}>{lookCount} need a look</span>}
+            <Button
+              variant="secondary"
+              size="sm"
+              className="!h-5 !w-5 !px-0 !rounded-md"
+              onClick={() => { setListOpen(false); setMinimized(true); }}
+              aria-label="Minimize"
+              title="Minimize"
+            >
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+          </header>
+          <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-1.5">
+            {items.map(i => i.node)}
+          </ul>
+          <footer className="flex items-center justify-between border-t border-[var(--border-dark)] bg-[var(--surface)] px-2.5 py-1">
+            <span className="text-[9px] text-[var(--text-muted)]">Keeps running even if you change pages.</span>
+            {(finishedScoring.length > 0 || finishedInvites.length > 0) && (
+              <button
+                type="button"
+                onClick={() => {
+                  finishedScoring.forEach(job => clearJob(job.jobId));
+                  if (finishedInvites.length) invite?.dismiss(finishedInvites.map(j => j.job_id));
+                }}
+                className="text-[10px] text-[var(--muted-foreground)] hover:text-brand-blue hover:underline"
+              >
+                Clear finished
+              </button>
+            )}
+          </footer>
+        </section>
+
+      {/* The round button — here while any task is tracked. The ring is how
+          far the running tasks are; the badge counts tasks; an orange dot
+          means a finished one needs a look. Click: show / hide the list. */}
       <button
         type="button"
-        onClick={restore}
-        onMouseEnter={() => setIsHoveringShrunk(true)}
-        onMouseLeave={() => setIsHoveringShrunk(false)}
-        aria-label={
-          isAllComplete
-            ? `Scoring complete, ${totalStats.completed} scored. Open progress.`
-            : `Scoring ${overallProgress}% complete. Open progress.`
-        }
-        title={isAllComplete ? 'Scoring complete' : `Scoring ${overallProgress}%`}
-        className={`fixed bottom-6 ${rightCls} z-[10050] h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105 animate-in zoom-in duration-200`}
-        style={{
-          background: `conic-gradient(${isAllComplete ? 'var(--raw-22c55e)' : 'var(--raw-ffffff)'} ${overallProgress * 3.6}deg, rgba(255,255,255,0.25) 0deg)`,
-        }}
+        ref={toggleRef}
+        onClick={() => { setListOpen(!expanded); setMinimized(expanded); dismissWidgetHint(); }}
+        aria-expanded={expanded}
+        aria-label={runningCount
+          ? `My Activities: ${runningCount} running, ${overallProgress}%. ${expanded ? 'Hide' : 'Show'} list.`
+          : `My Activities: all finished. ${expanded ? 'Hide' : 'Show'} list.`}
+        title={runningCount ? `${runningCount} running · ${overallProgress}%` : 'My Activities — all finished'}
+        className={`fixed bottom-6 ${rightCls} z-40 h-10 w-10 rounded-full p-0.5 shadow-lg transition-[scale,box-shadow,background] duration-200 ease-out hover:scale-105 active:scale-95 animate-in zoom-in ${runningCount ? 'shadow-brand-blue/30' : 'shadow-success/30'} ${expanded ? '' : runningCount ? 'tf-call-ring' : 'tf-call-ring tf-call-ring-success'}`}
+        style={{ background: runningCount
+          ? `conic-gradient(var(--brand-blue) ${overallProgress * 3.6}deg, var(--border-dark) 0deg)`
+          : 'var(--success)' }}
       >
-        <span className="relative flex h-full w-full items-center justify-center rounded-full bg-brand-blue text-white">
-          <Clock className="h-5 w-5" />
-          {hasActiveScoring && (
-            <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
+        <span className={`relative flex h-full w-full items-center justify-center rounded-full ${runningCount ? 'bg-brand-blue text-[var(--accent-foreground)]' : 'bg-[var(--card)] text-success'}`}>
+          {runningCount
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : <SuccessAnimation
+                key={items.length}
+                className="h-8 w-8"
+                fallback={<CheckCircle2 className="h-4 w-4" />}
+              />}
+          <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[var(--background)] px-0.5 text-[8px] font-bold tabular-nums text-brand-blue ring-1 ring-brand-blue/20">
+            {items.length}
+          </span>
+          {lookCount > 0 && (
+            <span aria-hidden className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-warning-strong ring-2 ring-[var(--background)]" />
           )}
         </span>
       </button>
-      </>
-    );
-  }
 
-  // The black progress card — what a minimise drops into, before it shrinks.
-  if (effectiveMinimized) {
-    return (
-      <>
-      {widgetHint}
-      <div
-        className={`${cardClassName} animate-in slide-in-from-bottom duration-300`}
-        onClick={restore}
-      >
-        {cardBody}
-      </div>
-      </>
-    );
-  }
-
-  // Expanded panel
-  return (
-    <div className={`fixed bottom-4 sm:bottom-6 ${inviteIconShown ? 'right-3 sm:right-[5.25rem]' : 'right-3 sm:right-6'} z-[10050] w-[calc(100vw-1.5rem)] sm:w-96 max-w-96 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden`}>
-      {/* Header */}
-      <div className={`flex items-center justify-between px-4 py-3 ${
-        isAllFailed ? 'bg-destructive' : hasSomeFailures ? 'bg-warning' : isAllComplete ? 'bg-success' : 'bg-gray-800'
-      } text-white`}>
-        <div className="flex items-center gap-2">
-          {hasActiveScoring ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : isAllFailed ? (
-            <XCircle className="w-5 h-5" />
-          ) : (
-            <CheckCircle2 className="w-5 h-5" />
-          )}
-          <span className="font-medium text-sm">
-            {activeScoringJobs.length > 1
-              ? `Scoring · ${runsSummary}`
-              : hasActiveScoring
-              ? 'Scoring in Progress'
-              : isAllFailed
-              ? 'Scoring Failed'
-              : hasSomeFailures
-              ? 'Scoring Complete (with errors)'
-              : 'Scoring Complete'}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          {/* Finished runs only — a run still going keeps being tracked. */}
-          {doneCount > 0 && (
-            <Button
-              tone="onColor"
-              variant="secondary"
-              size="sm"
-              onClick={() => activeScoringJobs.filter(isRunDone).forEach(job => clearJob(job.jobId))}
-              className="px-2 text-xs"
-              title="Remove finished runs from this list"
-            >
-              Clear done
-            </Button>
-          )}
-          <Button
-            tone="onColor"
-            variant="secondary"
-            size="sm"
-            onClick={() => setMinimized(true)}
-            className=""
-            aria-label="Collapse" title="Collapse"
-          >
-            <Minimize2 className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Overall Progress */}
-      <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-        <div className="flex items-center justify-between text-sm mb-2">
-          <span className="text-gray-600">Overall Progress</span>
-        </div>
-        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div className="h-full flex">
-            <div
-              className="bg-success transition-all duration-300"
-              style={{ width: `${(totalStats.completed / totalStats.total) * 100}%` }}
-            />
-            <div
-              className="bg-destructive transition-all duration-300"
-              style={{ width: `${(totalStats.failed / totalStats.total) * 100}%` }}
-            />
-            <div
-              className="bg-gray-600 animate-pulse transition-all duration-300"
-              style={{ width: `${(totalStats.processing / totalStats.total) * 100}%` }}
-            />
-          </div>
-        </div>
-        <div className="flex items-center justify-between mt-2 tf-meta">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-success" />
-              {totalStats.completed} done
-            </span>
-            {totalStats.failed > 0 && (
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-destructive" />
-                {totalStats.failed} failed
-              </span>
-            )}
-          </div>
-          <span>{totalStats.queued + totalStats.processing} Resume{(totalStats.queued + totalStats.processing) !== 1 ? 's' : ''} Remaining</span>
-        </div>
-      </div>
-
-      {/* One row per run — running first, then finished. A row opens that
-          run's own popup; a finished one also offers View and ✕. */}
-      <div className="max-h-72 overflow-y-auto">
-        {orderedJobs.map((job) => (
-          <RunRow
-            key={job.jobId}
-            job={job}
-            onOpen={() => {
-              if (onRestorePanel) { onRestorePanel(); return; }
-              setModalJobId(job.jobId);
-            }}
-            onView={() => openResults(job)}
-            onClear={() => clearJob(job.jobId)}
-          />
-        ))}
-      </div>
-    </div>
+      {inviteActions.cancelDialog}
+    </>
   );
 }
 
-/** One run in the expanded widget: its job (JD ID, title, version) and where
- *  it stands — a progress bar while running, its counts once finished. */
+/* Badge tones, the same for every kind of task. */
+/* Compact sizes for everything in the list. */
+const CHIP_SM = '!text-[9px] !px-1 !py-0 !gap-0.5';
+const BADGE_SM = 'tf-badge !text-[9px] !px-1 !py-0 !gap-0.5 [&_svg]:!h-2 [&_svg]:!w-2';
+const BTN_SM = '!h-5 !px-1.5 !text-[10px] !gap-0.5 !rounded-md [&_svg]:!h-2.5 [&_svg]:!w-2.5';
+const META_SM = 'text-[10px] text-[var(--muted-foreground)]';
+
+const BADGE_TONE: Record<'run' | 'wait' | 'ok' | 'warn' | 'bad', string> = {
+  run: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20',
+  wait: 'bg-[var(--muted)] text-[var(--muted-foreground)] ring-[var(--border)]',
+  ok: 'bg-success-subtle text-success ring-success-line',
+  warn: 'bg-warning-subtle text-warning-strong ring-warning-line',
+  bad: 'bg-destructive-subtle text-destructive ring-destructive-line',
+};
+const BAR_TONE: Record<'run' | 'wait' | 'ok' | 'warn' | 'bad', string> = {
+  run: 'bg-brand-blue', wait: 'bg-[var(--secondary)]', ok: 'bg-success', warn: 'bg-warning-strong', bad: 'bg-destructive',
+};
+
+/* Each module's icon and colour exactly as the Dashboard shows them
+   (app/(dashboard)/dashboard/page.tsx — activityAppearance / the KPI cards):
+   Resume Scoring FileText cyan, AI Assessment ClipboardList orange,
+   AI Interview Video cyan, AI Talent Match Sparkles cyan. */
+const MODULE = {
+  score: { label: 'Resume Scoring', Icon: FileText, chip: 'bg-brand-cyan/10 ring-brand-cyan/15', text: 'text-brand-cyan' },
+  assessment: { label: 'AI Assessment', Icon: ClipboardList, chip: 'bg-brand-orange/10 ring-brand-orange/15', text: 'text-brand-orange' },
+  interview: { label: 'AI Interview', Icon: Video, chip: 'bg-brand-cyan/10 ring-brand-cyan/15', text: 'text-brand-cyan' },
+  match: { label: 'AI Talent Match', Icon: Sparkles, chip: 'bg-brand-cyan/10 ring-brand-cyan/15', text: 'text-brand-cyan' },
+  upload: { label: 'Resume Upload', Icon: Upload, chip: 'bg-brand-cyan/10 ring-brand-cyan/15', text: 'text-brand-cyan' },
+} as const;
+
+/** The count beside the % — "(1,234 invited)", "(2 scored)" — in brand-blue,
+ *  apart from the grey % and the green status badge. */
+const COUNT_TEXT = 'font-medium text-brand-blue';
+
+/** 1,234 — counts run into the thousands. */
+const n = (v: number) => (v ?? 0).toLocaleString('en-IN');
+
+/* JD ID + version for a scoring run that was started without them (the
+   context only has the JD id): read once per JD from the JD itself, shared by
+   every row, re-rendering the rows that asked when it lands. */
+const jdMetaCache = new Map<string, { code?: string; version?: number }>();
+const jdMetaLoading = new Set<string>();
+const jdMetaListeners = new Set<() => void>();
+function useJdMeta(jdId: string, needed: boolean) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const listener = () => setTick(t => t + 1);
+    jdMetaListeners.add(listener);
+    return () => { jdMetaListeners.delete(listener); };
+  }, []);
+  useEffect(() => {
+    if (!needed || !jdId || jdMetaCache.has(jdId) || jdMetaLoading.has(jdId)) return;
+    jdMetaLoading.add(jdId);
+    jdService.get(jdId)
+      .then(jd => { jdMetaCache.set(jdId, { code: jd.job_id || undefined, version: jd.version_number ?? undefined }); })
+      .catch(() => { /* no code — the row shows the title only; a later mount tries again */ })
+      .finally(() => { jdMetaLoading.delete(jdId); jdMetaListeners.forEach(l => l()); });
+  }, [jdId, needed]);
+  return jdMetaCache.get(jdId);
+}
+
+/** The row's shell: module icon, then the module name + status badge, the
+ *  job line, the counts, and one line holding a compact bar with its % and
+ *  the row's buttons (View, …, delete). */
+function TaskRow({
+  module,
+  badge,
+  job,
+  counts,
+  countsTitle,
+  pct,
+  barTone,
+  extra,
+  actions,
+}: {
+  module: keyof typeof MODULE;
+  badge: React.ReactNode;
+  job: React.ReactNode;
+  counts?: React.ReactNode;
+  /** Plain-text counts, for the tooltip when the line is cut short. */
+  countsTitle?: string;
+  pct: number;
+  barTone: string;
+  extra?: React.ReactNode;
+  actions: React.ReactNode;
+}) {
+  const m = MODULE[module];
+  return (
+    <li className="rounded-lg bg-[var(--card)] px-2.5 py-2 shadow-sm ring-1 ring-[var(--border)]">
+      <div className="flex items-start gap-2">
+        <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ring-1 ${m.chip}`}>
+          <m.Icon className={`h-3 w-3 ${m.text}`} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="flex-1 truncate text-[9px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">{m.label}</p>
+            {badge}
+          </div>
+          {job}
+          {extra}
+          {/* One line, in this order: progress bar → % → counts (cut short
+              with a tooltip when they run long — 1,000+ is normal) → buttons. */}
+          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <div className="h-1.5 w-10 sm:w-14 shrink-0 overflow-hidden rounded-full bg-[var(--border-dark)]">
+              <div className={`h-full rounded-full transition-[width] duration-500 ${barTone}`} style={{ width: `${pct}%` }} />
+            </div>
+            <span className={`${META_SM} tabular-nums shrink-0 font-medium`}>{pct}%</span>
+            {/* In brackets after the %: "100% (1,234 invited)", "(2 scored)". */}
+            <p className={`${META_SM} min-w-0 flex-1 basis-20 truncate`} title={countsTitle ? `(${countsTitle})` : undefined}>
+              {counts ? <><span className={COUNT_TEXT}>(</span>{counts}<span className={COUNT_TEXT}>)</span></> : null}
+            </p>
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">{actions}</div>
+          </div>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+/** The job line: JD ID · name · version, one line. */
+function JobLine({ code, name, version, onOpen, title, after }: { code?: string | null; name: string; version?: number | null; onOpen: () => void; title: string; after?: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onOpen} className="mt-0.5 flex max-w-full items-center gap-1 text-left hover:text-brand-blue" title={title}>
+      {code && <JobIdBadge className="inline-flex h-3.5 items-center flex-shrink-0 !px-1 !text-[9px]">{code}</JobIdBadge>}
+      <span className="truncate text-[11px] font-medium text-[var(--text-primary)] hover:underline">{name}</span>
+      {version != null && version > 0 && (
+        <span className="px-1 rounded font-semibold text-[9px] leading-[14px] text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">v{version}</span>
+      )}
+      {after}
+    </button>
+  );
+}
+
+/** Small delete (remove from this list) button. */
+function RemoveButton({ onClick, what }: { onClick: () => void; what: string }) {
+  return (
+    <Button variant="secondary" size="sm" className="!h-5 !w-5 !px-0 !rounded-md" onClick={onClick} aria-label={`Remove this ${what} from the list`} title="Remove from this list">
+      <Trash2 className="h-2.5 w-2.5" />
+    </Button>
+  );
+}
+
+/** One scoring run in the list. */
 function RunRow({
   job,
+  settled,
   onOpen,
   onView,
   onClear,
 }: {
   job: ScoringJob;
+  settled: number;
   onOpen: () => void;
   onView: () => void;
   onClear: () => void;
 }) {
   const isComplete = job.queued === 0 && job.processing === 0;
-  const progress = job.total > 0 ? Math.round(((job.completed + job.failed) / job.total) * 100) : 0;
+  const pct = job.total > 0 ? Math.round((settled / job.total) * 100) : 0;
   const exact = job.items.filter(item => item.matchResult === 'Exact Match').length;
+  const cancelled = job.items.filter(item => item.status === 'Cancelled').length;
 
   // Surface *why* it failed instead of just a count — a missing API key and a
   // transient network error need different reactions from the user.
@@ -660,80 +628,146 @@ function RunRow({
       : firstFailureReason
     : undefined;
 
+  const tone: keyof typeof BADGE_TONE = !isComplete ? 'run'
+    : job.completed === 0 && job.failed > 0 ? 'bad'
+    : job.failed > 0 ? 'warn' : 'ok';
+  const label = !isComplete ? 'Running' : tone === 'bad' ? 'Failed' : tone === 'warn' ? 'Done with failures' : 'Complete';
+  const meta = useJdMeta(job.jobId, !job.jobCode || job.jobVersion == null);
+  const code = job.jobCode || meta?.code;
+  const version = job.jobVersion ?? meta?.version;
+  const countsTitle = [
+    isComplete ? `${n(job.completed)} scored` : `${n(settled)}/${n(job.total)} processed`,
+    exact > 0 && `${n(exact)} Exact`,
+    job.failed > 0 && `${n(job.failed)} failed`,
+    cancelled > 0 && `${n(cancelled)} cancelled`,
+  ].filter(Boolean).join(' · ');
+
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
-      className="border-b border-gray-100 last:border-b-0 px-4 py-3 hover:bg-gray-50 cursor-pointer focus:outline-none focus-visible:bg-gray-50"
-      title="Open this run's progress"
-    >
-      <div className="flex items-start gap-3">
-        <div className={`mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-          !isComplete ? 'bg-gray-100' : job.completed === 0 ? 'bg-destructive-subtle' : 'bg-success-subtle'
-        }`}>
-          {!isComplete ? (
-            <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
-          ) : job.completed === 0 ? (
-            <XCircle className="w-4 h-4 text-destructive" />
-          ) : (
-            <CheckCircle2 className="w-4 h-4 text-success" />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            {job.jobCode && <JobIdBadge className="inline-flex h-5 items-center flex-shrink-0 text-2xs">{job.jobCode}</JobIdBadge>}
-            <span className="tf-row-name truncate">{job.jobTitle}</span>
-            {job.jobVersion != null && (
-              <span className="px-1.5 py-0.5 rounded font-semibold text-2xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
-                v{job.jobVersion}
-              </span>
-            )}
-          </div>
-          {isComplete ? (
-            <div className="tf-meta mt-0.5">
-              {job.completed} scored
-              {exact > 0 && <> · {exact} Exact</>}
-              {job.failed > 0 && <span className="text-destructive"> · {job.failed} failed</span>}
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 mt-1.5">
-              <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-brand-blue transition-[width] duration-300" style={{ width: `${progress}%` }} />
-              </div>
-              <span className="tf-meta tabular-nums flex-shrink-0">{job.completed + job.failed}/{job.total}</span>
-            </div>
-          )}
-          {isComplete && job.failed > 0 && friendlyFailureReason && (
-            <div className="mt-2 px-2 py-1.5 bg-destructive-subtle border border-destructive-line rounded tf-error">
-              {friendlyFailureReason}
-            </div>
-          )}
-        </div>
-        {isComplete && (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {job.completed > 0 && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onView(); }}
-                className="text-xs font-medium py-1 px-2.5 rounded bg-brand-blue text-white hover:bg-brand-blue-2 transition-colors"
-              >
-                View
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onClear(); }}
-              className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-              aria-label="Remove this run from the list"
-              title="Remove from list"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
+    <TaskRow
+      module="score"
+      badge={<span className={`${BADGE_SM} ring-1 ${BADGE_TONE[tone]}`}>{label}</span>}
+      job={<JobLine code={code} name={job.jobTitle} version={version} onOpen={onOpen} title="Open this run's progress" />}
+      countsTitle={countsTitle}
+      counts={<>
+        {isComplete ? <span className={COUNT_TEXT}>{n(job.completed)} scored</span> : <span className={COUNT_TEXT}>{n(settled)}/{n(job.total)} processed</span>}
+        {exact > 0 && <> · {n(exact)} Exact</>}
+        {job.failed > 0 && <span className="text-destructive"> · {n(job.failed)} failed</span>}
+        {cancelled > 0 && <span className="text-warning-strong"> · {n(cancelled)} cancelled</span>}
+      </>}
+      extra={isComplete && job.failed > 0 && friendlyFailureReason ? (
+        <div className="mt-1.5 px-2 py-1 bg-destructive-subtle border border-destructive-line rounded tf-error !text-[10px]">{friendlyFailureReason}</div>
+      ) : undefined}
+      pct={pct}
+      barTone={BAR_TONE[tone]}
+      actions={<>
+        {isComplete && job.completed > 0 && job.failed === 0
+          ? <Button variant="secondary" size="sm" className={BTN_SM} onClick={onView} title="Open the results">View</Button>
+          : <Button variant="secondary" size="sm" className={BTN_SM} onClick={onOpen} title="Open this run's progress">{isComplete && job.failed > 0 ? 'Review' : 'View'}</Button>}
+        {isComplete && <RemoveButton onClick={onClear} what="run" />}
+      </>}
+    />
+  );
+}
+
+/** One bulk invite send in the list. */
+function InviteRow({
+  job,
+  busy,
+  onOpen,
+  onCancel,
+  onResume,
+  onRemove,
+}: {
+  job: TrackedBulkInvite;
+  busy: string | null;
+  onOpen: () => void;
+  onCancel: () => void;
+  onResume: () => void;
+  onRemove: () => void;
+}) {
+  const interview = job.kind !== 'assessment';
+  const state = inviteStateOf(job);
+  const active = isBulkInviteActive(job);
+  const canManage = job.can_manage !== false;
+  const finished = !active && job.status !== 'paused' && !job.stalled;
+  const pct = job.total > 0 ? Math.round((job.processed / job.total) * 100) : 0;
+  const timeLeft = active && !job.stalled && (job.is_sending !== false || job.waiting_turn) ? formatTimeLeft(job.eta_seconds) : null;
+  const doneWord = job.mode === 'resend' ? 'new links' : 'invited';
+  /* The assessment / AI interview version sent (the JD's own version is on the JD chip). */
+  const moduleVersion = inviteVersionOf(job);
+  const countsTitle = [
+    finished ? `${n(job.sent)} ${doneWord}` : `${n(job.processed)}/${n(job.total)} processed${timeLeft ? ` · ${timeLeft}` : ''}`,
+    job.skipped > 0 && `${n(job.skipped)} skipped`,
+    job.failed > 0 && `${n(job.failed)} failed`,
+    (job.cancelled ?? 0) > 0 && `${n(job.cancelled ?? 0)} cancelled`,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <TaskRow
+      module={interview ? 'interview' : 'assessment'}
+      badge={<span className={`${BADGE_SM} ring-1 ${BADGE_TONE[state.tone]}`}>{state.icon}{state.label}</span>}
+      job={
+        <JobLine
+          code={job.jdCode ?? job.jd_code}
+          name={job.jdTitle || job.jd_title || job.version_label || 'Invitations'}
+          version={job.jobVersion ?? job.job_version ?? undefined}
+          onOpen={onOpen}
+          title="Open this send's results"
+          after={moduleVersion ? (
+            interview
+              ? <span className="inline-flex shrink-0 whitespace-nowrap items-center rounded px-1 text-[9px] leading-[14px] font-semibold tabular-nums ring-1 text-[var(--info-strong)] bg-[var(--info-subtle)] ring-[var(--info-line)]">AI Interview V{moduleVersion}</span>
+              : <span className="inline-flex shrink-0 whitespace-nowrap items-center rounded px-1 text-[9px] leading-[14px] font-semibold tabular-nums ring-1 text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20">Assessment V{moduleVersion}</span>
+          ) : undefined}
+        />
+      }
+      countsTitle={countsTitle}
+      counts={<>
+        {finished ? <span className={COUNT_TEXT}>{n(job.sent)} {doneWord}</span> : <span className={COUNT_TEXT}>{n(job.processed)}/{n(job.total)} processed{timeLeft ? ` · ${timeLeft}` : ''}</span>}
+        {job.skipped > 0 && <> · {n(job.skipped)} skipped</>}
+        {job.failed > 0 && <span className="text-destructive"> · {n(job.failed)} failed</span>}
+        {(job.cancelled ?? 0) > 0 && <span className="text-warning-strong"> · {n(job.cancelled ?? 0)} cancelled</span>}
+      </>}
+      extra={job.status === 'paused' && job.paused_reason ? (
+        <p className="mt-1 text-[10px] text-warning-strong [overflow-wrap:anywhere]">{job.paused_reason}</p>
+      ) : undefined}
+      pct={pct}
+      barTone={BAR_TONE[state.tone]}
+      actions={<>
+        <Button variant="secondary" size="sm" className={BTN_SM} onClick={onOpen}>{finished && job.failed > 0 ? 'Review' : 'View'}</Button>
+        {canManage && job.can_resume && (
+          <Button variant="primary" size="sm" className={BTN_SM} onClick={onResume} disabled={busy === `resume:${job.job_id}`}>
+            <Play className="h-3 w-3" />Resume
+          </Button>
         )}
-      </div>
-    </div>
+        {canManage && active && (
+          <Button variant="secondary" size="sm" className={BTN_SM} onClick={onCancel} title="Stop — what has gone out stays sent">Cancel</Button>
+        )}
+        {finished && <RemoveButton onClick={onRemove} what="batch" />}
+      </>}
+    />
+  );
+}
+
+/** A task a page registered (lib/backgroundTasks): a minimized AI Talent
+ *  Match run, or resume uploads still processing. */
+function MatchRow({ task, onOpen }: { task: ExternalBackgroundTask; onOpen: () => void }) {
+  const pct = Math.round(task.done ? 100 : task.pct);
+  const upload = task.kind === 'resume-upload';
+  return (
+    <TaskRow
+      module={upload ? 'upload' : 'match'}
+      badge={
+        <span className={`${BADGE_SM} ring-1 ${task.done ? BADGE_TONE.ok : BADGE_TONE.run}`}>
+          {task.done ? <CheckCircle2 className="w-3 h-3" /> : <Loader2 className="w-3 h-3 animate-spin" />}
+          {task.done ? 'Complete' : upload ? 'Uploading' : 'Matching'}
+        </span>
+      }
+      job={<JobLine name={task.title} onOpen={onOpen} title={upload ? 'Open Upload History' : task.done ? 'See the matches' : 'Open'} />}
+      countsTitle={task.detail}
+      counts={task.detail ? <span className={COUNT_TEXT}>{task.detail}</span> : undefined}
+      pct={pct}
+      barTone={task.done ? 'bg-success' : 'bg-brand-blue'}
+      actions={<Button variant={task.done ? 'primary' : 'secondary'} size="sm" className={BTN_SM} onClick={onOpen}>View</Button>}
+    />
   );
 }

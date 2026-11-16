@@ -176,6 +176,31 @@
   }
 }
 
+/* "Ringing" floating button (My Activities): two rings ripple out of the
+   button one after the other, like an incoming call. Blue while work runs,
+   green once everything has finished. Stops for reduced motion. */
+@keyframes tf-call-ring {
+  0%   { transform: scale(1);   opacity: 0.75; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.tf-call-ring::before,
+.tf-call-ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid var(--brand-blue);
+  pointer-events: none;
+  animation: tf-call-ring 1.8s ease-out infinite;
+}
+.tf-call-ring::after { animation-delay: 0.9s; }
+.tf-call-ring-success::before,
+.tf-call-ring-success::after { border-color: var(--success); }
+@media (prefers-reduced-motion: reduce) {
+  .tf-call-ring::before,
+  .tf-call-ring::after { animation: none; opacity: 0; }
+}
+
 /* ── App-shell scroll lock ──────────────────────────────────────────────
    Set on <html> by the (dashboard) layout while it is mounted. The dashboard
    shell is 100dvh tall with its own scroll container, so the document has

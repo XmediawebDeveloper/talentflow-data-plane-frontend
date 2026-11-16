@@ -4,6 +4,7 @@ import { phoneCentredLeft } from '@/lib/hooks/useCenteredMenuOnPhone';
 import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, CheckCircle2, CheckSquare, Square, MoreVertical, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video, FileDown } from 'lucide-react';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
+import { useBackgroundWorkRefresh } from '@/lib/backgroundWorkEvents';
 import { createPortal } from 'react-dom';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -2668,6 +2669,21 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           }}
         />
   ) : null;
+
+  /* Background work on this job moved: invites going out (Assessment Results,
+     the AI interview invite count, the tracker) or resumes being scored
+     (Scored Resumes) — re-read so the tabs' counts change as it happens. */
+  useBackgroundWorkRefresh((detail) => {
+    if (detail.jdId && detail.jdId !== job.id) return;
+    if (detail.kind === 'invite') {
+      void fetchAssessmentResults();
+      aiInterviewConfigFetchedRef.current = false;
+      void loadAIInterviewConfig();
+      setTrackerRefreshSignal((n) => n + 1);
+    } else {
+      void fetchScoredResumes();
+    }
+  });
 
   if (viewingScoredResume) {
     const _scoredIdx = scoredResumes.findIndex(

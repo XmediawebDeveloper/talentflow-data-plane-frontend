@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, useId, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
-import { Copy, GitBranch, Loader2, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronDown, FileText, Maximize2, Info, RefreshCw, Ban, Lightbulb, HelpCircle } from 'lucide-react';
+import { Copy, GitBranch, Loader2, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronDown, FileText, Info, RefreshCw, Ban, Lightbulb, HelpCircle } from 'lucide-react';
 import UploadModal from '@/components/UploadModal';
 import UploadHistoryEmptyState from '@/components/resumes/UploadHistoryEmptyState';
 import type { DuplicateFile } from '@/components/DuplicateResumeModal';
@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { removeBackgroundTask, upsertBackgroundTask } from '@/lib/backgroundTasks';
 
 // Dynamic import to avoid SSR issues with docx-preview dependency
 const DuplicateResumeModal = dynamic(() => import('@/components/DuplicateResumeModal'), {
@@ -121,6 +122,41 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
   // Upload history modal state
   const [isUploadHistoryModalOpen, setIsUploadHistoryModalOpen] = useState(false);
   const [isUploadHistoryMinimized, setIsUploadHistoryMinimized] = useState(false);
+
+  /* Minimized Upload History: a row in the shared "My Activities" list
+     (bottom-right, beside scoring runs and invite sends) instead of a floating
+     button of its own in the same corner. The row's View reopens the panel. */
+  const uploadTaskId = `resume-upload:${useId()}`;
+  const reopenUploadHistory = useRef<() => void>(() => {});
+  useEffect(() => {
+    reopenUploadHistory.current = () => {
+      setIsUploadHistoryMinimized(false);
+      setIsUploadHistoryModalOpen(true);
+    };
+  });
+  useEffect(() => {
+    if (!isUploadHistoryMinimized) { removeBackgroundTask(uploadTaskId); return; }
+    const mine = uploadHistory.filter((r) => r.source === 'my-resumes');
+    const running = mine.filter((r) => r.status === 'processing' || (r.pending ?? 0) > 0);
+    const of = (list: typeof mine, pick: (r: (typeof mine)[number]) => number) => list.reduce((sum, r) => sum + (Number(pick(r)) || 0), 0);
+    const total = of(running, (r) => r.totalFiles);
+    const left = of(running, (r) => r.pending);
+    const uploaded = of(mine, (r) => r.completed) + of(mine, (r) => r.versioned);
+    const failed = of(mine, (r) => r.errors);
+    const fmt = (v: number) => v.toLocaleString('en-IN');
+    upsertBackgroundTask({
+      id: uploadTaskId,
+      kind: 'resume-upload',
+      title: 'Upload History',
+      pct: running.length && total > 0 ? Math.round(((total - left) / total) * 100) : 100,
+      done: running.length === 0,
+      detail: running.length
+        ? `${fmt(total - left)}/${fmt(total)} processed`
+        : `${fmt(uploaded)} uploaded${failed ? ` · ${fmt(failed)} failed` : ''}`,
+      onOpen: () => reopenUploadHistory.current(),
+    });
+  }, [isUploadHistoryMinimized, uploadHistory, uploadTaskId]);
+  useEffect(() => () => removeBackgroundTask(uploadTaskId), [uploadTaskId]);
   const [uploadHistoryTab, setUploadHistoryTab] = useState<'current' | 'completed'>('current');
   // Flipped the moment an upload starts here, so the Upload History button goes
   // live for a first-time user immediately instead of waiting for the resume
@@ -1098,33 +1134,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
       )}
 
       {/* Upload History Sheet (Slide-in Panel) */}
-      {/* Minimized Upload History Floating Indicator */}
-      {isUploadHistoryMinimized && (
-        <div
-          onClick={() => {
-            setIsUploadHistoryMinimized(false);
-            setIsUploadHistoryModalOpen(true);
-          }}
-          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 bg-brand-blue hover:bg-brand-blue-2 text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-all cursor-pointer flex items-center gap-2 sm:gap-3 animate-in slide-in-from-bottom duration-300"
-        >
-          <div className="relative">
-            <History className="w-5 h-5" />
-            {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-brand-orange rounded-full animate-pulse" />
-            )}
-          </div>
-          <div>
-            <p className="text-sm font-medium">Upload History</p>
-            <p className="text-xs text-blue-100">
-              {(() => {
-                const processing = uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length;
-                return processing > 0 ? `${processing} processing...` : 'Click to expand';
-              })()}
-            </p>
-          </div>
-          <Maximize2 className="w-4 h-4 ml-2" />
-        </div>
-      )}
+      {/* Minimized Upload History: a row in My Activities (see uploadTaskId above). */}
 
       {isUploadHistoryModalOpen && !isUploadHistoryMinimized && (
         <>

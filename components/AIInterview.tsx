@@ -9,6 +9,7 @@ import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { collapseAIInterviewLineages } from '@/lib/utils/aiInterviewJobOrder';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
+import { useBackgroundWorkRefresh } from '@/lib/backgroundWorkEvents';
 import { createPortal } from 'react-dom';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
@@ -1246,6 +1247,10 @@ export default function AIInterview() {
     if (activeTab === 'invitation-status') loadAllInviteStatuses(true);
     setRefreshSignal((n) => n + 1);
   };
+  /* onSent runs when a send is only queued; the invites go out in the
+     background. Re-read the same way as they actually go out (and once more
+     when the send finishes), so Invitations Sent moves without a reload. */
+  useBackgroundWorkRefresh(() => inviteSentRefreshRef.current(), ['invite']);
 
   /** Open THE invite popup. With a config: that job + that interview version
    *  (version cards hidden). Without: the popup's own picker of every

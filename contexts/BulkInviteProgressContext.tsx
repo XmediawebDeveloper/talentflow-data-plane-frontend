@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useEffectEven
 import { usePathname } from 'next/navigation';
 import { bulkInviteService, isBulkInviteActive, type BulkInviteApiError, type BulkInviteJob } from '@/lib/services/bulkInviteService';
 import { getTokens } from '@/lib/services/api';
+import { emitBackgroundWork } from '@/lib/backgroundWorkEvents';
 
 /**
  * The Create / Send bulk runs of the signed-in user, polled while they run so
@@ -179,6 +180,22 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
   const [openResults, setOpenResults] = useState<{ id: string; tab: BulkInviteResultsTab } | null>(null);
   const [widget, setWidget] = useState<BulkInviteWidgetView>('hidden');
   const pathname = usePathname();
+
+  /* Tell the pages when a send moves on: its `sent` count went up, or it
+     finished. Pages showing invite counts re-read on this (see
+     lib/backgroundWorkEvents), so the counts change as the invites go out
+     rather than after a reload. The first sight of a job only records it. */
+  const seenProgress = useRef<Map<string, { sent: number; active: boolean }>>(new Map());
+  useEffect(() => {
+    for (const j of jobs) {
+      const active = isBulkInviteActive(j);
+      const before = seenProgress.current.get(j.job_id);
+      seenProgress.current.set(j.job_id, { sent: j.sent, active });
+      if (!before) continue;
+      const finished = before.active && !active;
+      if (j.sent > before.sent || finished) emitBackgroundWork({ kind: 'invite', jdId: j.jd_id, finished });
+    }
+  }, [jobs]);
 
   /* Who is signed in: read after mount (client-only), and again on every
      route change, tab focus and storage change — sign-in / sign-out swaps the
