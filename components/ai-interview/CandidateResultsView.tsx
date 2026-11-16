@@ -4150,6 +4150,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       result,
                       messages,
                     }, fileName);
+                    // Audit the browser-built PDF; fire-and-forget so the download never breaks.
+                    api.post(`/ai-interview/${liveSession.id}/log-client-download`, { kind: 'transcript_pdf' }).catch(() => {});
                     return;
                   }
 

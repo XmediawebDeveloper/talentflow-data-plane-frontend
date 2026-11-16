@@ -242,7 +242,9 @@ export default function CandidateActivityCard({
     let cancelled = false;
     setLoading(true);
     setFailed(false);
-    resumeService.getActivity(resumeId)
+    // log_view=true: opening this card is the candidate-timeline view audited
+    // as CANDIDATE_TIMELINE_VIEWED (other getActivity callers don't log).
+    resumeService.getActivity(resumeId, true)
       .then(d => { if (!cancelled) setData(d); })
       .catch(() => { if (!cancelled) setFailed(true); })
       .finally(() => { if (!cancelled) setLoading(false); });

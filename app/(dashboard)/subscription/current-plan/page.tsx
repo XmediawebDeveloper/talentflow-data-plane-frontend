@@ -683,6 +683,11 @@ function CurrentPlanContent() {
   const sharedQuotaDataRef = useRef(sharedQuotaData);
   useEffect(() => { sharedQuotaDataRef.current = sharedQuotaData; }, [sharedQuotaData]);
 
+  // Audit trail: subscription details viewed, once per page open (fire-and-forget).
+  useEffect(() => {
+    api.post('/billing/log-view', { kind: 'subscription_details_viewed' }).catch(() => {});
+  }, []);
+
   // Plan change acceptance
   const { hasPendingChanges, daysRemaining, currentChange, openReviewModal } = usePlanChange();
 
