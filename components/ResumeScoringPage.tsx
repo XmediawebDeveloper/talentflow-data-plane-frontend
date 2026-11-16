@@ -3200,6 +3200,7 @@ export default function ResumeScoringPage({
               activeScoringJobs.forEach(job => clearJob(job.jobId));
             }}
             filterByJobId={filterByJobId}
+            headerJobVersion={activeScoringJobs.find(job => job.jobId === filterByJobId)?.jobVersion}
             showJobTitleColumn={showJobTitleColumn}
             showJobColumns={progressSpansJob}
             /* Not tied to `progressSpansJob` like the other two. Job ID / Job
@@ -3851,7 +3852,7 @@ export default function ResumeScoringPage({
               View by [ Job | Candidates ]
               [☐ Select All ▾]          [⇅ Sort ▾] [⇕]
             From lg the toolbar is unchanged. */}
-        <div className="tf-jobs-toolbar tf-toolbar-card max-lg:mb-4">
+        <div className="tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card max-lg:mb-4">
         {/* Search and Filter Bar — only when there's a list to filter */}
         {scoredHistory.length > 0 && (
           <div className="tf-jobs-contents mb-3">
@@ -5220,6 +5221,7 @@ export default function ResumeScoringPage({
               activeScoringJobs.forEach(job => clearJob(job.jobId));
             }}
             filterByJobId={filterByJobId}
+            headerJobVersion={activeScoringJobs.find(job => job.jobId === filterByJobId)?.jobVersion}
             showJobTitleColumn={showJobTitleColumn}
             showJobColumns={progressSpansJob}
             /* Not tied to `progressSpansJob` like the other two. Job ID / Job
@@ -6075,6 +6077,7 @@ export default function ResumeScoringPage({
             activeScoringJobs.forEach(job => clearJob(job.jobId));
           }}
           filterByJobId={filterByJobId}
+          headerJobVersion={activeScoringJobs.find(job => job.jobId === filterByJobId)?.jobVersion}
           showJobTitleColumn={showJobTitleColumn}
           /* Re-pulls the scored history behind this popup and drops the cached
              global list, so a run that finished while it was minimised shows

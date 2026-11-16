@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { emitBackgroundWork } from '@/lib/backgroundWorkEvents';
 
 export interface ScoringProgressItem {
   id: string;
@@ -111,6 +112,21 @@ const ScoringProgressContext = createContext<ScoringProgressContextType | undefi
 export function ScoringProgressProvider({ children }: { children: React.ReactNode }) {
   const [activeScoringJobs, setActiveScoringJobs] = useState<ScoringJob[]>([]);
   const [isMinimized, setIsMinimized] = useState(true);
+
+  /* Tell the pages when a run scores more resumes or finishes, so Scored /
+     result counts re-read as it happens (lib/backgroundWorkEvents). The first
+     sight of a run only records it. */
+  const seenScoring = useRef<Map<string, { completed: number; active: boolean }>>(new Map());
+  useEffect(() => {
+    for (const job of activeScoringJobs) {
+      const active = job.queued > 0 || job.processing > 0;
+      const before = seenScoring.current.get(job.jobId);
+      seenScoring.current.set(job.jobId, { completed: job.completed, active });
+      if (!before) continue;
+      const finished = before.active && !active;
+      if (job.completed > before.completed || finished) emitBackgroundWork({ kind: 'scoring', jdId: job.jobId, finished });
+    }
+  }, [activeScoringJobs]);
   // Ref-counted by owner id (see `setPanelVisibility` on the context type for
   // why this isn't a single shared boolean anymore).
   const [openPanelOwners, setOpenPanelOwners] = useState<Set<string>>(new Set());

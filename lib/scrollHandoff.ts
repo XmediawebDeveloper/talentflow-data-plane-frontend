@@ -66,3 +66,36 @@ export function scrollHandoffRef(el: HTMLElement | null) {
     el.removeEventListener('touchend', onTouchEnd);
   });
 }
+
+/**
+ * App-wide: a short sideways-scrolling strip (tab bars, pill rows — usually with
+ * the scrollbar hidden) turns the mouse wheel into left / right scrolling, so
+ * tabs past the edge can be reached without a touch screen or a scrollbar.
+ * Once the strip is at its start / end the wheel scrolls the page as usual.
+ * Tall boxes (wide tables) are left alone: only strips up to 96px tall count.
+ * Returns the cleanup.
+ */
+export function installStripWheelScroll(): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const onWheel = (e: WheelEvent) => {
+    if (e.ctrlKey || e.shiftKey || e.deltaY === 0 || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+    let node: Element | null = e.target instanceof Element ? e.target : null;
+    while (node && node !== document.body) {
+      if (node instanceof HTMLElement && node.clientHeight > 0 && node.clientHeight <= 96
+        && node.scrollWidth > node.clientWidth + 1) {
+        const overflowX = getComputedStyle(node).overflowX;
+        if (overflowX === 'auto' || overflowX === 'scroll') {
+          const max = node.scrollWidth - node.clientWidth;
+          if ((e.deltaY < 0 && node.scrollLeft <= 0) || (e.deltaY > 0 && node.scrollLeft >= max - 1)) return;
+          e.preventDefault();
+          const step = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+          node.scrollLeft += step;
+          return;
+        }
+      }
+      node = node.parentElement;
+    }
+  };
+  window.addEventListener('wheel', onWheel, { passive: false });
+  return () => window.removeEventListener('wheel', onWheel);
+}

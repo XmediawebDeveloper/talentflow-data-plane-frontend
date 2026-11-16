@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useBackgroundWorkRefresh } from '@/lib/backgroundWorkEvents';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -428,6 +429,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // re-render — always run the latest refresher.
   const refreshAfterInviteRef = useRef(refreshAfterInvite);
   refreshAfterInviteRef.current = refreshAfterInvite;
+  // ...and again as the invites actually go out in the background.
+  useBackgroundWorkRefresh(() => refreshAfterInviteRef.current(), ['invite']);
 
   // Always load activity on mount (needed for invite count in header)
   useEffect(() => {

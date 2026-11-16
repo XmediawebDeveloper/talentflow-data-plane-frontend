@@ -15,7 +15,7 @@ import {
   CheckCircle2, Circle, Clock3, XCircle, ChevronDown, Mail, Phone, Globe, Book,
   Video, FileQuestion, Tag, User, Calendar, Paperclip, Loader2, Inbox,
   Users, UserCheck, RefreshCw, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal, Lock,
-  Headphones, CircleDashed, BarChart3, Eye, ChevronRight, Check, ChevronLeft, Copy, Flag, Settings2, Info, UploadCloud, History, Bold, Italic, List, ListOrdered, Link2, Smile, Forward
+  Headphones, CircleDashed, BarChart3, Eye, ChevronRight, Check, ChevronLeft, Copy, Flag, Settings2, Info, UploadCloud, History, Bold, Italic, List, ListOrdered, Link2, Smile, Forward, Shield
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
@@ -40,6 +40,7 @@ import FilterSelect from '@/components/ui/filter-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import ForwardTicketDialog from '@/components/support/ForwardTicketDialog';
 import { forwardTeamLabel } from '@/lib/services/internalTicketService';
+import UnitDisputesView from '@/components/subscription/unit-disputes/UnitDisputesView';
 
 // Main API - Local backend handles everything including support tickets
 // Character limits for the Create Support Ticket form.
@@ -378,8 +379,9 @@ interface SupportCenterProps {
 }
 
 export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
-  // Active tab: 'external' for TalentFlow support, 'team' for internal team tickets
-  const [activeTab, setActiveTab] = useState<'external' | 'team'>('external');
+  // Active tab: 'external' for TalentFlow support, 'team' for internal team tickets,
+  // 'unit-disputes' for the shared Unit Disputes screen (also under Subscription).
+  const [activeTab, setActiveTab] = useState<'external' | 'team' | 'unit-disputes'>('external');
   const [view, setView] = useState<'overview' | 'submit' | 'tickets' | 'detail' | 'knowledge-base'>('overview');
   /* The overview's Help Resources + contact block, folded away by default. */
   const [helpOpen, setHelpOpen] = useState(false);
@@ -408,7 +410,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [emojiMenuOpen, setEmojiMenuOpen] = useState(false);
   const replyRef = useRef<HTMLTextAreaElement>(null);
-  const { user: authUser } = useAuth();
+  const { user: authUser, isTenantAdmin, hasPermission } = useAuth();
+  // Unit Disputes tab = same rule as Subscription → Unit Disputes (View Usage; the
+  // API re-checks). Without it the tab stays visible, greyed, with a tooltip.
+  const canViewUnitDisputes = isTenantAdmin || hasPermission('canViewUsage');
   // Last cursor/selection in the reply box. Null = not placed yet → insert at the end.
   const lastReplySel = useRef<{ start: number; end: number } | null>(null);
 
@@ -629,7 +634,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       teamSearchQuery, teamFilterStatus, teamFilterPriority, internalFilterAssignment,
       myCurrentPage, myItemsPerPage, teamCurrentPage, teamItemsPerPage },
     (s) => {
-      if (s.activeTab === 'external' || s.activeTab === 'team') setActiveTab(s.activeTab);
+      if (s.activeTab === 'external' || s.activeTab === 'team' || s.activeTab === 'unit-disputes') setActiveTab(s.activeTab);
       if (s.view === 'overview' || s.view === 'tickets' || s.view === 'knowledge-base') setView(s.view);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.filterStatus === 'string') setFilterStatus(s.filterStatus);
@@ -645,6 +650,24 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       if (typeof s.teamItemsPerPage === 'number') setTeamItemsPerPage(s.teamItemsPerPage);
     },
   );
+
+  const openTab = (tab: 'external' | 'team' | 'unit-disputes') => {
+    setActiveTab(tab);
+    setView('overview');
+    setSelectedTicket(null);
+    setSelectedInternalTicket(null);
+  };
+
+  // Deep link: /support-tickets?tab=unit-disputes (wins over the restored tab).
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'unit-disputes' || tab === 'team' || tab === 'external') setActiveTab(tab);
+  }, []);
+
+  // A restored / linked Unit Disputes tab the user can't see → back to My Support Tickets.
+  useEffect(() => {
+    if (activeTab === 'unit-disputes' && (!isAdmin || (authUser && !canViewUnitDisputes))) setActiveTab('external');
+  }, [activeTab, isAdmin, authUser, canViewUnitDisputes]);
 
   const categories = [
     { value: 'resume-upload', label: 'Resume Upload Issues', icon: Upload },
@@ -1297,7 +1320,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             ? [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Team Tickets', onClick: () => setView('tickets') }, { label: selectedInternalTicket.ticket_number }]
             : activeTab === 'external' && view === 'submit'
               ? [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets', onClick: () => setView('overview') }, { label: 'New Ticket' }]
-              : [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]
+              : activeTab === 'unit-disputes'
+                ? [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets', onClick: () => openTab('external') }, { label: 'Unit Disputes' }]
+                : [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]
         }
       />
       <div className="tf-card-soft mb-4 flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
@@ -1307,7 +1332,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           </div>
           <div className="min-w-0">
             <h1 className="tf-page-title">Support Center</h1>
-            <p className="mt-0.5 tf-body-secondary">{activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}</p>
+            <p className="mt-0.5 tf-body-secondary">{activeTab === 'external' ? 'Get help from the TalentFlow support team.' : activeTab === 'team' ? 'Manage help requests from your team in one place.' : 'Ask for units back when a session failed because of a platform problem.'}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1364,7 +1389,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             type="button"
             role="tab"
             aria-selected={activeTab === 'external'}
-            onClick={() => { setActiveTab('external'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
+            onClick={() => openTab('external')}
             className={`tf-tab-line -mb-px ${
               activeTab === 'external'
                 ? 'tf-tab-line-active'
@@ -1381,7 +1406,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             type="button"
             role="tab"
             aria-selected={activeTab === 'team'}
-            onClick={() => { setActiveTab('team'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
+            onClick={() => openTab('team')}
             className={`tf-tab-line -mb-px ${
               activeTab === 'team'
                 ? 'tf-tab-line-active'
@@ -1399,8 +1424,31 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               )}
             </div>
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'unit-disputes'}
+            aria-disabled={!canViewUnitDisputes}
+            title={canViewUnitDisputes ? undefined : 'You do not have permission to view unit disputes'}
+            onClick={() => { if (canViewUnitDisputes) openTab('unit-disputes'); }}
+            className={`tf-tab-line -mb-px ${
+              activeTab === 'unit-disputes'
+                ? 'tf-tab-line-active'
+                : canViewUnitDisputes ? '' : 'cursor-not-allowed text-gray-400 opacity-60'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <Shield className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden sm:inline">Unit Disputes</span>
+              <span className="sm:hidden">Disputes</span>
+              {!canViewUnitDisputes && <Lock className="h-3.5 w-3.5 flex-shrink-0" />}
+            </div>
+          </button>
         </div>
       )}
+
+      {/* Unit Disputes — the shared screen, without its own page shell. */}
+      {isAdmin && activeTab === 'unit-disputes' && canViewUnitDisputes && <UnitDisputesView embedded />}
 
       {/* Content */}
       <div>
