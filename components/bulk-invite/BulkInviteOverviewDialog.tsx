@@ -6,6 +6,8 @@ import {
   Send, SkipForward, Video, X, XCircle,
 } from 'lucide-react';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { Button } from '@/components/ui/button';
+import { useBulkInviteActions } from './useBulkInviteActions';
 import FilterSelect from '@/components/ui/filter-select';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import type { TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
@@ -83,6 +85,11 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
 
   const jobKey = jobs.map((j) => j.job_id).join(',');
   const anyActive = jobs.some(isBulkInviteActive);
+  /* Cancel: the whole of every send still going (header), or one waiting
+     candidate (row). Reload the rows after either. */
+  const actions = useBulkInviteActions(() => setTick((n) => n + 1));
+  const cancellable = jobs.filter((j) => isBulkInviteActive(j) && j.can_manage !== false);
+  const cancelOpen = actions.cancelOpen;
 
   /* Load (and, while anything sends, keep reloading) every send's rows. */
   useEffect(() => {
@@ -112,10 +119,12 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
   const refresh = useCallback(() => setTick((n) => n + 1), []);
 
   useEffect(() => {
+    // Esc while the cancel confirm is open closes only the confirm.
+    if (cancelOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, cancelOpen]);
 
   /* Header: one job → its badge and name; several → how many. */
   const jds = useMemo(() => {
@@ -201,6 +210,11 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
               {anyActive ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
               {anyActive ? 'Sending' : 'Complete'}
             </span>
+            {cancellable.length > 0 && (
+              <Button variant="secondary" size="sm" onClick={() => actions.askCancel(cancellable)}>
+                Cancel sending
+              </Button>
+            )}
             <button type="button" onClick={refresh} title="Refresh" aria-label="Refresh"
               className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 hover:bg-gray-50 dark:hover:bg-slate-800">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -362,6 +376,19 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
                       ) : <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-3 py-3 text-center">
+                      <span className="inline-flex items-center justify-center gap-2">
+                      {r.job.can_manage !== false && r.can_cancel && (
+                        <button
+                          type="button"
+                          onClick={() => void actions.cancelItem(r.job, r.id, r.name || r.email || undefined)}
+                          disabled={actions.busy === `cancel-item:${r.id}`}
+                          aria-label={`Cancel the invite to ${r.name || r.email || 'this candidate'}`}
+                          title="Cancel this candidate — the rest keep sending"
+                          className="h-9 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-destructive-line text-xs font-medium text-destructive hover:bg-destructive-subtle disabled:opacity-50"
+                        >
+                          {actions.busy === `cancel-item:${r.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />} Cancel
+                        </button>
+                      )}
                       {r.resume_id ? (
                         <a
                           href={`/recruitment/resume-view/${encodeURIComponent(r.resume_id)}`}
@@ -374,6 +401,7 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
                           <Eye className="w-4 h-4" />
                         </a>
                       ) : <span className="text-gray-300">—</span>}
+                      </span>
                     </td>
                   </tr>
                 );
@@ -412,6 +440,7 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
           </div>
         </div>
       </div>
+      {actions.cancelDialog}
     </div>
   );
 }

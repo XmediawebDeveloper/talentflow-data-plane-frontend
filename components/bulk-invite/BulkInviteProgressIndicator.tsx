@@ -126,15 +126,14 @@ export default function BulkInviteProgressIndicator() {
   /* Groups opened / closed by hand; the rest follow the default (running or
      needing a look → open). */
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
-  /* Merged rows (same job, kind and version sent more than once) opened to
-     show their separate sends. */
-  const [sendsOpen, setSendsOpen] = useState<Record<string, boolean>>({});
   const [legendOpen, setLegendOpen] = useState(false);
   /* Hovering the round icon previews a small card (same as the scoring
      widget's): what is sending and how far it got. Click opens the popup. */
   const [hovering, setHovering] = useState(false);
-  /* The header's View: every candidate of the listed sends in one table. */
-  const [overviewOpen, setOverviewOpen] = useState(false);
+  /* The View window: every candidate of the chosen sends in one table —
+     'all' (header View) or the sends of one merged row. */
+  const [overview, setOverview] = useState<'all' | string[] | null>(null);
+  const overviewOpen = overview !== null;
 
   /* First time the icon appears: a one-off tip saying what it is. */
   const [coachSeen, setCoachSeen] = useState(true);
@@ -336,8 +335,8 @@ export default function BulkInviteProgressIndicator() {
   /* One send: name, details, progress, counts, actions. */
   /* Sends of the same kind + version (and mode) under one job show as ONE
      row with their counts added up — sending V1 again adds to the V1 row
-     instead of a second V1 row. Its separate sends open below it, each with
-     its own View / Cancel / Send again. */
+     instead of a second V1 row. Its View opens every candidate of those
+     sends in one table. */
   const mergeSends = (items: TrackedBulkInvite[]) => {
     const out: { key: string; items: TrackedBulkInvite[] }[] = [];
     for (const j of items) {
@@ -353,10 +352,11 @@ export default function BulkInviteProgressIndicator() {
     const v = versionOf(j);
     const isInterview = j.kind !== 'assessment';
     const id = `${groupKey}::${key}`;
-    const isOpen = sendsOpen[id] ?? false;
+    const latest = [...items].sort((a, b) => sentAt(b).localeCompare(sentAt(a)))[0];
     const act = items.filter(isBulkInviteActive);
     const failed = sum((x) => x.failed, items);
     const skipped = sum((x) => x.skipped, items);
+    const cancellable = act.filter((x) => x.can_manage !== false);
     const st = act.length > 0
       ? (act.some((x) => x.is_sending !== false)
         ? { label: 'Sending', tone: 'run', icon: <Loader2 className="w-3 h-3 animate-spin" /> }
@@ -364,11 +364,14 @@ export default function BulkInviteProgressIndicator() {
       : items.some((x) => x.status === 'paused' || x.stalled) ? { label: 'Paused', tone: 'warn', icon: <Pause className="w-3 h-3" /> }
       : failed > 0 ? { label: 'Done with failures', tone: 'warn', icon: <AlertTriangle className="w-3 h-3" /> }
       : { label: 'Done', tone: 'ok', icon: <CheckCircle2 className="w-3 h-3" /> };
-    const last = timeOf([...items].map((x) => x.created_at ?? x.trackedAt).sort().pop());
+    const last = timeOf(latest.created_at ?? latest.trackedAt);
+    const total = sum((x) => x.total, items);
     const details = [
-      `${sum((x) => x.total, items)} candidates`,
-      `${items.length} sends`,
-      last ? `last sent ${last}` : null,
+      `${total} candidate${total === 1 ? '' : 's'}`,
+      last ? `sent ${last}` : null,
+      latest.sender_name ? `by ${latest.sender_name}` : null,
+      j.mode === 'resend' ? 'new links by email' : latest.delivery === 'link' ? 'links only' : 'by email',
+      j.mode === 'resend' ? null : expiryText(latest.expiry_days),
     ].filter(Boolean).join(' · ');
     return (
       <li key={id} className={`py-2.5 pr-3.5 ${indent ? 'pl-9' : 'pl-3.5'}`}>
@@ -392,12 +395,11 @@ export default function BulkInviteProgressIndicator() {
           <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
-              onClick={() => setSendsOpen((o) => ({ ...o, [id]: !isOpen }))}
-              aria-expanded={isOpen}
-              title={isOpen ? 'Hide the separate sends' : 'Show each send — to view, cancel or send again'}
-              className="h-6 px-2 inline-flex items-center gap-0.5 rounded-md text-2xs font-medium text-brand-blue hover:bg-brand-blue/5"
+              onClick={() => setOverview(items.map((x) => x.job_id))}
+              title="Open — every candidate and their status"
+              className="h-6 px-2 inline-flex items-center rounded-md text-2xs font-medium text-brand-blue hover:bg-brand-blue/5"
             >
-              View <ChevronRight className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+              View
             </button>
             {act.length === 0 && (
               <button
@@ -421,10 +423,12 @@ export default function BulkInviteProgressIndicator() {
           {sum((x) => x.cancelled ?? 0, items) > 0 && <span className="text-warning-strong" title={HINT.cancelled}>Cancelled {sum((x) => x.cancelled ?? 0, items)}</span>}
           {failed > 0 && <span className="text-destructive font-medium" title={HINT.failed}>Failed {failed}</span>}
         </p>
-        {isOpen && (
-          <ul className="mt-2 -mr-3.5 border-t border-gray-100 dark:border-slate-700/60 divide-y divide-gray-100 dark:divide-slate-700/60">
-            {items.map((x) => sendRow(x, true))}
-          </ul>
+        {cancellable.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <Button variant="secondary" size="sm" className="h-7 text-2xs" onClick={() => askCancel(cancellable)}>
+              Cancel sending
+            </Button>
+          </div>
         )}
       </li>
     );
@@ -565,7 +569,7 @@ export default function BulkInviteProgressIndicator() {
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
-                onClick={() => setOverviewOpen(true)}
+                onClick={() => setOverview('all')}
                 title="View every candidate of these sends — status, source and date"
                 className="h-7 px-2.5 inline-flex items-center rounded-md border border-brand-blue/30 text-2xs font-semibold text-brand-blue hover:bg-brand-blue/5 whitespace-nowrap"
               >
@@ -678,6 +682,7 @@ export default function BulkInviteProgressIndicator() {
             {groups.map((g) => {
               const gRunning = g.items.filter(isBulkInviteActive).length;
               const gLook = g.items.filter((j) => bulkInviteNeedsLook(j)).length;
+              const gSends = mergeSends(g.items);
               const isOpen = single || (toggled[g.key] ?? (gRunning > 0 || gLook > 0));
               const gFailed = sum((j) => j.failed, g.items);
               const gState = gRunning > 0
@@ -712,16 +717,17 @@ export default function BulkInviteProgressIndicator() {
                       </button>
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="tf-micro-hint whitespace-nowrap">
-                          {g.items.length} {g.items.length === 1 ? 'batch' : 'batches'}{gRunning > 0 ? ` · ${gRunning} running` : ''}
+                          {gSends.length} {gSends.length === 1 ? 'batch' : 'batches'}{gRunning > 0 ? ` · ${gSends.filter((m) => m.items.some(isBulkInviteActive)).length} running` : ''}
                         </span>
                         {!single && (
                           <button
                             type="button"
                             onClick={() => {
                               if (g.items.length === 1) openTab(g.items[0], g.items[0].failed > 0 && !isBulkInviteActive(g.items[0]) ? 'failed' : 'all');
+                              else if (gSends.length === 1) setOverview(g.items.map((j) => j.job_id));
                               else setToggled((t) => ({ ...t, [g.key]: true }));
                             }}
-                            title={g.items.length === 1 ? 'Open — every candidate and their status' : 'Show this job’s batches'}
+                            title={gSends.length === 1 ? 'Open — every candidate and their status' : 'Show this job’s batches'}
                             className="h-6 px-2 inline-flex items-center rounded-md text-2xs font-medium text-brand-blue hover:bg-brand-blue/5"
                           >
                             View
@@ -756,7 +762,7 @@ export default function BulkInviteProgressIndicator() {
                   </div>
                   {isOpen && (
                     <ul className={`divide-y divide-gray-100 dark:divide-slate-700/60 ${single ? '' : 'border-t border-gray-100 dark:border-slate-700/60'}`}>
-                      {mergeSends(g.items).map((m) => (m.items.length === 1
+                      {gSends.map((m) => (m.items.length === 1
                         ? sendRow(m.items[0], !single)
                         : mergedRow(g.key, m.key, m.items, !single)))}
                     </ul>
@@ -871,7 +877,12 @@ export default function BulkInviteProgressIndicator() {
           )}
         </span>
       </button>
-      {overviewOpen && <BulkInviteOverviewDialog jobs={scoped} onClose={() => setOverviewOpen(false)} />}
+      {overview !== null && (
+        <BulkInviteOverviewDialog
+          jobs={overview === 'all' ? scoped : shown.filter((j) => overview.includes(j.job_id))}
+          onClose={() => setOverview(null)}
+        />
+      )}
       {results}
       {cancelDialog}
     </>

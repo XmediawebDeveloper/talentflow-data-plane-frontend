@@ -749,8 +749,8 @@ export default function JobOpeningPickerList({
 
                   {/* Version history, expanded in place — the same panel
                       the Job Openings list opens, minus the action menu
-                      (nothing here changes a JD). Titles open in a new tab
-                      so the page selection isn't thrown away mid-pick. */}
+                      (nothing here changes a JD). Titles open the job in
+                      this same tab. */}
                   {hasVersionHistory && versionsExpanded && (
                     <JobVersionHistoryPanel
                       job={job}
@@ -759,7 +759,6 @@ export default function JobOpeningPickerList({
                       versionDetails={versionLineage.versionDetails}
                       versionApplicants={versionLineage.versionApplicants}
                       applicantsLabel={applicantsLabel}
-                      openInNewTab
                       /* The rows are things you TICK here, so the title's
                          hover scale comes off — on a selectable row that
                          little movement reads as the control twitching. */
