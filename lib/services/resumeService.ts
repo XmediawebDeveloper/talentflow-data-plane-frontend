@@ -83,6 +83,8 @@ export interface ResumeActivityScore {
   jd_title: string | null;
   jd_job_id: string | null;
   jd_status: string | null;
+  /** Job version (the JD row's version_number). */
+  jd_version: number;
   resume_id: string;
   resume_version: number;
   overall_score: number;
@@ -99,6 +101,8 @@ export interface ResumeActivityTalentMatch {
   jd_id: string | null;
   jd_title: string | null;
   jd_job_id: string | null;
+  /** Job version (the JD row's version_number) — null when the job is gone. */
+  jd_version: number | null;
   resume_id: string;
   resume_version: number;
   final_score: number | null;
@@ -114,6 +118,9 @@ export interface ResumeActivityAssessment {
   assessment_id: string | null;
   assessment_title: string | null;
   assessment_deleted: boolean;
+  jd_job_id: string | null;
+  /** Job version (the JD row's version_number) — null when the job is gone. */
+  jd_version: number | null;
   attempt_id: string | null;
   candidate_display_id: string | null;
   resume_version: number | null;
@@ -138,6 +145,9 @@ export interface ResumeActivityInterview {
   config_display_id: string | null;
   title: string | null;
   display_id: string | null;
+  jd_job_id: string | null;
+  /** Job version (the JD row's version_number) — null when the job is gone. */
+  jd_version: number | null;
   resume_version: number | null;
   linked_by: 'resume' | 'email';
   status: string;

@@ -1,6 +1,7 @@
 "use client";
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { scrollHandoffRef } from '@/lib/scrollHandoff';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
@@ -5700,7 +5701,7 @@ export default function ResumeScoringPage({
                     {/* Phone: one card per session (same groups, same View
                         action); the 9-column table takes over from sm. */}
                     {/* No outer border or padding — just the cards, as the JD Version History. */}
-                    <div className="lg:hidden tf-record-list max-h-[320px] overflow-y-auto overscroll-contain">
+                    <div ref={scrollHandoffRef} className="lg:hidden tf-record-list max-h-[320px] overflow-y-auto">
                       {groups.map((g) => (
                         <MobileRecordCard
                           key={`${g.version}||${g.scoredBy}||${g.date}`}

@@ -1,6 +1,7 @@
 'use client';
 
 import { CheckSquare, FileText, RefreshCw, Square, Users } from 'lucide-react';
+import { scrollHandoffRef } from '@/lib/scrollHandoff';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { Job } from '@/lib/types/types';
@@ -417,8 +418,9 @@ export default function JobVersionHistoryPanel({
             grid: 2 columns on phones, 3 from sm, 4 from md. Same values
             (rowModels), same radio / checkbox / actions as the table. */}
         <div
+          ref={scrollHandoffRef}
           className={`lg:hidden tf-ver-list ${
-            jobVersions.length > 3 ? 'overflow-y-auto max-h-[420px] overscroll-contain' : ''
+            jobVersions.length > 3 ? 'overflow-y-auto max-h-[420px]' : ''
           }`}
         >
           {rowModels.map(({ isChecked, version, isLatest, versionStatus, versionStatusConfig, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason }) => {
@@ -534,8 +536,9 @@ export default function JobVersionHistoryPanel({
           })}
         </div>
         <div
+          ref={scrollHandoffRef}
           className={`max-lg:hidden overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20 ${
-            jobVersions.length > 3 ? 'overflow-y-auto max-h-[240px] overscroll-contain' : ''
+            jobVersions.length > 3 ? 'overflow-y-auto max-h-[240px]' : ''
           }`}
         >
           <table className={`w-full ${hideJdDetails ? 'min-w-[640px]' : 'min-w-[960px]'} text-left`}>

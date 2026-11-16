@@ -15,7 +15,7 @@ import {
   CheckCircle2, Circle, Clock3, XCircle, ChevronDown, Mail, Phone, Globe, Book,
   Video, FileQuestion, Tag, User, Calendar, Paperclip, Loader2, Inbox,
   Users, UserCheck, RefreshCw, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal, Lock,
-  Headphones, CircleDashed, BarChart3, Eye, ChevronRight, Check, ChevronLeft, Copy, Flag, Settings2, Info, UploadCloud, History, Bold, Italic, List, ListOrdered, Link2, Smile
+  Headphones, CircleDashed, BarChart3, Eye, ChevronRight, Check, ChevronLeft, Copy, Flag, Settings2, Info, UploadCloud, History, Bold, Italic, List, ListOrdered, Link2, Smile, Forward
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
@@ -26,6 +26,8 @@ import FeatureGate from '@/components/shared/FeatureGate';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { AttachmentPicker as TeamAttachmentPicker, AttachmentList as TeamAttachmentList } from '@/components/support/TicketAttachments';
+import { saveBlob } from '@/lib/supportAttachments';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import api, { ApiError, handleApiError, getTokens } from '@/lib/services/api';
@@ -36,6 +38,8 @@ import { MobileRecordList, MobileRecordCard } from '@/components/ui/mobile-recor
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
+import ForwardTicketDialog from '@/components/support/ForwardTicketDialog';
+import { forwardTeamLabel } from '@/lib/services/internalTicketService';
 
 // Main API - Local backend handles everything including support tickets
 // Character limits for the Create Support Ticket form.
@@ -154,6 +158,17 @@ interface SupportTicket {
     timestamp: string;
     agentName?: string;
   }[];
+  /** Set when the ticket was forwarded from Team Support Tickets. */
+  forwardedFrom?: {
+    internalTicketId?: string;
+    internalTicketNumber?: string;
+    team?: string;
+    note?: string;
+    forwardedBy?: string;
+    forwardedAt?: string;
+    requesterName?: string;
+    requesterEmail?: string;
+  } | null;
 }
 
 interface TicketStats {
@@ -206,6 +221,18 @@ function transformTicket(apiTicket: any): SupportTicket {
       timestamp: r.timestamp,
       agentName: r.agent_name,
     })),
+    forwardedFrom: apiTicket.forwarded_from
+      ? {
+          internalTicketId: apiTicket.forwarded_from.internal_ticket_id ?? undefined,
+          internalTicketNumber: apiTicket.forwarded_from.internal_ticket_number ?? undefined,
+          team: apiTicket.forwarded_from.team ?? undefined,
+          note: apiTicket.forwarded_from.note ?? undefined,
+          forwardedBy: apiTicket.forwarded_from.forwarded_by ?? undefined,
+          forwardedAt: apiTicket.forwarded_from.forwarded_at ?? undefined,
+          requesterName: apiTicket.forwarded_from.requester_name ?? undefined,
+          requesterEmail: apiTicket.forwarded_from.requester_email ?? undefined,
+        }
+      : null,
   };
 }
 
@@ -280,6 +307,18 @@ function AwaitingTeamTag() {
     <span className="tf-badge bg-brand-orange/10 text-brand-orange-deep">
       <MessageSquare className="h-3 w-3" />
       Awaiting response
+    </span>
+  );
+}
+
+// A Team ticket forwarded to platform support (`team`), or a My Support Ticket
+// that came from a Team ticket (`from` = its INT- number).
+function ForwardedTag({ team, from }: { team?: string | null; from?: string | null }) {
+  const title = from ? `Forwarded from Team ticket ${from}` : `Forwarded to ${forwardTeamLabel(team)}`;
+  return (
+    <span className="tf-badge bg-brand-blue/10 text-brand-blue" title={title}>
+      <Forward className="h-3 w-3" />
+      {from ? `From ${from}` : 'Forwarded'}
     </span>
   );
 }
@@ -542,6 +581,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const [attachments, setAttachments] = useState<File[]>([]);
   // Files chosen in the reply box; uploaded to the ticket after the message.
   const [replyFiles, setReplyFiles] = useState<File[]>([]);
+  // Files on a Team ticket reply (admin side).
+  const [teamReplyFiles, setTeamReplyFiles] = useState<File[]>([]);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -849,13 +890,41 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     }
   };
 
+  // Forward a Team ticket to platform support (dialog in components/support/ForwardTicketDialog).
+  const [forwardTicket, setForwardTicket] = useState<InternalTicket | null>(null);
+  const handleInternalTicketForwarded = (updatedTicket: InternalTicket) => {
+    setInternalTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
+    if (selectedInternalTicket?.id === updatedTicket.id) {
+      setSelectedInternalTicket(updatedTicket);
+    }
+    fetchInternalStats();
+    // The forwarded copy is a new row in My Support Tickets.
+    fetchTickets();
+    fetchStats();
+  };
+  // Jump from a forwarded Team ticket to its copy in My Support Tickets.
+  const openForwardedSupportTicket = (supportTicketId: string) => {
+    setActiveTab('external');
+    setDetailError(null);
+    setSelectedTicket(null); // don't flash a previously opened ticket while this one loads
+    fetchTicketDetail(supportTicketId);
+    setView('detail');
+  };
+
   const handleSendInternalReply = async () => {
-    if (!replyMessage.trim() || !selectedInternalTicket || replySending) return;
+    if ((!replyMessage.trim() && teamReplyFiles.length === 0) || !selectedInternalTicket || replySending) return;
 
     setReplySending(true);
     try {
+      // Files first; on a forwarded ticket the backend also adds them to My Support Tickets / the Control Plane.
+      if (teamReplyFiles.length) {
+        await internalTicketService.uploadAttachments(selectedInternalTicket.id, teamReplyFiles);
+      }
+      const text = replyMessage.trim()
+        || `Attached ${teamReplyFiles.length} file${teamReplyFiles.length > 1 ? 's' : ''}: ${teamReplyFiles.map(f => f.name).join(', ')}`;
+      setTeamReplyFiles([]);
       const updatedTicket = await internalTicketService.addResponse(selectedInternalTicket.id, {
-        message: replyMessage,
+        message: text,
       });
 
       setSelectedInternalTicket(updatedTicket);
@@ -866,6 +935,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       toast.error(errorText(error, 'Failed to send reply'));
     } finally {
       setReplySending(false);
+    }
+  };
+
+  const downloadInternalAttachment = async (ticketId: string, file: { id: string; file_name: string }) => {
+    try {
+      saveBlob(await internalTicketService.downloadAttachment(ticketId, file.id), file.file_name);
+    } catch (error) {
+      toast.error(errorText(error, 'Could not download the file'));
     }
   };
 
@@ -1450,7 +1527,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <>
                               {getPriorityBadge(ticket.priority)}
                               {getStatusBadge(ticket.status)}
-                              {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
+                              {ticket.forwardedFrom && <ForwardedTag from={ticket.forwardedFrom.internalTicketNumber} />}
+{isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
                             </>
                           }
                           meta={[
@@ -1492,7 +1570,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <td className="tf-td">
                               <div className="flex flex-col items-start gap-1">
                                 {getStatusBadge(ticket.status)}
-                                {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
+                                {ticket.forwardedFrom && <ForwardedTag from={ticket.forwardedFrom.internalTicketNumber} />}
+{isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
                               </div>
                             </td>
                             <td className="tf-td text-right">
@@ -1954,7 +2033,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <div className="min-w-0">
                                 <div className="truncate tf-body">{file.name}</div>
                                 <div className="tf-meta">
-                                  {(file.size / 1024).toFixed(1)} KB
+                                  {(file.name.split('.').pop() || '').toUpperCase()} · {(file.size / 1024).toFixed(1)} KB
                                 </div>
                               </div>
                             </div>
@@ -2164,7 +2243,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <>
                               {getPriorityBadge(ticket.priority)}
                               {getStatusBadge(ticket.status)}
-                              {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
+                              {ticket.forwardedFrom && <ForwardedTag from={ticket.forwardedFrom.internalTicketNumber} />}
+{isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
                             </>
                           }
                           meta={[
@@ -2219,7 +2299,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <td className="tf-td">
                                 <div className="flex flex-col items-start gap-1">
                                   {getStatusBadge(ticket.status)}
-                                  {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
+                                  {ticket.forwardedFrom && <ForwardedTag from={ticket.forwardedFrom.internalTicketNumber} />}
+{isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
                                 </div>
                               </td>
                               <td className="tf-td">
@@ -2460,6 +2541,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <span className="rounded-md bg-gray-100 px-2 py-0.5 tf-caption dark:bg-slate-800">
                         {getCategoryLabel(selectedTicket.category)}
                       </span>
+                      {selectedTicket.forwardedFrom && <ForwardedTag from={selectedTicket.forwardedFrom.internalTicketNumber} />}
                       {isAwaitingUserReply(selectedTicket) && <AwaitingReplyTag />}
                     </div>
                   </div>
@@ -2517,6 +2599,46 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </div>
                   </div>
                 </div>
+
+                {selectedTicket.forwardedFrom && (() => {
+                  const fwd = selectedTicket.forwardedFrom;
+                  return (
+                    <div className="mt-4 flex flex-col gap-2 rounded-lg border border-brand-blue/20 bg-brand-blue/[0.05] p-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <Forward className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
+                        <div className="min-w-0 tf-body">
+                          <p>
+                            Forwarded from Team ticket <strong>{fwd.internalTicketNumber}</strong> to <strong>{forwardTeamLabel(fwd.team)}</strong>
+                            {fwd.forwardedBy && <> by {fwd.forwardedBy}</>}
+                            {fwd.forwardedAt && <> · {formatIST(fwd.forwardedAt)}</>}
+                          </p>
+                          {fwd.requesterName && (
+                            <p className="mt-1 tf-meta">
+                              Raised by {fwd.requesterName}{fwd.requesterEmail ? ` (${fwd.requesterEmail})` : ''}
+                            </p>
+                          )}
+                          {fwd.note && <p className="mt-1 break-words tf-meta">Note: {fwd.note}</p>}
+                          <p className="mt-1 tf-meta">Status changes here are reflected on the Team ticket.</p>
+                        </div>
+                      </div>
+                      {isAdmin && fwd.internalTicketId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('team');
+                            setSelectedInternalTicket(null);
+                            fetchInternalTicketDetail(fwd.internalTicketId!);
+                            setView('detail');
+                          }}
+                          className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-brand-blue hover:underline"
+                        >
+                          View Team ticket
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Conversation / Activity Log / Attachments tabs */}
                 <div className="mt-5 flex gap-1 border-b border-gray-200 dark:border-slate-700">
@@ -2649,6 +2771,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 <li key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 py-1 pl-2.5 pr-1 tf-meta dark:border-slate-700 dark:bg-slate-800/60">
                                   <Paperclip className="h-3 w-3 shrink-0 text-brand-blue" />
                                   <span className="truncate" title={file.name}>{file.name}</span>
+                                  <span className="shrink-0 rounded bg-indigo-50 px-1 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{(file.name.split('.').pop() || '').toUpperCase()}</span>
                                   <span className="shrink-0 text-gray-400">{(file.size / 1024).toFixed(0)} KB</span>
                                   <button
                                     type="button"
@@ -2807,6 +2930,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {infoRow(Inbox, 'Category', getCategoryLabel(selectedTicket.category))}
                     {infoRow(Calendar, 'Created', formatIST(selectedTicket.createdAt))}
                     {infoRow(Clock, 'Last Updated', formatIST(selectedTicket.updatedAt))}
+                    {selectedTicket.forwardedFrom?.requesterName && infoRow(User, 'Requester', (
+                      <span className="truncate">{selectedTicket.forwardedFrom.requesterName}</span>
+                    ))}
                     {selectedTicket.assignedAgent && infoRow(UserCheck, 'Agent', (
                       <span className="flex min-w-0 items-center gap-2">
                         <NameAvatar name={selectedTicket.assignedAgent} size="xs" />
@@ -3096,7 +3222,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             {!ticket.assigned_to && (
                               <span className="rounded border border-warning-line bg-warning-subtle px-1.5 py-0.5 text-2xs text-warning-strong">Unassigned</span>
                             )}
-                            {isAwaitingTeamResponse(ticket) && <AwaitingTeamTag />}
+                            {ticket.forwarding && <ForwardedTag team={ticket.forwarding.team} />}
+{isAwaitingTeamResponse(ticket) && <AwaitingTeamTag />}
                           </>
                         }
                         meta={[
@@ -3146,7 +3273,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <td className="tf-td">
                               <div className="flex flex-col items-start gap-1">
                                 {getInternalStatusBadge(ticket.status)}
-                                {isAwaitingTeamResponse(ticket) && <AwaitingTeamTag />}
+                                {ticket.forwarding && <ForwardedTag team={ticket.forwarding.team} />}
+{isAwaitingTeamResponse(ticket) && <AwaitingTeamTag />}
                               </div>
                             </td>
                             <td className="tf-td text-right">
@@ -3311,7 +3439,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               {!ticket.assigned_to && (
                                 <span className="rounded border border-warning-line bg-warning-subtle px-1.5 py-0.5 text-2xs text-warning-strong">Unassigned</span>
                               )}
-                              {isAwaitingTeamResponse(ticket) && <AwaitingTeamTag />}
+                              {ticket.forwarding && <ForwardedTag team={ticket.forwarding.team} />}
+{isAwaitingTeamResponse(ticket) && <AwaitingTeamTag />}
                             </>
                           }
                           meta={[
@@ -3355,7 +3484,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <td className="tf-td whitespace-nowrap font-medium text-gray-900 dark:text-slate-100">{ticket.ticket_number}</td>
                               <td className="tf-td max-w-[260px]">
                                 <div className="truncate text-gray-900 dark:text-slate-100" title={ticket.title}>{ticket.title}</div>
-                                {isAwaitingTeamResponse(ticket) && <div className="mt-1"><AwaitingTeamTag /></div>}
+                                {ticket.forwarding && <div className="mt-1"><ForwardedTag team={ticket.forwarding.team} /></div>}
+{isAwaitingTeamResponse(ticket) && <div className="mt-1"><AwaitingTeamTag /></div>}
                               </td>
                               <td className="tf-td">
                                 <div className="flex min-w-0 items-center gap-2">
@@ -3463,7 +3593,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           const thread: InternalTicket['responses'] = descriptionText && !descriptionAlreadyInReplies
             ? [{ id: `${t.id}-description`, user_id: t.created_by?.id || '', user_name: t.created_by?.name, user_role: 'user', message: t.description, created_at: t.created_at }, ...responses]
             : responses;
-          const detailTab = detailTabState.id === t.id && detailTabState.tab === 'activity' ? 'activity' : 'conversation';
+          const detailTab = detailTabState.id === t.id && detailTabState.tab !== 'conversation' ? detailTabState.tab : 'conversation';
+          const teamFiles = t.attachments || [];
           const statusLabel = t.status.charAt(0).toUpperCase() + t.status.slice(1).replace('-', ' ');
           const priorityLabel = internalPriorities.find(p => p.value === t.priority)?.label || t.priority;
           const busy = internalActionLoading === t.id;
@@ -3508,6 +3639,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               detail: r.message.length > 120 ? `${r.message.slice(0, 120)}…` : r.message,
             })),
             ...(t.assigned_to ? [{ time: '', icon: UserCheck, title: `Assigned to ${t.assigned_to.name}`, detail: '' }] : []),
+            ...(t.forwarding ? [{
+              time: t.forwarding.forwarded_at || '',
+              icon: Forward,
+              title: `Forwarded to ${forwardTeamLabel(t.forwarding.team)}${t.forwarding.forwarded_by?.name ? ` by ${t.forwarding.forwarded_by.name}` : ''}`,
+              detail: t.forwarding.support_ticket_number ? `Support ticket ${t.forwarding.support_ticket_number}` : '',
+            }] : []),
             { time: t.updated_at, icon: Clock, title: `Current status: ${statusLabel}`, detail: 'As of last update' },
           ];
 
@@ -3612,6 +3749,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       {!t.assigned_to && t.status !== 'closed' && (
                         <span className="rounded border border-warning-line bg-warning-subtle px-2 py-0.5 text-xs text-warning-strong">Unassigned</span>
                       )}
+                      {t.forwarding && <ForwardedTag team={t.forwarding.team} />}
                       {isAwaitingTeamResponse(t) && <AwaitingTeamTag />}
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-1.5 tf-meta sm:text-sm">
@@ -3640,11 +3778,40 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
                 </div>
 
+                {t.forwarding && (
+                  <div className="mt-4 flex flex-col gap-2 rounded-lg border border-brand-blue/20 bg-brand-blue/[0.05] p-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <Forward className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
+                      <div className="min-w-0 tf-body">
+                        <p>
+                          Forwarded to <strong>{forwardTeamLabel(t.forwarding.team)}</strong>
+                          {t.forwarding.support_ticket_number && <> as <strong>{t.forwarding.support_ticket_number}</strong></>}
+                          {t.forwarding.forwarded_by?.name && <> by {t.forwarding.forwarded_by.name}</>}
+                          {t.forwarding.forwarded_at && <> · {formatIST(t.forwarding.forwarded_at)}</>}
+                        </p>
+                        {t.forwarding.note && <p className="mt-1 break-words tf-meta">Note: {t.forwarding.note}</p>}
+                        <p className="mt-1 tf-meta">Status and platform-support replies are kept in sync with this ticket.</p>
+                      </div>
+                    </div>
+                    {t.forwarding.support_ticket_id && (
+                      <button
+                        type="button"
+                        onClick={() => openForwardedSupportTicket(t.forwarding!.support_ticket_id!)}
+                        className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-brand-blue hover:underline"
+                      >
+                        View in My Support Tickets
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {/* Conversation / Activity Log tabs */}
                 <div className="mt-5 flex gap-1 border-b border-gray-200 dark:border-slate-700">
                   {[
                     { id: 'conversation' as const, label: 'Conversation', icon: MessageSquare },
                     { id: 'activity' as const, label: 'Activity Log', icon: History },
+                    { id: 'attachments' as const, label: `Attachments (${teamFiles.length})`, icon: Paperclip },
                   ].map(tab => {
                     const TabIcon = tab.icon;
                     return (
@@ -3761,6 +3928,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           placeholder="Type your response..."
                           rows={4}
                         />
+                        <div className="mt-2">
+                          <TeamAttachmentPicker
+                            compact
+                            files={teamReplyFiles}
+                            onChange={setTeamReplyFiles}
+                            onTicket={teamFiles.length}
+                            disabled={replySending}
+                          />
+                        </div>
                         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           {/* Toolbar */}
                           <div className="flex flex-wrap items-center gap-0.5">
@@ -3803,7 +3979,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <Button
                             variant="primary"
                             onClick={handleSendInternalReply}
-                            disabled={replySending || !replyMessage.trim()}
+                            disabled={replySending || (!replyMessage.trim() && teamReplyFiles.length === 0)}
                             icon={replySending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                             className="w-full sm:w-auto"
                           >
@@ -3813,6 +3989,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       </div>
                     )}
                   </>
+                ) : detailTab === 'attachments' ? (
+                  <div className="mt-4">
+                    {t.forwarding && teamFiles.length > 0 && (
+                      <p className="mb-3 tf-meta">These files were also sent with the forwarded ticket {t.forwarding.support_ticket_number}.</p>
+                    )}
+                    <TeamAttachmentList files={teamFiles} onDownload={(file) => downloadInternalAttachment(t.id, file)} />
+                  </div>
                 ) : (
                   <ol className="relative mt-4 space-y-4 border-l border-gray-200 pl-5 dark:border-slate-700">
                     {activity.map((item, idx) => {
@@ -3862,6 +4045,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     ) : (
                       <span className="text-warning-strong">Not assigned</span>
                     ))}
+                    {t.forwarding && infoRow(Forward, 'Forwarded To', (
+                      <span className="truncate" title={t.forwarding.support_ticket_number || undefined}>
+                        {forwardTeamLabel(t.forwarding.team)}
+                      </span>
+                    ))}
                     {infoRow(Calendar, 'Created', formatIST(t.created_at))}
                     {infoRow(Clock, 'Last Updated', formatIST(t.updated_at))}
                     {infoRow(MessageSquare, 'Responses', `${responses.length} message${responses.length === 1 ? '' : 's'}`)}
@@ -3902,7 +4090,21 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       </button>
                     )}
 
-                    {(t.status === 'open' || t.status === 'in-progress') && (
+                    {/* Forwarded: platform support (admin) owns it now, so offer to move there instead of resolving here. */}
+                    {t.forwarding && (t.status === 'open' || t.status === 'in-progress') && (
+                      <button
+                        onClick={() => t.forwarding?.support_ticket_id
+                          ? openForwardedSupportTicket(t.forwarding.support_ticket_id)
+                          : toast.info('The forwarded ticket is still syncing — try again in a moment.')}
+                        disabled={busy}
+                        className={`${actionBtn} bg-brand-blue text-white shadow-sm shadow-brand-blue/25 hover:bg-brand-blue-2`}
+                      >
+                        <Forward className="h-4 w-4 flex-shrink-0" />
+                        Move to Admin
+                      </button>
+                    )}
+
+                    {!t.forwarding && (t.status === 'open' || t.status === 'in-progress') && (
                       <button
                         onClick={() => handleResolveInternalTicket(t.id)}
                         disabled={busy}
@@ -3910,6 +4112,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       >
                         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4 flex-shrink-0" />}
                         Mark as Resolved
+                      </button>
+                    )}
+
+                    {/* Can't resolve it here — hand it to platform support (once). */}
+                    {!t.forwarding && (t.status === 'open' || t.status === 'in-progress') && (
+                      <button
+                        onClick={() => setForwardTicket(t)}
+                        disabled={busy}
+                        className={`${actionBtn} border border-brand-blue/30 bg-brand-blue/[0.06] text-brand-blue hover:bg-brand-blue/10`}
+                      >
+                        <Forward className="h-4 w-4 flex-shrink-0" />
+                        Forward Ticket
                       </button>
                     )}
 
@@ -3953,6 +4167,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       </div>
       </div>
       </div>
+      <ForwardTicketDialog
+        ticket={forwardTicket}
+        open={!!forwardTicket}
+        onClose={() => setForwardTicket(null)}
+        onForwarded={handleInternalTicketForwarded}
+      />
     </div>
   );
 }

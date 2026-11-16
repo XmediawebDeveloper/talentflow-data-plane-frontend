@@ -287,6 +287,10 @@ interface ResumeTableProps {
    *  a page panel (Resume Database) so the cards line up with the panel's
    *  content inset. Default keeps the 8px gutter dialogs rely on. */
   flushCards?: boolean;
+  /** Width the table takes over from the phone cards: 'lg' (1024px, default)
+   *  or 'md' (768px) — the Select Applicants popup shows the table on tablets
+   *  too, the same layout as desktop. */
+  tableFrom?: 'md' | 'lg';
   /** Drops the header's select-all checkbox (the column stays for the row
    *  ticks) — for callers that put the Job Openings "Select All ▾" menu in
    *  their own toolbar instead. */
@@ -362,6 +366,7 @@ export default function ResumeTable({
   containerClassName = 'flex-1',
   tableShellClassName = '',
   flushCards = false,
+  tableFrom = 'lg',
   hideHeaderSelectAll = false,
   onPageItemsChange,
 }: ResumeTableProps) {
@@ -670,7 +675,7 @@ export default function ResumeTable({
           grew to fit every row and never scrolled — `sticky top-0` had nothing
           to stick to, and the header scrolled away with the page. Capping the
           height makes the rows scroll inside it and pins the header. */}
-      <div className={`hidden lg:block overflow-auto max-h-[calc(100dvh-24rem)] tf-table-shell ${tableShellClassName}`}>
+      <div className={`hidden ${tableFrom === 'md' ? 'md:block' : 'lg:block'} overflow-auto max-h-[calc(100dvh-24rem)] tf-table-shell ${tableShellClassName}`}>
         <table className="w-full min-w-[1200px] table-auto">
         {/* Background goes on the cells, not just <thead>: with separate cell
             backgrounds the rows would otherwise show through as they pass under. */}
@@ -1170,7 +1175,7 @@ export default function ResumeTable({
       </div>
 
       {/* FIX-008: Mobile Card View - visible only on mobile */}
-      <div className={`lg:hidden space-y-3 ${flushCards ? 'py-3' : 'px-2'}`}>
+      <div className={`${tableFrom === 'md' ? 'md:hidden' : 'lg:hidden'} space-y-3 ${flushCards ? 'py-3' : 'px-2'}`}>
         {paginatedItems.map((resume) => {
           const isBlocked = isBlockedResume(resume);
           return (

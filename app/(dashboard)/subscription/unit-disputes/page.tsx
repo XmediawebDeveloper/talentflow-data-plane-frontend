@@ -69,6 +69,7 @@ const STATUS_OPTIONS = [
   { value: 'PENDING_REVIEW', label: 'Pending Review' },
   { value: 'APPROVED', label: 'Approved' },
   { value: 'REJECTED', label: 'Rejected' },
+  { value: 'resolved', label: 'Resolved (Approved or Rejected)' },
 ];
 
 const REASON_OPTIONS = [
@@ -77,6 +78,13 @@ const REASON_OPTIONS = [
   { value: 'BILLING_ERROR', label: 'Billing Error' },
   { value: 'INTERRUPTED', label: 'Interrupted' },
 ];
+
+const getReasonLabel = (reason: string) => {
+  return REASON_OPTIONS.find(r => r.value === reason)?.label || reason;
+};
+
+// Must match DISPUTABLE_UNIT_TYPES in the backend disputes router.
+const DISPUTABLE_UNIT_TYPES: string[] = ['RS', 'AS', 'AIU'];
 
 const UNIT_TYPE_LABELS: Record<string, string> = {
   RU: 'Resume Storage',
@@ -91,6 +99,8 @@ const EXPORT_HEADERS = ['Dispute ID', 'Date', 'Unit Type', 'Units Requested', 'R
 // --- Component ---
 
 export default function UnitDisputesPage() {
+  // RBAC (Subscription & Billing → Usage & Quotas), enforced again by the API:
+  //   view = View Usage (route + tab), File Dispute = Upgrade Plan, Export = Export Usage.
   const { hasPermission } = useAuth();
   const canExportDisputes = hasPermission('canExportUsage');
   const canFileDispute = hasPermission('canUpgradePlan');
@@ -214,6 +224,11 @@ export default function UnitDisputesPage() {
           return;
         }
 
+        if (response.status === 403) {
+          setError('You do not have permission to view unit disputes.');
+          return;
+        }
+
         if (!response.ok) throw new Error('Failed to fetch disputes');
 
         const result = await response.json();
@@ -267,6 +282,7 @@ export default function UnitDisputesPage() {
     if (!selectedLog) return;
     if (!disputeReason) { toast.error('Please select a reason'); return; }
     if (disputeDescription.length < 10) { toast.error('Description must be at least 10 characters'); return; }
+    if (disputeDescription.length > 1000) { toast.error('Description cannot exceed 1000 characters'); return; }
     const units = parseFloat(disputeUnits);
     if (isNaN(units) || units <= 0) { toast.error('Please enter a valid number of units'); return; }
     if (units > selectedLog.units_consumed) { toast.error('Units cannot exceed consumed amount'); return; }
@@ -293,9 +309,18 @@ export default function UnitDisputesPage() {
         return;
       }
 
+      if (response.status === 403) {
+        toast.error('You do not have permission to file disputes');
+        return;
+      }
+
       if (!response.ok) {
         const errData = await response.json().catch(() => null);
-        const detail = errData?.detail || '';
+        // A validation error (422) sends `detail` as a list of {msg} objects, not a string.
+        const rawDetail = errData?.detail;
+        const detail: string = Array.isArray(rawDetail)
+          ? rawDetail.map((d: { msg?: string }) => d?.msg).filter(Boolean).join('; ')
+          : typeof rawDetail === 'string' ? rawDetail : '';
         if (detail.toLowerCase().includes('already exists') || detail.toLowerCase().includes('duplicate')) {
           toast.error('A dispute has already been filed for this consumption record. Please check your existing disputes.');
           closeFileModal();
@@ -340,12 +365,27 @@ export default function UnitDisputesPage() {
     return { total: disputes.length, pending, resolved };
   }, [disputes]);
 
+  // Consumption records with an open or approved dispute — the API refuses another
+  // one. A record whose disputes were all rejected can be disputed again.
+  const disputedLogIds = useMemo(
+    () => new Set(
+      disputes
+        .filter(d => d.status === 'PENDING_REVIEW' || d.status === 'APPROVED')
+        .map(d => d.consumption_log_id)
+        .filter((id): id is string => !!id)
+    ),
+    [disputes]
+  );
+
   const filteredDisputes = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return disputes.filter(d => {
-      const matchesSearch = searchQuery === '' ||
-        d.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        d.reason.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        d.description.toLowerCase().includes(searchQuery.toLowerCase());
+      // description is optional, and reasons match by label too ("System Error").
+      const matchesSearch = q === '' ||
+        (d.id || '').toLowerCase().includes(q) ||
+        (d.reason || '').toLowerCase().includes(q) ||
+        getReasonLabel(d.reason || '').toLowerCase().includes(q) ||
+        (d.description || '').toLowerCase().includes(q);
 
       const matchesStatus = statusFilter === 'all'
         || d.status === statusFilter
@@ -433,10 +473,6 @@ export default function UnitDisputesPage() {
     );
   };
 
-  const getReasonLabel = (reason: string) => {
-    return REASON_OPTIONS.find(r => r.value === reason)?.label || reason;
-  };
-
   const handleExport = async (format: ExportFileFormat) => {
     const csvRows = filteredDisputes.map(d => [
       d.id,
@@ -444,7 +480,7 @@ export default function UnitDisputesPage() {
       d.unit_type,
       d.units_to_refund.toString(),
       getReasonLabel(d.reason),
-      d.description,
+      d.description || '',
       getStatusLabel(d.status),
       d.units_restored?.toString() || '',
       d.resolved_at ? formatDate(d.resolved_at) : '',
@@ -453,6 +489,25 @@ export default function UnitDisputesPage() {
     await exportRows(format, EXPORT_HEADERS, csvRows, `unit-disputes-${new Date().toISOString().split('T')[0]}`, {
       sheetName: 'Unit Disputes',
     });
+
+    // Audit trail for the client-built file (the API re-checks Export Usage).
+    try {
+      const headers = getAuthHeaders();
+      if (headers) {
+        await fetch(`${API_URL}/disputes/export/log`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            format,
+            record_count: filteredDisputes.length,
+            status_filter: statusFilter,
+            ids: filteredDisputes.map(d => d.id),
+          }),
+        });
+      }
+    } catch (err) {
+      console.warn('[UnitDisputes] export audit log failed:', err);
+    }
   };
 
   const clearFilters = () => {
@@ -1070,18 +1125,32 @@ export default function UnitDisputesPage() {
                     {!loadingLogs && consumptionLogs.length > 0 && (
                       <>
                         <div className="mb-4 space-y-2">
-                          {consumptionLogs.map(log => (
+                          {consumptionLogs.map(log => {
+                            const alreadyDisputed = disputedLogIds.has(log.id);
+                            // RU / Max Users are freed by deleting the resume / removing the user, not by a dispute.
+                            const notDisputable = !DISPUTABLE_UNIT_TYPES.includes(log.unit_type);
+                            const blocked = alreadyDisputed || notDisputable;
+                            return (
                             <button
                               key={log.id}
                               onClick={() => {
+                                if (blocked) return;
                                 setSelectedLog(log);
                                 setDisputeUnits(log.units_consumed.toString());
                                 setFileStep(2);
                               }}
-                              className={`group w-full rounded-xl border p-3 text-left transition-all hover:-translate-y-0.5 ${
-                                selectedLog?.id === log.id
-                                  ? 'border-brand-blue/30 bg-brand-blue/[0.04] shadow-sm shadow-brand-blue/10'
-                                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04]'
+                              aria-disabled={blocked}
+                              title={
+                                notDisputable
+                                  ? 'Resume Storage and Max Users units cannot be disputed'
+                                  : alreadyDisputed ? 'A dispute is already open or approved for this record' : undefined
+                              }
+                              className={`group w-full rounded-xl border p-3 text-left transition-all ${
+                                blocked
+                                  ? 'cursor-not-allowed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 opacity-60'
+                                  : selectedLog?.id === log.id
+                                    ? 'hover:-translate-y-0.5 border-brand-blue/30 bg-brand-blue/[0.04] shadow-sm shadow-brand-blue/10'
+                                    : 'hover:-translate-y-0.5 border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04]'
                               }`}
                             >
                               <div className="flex items-center justify-between">
@@ -1091,7 +1160,11 @@ export default function UnitDisputesPage() {
                                     {log.units_consumed} unit{log.units_consumed !== 1 ? 's' : ''}
                                   </span>
                                 </div>
-                                <ChevronRight className="h-4 w-4 text-gray-400 dark:text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                                {blocked ? (
+                                  <span className="tf-meta">{notDisputable ? 'Not disputable' : 'Dispute filed'}</span>
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 text-gray-400 dark:text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                                )}
                               </div>
                               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta">
                                 <span>{formatDateTime(log.created_at)}</span>
@@ -1102,7 +1175,8 @@ export default function UnitDisputesPage() {
                               </div>
                               <div className="mt-1 font-mono tf-micro-hint">{truncateId(log.id)}</div>
                             </button>
-                          ))}
+                            );
+                          })}
                         </div>
 
                         {/* Pagination */}
@@ -1200,6 +1274,7 @@ export default function UnitDisputesPage() {
                           onChange={(e) => setDisputeDescription(e.target.value)}
                           placeholder="Describe the issue in detail (min 10 characters)"
                           rows={4}
+                          maxLength={1000}
                           className="tf-textarea resize-none rounded-xl py-2.5"
                         />
                         <p className="mt-1 tf-hint">{disputeDescription.length}/1000 characters</p>
