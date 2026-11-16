@@ -1,12 +1,15 @@
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, SlidersHorizontal, ChevronDown, Eye, ClipboardList, Ban } from 'lucide-react';
+import { X, Clock, CheckCircle2, XCircle, AlertCircle, AlertTriangle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, ChevronDown, Eye, ClipboardList, Ban, Layers, Square, CheckSquare, Coins, Filter as FilterIcon } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useModuleQuota } from '@/contexts/QuotaContext';
+import ScoreTableModal from '@/components/ScoreTableModal';
 import ListPagination from '@/components/ListPagination';
 import { Button } from '@/components/ui/button';
-import FilterSelect from '@/components/ui/filter-select';
-import { ToolbarResetButton } from '@/components/ui/list-toolbar';
-import { FilterChipsHover, FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
+import ListToolbar from '@/components/ui/list-toolbar';
+import SearchableSelect from '@/components/ui/searchable-select';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
 import AppModal from '@/components/ui/app-modal';
@@ -16,7 +19,7 @@ import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
-import { formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
+import { formatOverallScore } from '@/lib/utils/matchStatus';
 
 // Utility function to format date to IST (Asia/Kolkata timezone)
 function formatDateTimeIST(date: Date | string | undefined): { date: string; time: string } {
@@ -140,6 +143,9 @@ interface BulkScoringProgressModalProps {
   /** Every batch snapshot the popup reads or gets back from Cancel / Retry,
    *  so the host can keep its own state (e.g. the corner widget) in step. */
   onBatchStatus?: (status: BatchScoringStatus) => void;
+  /** The JD version this run scores against, for the header — used when the
+   *  rows themselves don't carry `jobVersion` (most hosts). */
+  headerJobVersion?: number | null;
 }
 
 /** Backend match_status ('exact_match', 'Partial Match', …) → the popup's verdict. */
@@ -166,8 +172,8 @@ export default function BulkScoringProgressModal({
   filterByJobId,
   showJobTitleColumn = true,
   showJobColumns = false,
-  showScoreColumn = false,
-  showScoredByColumn = false,
+  // showScoreColumn: kept in the props for hosts; the score now sits in Match Status.
+  // showScoredByColumn: kept in the props for hosts; Scored By is always a column now.
   onRetryFailed,
   onMinimize,
   onRefresh,
@@ -176,6 +182,7 @@ export default function BulkScoringProgressModal({
   onOpenResume,
   batchId,
   onBatchStatus,
+  headerJobVersion,
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
 
@@ -312,6 +319,12 @@ export default function BulkScoringProgressModal({
   const [bulkRetrying, setBulkRetrying] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isMinimizedInternal, setIsMinimizedInternal] = useState(false);
+  /* Rows ticked to score again (failed / cancelled batch rows only), by item id. */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  /* Retry asks first — what it will do and the units it uses. */
+  const [confirmRetryIds, setConfirmRetryIds] = useState<string[] | null>(null);
+  const [showFailSummary, setShowFailSummary] = useState(true);
+  const rsQuota = useModuleQuota('RS');
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [completedTimes, setCompletedTimes] = useState<number[]>([]);
 
@@ -467,6 +480,16 @@ export default function BulkScoringProgressModal({
     };
   })();
   const scopedToJobTitle = Boolean(headerJob?.title);
+  /* The job version(s) for the header: read off the rows when they carry it
+     (a run spanning several versions lists each), else the host's version. */
+  const headerVersions = (() => {
+    const scoped = filterByJobId ? progressData.filter(item => item.jobId === filterByJobId) : progressData;
+    const fromRows = [...new Set(scoped.map(item => item.jobVersion).filter((v): v is number => typeof v === 'number' && v > 0))].sort((a, b) => a - b);
+    if (fromRows.length) return fromRows;
+    return headerJobVersion && headerJobVersion > 0 ? [headerJobVersion] : [];
+  })();
+  /* Eye → this candidate's score table, in place (ScoreTableModal). */
+  const [scoreTableItem, setScoreTableItem] = useState<ScoringProgressItem | null>(null);
   /* Job ID / Job Title columns only when the rows span several jobs; one job
      is named in the header, and the table keeps just its Job Version. */
   const showJobIdTitleColumns = showJobColumns && !headerJob;
@@ -505,7 +528,7 @@ export default function BulkScoringProgressModal({
   /* Active filter tags: Status and Source, then one per filter the Filters
      button's badge counts (Scored From / Scored To are counted apart there, so
      they are two tags here). Search shows in its own box. */
-  const STATUS_CHIP_LABELS: Record<string, string> = { queued: 'Queued', 'in-progress': 'In Progress', completed: 'Completed', skipped: 'Skipped', failed: 'Failed', cancelled: 'Cancelled' };
+  const STATUS_CHIP_LABELS: Record<string, string> = { queued: 'Queue', 'in-progress': 'Processing', completed: 'Done', skipped: 'Skipped', failed: 'Failed', cancelled: 'Cancelled', selected: 'Selected' };
   const SOURCE_CHIP_LABELS: Record<string, string> = { 'internal-db': 'Shared Database', 'my-resumes': 'My Resumes' };
   const formatChipDate = (v: string) => {
     const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
@@ -544,7 +567,8 @@ export default function BulkScoringProgressModal({
       (statusFilter === 'completed' && item.status === 'Scored successfully') ||
       (statusFilter === 'skipped' && item.status === 'Already Scored - Skipped') ||
       (statusFilter === 'failed' && item.status === 'Failed') ||
-      (statusFilter === 'cancelled' && item.status === 'Cancelled');
+      (statusFilter === 'cancelled' && item.status === 'Cancelled') ||
+      (statusFilter === 'selected' && selected.has(item.id));
 
     const matchesSource = sourceFilter === 'all' ||
       (sourceFilter === 'internal-db' && item.source === 'Internal DB') ||
@@ -585,17 +609,62 @@ export default function BulkScoringProgressModal({
   // Only a row with a result can open one; the rest keep the plain resume link.
   const canViewResult = (item: ScoringProgressItem) =>
     !!onViewResult && (item.status === 'Scored successfully' || item.status === 'Already Scored - Skipped');
-  const viewItem = (item: ScoringProgressItem) => {
-    if (canViewResult(item)) onViewResult!(item);
-    else openResume(item.resumeId);
-  };
-  const viewTitle = onViewResult ? 'View scoring result' : 'View resume';
 
   /* Clamped rather than reset in an effect: a filter that shrinks the list
      below the current page just lands the user on the last page that exists. */
   const totalPages = Math.max(1, Math.ceil(filteredData.length / rowsPerPage));
   const safePage = Math.min(page, totalPages);
   const pagedData = filteredData.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+
+  /* ── Selection: tick failed / cancelled batch rows to score them again ──
+     Only rows the batch holds can be retried (POST /batch/{id}/retry), and
+     only by someone who can manage the batch. Skipped (already scored) rows
+     are not offered: there is no force re-score endpoint. */
+  const canPick = (item: ScoringProgressItem) =>
+    canManageBatch && !!item.resumeId && batchItemByResume.has(item.resumeId)
+    && (item.status === 'Failed' || item.status === 'Cancelled');
+  const picked = progressData.filter(item => selected.has(item.id) && canPick(item));
+  const filteredIds = new Set(filteredData.map(item => item.id));
+  /* Ticked rows the current pill / search / filters hide. */
+  const hiddenPicked = statusFilter === 'selected' ? 0 : picked.filter(item => !filteredIds.has(item.id)).length;
+  const allPickable = filteredData.filter(canPick);
+  const pagePickable = pagedData.filter(canPick);
+  const allPagePicked = pagePickable.length > 0 && pagePickable.every(item => selected.has(item.id));
+  const somePagePicked = !allPagePicked && pagePickable.some(item => selected.has(item.id));
+  const allPicked = allPickable.length > 0 && allPickable.every(item => selected.has(item.id));
+  const selectPage = () => setSelected(prev => { const next = new Set(prev); pagePickable.forEach(item => next.add(item.id)); return next; });
+  const deselectPage = () => setSelected(prev => { const next = new Set(prev); pagePickable.forEach(item => next.delete(item.id)); return next; });
+  const selectAllPickable = () => setSelected(new Set(allPickable.map(item => item.id)));
+  const clearSelection = () => setSelected(new Set());
+  const togglePicked = (id: string) => setSelected(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  /* Retry goes through the confirm (units). By resume id, as the batch API takes. */
+  const askRetry = (items: ScoringProgressItem[]) => {
+    const ids = [...new Set(items.filter(canPick).map(item => item.resumeId))];
+    if (ids.length) setConfirmRetryIds(ids);
+  };
+
+  /* ── Failure summary: failed rows grouped by reason ── */
+  const failGroups = (() => {
+    const groups = new Map<string, ScoringProgressItem[]>();
+    progressData.filter(item => item.status === 'Failed').forEach(item => {
+      const reason = item.errorReason || 'Scoring failed';
+      groups.set(reason, [...(groups.get(reason) ?? []), item]);
+    });
+    return [...groups.entries()].map(([reason, items]) => ({ reason, items })).sort((a, b) => b.items.length - a.items.length);
+  })();
+
+  /* ── The run's overall state, for the header badge, bar and % ── */
+  const processedCount = completedCount + skippedCount + failedCount + cancelledCount;
+  const progressPct = totalResumes > 0 ? Math.round((processedCount / totalResumes) * 100) : 0;
+  const runState = !isAllComplete
+    ? { label: 'Running', cls: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20', icon: <Loader2 className="w-3 h-3 animate-spin" />, bar: 'bg-brand-blue', pct: 'text-brand-blue' }
+    : completedCount + skippedCount === 0 && failedCount > 0
+      ? { label: 'Failed', cls: 'bg-destructive-subtle text-destructive ring-destructive-line', icon: <XCircle className="w-3 h-3" />, bar: 'bg-destructive', pct: 'text-destructive' }
+      : failedCount > 0
+        ? { label: 'Done with failures', cls: 'bg-warning-subtle text-warning-strong ring-warning-line', icon: <AlertTriangle className="w-3 h-3" />, bar: 'bg-warning-strong', pct: 'text-warning-strong' }
+        : cancelledCount > 0
+          ? { label: `Done · ${cancelledCount} cancelled`, cls: 'bg-warning-subtle text-warning-strong ring-warning-line', icon: <Ban className="w-3 h-3" />, bar: 'bg-warning-strong', pct: 'text-warning-strong' }
+          : { label: 'Complete', cls: 'bg-success-subtle text-success ring-success-line', icon: <CheckCircle2 className="w-3 h-3" />, bar: 'bg-success', pct: 'text-success' };
 
   /* Per-row batch action: Cancel a waiting resume, Retry a failed or
      cancelled one. Null when the row has none (or there is no batch). */
@@ -636,6 +705,10 @@ export default function BulkScoringProgressModal({
     }
     return null;
   };
+
+  /* Display label for a status — the stored value stays as is. */
+  const STATUS_LABEL: Record<string, string> = { 'Scored successfully': 'Scored', 'Scoring in progress': 'Progress' };
+  const statusLabel = (status: string) => STATUS_LABEL[status] ?? status;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -679,7 +752,9 @@ export default function BulkScoringProgressModal({
     }
   };
 
-  const getMatchResultBadge = (result?: string, score?: number) => {
+  /* `sm`: the compact badge that sits beside the score in Match Status. */
+  const SMALL_BADGE = 'inline-flex items-center gap-1 h-5 px-1.5 rounded text-[11px] font-medium border whitespace-nowrap w-fit [&>svg]:w-3 [&>svg]:h-3 [&>svg]:flex-shrink-0';
+  const getMatchResultBadge = (result?: string, score?: number, size: 'md' | 'sm' = 'md') => {
     if (!result) return null;
 
     let badgeClass = '';
@@ -705,7 +780,7 @@ export default function BulkScoringProgressModal({
     }
 
     return (
-      <span className={`${TABLE_BADGE} ${badgeClass}`}>
+      <span className={`${size === 'sm' ? SMALL_BADGE : TABLE_BADGE} ${badgeClass}`}>
         {icon}
         {displayText}
       </span>
@@ -758,6 +833,16 @@ export default function BulkScoringProgressModal({
                   <h2 className="tf-section-title sm:text-xl break-words sm:truncate min-w-0" title={scopedToJobTitle ? headerJob!.title : undefined}>
                     {scopedToJobTitle ? headerJob!.title : 'Bulk Scoring Progress'}
                   </h2>
+                  {/* The JD version(s) these rows are scored against. */}
+                  {scopedToJobTitle && headerVersions.map(v => (
+                    <span
+                      key={v}
+                      className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0"
+                      title="Job version"
+                    >
+                      v{v}
+                    </span>
+                  ))}
                 </div>
                 {/* Line 2: what this is, and how far it got. */}
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
@@ -766,20 +851,33 @@ export default function BulkScoringProgressModal({
                       Bulk scoring progress
                     </span>
                   )}
-                  <span className="tf-body-secondary">
-                    {completedCount + skippedCount + failedCount}/{totalResumes} resumes processed
-                  </span>
+                  {totalResumes > 0 && (
+                    <span className={`tf-badge gap-1.5 ring-1 ${runState.cls}`}>
+                      {runState.icon}
+                      {runState.label}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Action buttons - always visible */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              {isAllComplete && (
-                <div className="tf-badge hidden sm:flex gap-1.5 bg-success-subtle text-success ring-1 ring-success-line">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Complete
-                </div>
+              {/* Cancel every resume still waiting (confirm first). Those being
+                  scored now finish; finished scores stay. */}
+              {canManageBatch && batchWaitingCount > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setConfirmCancelAll(true)}
+                  disabled={batchBusy !== null}
+                  className="px-2 sm:px-3"
+                  aria-label={`Cancel all waiting (${batchWaitingCount})`}
+                  title="Stop every resume still waiting — the ones being scored now finish, finished scores stay"
+                >
+                  {batchBusy === 'cancel:all' ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                  <span className="hidden sm:inline">Cancel all</span>
+                </Button>
               )}
               {onRefresh && (
                 <Button
@@ -813,11 +911,11 @@ export default function BulkScoringProgressModal({
                   size="sm"
                   onClick={() => { setIsMinimizedInternal(true); onMinimize?.(); }}
                   className="px-2 sm:px-3"
-                  aria-label="Continue in background"
-                  title="Continue in background — scoring keeps running"
+                  aria-label="Minimize"
+                  title="Minimize — scoring keeps running. Open it again from the button at the bottom-right."
                 >
                   <Minus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Continue in background</span>
+                  <span className="hidden sm:inline">Minimize</span>
                 </Button>
               )}
               {/* Close appears only once every row has settled. While work is
@@ -844,37 +942,31 @@ export default function BulkScoringProgressModal({
             </div>
           </div>
 
-          {/* ETA - below title */}
-          <div className="mt-3 flex items-center justify-end gap-3 empty:mt-0">
-            {eta && !isAllComplete && (
-              <div className="flex items-center gap-1 tf-caption flex-shrink-0">
-                <Clock className="w-3 h-3" />
-                <span>{eta.remaining} Resume{eta.remaining !== 1 ? 's' : ''} Remaining</span>
+          {/* Progress — inset with the header's side gutters: processed count
+              (and what is left) on the left, the live % on the right, then the
+              bar. Skipped, failed and cancelled rows all count as processed —
+              work that will not happen — so a finished run always reaches 100%. */}
+          {totalResumes > 0 && (
+            <div className="mt-3">
+              <div className="mb-1.5 flex items-end justify-between gap-3">
+                <span className="tf-meta">
+                  {processedCount} of {totalResumes} resume{totalResumes === 1 ? '' : 's'} processed
+                  {eta && !isAllComplete && <> · {eta.remaining} remaining</>}
+                </span>
+                <span className={`text-sm font-semibold tabular-nums ${runState.pct}`} aria-live="polite">{progressPct}%</span>
               </div>
-            )}
-            {isAllComplete && (
-              <div className="flex sm:hidden items-center gap-1 text-success text-xs font-medium flex-shrink-0">
-                <CheckCircle2 className="w-3 h-3" />
-                Done
+              <div
+                className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progressPct}
+                aria-label="Scoring progress"
+              >
+                <div className={`h-full rounded-full transition-[width] duration-500 ease-out ${runState.bar}`} style={{ width: `${progressPct}%` }} />
               </div>
-            )}
-          </div>
-          </div>
-
-          {/* Progress bar, edge to edge under the header — the one place the
-              run's overall state is readable at a glance without counting.
-              Skipped rows count as processed: they are work that will not
-              happen, so leaving them out strands the bar short of the end on a
-              run that is finished. */}
-          <div className="h-1.5 w-full bg-gray-100 dark:bg-slate-800">
-            <div
-              className={`h-full transition-[width] duration-500 ease-out ${isAllComplete ? 'bg-success' : 'bg-brand-blue'}`}
-              style={{
-                width: `${totalResumes > 0
-                  ? Math.round(((completedCount + skippedCount + failedCount) / totalResumes) * 100)
-                  : 0}%`,
-              }}
-            />
+            </div>
+          )}
           </div>
         </div>
 
@@ -901,19 +993,23 @@ export default function BulkScoringProgressModal({
             permanently spinning icon on a finished run reads as still working. */}
         <div className="px-3 sm:px-5 py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
           <div className="flex flex-wrap items-center gap-2">
+            {/* Always the same seven pills, in this order, so the row never
+                shifts as counts change. All clears the status filter. */}
             {[
+              { key: 'all', label: 'All', count: totalResumes, icon: <Layers className="w-4 h-4" />, tone: 'text-gray-500 dark:text-slate-400' },
               { key: 'queued', label: 'Queue', count: queuedCount, icon: <Clock className="w-4 h-4" />, tone: 'text-blue-600 dark:text-blue-300' },
               { key: 'in-progress', label: 'Processing', count: inProgressCount, icon: <Loader2 className={`w-4 h-4 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />, tone: 'text-brand-blue' },
               { key: 'completed', label: 'Done', count: completedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-success' },
-              { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-warning' },
+              /* brand-cyan: the same colour as the Skipped row badge */
+              { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-brand-cyan' },
               { key: 'failed', label: 'Failed', count: failedCount, icon: <XCircle className="w-4 h-4" />, tone: 'text-destructive' },
-              ...(cancelledCount > 0 || batchId ? [{ key: 'cancelled', label: 'Cancelled', count: cancelledCount, icon: <Ban className="w-4 h-4" />, tone: 'text-gray-500 dark:text-slate-400' }] : []),
+              { key: 'cancelled', label: 'Cancelled', count: cancelledCount, icon: <Ban className="w-4 h-4" />, tone: 'text-gray-500 dark:text-slate-400' },
             ].map(stat => {
               const isActive = statusFilter === stat.key;
               return (
                 <button
                   key={stat.key}
-                  onClick={() => setStatusFilter(isActive ? 'all' : stat.key)}
+                  onClick={() => { setStatusFilter(isActive || stat.key === 'all' ? 'all' : stat.key); setPage(1); }}
                   aria-pressed={isActive}
                   title={isActive ? `Showing ${stat.label} only - click to clear` : `Show ${stat.label} only`}
                   className={`inline-flex items-center gap-1.5 sm:gap-2 whitespace-nowrap rounded-full border px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm transition-all [&_svg]:w-3.5 [&_svg]:h-3.5 sm:[&_svg]:w-4 sm:[&_svg]:h-4 ${
@@ -928,38 +1024,30 @@ export default function BulkScoringProgressModal({
                 </button>
               );
             })}
+            {statusFilter === 'selected' && (
+              <button
+                onClick={() => { setStatusFilter('all'); setPage(1); }}
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-brand-blue/40 bg-brand-blue/[0.05] px-2 py-1 text-xs text-brand-blue ring-2 ring-brand-blue/20 sm:px-3 sm:py-1.5 sm:text-sm"
+                title="Back to everyone"
+              >
+                <FilterIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />Selected only: <b className="tabular-nums">{picked.length}</b><X className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {/* Retry every failed + cancelled batch row — asks first (units). */}
+            {canManageBatch && batchRetryCount > 0 && picked.length === 0 && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => askRetry(progressData)}
+                disabled={batchBusy !== null}
+                className="sm:ml-auto"
+                title="Score every failed and cancelled resume again"
+              >
+                {batchBusy === 'retry:all' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                <span>Retry all ({batchRetryCount})</span>
+              </Button>
+            )}
           </div>
-
-          {/* Batch controls — Cancel all waiting / Retry all failed + cancelled */}
-          {canManageBatch && (batchWaitingCount > 0 || batchRetryCount > 0) && (
-            <div className="mt-3 flex flex-wrap justify-end gap-2">
-              {batchWaitingCount > 0 && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setConfirmCancelAll(true)}
-                  disabled={batchBusy !== null}
-                  className="!text-destructive !border-destructive-line"
-                  title="Stop every resume still waiting — the ones being scored now finish, finished scores stay"
-                >
-                  {batchBusy === 'cancel:all' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
-                  <span>Cancel all waiting ({batchWaitingCount})</span>
-                </Button>
-              )}
-              {batchRetryCount > 0 && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => void retryBatchRows()}
-                  disabled={batchBusy !== null}
-                  title="Score every failed and cancelled resume again"
-                >
-                  {batchBusy === 'retry:all' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                  <span>Retry all ({batchRetryCount})</span>
-                </Button>
-              )}
-            </div>
-          )}
 
           {/* Bulk Retry Button (hosts without a batch) */}
           {!batchId && filterByJobId && onRetryFailed && failedCount > 0 && (
@@ -988,167 +1076,214 @@ export default function BulkScoringProgressModal({
             to its own row below. Wraps only when the modal is too narrow to
             fit them all (phones), which the expanded panel doesn't need to
             match since it already lays its own fields out in a grid. */}
-        <div className="p-2.5 sm:p-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0 max-lg:sticky max-lg:top-0 max-lg:z-10">
-          {/* Phones: row 1 = Search + Filters, row 2 = Status | Source halves
-              (order-2), labels screen-reader only — the boxes' own
-              placeholders / "All Status" / "All Sources" name them. */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:gap-x-3">
-            <div className="flex items-center gap-1.5 flex-1 min-w-0 max-sm:min-w-[calc(100%-5.5rem)] sm:flex-none sm:w-auto">
-              <label className="max-sm:sr-only tf-caption whitespace-nowrap shrink-0">
-                Search
-              </label>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Name or email..."
-                className="tf-input w-auto flex-1 sm:flex-none sm:w-44 px-2.5"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5 max-sm:order-2 max-sm:w-[calc(50%-0.25rem)] sm:w-auto">
-              <label className="max-sm:sr-only tf-caption whitespace-nowrap shrink-0">
-                Status
-              </label>
-              <FilterSelect
-                value={statusFilter}
-                onChange={(v) => setStatusFilter(v)}
-                ariaLabel="Status"
-                className="flex-1 min-w-0 sm:flex-none sm:w-32 h-9 px-2.5 sm:px-2.5 rounded-lg sm:rounded-lg text-sm"
+        {/* Toolbar — the app's shared ListToolbar, the same search / dropdown /
+            More Filters / Reset as Job Openings. Side padding matches the table
+            wrapper below (px-3 sm:px-5) so the Select All checkbox sits on the
+            same vertical line as the table's header checkbox. */}
+        <div className="px-3 sm:px-5 pt-2.5 sm:pt-3 pb-0.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0 max-lg:sticky max-lg:top-0 max-lg:z-10">
+          <ListToolbar
+            searchValue={searchQuery}
+            onSearchChange={(v) => { setSearchQuery(v); setPage(1); }}
+            searchPlaceholder="Search name or email..."
+            controlsFollowSearch
+            compactOnMobile
+            /* Select All — the Job Openings "Select All ▾" look: one bordered
+               pill holding a checkbox (this page) and the ▾ menu (this page /
+               every page / clear). Border 1px + 11px left padding puts the
+               checkbox 12px in — the header cell's own px-3 — so the two line
+               up. Only failed / cancelled batch rows can be ticked. */
+            beforeSearch={canManageBatch ? (
+              <div
+                className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border pl-[11px] pr-1 transition-colors ${
+                  picked.length
+                    ? 'bg-brand-blue/10 border-brand-blue/30'
+                    : 'bg-brand-blue/5 border-brand-blue/10 hover:bg-brand-blue/10'
+                }`}
+                title={allPickable.length ? undefined : 'Only failed or cancelled resumes can be selected'}
+              >
+                <input
+                  type="checkbox"
+                  className="tf-checkbox"
+                  aria-label={allPagePicked ? 'Deselect all on this page' : 'Select all on this page'}
+                  disabled={!pagePickable.length}
+                  checked={allPagePicked}
+                  ref={(el) => { if (el) el.indeterminate = somePagePicked; }}
+                  onChange={() => (allPagePicked ? deselectPage() : selectPage())}
+                />
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild disabled={!allPickable.length}>
+                    <button
+                      type="button"
+                      className={`inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-sm font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                        picked.length ? 'text-brand-blue' : 'text-gray-700 hover:text-brand-blue dark:text-slate-300'
+                      }`}
+                    >
+                      <span className="tabular-nums">{picked.length ? `${picked.length} Selected` : 'Select All'}</span>
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="!z-[10070] w-64 max-w-[calc(100vw-2rem)] !rounded-lg !bg-white !px-0 !py-1 !shadow-lg dark:!bg-slate-900">
+                    <DropdownMenuItem
+                      className="!rounded-none !px-3 !py-2 text-sm text-gray-700 dark:text-slate-200"
+                      role="menuitemcheckbox"
+                      aria-checked={allPagePicked}
+                      disabled={!pagePickable.length}
+                      onSelect={() => (allPagePicked ? deselectPage() : selectPage())}
+                    >
+                      {allPagePicked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                      Select all on this page ({pagePickable.length})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="!rounded-none !px-3 !py-2 text-sm text-gray-700 dark:text-slate-200"
+                      role="menuitemcheckbox"
+                      aria-checked={allPicked}
+                      onSelect={() => (allPicked ? clearSelection() : selectAllPickable())}
+                    >
+                      {allPicked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                      Select all resumes ({allPickable.length})
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="!rounded-none !px-3 !py-2 text-sm text-gray-700 dark:text-slate-200"
+                      disabled={!picked.length}
+                      onSelect={clearSelection}
+                    >
+                      <X className="w-4 h-4 text-gray-500" />
+                      Clear selection
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : undefined}
+            /* Source — inline with Search, as Location / Industry on Job
+               Openings (SearchableSelect). Shared Database is listed only for
+               users with access to it. Status is the pill row above. */
+            leadingActions={
+              <SearchableSelect
+                className="w-full sm:w-44"
+                value={sourceFilter === 'all' ? '' : sourceFilter}
+                onChange={(v) => { setSourceFilter(v || 'all'); setPage(1); }}
                 options={[
-                  { value: 'all', label: 'All Status' },
-                  { value: 'queued', label: 'Queued' },
-                  { value: 'in-progress', label: 'In Progress' },
-                  { value: 'completed', label: 'Completed' },
-                  { value: 'skipped', label: 'Skipped' },
-                  { value: 'failed', label: 'Failed' },
-                  { value: 'cancelled', label: 'Cancelled' },
-                ]}
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5 max-sm:order-2 max-sm:w-[calc(50%-0.25rem)] sm:w-auto">
-              <label className="max-sm:sr-only tf-caption whitespace-nowrap shrink-0">
-                Source
-              </label>
-              <FilterSelect
-                value={sourceFilter}
-                onChange={(v) => setSourceFilter(v)}
-                ariaLabel="Source"
-                className="flex-1 min-w-0 sm:flex-none sm:w-32 h-9 px-2.5 sm:px-2.5 rounded-lg sm:rounded-lg text-sm"
-                options={[
-                  { value: 'all', label: 'All Sources' },
-                  /* Shared Database option: always listed, greyed out (disabled)
-                     when the user has no Internal DB access. */
-                  { value: 'internal-db', label: 'Shared Database', disabled: !hasInternalDBAccess, title: !hasInternalDBAccess ? 'You do not have permission to view the Shared Database' : undefined },
+                  ...(hasInternalDBAccess ? [{ value: 'internal-db', label: 'Shared Database' }] : []),
                   { value: 'my-resumes', label: 'My Resumes' },
                 ]}
+                allLabel="All Sources"
+                placeholder="All Sources"
+                searchPlaceholder="Search source..."
+                ariaLabel="Filter by source"
               />
-            </div>
-
-            {/* Filters - the less-used controls live behind this toggle rather
-                than stretching the toolbar: the three above answer most
-                questions, and these narrow an already-filtered list. */}
-            {/* Active filter tags: a popup on hovering Filters (laptop / desktop). */}
-            <FilterChipsHover chips={activeFilterChips}>
-            <button
-              type="button"
-              onClick={() => setShowMoreFilters(v => !v)}
-              aria-expanded={showMoreFilters}
-              className={`inline-flex h-9 items-center gap-1.5 px-2.5 rounded-lg border text-sm font-medium whitespace-nowrap transition-colors ${
-                showMoreFilters || extraFiltersApplied
-                  ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
-                  : 'border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:border-brand-blue/40 hover:text-brand-blue'
-              }`}
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              {/* Icon-only on phones, so the search box keeps its row. */}
-              <span className="max-sm:sr-only">Filters</span>
-              {activeExtraFilterCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-blue text-white text-2xs font-semibold">
-                  {activeExtraFilterCount}
+            }
+            onToggleFilters={() => setShowMoreFilters(v => !v)}
+            filterChips={activeFilterChips}
+            filtersOpen={showMoreFilters}
+            activeFilterCount={activeExtraFilterCount}
+            filtersApplied={extraFiltersApplied}
+            onClearFilters={clearAllFilters}
+            /* What the selection can do — after More Filters / Reset, pushed
+               right; a full row of its own on phones. */
+            afterFiltersActions={picked.length > 0 ? (
+              <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+                <span className="tf-meta whitespace-nowrap">
+                  <b className="text-gray-900 dark:text-slate-100 tabular-nums">{picked.length}</b> selected
+                  {hiddenPicked > 0 && <> · <span className="text-warning-strong">{hiddenPicked} not shown here</span></>}
                 </span>
-              )}
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showMoreFilters ? 'rotate-180' : ''}`} />
-            </button>
-            </FilterChipsHover>
-            {/* Reset — beside Filters, as on Job Openings. */}
-            {anyFiltersApplied && <ToolbarResetButton onClick={clearAllFilters} />}
-          </div>
-
-          {showMoreFilters && (
-              <div className="mt-2 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.03] p-2.5 sm:p-3">
-                <div className="tf-grid-4 [&>div]:min-w-0">
-                  {/* Each select appears only when the rows actually carry that
-                      field - a popup for a single scoring run has no versions
-                      to choose between - and its options are read off the rows
-                      themselves. */}
-                  {scoredByOptions.length > 0 && (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <label className="tf-caption whitespace-nowrap shrink-0">
-                        Scored By
-                      </label>
-                      <FilterSelect
-                        value={scoredByFilter}
-                        onChange={(v) => setScoredByFilter(v)}
-                        ariaLabel="Scored By"
-                        className="w-full sm:w-full min-w-0 px-2.5 sm:px-2.5 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-xs"
-                        options={[
-                          { value: 'all', label: 'All Scorers' },
-                          ...scoredByOptions.map(name => ({ value: name, label: name })),
-                        ]}
-                      />
-                    </div>
-                  )}
-
-                  {jobVersionOptions.length > 0 && (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <label className="tf-caption whitespace-nowrap shrink-0">
-                        Job Version
-                      </label>
-                      <FilterSelect
-                        value={jobVersionFilter}
-                        onChange={(v) => setJobVersionFilter(v)}
-                        ariaLabel="Job Version"
-                        className="w-full sm:w-full min-w-0 px-2.5 sm:px-2.5 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-xs"
-                        options={[
-                          { value: 'all', label: 'All Versions' },
-                          ...jobVersionOptions.map(version => ({ value: String(version), label: `v${version}` })),
-                        ]}
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2 min-w-0">
-                    <label className="tf-caption whitespace-nowrap shrink-0">
-                      Scored From
-                    </label>
-                    <DateField
-                      value={scoredFrom}
-                      max={scoredTo || undefined}
-                      onChange={setScoredFrom}
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 min-w-0">
-                    <label className="tf-caption whitespace-nowrap shrink-0">
-                      Scored To
-                    </label>
-                    <DateField
-                      value={scoredTo}
-                      min={scoredFrom || undefined}
-                      onChange={setScoredTo}
-                    />
-                  </div>
-                </div>
-
-                {/* Active filter tags as the panel's last line — phones / tablets only. */}
-                <FilterChipsPanelLine chips={activeFilterChips} />
+                {hiddenPicked > 0 && (
+                  <Button variant="secondary" size="sm" onClick={() => { setStatusFilter('selected'); setSearchQuery(''); setPage(1); }} title="Show only the resumes you ticked">
+                    Show selected
+                  </Button>
+                )}
+                <Button variant="secondary" size="sm" onClick={clearSelection}>Clear</Button>
+                <Button variant="primary" size="sm" disabled={batchBusy !== null} onClick={() => askRetry(picked)}>
+                  <RotateCcw className="w-3.5 h-3.5" />Retry selected ({picked.length})
+                </Button>
               </div>
-          )}
+            ) : undefined}
+          />
 
-          {/* Clear Filters moved up beside the Filters button as Reset (Job Openings). */}
+          {/* More Filters — the Job Openings panel: label above each control,
+              SearchableSelect / DateField, four to a row on desktop. Each select
+              appears only when the rows carry that field. */}
+          {showMoreFilters && (
+            <div className="mb-3 pt-3 border-t border-brand-blue/10">
+              <div className="tf-grid-4 [&>div]:min-w-0">
+                {scoredByOptions.length > 0 && (
+                  <div>
+                    <label className="block tf-label mb-1.5">Scored By</label>
+                    <SearchableSelect
+                      value={scoredByFilter === 'all' ? '' : scoredByFilter}
+                      onChange={(v) => { setScoredByFilter(v || 'all'); setPage(1); }}
+                      options={scoredByOptions.map(name => ({ value: name, label: name }))}
+                      allLabel="All Scorers"
+                      placeholder="All Scorers"
+                      searchPlaceholder="Search scorer..."
+                      ariaLabel="Filter by scored by"
+                    />
+                  </div>
+                )}
+                {jobVersionOptions.length > 0 && (
+                  <div>
+                    <label className="block tf-label mb-1.5">Job Version</label>
+                    <SearchableSelect
+                      value={jobVersionFilter === 'all' ? '' : jobVersionFilter}
+                      onChange={(v) => { setJobVersionFilter(v || 'all'); setPage(1); }}
+                      options={jobVersionOptions.map(version => ({ value: String(version), label: `v${version}` }))}
+                      allLabel="All Versions"
+                      placeholder="All Versions"
+                      searchPlaceholder="Search version..."
+                      ariaLabel="Filter by job version"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block tf-label mb-1.5">Scored From</label>
+                  <DateField value={scoredFrom} max={scoredTo || undefined} onChange={(v) => { setScoredFrom(v); setPage(1); }} />
+                </div>
+                <div>
+                  <label className="block tf-label mb-1.5">Scored To</label>
+                  <DateField value={scoredTo} min={scoredFrom || undefined} onChange={(v) => { setScoredTo(v); setPage(1); }} />
+                </div>
+              </div>
+              {/* Active filter tags as the panel's last line — phones / tablets only. */}
+              <FilterChipsPanelLine chips={activeFilterChips} />
+            </div>
+          )}
         </div>
+
+        {/* Failure summary — failed resumes grouped by reason, so a run with
+            many failures is read in one glance, each reason with Show (filter
+            to Failed) and, where the batch can retry them, Retry N. */}
+        {failGroups.length > 0 && (
+          <div className="mx-3 mt-3 shrink-0 rounded-lg bg-destructive-subtle/40 ring-1 ring-destructive-line sm:mx-5">
+            <div className="flex items-center gap-2 px-3 py-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-destructive" />
+              <span className="tf-row-title flex-1">
+                {failedCount} failed — {failGroups.length} reason{failGroups.length === 1 ? '' : 's'}
+              </span>
+              <button type="button" className="tf-meta hover:text-brand-blue hover:underline" onClick={() => setShowFailSummary(v => !v)}>
+                {showFailSummary ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {showFailSummary && (
+              <ul className="max-h-40 overflow-y-auto divide-y divide-destructive-line/60 border-t border-destructive-line/60">
+                {failGroups.map(group => {
+                  const retryable = group.items.filter(canPick);
+                  return (
+                    <li key={group.reason} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                      <span className="w-10 shrink-0 text-sm font-semibold tabular-nums text-destructive">{group.items.length}</span>
+                      <p className="tf-body min-w-0 flex-1 [overflow-wrap:anywhere]">{group.reason}</p>
+                      <Button variant="secondary" size="sm" className="!h-7 text-xs" onClick={() => { setStatusFilter('failed'); setPage(1); }}>Show</Button>
+                      {retryable.length > 0 && (
+                        <Button variant="primary" size="sm" className="!h-7 text-xs" disabled={batchBusy !== null} onClick={() => askRetry(retryable)}>
+                          <RotateCcw className="w-3 h-3" />Retry {retryable.length}
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* Table / Cards */}
         {/* pt lives on the children so the sticky table header can pin flush to the scrollport top */}
@@ -1191,11 +1326,25 @@ export default function BulkScoringProgressModal({
                 <table className="w-full">
                   {/* One job (the header names it — JD ID, title, version):
                       only Job Version stays as a column. Several jobs: Job ID
-                      and Job Title too. Order: Candidate, Status, Score out of
-                      10, Match Status, Job Version, Resume Version, Source,
-                      Scored By / Date, Actions. */}
+                      and Job Title too. Order: Candidate, Status, Match Status
+                      (score + verdict), Job Version, Resume Version, Source,
+                      Scored Date, Scored By, Actions. */}
                   <thead className="sticky top-0 z-10">
                     <tr>
+                      {canManageBatch && (
+                        <th className="tf-th-cell w-10 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">
+                          <input
+                            type="checkbox"
+                            className="tf-checkbox"
+                            aria-label={allPagePicked ? 'Deselect all on this page' : 'Select all on this page'}
+                            title={pagePickable.length ? undefined : 'Only failed or cancelled resumes can be selected'}
+                            disabled={!pagePickable.length}
+                            checked={allPagePicked}
+                            ref={(el) => { if (el) el.indeterminate = somePagePicked; }}
+                            onChange={() => (allPagePicked ? deselectPage() : selectPage())}
+                          />
+                        </th>
+                      )}
                       {showJobIdTitleColumns && (
                         <>
                           <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job ID</th>
@@ -1204,12 +1353,12 @@ export default function BulkScoringProgressModal({
                       )}
                       <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate</th>
                       <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
-                      {showScoreColumn && <th className="tf-th-cell text-center tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Score out of 10</th>}
                       <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Status</th>
                       {showJobColumns && <th className="tf-th-cell text-center tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Version</th>}
                       <th className="tf-th-cell text-center tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Resume Version</th>
                       <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
-                      <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">{showScoredByColumn ? 'Scored By / Date' : 'Scored Date'}</th>
+                      <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Scored Date</th>
+                      <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Scored By</th>
                       <th className="tf-th-cell text-left tf-th bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700 tf-sticky-col">Actions</th>
                     </tr>
                   </thead>
@@ -1226,8 +1375,21 @@ export default function BulkScoringProgressModal({
                         onClick={canViewResult(item) ? () => onViewResult!(item) : undefined}
                         className={`border-b border-gray-100 dark:border-slate-700/60 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${
                           index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800/50'
-                        } ${canViewResult(item) ? 'cursor-pointer' : ''}`}
+                        } ${canViewResult(item) ? 'cursor-pointer' : ''} ${selected.has(item.id) ? '!bg-brand-blue/[0.05]' : ''}`}
                       >
+                        {canManageBatch && (
+                          <td className="tf-td w-10" onClick={(e) => e.stopPropagation()}>
+                            {canPick(item) && (
+                              <input
+                                type="checkbox"
+                                className="tf-checkbox"
+                                aria-label={`Select ${item.candidateName}`}
+                                checked={selected.has(item.id)}
+                                onChange={() => togglePicked(item.id)}
+                              />
+                            )}
+                          </td>
+                        )}
                         {showJobIdTitleColumns && (
                           <>
                             <td className="tf-td whitespace-nowrap">
@@ -1241,7 +1403,19 @@ export default function BulkScoringProgressModal({
                         {/* 1. Candidate */}
                         <td className="tf-td whitespace-nowrap">
                           <div className="flex flex-col gap-1">
-                            <div className="tf-row-name truncate max-w-[200px]" title={item.candidateName}>{item.candidateName}</div>
+                            {/* The name opens the resume (the eye opens the score table). */}
+                            {item.resumeId ? (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); openResume(item.resumeId); }}
+                                className="tf-row-name truncate max-w-[200px] text-left hover:text-brand-blue hover:underline"
+                                title={`Open ${item.candidateName}'s resume`}
+                              >
+                                {item.candidateName}
+                              </button>
+                            ) : (
+                              <div className="tf-row-name truncate max-w-[200px]" title={item.candidateName}>{item.candidateName}</div>
+                            )}
                             {item.email && (
                               <div className="tf-meta truncate max-w-[200px]" title={item.email}>{item.email}</div>
                             )}
@@ -1260,7 +1434,7 @@ export default function BulkScoringProgressModal({
                           <div className="flex flex-col gap-1">
                             <span className={`${TABLE_BADGE} ${getStatusBadgeClass(item.status)}`}>
                               {getStatusIcon(item.status)}
-                              {item.status}
+                              {statusLabel(item.status)}
                             </span>
                             {item.status === 'Failed' && (
                               <div className="flex items-start gap-1 tf-error mt-1 max-w-[280px] whitespace-normal break-words">
@@ -1270,20 +1444,17 @@ export default function BulkScoringProgressModal({
                             )}
                           </div>
                         </td>
-                        {/* 3. Score out of 10 — the Match Status badge's colours,
-                            so the number and the verdict read as one. */}
-                        {showScoreColumn && (
-                          <td className="tf-td whitespace-nowrap text-center">
-                            {item.score !== undefined && item.matchResult ? (
-                              <span className={`${SCORE_CELL_TEXT} ${SCORE_TEXT_CLASS[item.matchResult]}`}>{formatOverallScoreValue(item.overallRating10, item.score)}</span>
-                            ) : (
-                              <span className="tf-body-muted">&mdash;</span>
-                            )}
-                          </td>
-                        )}
-                        {/* 4. Match Status */}
+                        {/* 3. Match Status — the mark (score out of 10, in the
+                            verdict's colour) with a small verdict badge beside it. */}
                         <td className="tf-td whitespace-nowrap">
-                          {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : <span className="tf-body-muted">Pending</span>}
+                          {item.matchResult ? (
+                            <span className="inline-flex flex-col items-start gap-1">
+                              {item.score !== undefined && (
+                                <span className={`${SCORE_CELL_TEXT} ${SCORE_TEXT_CLASS[item.matchResult]}`}>{formatOverallScore(item.overallRating10, item.score)}</span>
+                              )}
+                              {getMatchResultBadge(item.matchResult, item.score, 'sm')}
+                            </span>
+                          ) : <span className="tf-body-muted">Pending</span>}
                         </td>
                         {/* Job Version — the job itself is in the header. */}
                         {showJobColumns && (
@@ -1310,34 +1481,33 @@ export default function BulkScoringProgressModal({
                             {item.source}
                           </span>
                         </td>
-                        {/* 7. Scored By / Date — who, then when (date · time). */}
+                        {/* 7. Scored Date — date, then time. */}
                         <td className="tf-td whitespace-nowrap">
                           {scoredAt ? (
                             <div className="tf-body">
-                              {showScoredByColumn && (
-                                <div className="tf-row-name">{item.scoredBy || '-'}</div>
-                              )}
-                              <div className={showScoredByColumn ? 'text-xs text-gray-500 dark:text-slate-500' : 'font-medium'}>
-                                {scoredAt.date}
-                                {showScoredByColumn ? <> &middot; {scoredAt.time}</> : null}
-                              </div>
-                              {!showScoredByColumn && (
-                                <div className="tf-meta">{scoredAt.time}</div>
-                              )}
+                              <div className="font-medium">{scoredAt.date}</div>
+                              <div className="tf-meta">{scoredAt.time}</div>
                             </div>
                           ) : (
                             <span className="tf-body-muted">Pending</span>
                           )}
                         </td>
+                        {/* 8. Scored By — who ran it (a user, or the engine). */}
+                        <td className="tf-td whitespace-nowrap">
+                          {item.scoredBy
+                            ? <div className="tf-row-name truncate max-w-[160px]" title={item.scoredBy}>{item.scoredBy}</div>
+                            : <span className="tf-body-muted">&mdash;</span>}
+                        </td>
                         <td className="tf-td whitespace-nowrap tf-sticky-col">
                           <div className="flex items-center gap-2">
-                            {item.resumeId && (
+                            {/* Eye — only once scored: opens the score table. */}
+                            {item.status === 'Scored successfully' && item.resumeId && (
                               <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={(e) => { e.stopPropagation(); viewItem(item); }}
-                                aria-label={viewTitle}
-                                title={viewTitle}
+                                onClick={(e) => { e.stopPropagation(); setScoreTableItem(item); }}
+                                aria-label={`View ${item.candidateName}'s score table`}
+                                title="View score table"
                                 className="!h-8 !w-8 !px-0"
                               >
                                 <Eye className="w-4 h-4" />
@@ -1355,7 +1525,7 @@ export default function BulkScoringProgressModal({
                                 {retryingItems.has(item.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Retrying...</> : <><RotateCcw className="w-3 h-3" />Retry</>}
                               </Button>
                             )}
-                            {!item.resumeId && !(onRetryFailed && item.status === 'Failed') && (
+                            {item.status !== 'Scored successfully' && !batchRowAction(item) && !(!batchId && onRetryFailed && item.status === 'Failed') && (
                               <span className="tf-body-muted">&mdash;</span>
                             )}
                           </div>
@@ -1374,13 +1544,23 @@ export default function BulkScoringProgressModal({
                   <div
                     key={item.id}
                     onClick={canViewResult(item) ? () => onViewResult!(item) : undefined}
-                    className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-3 sm:p-4 shadow-sm ${canViewResult(item) ? 'cursor-pointer' : ''}`}
+                    className={`bg-white dark:bg-slate-900 border rounded-xl p-3 sm:p-4 shadow-sm ${selected.has(item.id) ? 'border-brand-blue/40 ring-1 ring-brand-blue/20' : 'border-gray-200 dark:border-slate-700'} ${canViewResult(item) ? 'cursor-pointer' : ''}`}
                   >
                     {/* Top row: job / version info + Status chip; then the name
                         and email on their own full-width lines (beside the chip
                         a 320px card left the name a one-word column). */}
                     <div className="mb-2">
                       <div className="flex items-center justify-between gap-2 mb-1">
+                        {canPick(item) && (
+                          <input
+                            type="checkbox"
+                            className="tf-checkbox shrink-0"
+                            aria-label={`Select ${item.candidateName}`}
+                            checked={selected.has(item.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => togglePicked(item.id)}
+                          />
+                        )}
                         <div className="min-w-0 flex-1">
                         {showJobColumns && (
                           <div className="flex flex-wrap items-center gap-1.5 tf-meta">
@@ -1401,11 +1581,22 @@ export default function BulkScoringProgressModal({
                         </div>
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border flex-shrink-0 whitespace-nowrap ${getStatusBadgeClass(item.status)}`}>
                           {getStatusIcon(item.status)}
-                          <span className="inline">{item.status}</span>
+                          <span className="inline">{statusLabel(item.status)}</span>
                         </span>
                       </div>
                       <div className="min-w-0">
-                        <div className="tf-row-name [overflow-wrap:anywhere]">{item.candidateName}</div>
+                        {item.resumeId ? (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openResume(item.resumeId); }}
+                            className="tf-row-name [overflow-wrap:anywhere] text-left hover:text-brand-blue hover:underline"
+                            title={`Open ${item.candidateName}'s resume`}
+                          >
+                            {item.candidateName}
+                          </button>
+                        ) : (
+                          <div className="tf-row-name [overflow-wrap:anywhere]">{item.candidateName}</div>
+                        )}
                         {item.email && (
                           <div className="tf-meta [overflow-wrap:anywhere]">{item.email}</div>
                         )}
@@ -1443,7 +1634,7 @@ export default function BulkScoringProgressModal({
                           </dd>
                         </>
                       )}
-                      {showScoredByColumn && item.scoredBy && (
+                      {item.scoredBy && (
                         <>
                           <dt className="text-gray-500 dark:text-slate-500">Scored by</dt>
                           <dd className="text-gray-900 dark:text-slate-100 [overflow-wrap:anywhere]" title={item.scoredBy}>{item.scoredBy}</dd>
@@ -1452,29 +1643,28 @@ export default function BulkScoringProgressModal({
                       {item.matchResult && (
                         <>
                           <dt className="text-gray-500 dark:text-slate-500">Match</dt>
-                          <dd className="min-w-0">{getMatchResultBadge(item.matchResult, item.score)}</dd>
-                        </>
-                      )}
-                      {showScoreColumn && item.score !== undefined && item.matchResult && (
-                        <>
-                          <dt className="text-gray-500 dark:text-slate-500">Score</dt>
-                          <dd className={`font-semibold ${SCORE_TEXT_CLASS[item.matchResult]}`}>{formatOverallScore(item.overallRating10, item.score)}</dd>
+                          <dd className="min-w-0 inline-flex flex-col items-start gap-1">
+                            {item.score !== undefined && (
+                              <span className={`font-semibold tabular-nums ${SCORE_TEXT_CLASS[item.matchResult]}`}>{formatOverallScore(item.overallRating10, item.score)}</span>
+                            )}
+                            {getMatchResultBadge(item.matchResult, item.score, 'sm')}
+                          </dd>
                         </>
                       )}
                     </dl>
-                    {/* Footer: View / Retry */}
-                    {(item.resumeId || (onRetryFailed && item.status === 'Failed') || batchRowAction(item)) && (
+                    {/* Footer: View (once scored → score table) / Cancel / Retry */}
+                    {((item.status === 'Scored successfully' && item.resumeId) || (!batchId && onRetryFailed && item.status === 'Failed') || batchRowAction(item)) && (
                     <div className="flex items-center justify-between gap-2 pt-1 mt-2">
-                      {item.resumeId && (
+                      {item.status === 'Scored successfully' && item.resumeId && (
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={(e) => { e.stopPropagation(); viewItem(item); }}
-                          aria-label={viewTitle}
-                          title={viewTitle}
+                          onClick={(e) => { e.stopPropagation(); setScoreTableItem(item); }}
+                          aria-label={`View ${item.candidateName}'s score table`}
+                          title="View score table"
                           icon={<Eye className="w-3 h-3" />}
                         >
-                          View
+                          View score
                         </Button>
                       )}
                       {batchRowAction(item)}
@@ -1605,6 +1795,97 @@ export default function BulkScoringProgressModal({
           The {batchWaitingCount} still waiting will not be scored and are not charged — you can score them later with Retry.
         </p>
       </AppModal>
+      {/* Eye → the candidate's score table, over this popup (z-[60]). The batch
+          row's score id finds the exact score; without one, ScoreTableModal
+          falls back to the candidate's resume id on that JD. */}
+      {scoreTableItem && (() => {
+        const scoreId = batchItemByResume.get(scoreTableItem.resumeId)?.score_id;
+        const version = scoreTableItem.jobVersion ?? headerVersions[0] ?? null;
+        return (
+          <ScoreTableModal
+            resume={{
+              id: scoreId || scoreTableItem.id,
+              resumeId: scoreTableItem.resumeId,
+              jdId: scoreTableItem.jobId,
+              candidateName: scoreTableItem.candidateName,
+              email: scoreTableItem.email || '',
+              phone: '',
+              matchStatus: scoreTableItem.matchResult || '',
+              scorePercentage: scoreTableItem.score as number,
+              overallRating10: scoreTableItem.overallRating10,
+              scoredDate: scoreTableItem.scoredDateTime ? scoreTableItem.scoredDateTime.toISOString() : '',
+              scoredBy: scoreTableItem.scoredBy || '',
+              resumeVersion: scoreTableItem.resumeVersion,
+              jobVersion: version ?? undefined,
+            }}
+            jobId={scoreTableItem.jobId}
+            jobCode={scoreTableItem.jobCode}
+            jobVersion={version}
+            jobTitle={scoreTableItem.jobTitle}
+            header={{ jobVersion: version, resumeVersion: scoreTableItem.resumeVersion ?? null }}
+            onClose={() => setScoreTableItem(null)}
+          />
+        );
+      })()}
+      {/* Retry confirm — what happens to each kind of row, and the units it uses. */}
+      {(() => {
+        const ids = confirmRetryIds ?? [];
+        const rows = progressData.filter(item => ids.includes(item.resumeId));
+        const failedN = rows.filter(item => item.status === 'Failed').length;
+        const cancelledN = rows.filter(item => item.status === 'Cancelled').length;
+        const n = ids.length;
+        const available = rsQuota.availableUnits;
+        const known = !rsQuota.isUnlimited && available !== null && available >= 0;
+        const short = known && n > available!;
+        return (
+          <AppModal
+            open={!!confirmRetryIds}
+            onCancel={() => { if (!batchBusy) setConfirmRetryIds(null); }}
+            cancelLabel="Not now"
+            size="sm"
+            tone="brand"
+            icon={<Coins className="w-5 h-5" />}
+            title={`Score ${n} resume${n === 1 ? '' : 's'} again?`}
+            actions={[{
+              label: `Retry ${n}`,
+              variant: 'primary',
+              disabled: short,
+              loading: batchBusy === 'retry:all' || (n === 1 && batchBusy === `retry:${ids[0]}`),
+              onClick: async () => {
+                await retryBatchRows(ids);
+                setConfirmRetryIds(null);
+                setSelected(new Set());
+                if (statusFilter === 'selected') setStatusFilter('all');
+              },
+            }]}
+          >
+            <ul className="space-y-1.5">
+              {failedN > 0 && (
+                <li className="tf-body-secondary flex gap-2">
+                  <span className="font-semibold tabular-nums text-destructive">{failedN}</span>failed earlier — scored once more
+                </li>
+              )}
+              {cancelledN > 0 && (
+                <li className="tf-body-secondary flex gap-2">
+                  <span className="font-semibold tabular-nums text-gray-600 dark:text-slate-300">{cancelledN}</span>cancelled — scored now
+                </li>
+              )}
+            </ul>
+            <div className={`mt-4 rounded-lg px-3 py-2.5 ring-1 ${short ? 'bg-destructive-subtle ring-destructive-line' : 'bg-brand-blue/5 ring-brand-blue/15'}`}>
+              <p className="tf-body flex items-center gap-2">
+                <Coins className="w-4 h-4 text-brand-blue" />
+                Uses up to <b>{n}</b> unit{n === 1 ? '' : 's'}
+                {rsQuota.isUnlimited ? ' · unlimited plan' : known ? ` · ${available} available` : ''}
+              </p>
+              <p className={`tf-meta mt-0.5 ${short ? '!text-destructive' : ''}`}>
+                {short
+                  ? `Not enough units — you need ${n - available!} more. Add units from Subscription.`
+                  : 'Units are used only for resumes that finish scoring.'}
+              </p>
+            </div>
+          </AppModal>
+        );
+      })()}
     </div>
   );
 }

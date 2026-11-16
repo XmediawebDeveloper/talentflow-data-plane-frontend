@@ -1,5 +1,6 @@
 import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, ArchiveRestore, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, Cpu, User, ExternalLink, Info, Layers, Loader2, Monitor, Ban, Sliders, Globe, Zap, Star, Shield } from 'lucide-react';
 import { Fragment, useState, useMemo, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useBackgroundWorkRefresh } from '@/lib/backgroundWorkEvents';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -1166,6 +1167,9 @@ export default function AssessmentDetailsView({
       onRefresh?.(),
     ]);
   };
+  /* Invites go out in the background after they are queued: re-read the
+     invite table, its summary and the header counts as they actually go out. */
+  useBackgroundWorkRefresh(() => { void reloadInvites(); }, ['invite']);
 
   /* Opens the candidate's Result Details — the same route and the same
      Prev/Next list the Recent Activity tab hands it, so paging between

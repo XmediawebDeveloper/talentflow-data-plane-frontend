@@ -1,11 +1,9 @@
-import { Sparkles, CheckCircle2, Loader2, AlertCircle, Lightbulb, Minus, Check } from 'lucide-react';
-import { useState, useRef, useEffect, useContext } from 'react';
+import { Sparkles, CheckCircle2, Loader2, AlertCircle, Lightbulb, Minus } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import ScoringProgressContext from '@/contexts/ScoringProgressContext';
-import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
-import { isBulkInviteActive } from '@/lib/services/bulkInviteService';
+import { removeBackgroundTask, upsertBackgroundTask } from '@/lib/backgroundTasks';
 
 interface AITalentMatchProgressPanelProps {
   jobTitle: string;
@@ -44,13 +42,31 @@ export default function AITalentMatchProgressPanel({
     onComplete(results);
   };
 
-  /* The corner's other widgets (scoring, bulk invite) keep their spot; the
-     icon stacks above them when one is showing. */
-  const scoring = useContext(ScoringProgressContext);
-  const bulk = useOptionalBulkInviteProgress();
-  const cornerTaken = (!!scoring && scoring.activeScoringJobs.length > 0 && !scoring.isMainPanelOpen)
-    || (!!bulk && bulk.widget !== 'hidden' && bulk.jobs.some((j) => !j.dismissed && !bulk.inPopupIds.has(j.job_id)
-      && (bulk.widget === 'mini' || isBulkInviteActive(j) || j.status === 'paused' || !!j.stalled)));
+  /* Minimized: a row in the shared "Background tasks" dock (bottom-right,
+     beside scoring runs and invite sends) instead of a round icon of its own.
+     The row's Open reopens this popup — or, once matching finished, hands the
+     held results over. Removed when the popup reopens, errors or unmounts. */
+  const taskId = `talent-match:${jobId}`;
+  const openFromDock = useRef<() => void>(() => {});
+  useEffect(() => {
+    openFromDock.current = () => {
+      if (heldResults) { removeBackgroundTask(taskId); handOver(heldResults); }
+      else setView('popup');
+    };
+  });
+  useEffect(() => {
+    if (view !== 'icon' || error) { removeBackgroundTask(taskId); return; }
+    upsertBackgroundTask({
+      id: taskId,
+      kind: 'talent-match',
+      title: jobTitle,
+      pct: heldResults ? 100 : progress,
+      done: !!heldResults,
+      detail: heldResults ? `${heldResults.length} matching candidate${heldResults.length === 1 ? '' : 's'} found` : undefined,
+      onOpen: () => openFromDock.current(),
+    });
+  }, [view, error, progress, heldResults, jobTitle, taskId]);
+  useEffect(() => () => removeBackgroundTask(taskId), [taskId]);
 
   const minimize = () => {
     if (view !== 'popup') return;
@@ -153,37 +169,8 @@ export default function AITalentMatchProgressPanel({
     );
   }
 
-  // Minimized: the round icon — a ring of the progress, the % (✓ once done)
-  if (view === 'icon') {
-    const done = !!heldResults;
-    const ring = done ? 'var(--raw-22c55e, #22c55e)' : 'var(--raw-ffffff, #ffffff)';
-    const label = done
-      ? `AI matching finished · ${jobTitle} · click to see the results`
-      : `AI matching · ${jobTitle} · ${progress}% · click to open`;
-    return (
-      <button
-        type="button"
-        onClick={() => (heldResults ? handOver(heldResults) : setView('popup'))}
-        aria-label={label}
-        title={label}
-        className={`fixed ${cornerTaken ? 'bottom-[5.5rem]' : 'bottom-6'} right-3 sm:right-6 z-40 h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 focus-visible:ring-offset-2 animate-in fade-in zoom-in-75 duration-200`}
-        style={{ background: `conic-gradient(${ring} ${(done ? 100 : progress) * 3.6}deg, rgba(255,255,255,0.25) 0deg)` }}
-      >
-        <span className="relative flex h-full w-full items-center justify-center rounded-full bg-brand-blue text-white">
-          <Sparkles className="h-5 w-5" />
-          {done ? (
-            <span className="absolute -top-1 -right-1 h-[1.125rem] w-[1.125rem] rounded-full bg-success text-white flex items-center justify-center ring-2 ring-white">
-              <Check className="w-3 h-3" />
-            </span>
-          ) : (
-            <span className="absolute -top-1.5 -right-2 min-w-[1.75rem] h-[1.125rem] px-1 rounded-full bg-white text-brand-blue text-[10px] font-bold leading-[1.125rem] tabular-nums ring-1 ring-brand-blue/20">
-              {progress}%
-            </span>
-          )}
-        </span>
-      </button>
-    );
-  }
+  // Minimized: shown as a row in the Background tasks dock (see above).
+  if (view === 'icon') return null;
 
   const minimizing = view === 'minimizing';
 
