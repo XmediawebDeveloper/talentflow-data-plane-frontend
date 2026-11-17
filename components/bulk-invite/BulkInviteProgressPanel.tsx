@@ -277,9 +277,15 @@ export default function BulkInviteProgressPanel({
   const againCount = (job.retryable_failed ?? 0) + (job.cancelled_unsent ?? 0);
   /* Rows that can be sent again: the server says so per row (`can_retry`). */
   const pickable = canManage ? rows.filter((r) => r.can_retry) : [];
+  // Select All + the checkbox column only when something can actually be
+  // picked (a failed / skipped / cancelled candidate that can be sent again)
+  // - a send where everyone was sent shows no checkboxes at all.
+  const canSelect = canManage && (againCount > 0 || pickable.length > 0);
   const allPagePicked = pickable.length > 0 && pickable.every((r) => pickAll || picked.has(r.id));
   const somePagePicked = !allPagePicked && pickable.some((r) => picked.has(r.id));
-  const pickedCount = pickAll ? againCount : picked.size;
+  // Nothing left to pick (e.g. the rows were sent again meanwhile): no stale
+  // "N selected" / Send again bar for checkboxes that are no longer shown.
+  const pickedCount = !canSelect ? 0 : pickAll ? againCount : picked.size;
   const togglePick = (id: string) => {
     setPickAll(false);
     setPicked((prev) => {
@@ -354,10 +360,10 @@ export default function BulkInviteProgressPanel({
     return 'Waiting in the queue.';
   };
   /* ☐ · S.No · Candidate · Status (+ reason) · Send For · Source · Sent Date · Actions.
-     The checkbox column is there whenever this user can manage the send, so it
-     lines up under the toolbar's Select All. Minimum widths so nothing
+     The checkbox column is there only when something can be picked (canSelect),
+     so it lines up under the toolbar's Select All. Minimum widths so nothing
      overlaps; the list scrolls sideways when the window is narrower still. */
-  const GRID = canManage
+  const GRID = canSelect
     ? 'sm:grid-cols-[1.25rem_2.25rem_minmax(11rem,1.5fr)_minmax(10rem,1.4fr)_9rem_minmax(9rem,1fr)_6.5rem_9rem]'
     : 'sm:grid-cols-[2.25rem_minmax(11rem,1.5fr)_minmax(10rem,1.4fr)_9rem_minmax(9rem,1fr)_6.5rem_9rem]';
   const isInterviewSend = job.kind !== 'assessment';
@@ -480,7 +486,7 @@ export default function BulkInviteProgressPanel({
         searchDebounceMs={300}
         searchPlaceholder="Search by candidate name or email..."
         className="!mb-0"
-        beforeSearch={canManage ? (
+        beforeSearch={canSelect ? (
           <div
             className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border pl-3 pr-1 transition-colors ${
               pickedCount ? 'bg-brand-blue/10 border-brand-blue/30' : 'bg-brand-blue/5 border-brand-blue/10 hover:bg-brand-blue/10'
@@ -565,10 +571,10 @@ export default function BulkInviteProgressPanel({
       {/* A whole page shows at once (no scroll box of its own); the popup
           around it scrolls, and a page change brings the table's top back. */}
       <div ref={listRef} className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-x-auto overflow-y-hidden scroll-mt-4">
-      <ul className={`divide-y divide-gray-100 dark:divide-slate-700/60 ${canManage ? 'sm:min-w-[60rem]' : 'sm:min-w-[58rem]'}`}>
+      <ul className={`divide-y divide-gray-100 dark:divide-slate-700/60 ${canSelect ? 'sm:min-w-[60rem]' : 'sm:min-w-[58rem]'}`}>
         {rows.length > 0 && (
           <li aria-hidden="true" className={`hidden sm:grid ${GRID} gap-3 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-gray-700 dark:text-slate-300 sticky top-0 z-[1]`}>
-            {canManage && (
+            {canSelect && (
               <span className="flex items-center">
                 <input
                   type="checkbox"
@@ -611,7 +617,7 @@ export default function BulkInviteProgressPanel({
             : 'text-gray-700 dark:text-slate-300';
           return (
             <li key={r.id} className={`grid grid-cols-1 ${GRID} gap-x-3 gap-y-1.5 px-3 py-2.5 sm:items-center ${isPicked ? 'bg-brand-blue/[0.04]' : ''}`}>
-              {canManage && (
+              {canSelect && (
                 <span className="hidden sm:flex items-center">
                   {r.can_retry && (
                     <input
@@ -627,7 +633,7 @@ export default function BulkInviteProgressPanel({
               <span className="hidden sm:block text-sm tabular-nums text-gray-500 dark:text-slate-400">{(page - 1) * pageSize + i + 1}</span>
               <div className="flex items-center gap-2.5 min-w-0">
                 {/* Phones: the checkbox sits in front of the name. */}
-                {canManage && r.can_retry && (
+                {canSelect && r.can_retry && (
                   <input
                     type="checkbox"
                     aria-label={`Select ${r.name || r.email}`}

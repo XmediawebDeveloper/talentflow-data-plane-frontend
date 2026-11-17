@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Upload, Loader2, Search, History, X, AlertCircle, ChevronRight, ChevronDown, ArrowLeft, FileText, LayoutGrid, List, Folder, FolderOpen, MapPin, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, UserPlus, Sparkles, Brain, Edit2 } from 'lucide-react';
+import { Plus, Upload, Loader2, Search, History, X, AlertCircle, ChevronRight, ChevronDown, ArrowLeft, FileText, LayoutGrid, List, Folder, FolderOpen, MapPin, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, UserPlus, Sparkles, Brain, Edit2, Layers } from 'lucide-react';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable, { ResumeTableSkeleton } from '@/components/ResumeTable';
@@ -16,6 +16,8 @@ import SearchFilterBarCompact, { getResumeFilterChips } from '@/components/Searc
 import { type FilterChip } from '@/components/ui/filter-chips';
 import { Skeleton } from '@/components/ui/skeleton';
 import FilterSelect from '@/components/ui/filter-select';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { type ResumeVersionFilter, RESUME_VERSION_FILTER_OPTIONS, keepByVersion } from '@/components/resumes/resumeVersionFilter';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import BulkActionsBar from '@/components/BulkActionsBar';
@@ -88,6 +90,8 @@ const CARD_FOLDER_FILTER_OPTIONS: { value: CardFolderFilter; label: string }[] =
   { value: 'empty', label: 'Empty' },
   { value: 'with-subfolders', label: 'Has subfolders' },
 ];
+
+/* Versions dropdown — shared with Shared Database (resumeVersionFilter.tsx). */
 
 interface DragItem {
   id: string;
@@ -944,6 +948,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const appliedSearchQuery = search.appliedQuery;
   const filters = search.filters;
   const [sortBy, setSortBy] = useState('date');
+  const [versionFilter, setVersionFilter] = useState<ResumeVersionFilter>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
@@ -968,6 +973,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [quickViewResume, setQuickViewResume] = useState<Resume | null>(null);
 
   const [allResumesTotal, setAllResumesTotal] = useState(0);
+  // Header badge: the library's own count (falls back to the list's until the first unfiltered load).
+  const libraryResumeTotal = allResumesTotal || totalItems;
   // Mirror of the above that overlapping fetches can read without going through
   // a stale render closure — see the `isUnfiltered` block in fetchData.
   const allResumesTotalRef = useRef(0);
@@ -1110,7 +1117,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     }
 
     // Create signature of params to detect ACTUAL changes (not just reference changes)
-    const currentParams = JSON.stringify({ appliedSearchQuery, filters, selectedFolder, currentPage, itemsPerPage, sortBy });
+    const currentParams = JSON.stringify({ appliedSearchQuery, filters, selectedFolder, currentPage, itemsPerPage, sortBy, versionFilter });
 
     // Skip if params haven't actually changed (prevents loop from object reference changes)
     if (currentParams === lastFetchParamsRef.current) {
@@ -1161,7 +1168,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       console.log('[MyResumes] useEffect - Cleanup (timer cleared)');
       clearTimeout(debounceTimer);
     };
-  }, [appliedSearchQuery, filters, selectedFolder, currentPage, itemsPerPage, sortBy]);
+  }, [appliedSearchQuery, filters, selectedFolder, currentPage, itemsPerPage, sortBy, versionFilter]);
 
   // Handle deep link from notifications
   useEffect(() => {
@@ -1462,15 +1469,31 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
          it asks for exactly what the fetch that just finished loaded. On a
          refresh the restored view usually equals the mount fetch's defaults,
          and this replay was a second identical list + folders round trip. */
-      const fetchKey = JSON.stringify(searchParams);
+      const fetchKey = JSON.stringify({ ...searchParams, versionFilter });
       if (opts?.replay && opts.dedupe && fetchKey === lastCompletedFetchKeyRef.current) {
         console.log('[FETCH] Replay matches the last completed fetch, skipping');
         return;
       }
       lastCompletedFetchKeyRef.current = '';
 
+      /* Versions filter: every matching row, filtered on `version_count`, then
+         this page sliced out — totals describe the filtered set. */
+      const listResumes = async () => {
+        if (versionFilter === 'all') return resumeService.list(searchParams);
+        const all = await fetchAllRows((page_size, page) => resumeService.list({ ...searchParams, page, page_size }));
+        const kept = keepByVersion(all.items || [], versionFilter);
+        const start = (currentPage - 1) * itemsPerPage;
+        return {
+          ...all,
+          items: kept.slice(start, start + itemsPerPage),
+          total: kept.length,
+          total_pages: Math.max(1, Math.ceil(kept.length / itemsPerPage)),
+          total_including_versions: all.total_including_versions,
+        };
+      };
+
       const [resumeResponse, folderResponse] = await Promise.all([
-        resumeService.list(searchParams),
+        listResumes(),
         // Same Uploaded By value the resume list was just sent — so a
         // folder's badge always matches what opening that folder under the
         // same filter actually lists (see folderService.list's own note).
@@ -1537,7 +1560,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
          closure predates the first one's `setAllResumesTotal`, so reading
          state here wrote the badge back to 0 — that's the count going missing
          after a refresh. */
-      const isUnfiltered = Object.keys(searchParams).every(key => BASE_SEARCH_PARAM_KEYS.includes(key));
+      const isUnfiltered = versionFilter === 'all' && Object.keys(searchParams).every(key => BASE_SEARCH_PARAM_KEYS.includes(key));
       if (isUnfiltered) {
         allResumesTotalRef.current = resumeResponse.total;
         setAllResumesTotal(resumeResponse.total);
@@ -1557,6 +1580,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
          When this request was scoped to exactly one folder and nothing else,
          its total IS that folder's listing, so take it over the API's count. */
       const isFolderOnly =
+        versionFilter === 'all' &&
         !!searchParams.folder_id &&
         Object.keys(searchParams).every(
           key => BASE_SEARCH_PARAM_KEYS.includes(key) || key === 'folder_id',
@@ -1592,6 +1616,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       setResumes(convertedResumes);
       setLoadedFolderId(folderId || 'all');
       setTotalItems(resumeResponse.total);
+      /* Library-wide (the server counts every stored file, whatever the
+         filters) — pairs with `allResumesTotal` in the header badge. */
       setTotalIncludingVersions(resumeResponse.total_including_versions);
       setTotalPages(resumeResponse.total_pages);
       setFolders(applyCachedCorrections(rawFolders));
@@ -3034,6 +3060,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     ...(viewMode === 'card' && cardFolderFilter !== 'all' && selectedCardFolderFilterLabel
       ? [{ key: 'folder-filter', label: 'Folder', value: selectedCardFolderFilterLabel, onRemove: () => setCardFolderFilter('all') }]
       : []),
+    /* Versions dropdown: a tag like any filter, so it counts on the Filter
+       badge, shows in the hover / panel tags, and Reset sets it back to
+       All versions (Reset removes every tag it was handed). */
+    ...(versionFilter !== 'all'
+      ? [{
+          key: 'version-filter',
+          label: 'Versions',
+          value: RESUME_VERSION_FILTER_OPTIONS.find(o => o.value === versionFilter)?.label ?? versionFilter,
+          onRemove: () => { setVersionFilter('all'); setCurrentPage(1); },
+        }]
+      : []),
     ...getResumeFilterChips(filters, (newFilters: any) => search.setFilters(newFilters)),
   ];
 
@@ -3143,12 +3180,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
               <h1 className="tf-page-title">My Resume Database</h1>
               <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
-                {totalItems} Resumes
-                {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalItems && (
+                {/* Standard: the whole library, never the filtered view — filters,
+                    search, folder and Versions narrow the list and its pagination,
+                    not this badge. */}
+                {libraryResumeTotal} Resumes
+                {typeof totalIncludingVersions === 'number' && totalIncludingVersions > libraryResumeTotal && (
                   <span
-                    title={`${totalItems.toLocaleString()} resumes + ${(totalIncludingVersions - totalItems).toLocaleString()} older versions = ${totalIncludingVersions.toLocaleString()} stored (counted in Resume Storage)`}
+                    title={`${libraryResumeTotal.toLocaleString()} resumes + ${(totalIncludingVersions - libraryResumeTotal).toLocaleString()} older versions = ${totalIncludingVersions.toLocaleString()} stored (counted in Resume Storage)`}
                   >
-                    {' '}(+{(totalIncludingVersions - totalItems).toLocaleString()} {totalIncludingVersions - totalItems === 1 ? 'version' : 'versions'})
+                    {' '}(+{(totalIncludingVersions - libraryResumeTotal).toLocaleString()} {totalIncludingVersions - libraryResumeTotal === 1 ? 'version' : 'versions'})
                   </span>
                 )}
               </span>
@@ -3284,6 +3324,18 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                     sessionStorage.setItem('resumeNavSource', 'my-resumes');
                     router.push(`/recruitment/resume-view/${resume.id}?${RESUME_VIEW_SOURCE_PARAM}=my-resumes`);
                   }}
+                />
+              </div>
+
+              {/* Versions — right after the search box: all resumes, only those
+                  re-uploaded (v2+), or only first uploads. */}
+              <div className="w-full sm:w-auto xl:w-auto">
+                <ToolbarFilterSelect<ResumeVersionFilter>
+                  label="Versions"
+                  value={versionFilter}
+                  options={RESUME_VERSION_FILTER_OPTIONS}
+                  onChange={(v) => { setVersionFilter(v); setCurrentPage(1); }}
+                  icon={<Layers className="h-4 w-4" />}
                 />
               </div>
 

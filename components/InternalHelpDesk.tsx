@@ -118,6 +118,13 @@ export default function InternalHelpDesk() {
   useEffect(() => {
     const t = searchParams.get('tab');
     if (t === 'unit-disputes' || t === 'requests') setTab(t);
+    // Applied — clear it, so the "Help Desk" crumb / tab buttons don't leave
+    // ?tab=unit-disputes in the address bar (and a refresh reopen it).
+    if (t !== null) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('tab');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search);
+    }
   }, [searchParams]);
 
   // A restored / linked Unit Disputes tab the user can't see → back to My Requests.

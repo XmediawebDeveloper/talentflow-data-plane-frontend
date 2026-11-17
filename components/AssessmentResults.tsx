@@ -1,10 +1,10 @@
-import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, MoreVertical, X, Mail } from 'lucide-react';
+import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, MoreVertical, X } from 'lucide-react';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { assessmentService, jdService } from '@/lib/services';
-import { formatISTDate, formatISTWithSeconds } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate, formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import JobIdBadge from './jobs/JobIdBadge';
 /* The All Assessments table's version pill and ⋮ menu, so this table reads as
    the same table system. */
@@ -2699,8 +2699,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         return toolbarPortal ? createPortal(toolbarBlock, toolbarPortal) : toolbarBlock;
         })()}
 
-        {/* Candidates Results Table */}
-        <div className="tf-card overflow-hidden">
+        {/* Candidates Results Table. Job Details phones/tablets (list view
+            with rows): no panel around the record cards — each card is its own
+            box, as on Scored Resumes, not a card inside a card. */}
+        <div className={`tf-card overflow-hidden ${portaled && recordCardVariant === 'jd' && displayMode !== 'grid' && paginatedCandidates.length > 0 ? 'max-lg:border-0 max-lg:bg-transparent max-lg:ring-0 max-lg:shadow-none max-lg:rounded-none max-lg:overflow-visible dark:max-lg:bg-transparent' : ''}`}>
           {/* Heading + candidate count — standalone only. Embedded in Job
               Details this row is dropped entirely to match the AI Talent
               Match reference, whose table card has no heading/count row at
@@ -2821,11 +2823,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               rounds this assessment runs, submitted date, and the row's ⋮
               (View Result, Create / Send, Download PDF). The card opens on tap. */}
           {displayMode !== 'grid' && paginatedCandidates.length > 0 && (
-            <div className="lg:hidden space-y-3 p-3">
+            <div className={`lg:hidden space-y-3 ${portaled && recordCardVariant === 'jd' ? '' : 'p-3'}`}>
               {paginatedCandidates.map((candidate) => {
                 const isSelected = selectedRows.includes(candidate.id);
+                /* Phone cards show the per-round scores only (no Overall). */
                 const rounds = [
-                  { label: 'Overall', value: getMobileOverallScore(candidate) },
                   ...(assessmentDetails?.technical_enabled ? [{ label: 'Tech', value: candidate.tech_score }] : []),
                   ...(assessmentDetails?.coding_enabled ? [{ label: 'Coding', value: candidate.coding_score }] : []),
                 ];
@@ -2847,11 +2849,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         />
                       }
                       badges={resultStatusChip(candidate.status)}
-                      title={showName(candidate.name) || 'Unknown'}
+                      /* CID chip right after the name (the table's CID chip). */
+                      title={
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="truncate">{showName(candidate.name) || 'Unknown'}</span>
+                          {candidate.candidateDisplayId && (
+                            <span className="shrink-0 text-2xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded">
+                              {candidate.candidateDisplayId}
+                            </span>
+                          )}
+                        </span>
+                      }
                       actions={renderRowMenu(candidate)}
-                      meta={[{ icon: <Mail />, label: candidate.email ? <span className="[overflow-wrap:anywhere]">{candidate.email}</span> : null }]}
+                      actionsOnNameRow
                       fields={[
-                        { label: 'Submitted', value: candidate.completedDate && candidate.completedDate !== '-' ? candidate.completedDate : null },
+                        { label: 'Email', value: candidate.email ? <span className="[overflow-wrap:anywhere]">{candidate.email}</span> : null },
+                        { label: 'Started', value: candidate.started_at ? formatIST(candidate.started_at) : null },
+                        { label: 'Completed', value: candidate.completed_at ? formatIST(candidate.completed_at) : null },
                         { label: 'Duration', value: candidate.duration && candidate.duration !== '-' ? candidate.duration : null },
                       ]}
                       footer={shownRounds.length > 0 ? (
@@ -2861,7 +2875,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               key={label}
                               tone={typeof value !== 'number' ? 'neutral' : value >= passingThreshold ? 'success' : 'danger'}
                             >
-                              {label} {typeof value === 'number' ? `${value}%` : '—'}
+                              {label}: {typeof value === 'number' ? `${value}% - ${value >= passingThreshold ? 'Pass' : 'Fail'}` : '—'}
                             </MobileStatChip>
                           ))}
                         </>

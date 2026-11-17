@@ -1,6 +1,6 @@
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { X, Clock, CheckCircle2, XCircle, AlertCircle, AlertTriangle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, ChevronDown, Eye, ClipboardList, Ban, Layers, Square, CheckSquare, Coins, Filter as FilterIcon } from 'lucide-react';
+import { X, ArrowLeft, Clock, CheckCircle2, XCircle, AlertCircle, AlertTriangle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, ChevronDown, Eye, ClipboardList, Ban, Layers, Square, CheckSquare, Coins, Filter as FilterIcon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useModuleQuota } from '@/contexts/QuotaContext';
@@ -146,6 +146,11 @@ interface BulkScoringProgressModalProps {
   /** The JD version this run scores against, for the header — used when the
    *  rows themselves don't carry `jobVersion` (most hosts). */
   headerJobVersion?: number | null;
+  /** Opened from another popup (e.g. "Overall Activity"): renders a back
+   *  button at the start of the header that returns there. */
+  onBack?: () => void;
+  /** Where Back goes, for its tooltip / label. */
+  backLabel?: string;
 }
 
 /** Backend match_status ('exact_match', 'Partial Match', …) → the popup's verdict. */
@@ -183,6 +188,8 @@ export default function BulkScoringProgressModal({
   batchId,
   onBatchStatus,
   headerJobVersion,
+  onBack,
+  backLabel = 'Back',
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
 
@@ -623,6 +630,9 @@ export default function BulkScoringProgressModal({
   const canPick = (item: ScoringProgressItem) =>
     canManageBatch && !!item.resumeId && batchItemByResume.has(item.resumeId)
     && (item.status === 'Failed' || item.status === 'Cancelled');
+  /* Select All + the checkbox column only when some row can be ticked: a run
+     where every resume scored shows no checkboxes at all. */
+  const canSelect = progressData.some(canPick);
   const picked = progressData.filter(item => selected.has(item.id) && canPick(item));
   const filteredIds = new Set(filteredData.map(item => item.id));
   /* Ticked rows the current pill / search / filters hide. */
@@ -814,6 +824,18 @@ export default function BulkScoringProgressModal({
           {/* Top row: icon+title and action buttons */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+              {onBack && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onBack}
+                  className="w-8 flex-shrink-0 !px-0"
+                  aria-label={backLabel}
+                  title={backLabel}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+              )}
               <div className="hidden sm:flex w-11 h-11 bg-brand-blue/10 rounded-xl items-center justify-center flex-shrink-0">
                 <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
               </div>
@@ -1092,7 +1114,7 @@ export default function BulkScoringProgressModal({
                every page / clear). Border 1px + 11px left padding puts the
                checkbox 12px in — the header cell's own px-3 — so the two line
                up. Only failed / cancelled batch rows can be ticked. */
-            beforeSearch={canManageBatch ? (
+            beforeSearch={canSelect ? (
               <div
                 className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border pl-[11px] pr-1 transition-colors ${
                   picked.length
@@ -1331,7 +1353,7 @@ export default function BulkScoringProgressModal({
                       Scored Date, Scored By, Actions. */}
                   <thead className="sticky top-0 z-10">
                     <tr>
-                      {canManageBatch && (
+                      {canSelect && (
                         <th className="tf-th-cell w-10 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">
                           <input
                             type="checkbox"
@@ -1377,7 +1399,7 @@ export default function BulkScoringProgressModal({
                           index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800/50'
                         } ${canViewResult(item) ? 'cursor-pointer' : ''} ${selected.has(item.id) ? '!bg-brand-blue/[0.05]' : ''}`}
                       >
-                        {canManageBatch && (
+                        {canSelect && (
                           <td className="tf-td w-10" onClick={(e) => e.stopPropagation()}>
                             {canPick(item) && (
                               <input

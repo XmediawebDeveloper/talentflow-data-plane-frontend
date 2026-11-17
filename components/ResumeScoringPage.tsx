@@ -1056,6 +1056,19 @@ export default function ResumeScoringPage({
     if (viewMode === 'history' && (previous === 'details' || previous === 'candidateView')) {
       clearHistoryFilters();
     }
+    /* URL follows the view: back on the list, the address is the list's own
+       (/recruitment/resume-scoring), never a job's `?jd_id=…` (or a
+       candidate's `&score_id=…`) left over from the drill-in — the breadcrumb
+       read "Resume Scoring" while the bar still named a job. One place for
+       every way back (breadcrumbs, Back, minimize, Score Resumes' crumb).
+       `replace`, so the list doesn't add a second history entry. */
+    if (viewMode === 'history' && previous !== 'history' && typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('jd_id') || url.searchParams.has('score_id') || url.searchParams.has('view') || url.searchParams.has('mode')) {
+        ['jd_id', 'score_id', 'view', 'mode'].forEach(k => url.searchParams.delete(k));
+        router.replace(url.pathname + url.search, { scroll: false });
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode]);
   // Legacy history-filter state referenced by the "Clear All Filters" handler.

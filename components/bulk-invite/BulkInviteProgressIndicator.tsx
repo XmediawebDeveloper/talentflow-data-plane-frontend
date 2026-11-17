@@ -54,7 +54,7 @@ export const inviteStateOf = (j: TrackedBulkInvite): { label: string; tone: 'run
 
 export default function BulkInviteProgressIndicator() {
   const {
-    jobs, inPopupIds, openResultsFor, openResultsTab, setOpenResultsFor, widget, setWidget, setIconShown,
+    jobs, inPopupIds, openResultsFor, openResultsTab, openResultsBack, setOpenResultsFor, widget, setWidget, setIconShown,
   } = useBulkInviteProgress();
 
   // Sends in the background: not removed, and not shown in their own popup.
@@ -137,6 +137,8 @@ export default function BulkInviteProgressIndicator() {
       // Close: back to the dock's list. Minimize: down to its round button.
       onClose={() => { setOpenResultsFor(null); setWidget('mini'); }}
       onMinimize={() => { setOpenResultsFor(null); setWidget('icon'); }}
+      onBack={openResultsBack ? () => { setOpenResultsFor(null); openResultsBack(); } : undefined}
+      backLabel="Back to Overall Activity"
     />
   ) : null;
 }
