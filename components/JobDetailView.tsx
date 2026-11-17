@@ -83,7 +83,7 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { usePlanFeature, usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { useScoringProgress, toMatchResult } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
@@ -2387,6 +2387,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             } else if (itemStatus === 'completed') {
               updateItemStatus(batchId, itemId, 'Scored successfully', {
                 score: item.overall_score,
+                overallRating10: item.overall_rating_10,
+                matchResult: toMatchResult(item.match_status),
                 scoredDateTime: new Date().toISOString(),
               });
             } else if (itemStatus === 'failed') {

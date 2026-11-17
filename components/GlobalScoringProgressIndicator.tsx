@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useScoringProgress, ScoringJob } from '@/contexts/ScoringProgressContext';
+import { useScoringProgress, ScoringJob, toMatchResult } from '@/contexts/ScoringProgressContext';
 import { CheckCircle2, Loader2, Layers, ChevronDown, ChevronRight, Maximize2, Search, Trash2, Sparkles, Play, FileText, ClipboardList, Video, Upload } from 'lucide-react';
 import ActivitiesOverviewModal, { ACTIVITY_MODULE, type ActivityKind, type ActivityRow } from '@/components/activities/ActivitiesOverviewModal';
 import AppModal from '@/components/ui/app-modal';
@@ -126,9 +126,12 @@ export default function GlobalScoringProgressIndicator() {
     for (const b of status.items || []) {
       const row = byResume.get(b.resume_id);
       const next = STATUS[(b.status || '').toLowerCase()];
-      if (!row || !next || row.status === next) continue;
+      /* A row already Scored but missing its verdict (older runs) still takes
+         it, so Exact Match counts are right. */
+      const needsVerdict = next === 'Scored successfully' && !row?.matchResult && !!b.match_status;
+      if (!row || !next || (row.status === next && !needsVerdict)) continue;
       updateItemStatus(job.jobId, row.id, next as typeof row.status, next === 'Scored successfully'
-        ? { score: b.overall_score, overallRating10: b.overall_rating_10, scoredDateTime: new Date().toISOString() }
+        ? { score: b.overall_score, overallRating10: b.overall_rating_10, matchResult: toMatchResult(b.match_status), scoredDateTime: new Date().toISOString() }
         : next === 'Failed' || next === 'Cancelled' ? { errorReason: b.error_message } : {});
     }
   };
@@ -392,7 +395,9 @@ export default function GlobalScoringProgressIndicator() {
           job={job}
           settled={settledOf(job)}
           onOpen={() => openRun(job)}
-          onView={() => openResults(job)}
+          /* A finished run's View: Overall Activity on Resume Scoring (stays
+             on this page; a job's eye there opens its popup, with Back). */
+          onView={() => openOverview('scoring')}
           onClear={() => clearJob(job.jobId)}
         />
       ),
@@ -451,8 +456,11 @@ export default function GlobalScoringProgressIndicator() {
     setOverviewKind(null);
     const job = scoringJobOf(row);
     if (job) {
-      openRun(job);
-      if (!onRestorePanel) setBackToOverview(row.kind);
+      /* Always this job's own popup (never a page's minimised one, which may
+         be a different job), so Back to Overall Activity is always there. */
+      setListOpen(false);
+      setModalJobId(job.jobId);
+      setBackToOverview(row.kind);
       return;
     }
     const inv = inviteJobOf(row);
@@ -972,7 +980,7 @@ function RunRow({
       barTone={BAR_TONE[tone]}
       actions={<>
         {isComplete && job.completed > 0 && job.failed === 0
-          ? <Button variant="secondary" size="sm" className={BTN_SM} onClick={onView} title="Open the results">View</Button>
+          ? <Button variant="secondary" size="sm" className={BTN_SM} onClick={onView} title="Open Overall Activity">View</Button>
           : <Button variant="secondary" size="sm" className={BTN_SM} onClick={onOpen} title="Open this run's progress">{isComplete && job.failed > 0 ? 'Review' : 'View'}</Button>}
         {isComplete && <RemoveButton onClick={onClear} what="run" />}
       </>}
