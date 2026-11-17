@@ -2,8 +2,8 @@
 
 /* "Overall Activity" — every job in My Activities for one module (AI
    Assessment / AI Interview / Resume Scoring) in one popup: totals, one
-   overall bar, a job table with Select All, and bulk Send again / Re-score /
-   Cancel across many jobs at once. Opened from the My Activities dock; the
+   overall bar, a job table with per-row Send again / Re-score /
+   Cancel. Opened from the My Activities dock; the
    page underneath never changes.
 
    Job level only. A cross-job candidate list needs a backend list API that
@@ -103,7 +103,6 @@ export default function ActivitiesOverviewModal({
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
   const [confirmRetry, setConfirmRetry] = useState<ActivityRow[] | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -116,7 +115,7 @@ export default function ActivitiesOverviewModal({
   }), { total: 0, done: 0, failed: 0, skipped: 0, cancelled: 0, queue: 0, running: 0, exact: 0 });
   const overall = pctOf(sum);
 
-  const reset = () => { setPage(1); setPicked(new Set()); };
+  const reset = () => setPage(1);
   const switchKind = (k: ActivityKind) => { onKindChange(k); setPill('all'); setQ(''); reset(); };
 
   const list = mine
@@ -128,22 +127,8 @@ export default function ActivitiesOverviewModal({
   const curPage = Math.min(page, lastPage);
   const pageRows = list.slice((curPage - 1) * perPage, curPage * perPage);
 
-  /* A job can be ticked only when a bulk action applies to it: cancel (still
-     running) or Send again / Re-score (has failed / cancelled rows). Select
-     All and the checkbox column hide when no job qualifies. */
-  const actionable = (r: ActivityRow) => r.canManage && (r.running || r.retryable > 0);
-  const manageable = list.filter(actionable);
-  const canSelect = mine.some(actionable);
-  const allPicked = manageable.length > 0 && manageable.every(r => picked.has(r.key));
-  const toggleAll = () => setPicked(allPicked ? new Set() : new Set(manageable.map(r => r.key)));
-  const toggle = (key: string) => setPicked(prev => { const nx = new Set(prev); if (nx.has(key)) nx.delete(key); else nx.add(key); return nx; });
-
-  /* Only ticks that still apply: a job that finished cleanly while ticked
-     drops out instead of leaving a stale "1 selected". */
-  const pickedRows = mine.filter(r => picked.has(r.key) && actionable(r));
-  const retryRows = pickedRows.filter(r => r.retryable > 0 && !r.running);
-  const retryCount = retryRows.reduce((t, r) => t + r.retryable, 0);
-  const cancelRows = pickedRows.filter(r => r.running);
+  /* Send again / Re-score is per row: jobs with failed / cancelled rows. */
+  const retryCount = (confirmRetry ?? []).reduce((t, r) => t + r.retryable, 0);
 
   const PILLS: { k: Pill; label: string; v: number; icon: React.ReactNode; tone: string }[] = [
     { k: 'all', label: 'All', v: mine.length, icon: <Layers />, tone: 'text-[var(--muted-foreground)]' },
@@ -290,32 +275,10 @@ export default function ActivitiesOverviewModal({
 
           {/* toolbar */}
           <div className="flex flex-wrap items-center gap-2">
-            {canSelect && (
-              <label className={`inline-flex h-9 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] pl-[11px] pr-3 text-sm ${manageable.length ? '' : 'opacity-50'}`}>
-                <input type="checkbox" className="tf-checkbox" checked={allPicked} disabled={!manageable.length} onChange={toggleAll} aria-label="Select all jobs" />
-                Select All <span className="tf-meta">({n(manageable.length)})</span>
-              </label>
-            )}
             <label className="flex h-9 min-w-[12rem] flex-1 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 sm:max-w-xs">
               <Search className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
               <input value={q} onChange={e => { setQ(e.target.value); reset(); }} placeholder="Search JD ID or job…" className="w-full bg-transparent text-sm outline-none" aria-label="Search jobs" />
             </label>
-            {pickedRows.length > 0 && (
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                <span className="tf-meta">{pickedRows.length} selected</span>
-                {retryCount > 0 && (
-                  <Button variant="primary" size="sm" icon={<RotateCcw className="h-3.5 w-3.5" />} onClick={() => setConfirmRetry(retryRows)}>
-                    {m.again} ({n(retryCount)})
-                  </Button>
-                )}
-                {cancelRows.length > 0 && (
-                  <Button variant="secondary" size="sm" icon={<Square className="h-3.5 w-3.5" />} onClick={() => { onCancel(cancelRows); setPicked(new Set()); }}>
-                    Cancel running ({cancelRows.length})
-                  </Button>
-                )}
-                <Button variant="secondary" size="sm" onClick={() => setPicked(new Set())}>Clear</Button>
-              </div>
-            )}
           </div>
 
           {/* job table */}
@@ -323,11 +286,6 @@ export default function ActivitiesOverviewModal({
             <table className="w-full min-w-[880px] text-left">
               <thead>
                 <tr className="bg-[var(--surface)]">
-                  {canSelect && (
-                    <th className="w-8 px-3 py-2">
-                      <input type="checkbox" className="tf-checkbox" checked={allPicked} disabled={!manageable.length} onChange={toggleAll} aria-label="Select all jobs" />
-                    </th>
-                  )}
                   <th className="tf-th px-3 py-2">S.No</th>
                   <th className="tf-th px-3 py-2">Job</th>
                   <th className="tf-th px-3 py-2">Version</th>
@@ -345,15 +303,7 @@ export default function ActivitiesOverviewModal({
                   const st = stateOf(r);
                   const pct = pctOf(r);
                   return (
-                    <tr key={r.key} className={picked.has(r.key) ? 'bg-brand-blue/[0.04]' : 'hover:bg-[var(--surface)]'}>
-                      {canSelect && (
-                        <td className="px-3 py-2">
-                          {actionable(r) && (
-                            <input type="checkbox" className="tf-checkbox" checked={picked.has(r.key)} onChange={() => toggle(r.key)}
-                              aria-label={`Select ${r.code ?? ''} ${r.title}`} />
-                          )}
-                        </td>
-                      )}
+                    <tr key={r.key} className="hover:bg-[var(--surface)]">
                       <td className="tf-td px-3 py-2 tabular-nums">{(curPage - 1) * perPage + i + 1}</td>
                       <td className="px-3 py-2">
                         <button type="button" onClick={() => onOpenRow(r)} className="flex max-w-[16rem] items-center gap-1.5 text-left hover:text-brand-blue" title="Open this job's progress">
@@ -397,10 +347,16 @@ export default function ActivitiesOverviewModal({
                               <Button variant="secondary" size="sm" className="!h-7 !w-7 !px-0" title="Cancel — what is done stays done" aria-label="Cancel" onClick={() => onCancel([r])}>
                                 <Square className="h-3.5 w-3.5" />
                               </Button>)
-                            : (
+                            : (<>
+                              {r.canManage && r.retryable > 0 && (
+                                <Button variant="secondary" size="sm" className="!h-7 !w-7 !px-0" title={`${m.again} ${n(r.retryable)} failed / cancelled`} aria-label={m.again} onClick={() => setConfirmRetry([r])}>
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
                               <Button variant="secondary" size="sm" className="!h-7 !w-7 !px-0" title="Remove from My Activities" aria-label="Remove from My Activities" onClick={() => onRemoveRow(r)}>
                                 <Trash2 className="h-3.5 w-3.5" />
-                              </Button>)}
+                              </Button>
+                            </>)}
                         </div>
                       </td>
                     </tr>
@@ -440,7 +396,7 @@ export default function ActivitiesOverviewModal({
             if (!confirmRetry) return;
             setBusy(true);
             try { await onRetry(confirmRetry); } finally {
-              setBusy(false); setConfirmRetry(null); setPicked(new Set());
+              setBusy(false); setConfirmRetry(null);
             }
           },
         }]}
@@ -453,7 +409,7 @@ export default function ActivitiesOverviewModal({
           </p>
           {shortUnits && (
             <p className="rounded-lg border border-destructive-line bg-destructive-subtle px-3 py-2 text-xs text-destructive">
-              Not enough units. Select fewer jobs, or add units in Usage &amp; Quotas first.
+              Not enough units. Add units in Usage &amp; Quotas first.
             </p>
           )}
         </div>
