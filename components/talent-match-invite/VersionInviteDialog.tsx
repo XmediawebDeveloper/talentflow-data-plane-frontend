@@ -4,11 +4,13 @@ import { Fragment, useEffect, useEffectEvent, useId, useRef, useState, type Comp
 import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Briefcase, Calendar, ChevronDown, Lightbulb, Loader2, Mail, Minus, Plus, User, Trash2, Video, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePathname, useRouter } from 'next/navigation';
-import { saveInviteUnitsHandoff, USAGE_QUOTAS_FROM_INVITE_URL, type InviteUnitsRestore } from '@/lib/utils/inviteUnitsHandoff';
+import { type InviteUnitsRestore } from '@/lib/utils/inviteUnitsHandoff';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/hooks/useAuth';
-import api from '@/lib/services/api';
+import api, { dispatchUnitsConsumed } from '@/lib/services/api';
+
+const USAGE_QUOTAS_URL = '/subscription/usage-quotas';
 import VersionList, { STATUS_PILL, VersionTitle, VersionUsage } from './VersionList';
 import ServerCandidatePicker, { EMPTY_SELECTION, TAB_LABEL, selectionCount, toRequestSelection, type PickReveal, type PickerSelection } from './ServerCandidatePicker';
 import ExtraCandidatesInput, { MAX_EXTRA_CANDIDATES, type EmailCheck, type ExistingCandidateMatch, type ExtraCounts, type ExtraMode, type PickedPerson } from './ExtraCandidatesInput';
@@ -652,7 +654,7 @@ export default function VersionInviteDialog({
     else requestClose();
   });
   useEffect(() => {
-    const onFocus = () => reloadAfterReturn();
+    const onFocus = () => { reloadAfterReturn(); refreshUnitsAfterTab(); };
     const onKey = (e: KeyboardEvent) => closeOnEscape(e);
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);
@@ -845,42 +847,25 @@ export default function VersionInviteDialog({
     revealPick.current?.({ source: p.sourceKey as InviteCandidateSourceTab, resumeId: p.resumeId, email: p.email });
   };
 
-  /* Add units: the popup saved as it is, then Usage & Quotas; buying and
-     coming back reopens it here. Without access to Usage & Quotas, who to
+  /* Add units: Usage & Quotas in a new tab. Without access to it, who to
      ask instead. */
   const router = useRouter();
   // Buying units is a billing action (2026-11-10): Upgrade Plan, same as the add-on API.
   const canAddUnits = can('canUpgradePlan');
+  /* Usage & Quotas opens in a NEW TAB (2026-11-17): the recruiter stays on
+     this page with the popup open, exactly as it was. When they come back to
+     this tab the units are fetched again (see refreshUnitsAfterTab). */
+  const unitsTabOpened = useRef(false);
   const addUnits = () => {
-    saveInviteUnitsHandoff({
-      request: {
-        kind,
-        job: job ? { jdId: job.jdId, jdCode: job.jdCode, jdTitle: job.jdTitle, versionNumber: job.jobVersionNumber } : undefined,
-        versionId: fixedVersionId,
-        candidates,
-        preselect,
-        pickInto,
-        openOn,
-        hideDuplicate,
-        inviteGate: { allowed: inviteAllowed, reason: inviteDeniedReason },
-      },
-      restore: {
-        step: current === 'version' ? 'version' : 'candidates',
-        versionId,
-        selection: serverSelection,
-        extras,
-        addTab,
-        ...(messageTouched.current ? { message, expiryDays } : {}),
-      },
-      noun: unitsNoun,
-      candidateCount: recipientCount,
-    });
-    // The popup's own history entry is swapped for Usage & Quotas (replace),
-    // so Back from there lands on this page — not taken off with history.back().
-    guard.current.active = false;
-    onClose();
-    router.replace(USAGE_QUOTAS_FROM_INVITE_URL);
+    unitsTabOpened.current = true;
+    window.open(USAGE_QUOTAS_URL, '_blank', 'noopener');
   };
+  const refreshUnitsAfterTab = useEffectEvent(() => {
+    if (!unitsTabOpened.current || document.visibilityState === 'hidden') return;
+    unitsTabOpened.current = false;
+    setQuotaKey((k) => k + 1);
+    dispatchUnitsConsumed();
+  });
   const addUnitsAction: ReactNode = canAddUnits ? (
     <Button variant="primary" size="sm" onClick={addUnits} className="shrink-0 whitespace-nowrap">
       Add units
