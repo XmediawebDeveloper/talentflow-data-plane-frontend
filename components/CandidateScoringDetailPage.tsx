@@ -1,5 +1,6 @@
 'use client';
 
+import JobIdBadge, { JOB_ID_BADGE_CLASS, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { CREATE_SEND_BUTTON_CLASS, CANDIDATE_ACTION_BUTTON_CLASS } from '@/lib/constants/createSendActions';
 import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, ThumbsUp, ThumbsDown, Loader2, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send, Plus, ClipboardList, Video } from 'lucide-react';
@@ -1923,9 +1924,9 @@ Best regards`);
                     page header's own chips (`JobDetailView`). Both come from
                     the list row, else from the JD this page already loaded. */}
                 {(resume.jobCode || jdDetails?.job_id) && (
-                  <span className="inline-flex items-center px-2 py-0.5 mr-1.5 bg-brand-blue text-white rounded-md text-xs font-semibold font-mono tracking-wide align-middle whitespace-nowrap">
+                  <JobIdBadge className={`mr-1.5 align-middle whitespace-nowrap ${JOB_ID_BADGE_FIT}`}>
                     {resume.jobCode || jdDetails?.job_id}
-                  </span>
+                  </JobIdBadge>
                 )}
                 <button
                   type="button"
@@ -3033,7 +3034,7 @@ Best regards`);
                         <button
                           type="button"
                           onClick={() => setShowJdNavConfirm(true)}
-                          className="tf-btn tf-btn-primary px-2 py-0.5 bg-brand-blue rounded-md text-xs font-semibold font-mono tracking-wide hover:bg-brand-blue-2 transition-colors whitespace-normal shadow-none gap-0 justify-start"
+                          className={`${JOB_ID_BADGE_CLASS} ${JOB_ID_BADGE_FIT} hover:bg-brand-blue-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40`}
                         >
                           {jdDetails.job_id}
                         </button>

@@ -161,10 +161,11 @@ export default function GlobalScoringProgressIndicator() {
     router.push(runResultsUrl(job));
   };
 
-  /* Say when a background run finishes: a toast with its counts and View
-     Results, so the recruiter learns of it wherever they are. Only runs that
-     asked for it (`announce`), each once; runs already finished when this
-     mounts (a reload) are not announced again. */
+  /* Every scoring run says when it finishes (2026-11-17), wherever the
+     recruiter is: "<JD ID> <job title> v<version> — <n> resumes scored
+     successfully" with View. Each run once; runs already finished when this mounts (a
+     reload) are not announced again. The JD ID / version come from the run,
+     else from the JD itself (fetched once). */
   const announcedRef = useRef<Set<string> | null>(null);
   useEffect(() => {
     const isDone = (job: ScoringJob) => job.total > 0 && job.queued === 0 && job.processing === 0;
@@ -174,17 +175,42 @@ export default function GlobalScoringProgressIndicator() {
     }
     const announced = announcedRef.current;
     activeScoringJobs.forEach(job => {
-      if (!job.announce || !isDone(job) || announced.has(job.jobId)) return;
+      if (!isDone(job) || announced.has(job.jobId)) return;
       announced.add(job.jobId);
-      const exact = job.items.filter(item => item.matchResult === 'Exact Match').length;
-      const title = `${job.jobTitle}${job.jobVersion ? ` v${job.jobVersion}` : ''}`;
-      const parts = [`${job.completed} scored`, exact > 0 && `${exact} Exact Match`, job.failed > 0 && `${job.failed} failed`]
-        .filter(Boolean).join(' · ');
-      const show = job.completed === 0 ? toast.error : job.failed > 0 ? toast.warning : toast.success;
-      show(`Scoring finished: ${title}`, {
-        description: parts,
-        duration: 8000,
-        action: job.completed > 0 ? { label: 'View Results', onClick: () => openResults(job) } : undefined,
+      /* A Job Details run is keyed by its batch id; the JD id is on its rows. */
+      const jdId = job.items[0]?.jobId || job.jobId;
+      const cached = jdMetaCache.get(jdId) ?? jdMetaCache.get(job.jobId);
+      const meta: Promise<{ code?: string; version?: number } | undefined> = job.jobCode && job.jobVersion != null
+        ? Promise.resolve(undefined)
+        : cached
+          ? Promise.resolve(cached)
+          : jdService.get(jdId)
+            .then(jd => { const m = { code: jd.job_id || undefined, version: jd.version_number ?? undefined }; jdMetaCache.set(jdId, m); return m; })
+            .catch(() => undefined);
+      void meta.then(m => {
+        const code = job.jobCode || m?.code;
+        const version = job.jobVersion ?? m?.version;
+        const subject = [code, job.jobTitle, version ? `v${version}` : ''].filter(Boolean).join(' ');
+        const cancelled = job.items.filter(item => item.status === 'Cancelled').length;
+        const resumes = (v: number) => `${n(v)} resume${v === 1 ? '' : 's'}`;
+        const view = () => {
+          setListOpen(false);
+          if (job.completed > 0 && job.failed === 0) { openResults(job); return; }
+          // Failures: that run's own popup, to review / re-score them.
+          if (onRestorePanel) onRestorePanel(); else setModalJobId(job.jobId);
+        };
+        const action = { label: 'View', onClick: view };
+        if (job.completed > 0 && job.failed === 0) {
+          toast.success(`${subject} — ${resumes(job.completed)} scored successfully`, {
+            description: cancelled > 0 ? `${n(cancelled)} cancelled before scoring` : undefined,
+            duration: 8000,
+            action,
+          });
+        } else if (job.completed > 0) {
+          toast.warning(`${subject} — ${resumes(job.completed)} scored, ${n(job.failed)} failed`, { duration: 10000, action });
+        } else if (job.failed > 0) {
+          toast.error(`${subject} — scoring failed for ${resumes(job.failed)}`, { duration: 10000, action });
+        }
       });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -552,12 +578,13 @@ export default function GlobalScoringProgressIndicator() {
         >
           <header className="flex items-center gap-1 border-b border-[var(--info-line)] bg-[var(--info-subtle)] px-2.5 py-1.5">
             <Layers className="h-3 w-3 text-brand-blue" />
-            <h3 className="flex-1 text-xs font-semibold text-[var(--text-primary)]">My Activities</h3>
-            {runningCount > 0 && <span className={`tf-stat-chip tf-stat-chip-info ${CHIP_SM}`}>{runningCount} running</span>}
-            {lookCount > 0 && <span className={`tf-stat-chip tf-stat-chip-warning ${CHIP_SM}`}>{lookCount} need a look</span>}
+            <h3 className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--text-primary)]">My Activities</h3>
+            {/* Phones: the counts sit in the filter chips below instead. */}
+            {runningCount > 0 && <span className={`tf-stat-chip tf-stat-chip-info ${CHIP_SM} max-sm:!hidden`}>{runningCount} running</span>}
+            {lookCount > 0 && <span className={`tf-stat-chip tf-stat-chip-warning ${CHIP_SM} max-sm:!hidden`}>{lookCount} need a look</span>}
             {overviewRows.length > 1 && (
               <Button variant="secondary" size="sm" className={BTN_SM} onClick={() => openOverview(firstKind)} title="Every job in one popup">
-                <Maximize2 />View all
+                <Maximize2 /><span className="max-[359px]:sr-only">View all</span>
               </Button>
             )}
             <Button
