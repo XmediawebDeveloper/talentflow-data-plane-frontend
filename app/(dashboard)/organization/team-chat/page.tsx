@@ -50,6 +50,7 @@ import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
 import NameAvatar from '@/components/ui/name-avatar';
 import ChatAttachmentViewer, { type ChatAttachment } from '@/components/organization/ChatAttachmentViewer';
+import CachedChatImage from '@/components/organization/CachedChatImage';
 import { IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 import TeamChatIllustration from '@/components/teams/TeamChatIllustration';
 
@@ -1781,8 +1782,10 @@ export default function TeamChatPage() {
                                       setViewerAttachment({ url: message.metadata!.file_url!, name: message.metadata!.file_name });
                                     }}
                                   >
-                                    <img
-                                      src={message.metadata!.file_url}
+                                    {/* Loaded once per session, then shown instantly on every tab switch. */}
+                                    <CachedChatImage
+                                      cacheKey={message.id}
+                                      src={message.metadata!.file_url!}
                                       alt={message.metadata!.file_name || 'Image attachment'}
                                       className="block max-h-64 max-w-full object-contain"
                                     />
