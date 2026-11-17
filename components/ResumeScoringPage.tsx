@@ -1929,12 +1929,11 @@ export default function ResumeScoringPage({
         );
         updateBulkProgress();
 
+        // Stay where the recruiter is (2026-11-17): refresh the data, leave
+        // the popup open showing the result — no page or view change.
         if (onRefreshHistory) {
           invalidateGlobalScoredResumes();
           await onRefreshHistory();
-          setShowProgressModal(false);
-          setPendingAutoSelectJdId(jobId);
-          router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
         }
         return;
       }
@@ -2008,19 +2007,12 @@ export default function ResumeScoringPage({
               // before anyone could read the failed row's error message. Only
               // auto-advance on a clean run; on any failure, leave the modal
               // open so the user can read it and use Retry/Retry All.
-              if ((status.failed || 0) > 0) {
-                console.log(`[ResumeScoringPage] ${status.failed} item(s) failed — keeping progress modal open`);
-              } else if (onRefreshHistory) {
-                console.log('[ResumeScoringPage] Refreshing scored history...');
+              // Never navigate on completion (2026-11-17): the recruiter stays
+              // on this page and view; the popup stays open with the result,
+              // and only the data underneath is refreshed.
+              if (onRefreshHistory) {
                 invalidateGlobalScoredResumes();
                 await onRefreshHistory();
-                setShowProgressModal(false);
-                setPendingAutoSelectJdId(jobId);
-                router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
-              } else {
-                setTimeout(() => {
-                  window.location.href = `/recruitment/resume-scoring?jd_id=${jobId}`;
-                }, 2000);
               }
             }
           } catch (pollErr) {
@@ -2190,21 +2182,13 @@ export default function ResumeScoringPage({
           })
           .catch(e => console.warn('[ResumeScoringPage] Could not update match statuses from scores:', e))
           .finally(() => {
-            // Step 2: Wait 3 seconds so user can read the correct match results,
-            // then refresh history and close modal
-            setTimeout(() => {
-              invalidateGlobalScoredResumes();
-              onRefreshHistory().then(() => {
-                setShowProgressModal(false);
-                // Trigger auto-navigation to the details view for this JD
-                setPendingAutoSelectJdId(jobId);
-                router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
-              }).catch((err) => {
-                console.error('[ResumeScoringPage] Failed to refresh history after batch:', err);
-                setShowProgressModal(false);
-                setViewMode('history');
-              });
-            }, 3000);
+            // Step 2: refresh the data underneath. The popup stays open and
+            // the page / view do not change (2026-11-17) — the recruiter
+            // leaves through "View Results" or by closing the popup.
+            invalidateGlobalScoredResumes();
+            onRefreshHistory().catch((err) => {
+              console.error('[ResumeScoringPage] Failed to refresh history after batch:', err);
+            });
           });
       }, 2000);
     }
@@ -2454,13 +2438,12 @@ export default function ResumeScoringPage({
      view's JSX, so moving the page to the results view mid-popup unmounted it
      — the finished popup vanished and the corner widget was left holding a
      "minimised" run nobody had minimised. */
-  const goToResultsFor = async (jobId: string) => {
+  /* Scoring finished / popup closed: refresh the scores only. The page and
+     the view stay as they are (2026-11-17) — no jump to the JD's results;
+     the recruiter goes there through View Results when they want to. */
+  const refreshScoresInPlace = async () => {
     invalidateGlobalScoredResumes();
     await onRefreshHistory?.();
-    // Once scoredHistory carries this job's fresh scores, the layout effect on
-    // pendingAutoSelectJdId opens its details view — behind the popup.
-    setPendingAutoSelectJdId(jobId);
-    router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
   };
   const resumeSelectionModal = showResumeSelectionModal && selectedJobData ? (
     <SelectSourceModal
@@ -2469,13 +2452,9 @@ export default function ResumeScoringPage({
       jobShortId={selectedJobData.job_id}
       jobVersion={selectedJobData.current_version && selectedJobData.current_version > 0 ? selectedJobData.current_version : null}
       onClose={() => setShowResumeSelectionModal(false)}
-      onScoringFinished={() => goToResultsFor(selectedJob)}
-      onScoringComplete={async () => {
-        // The results view is normally already behind the popup; only a
-        // Close that beats that refresh still has to fetch it first.
-        if (!(viewMode === 'details' && selectedHistoryItem?.jobId === selectedJob)) {
-          await goToResultsFor(selectedJob);
-        }
+      onScoringFinished={() => { void refreshScoresInPlace(); }}
+      onScoringComplete={() => {
+        void refreshScoresInPlace();
         setShowResumeSelectionModal(false);
       }}
       onViewResult={(item) => {
