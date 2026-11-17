@@ -31,7 +31,7 @@ import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import { useResumeUploadFlow } from './resumes/useResumeUploadFlow';
-import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { useScoringProgress, toMatchResult } from '@/contexts/ScoringProgressContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import { canDownloadResume } from '@/lib/permissions/resumeDownload';
 
@@ -729,7 +729,7 @@ export default function SelectSourceModal({
             const itemId = `${jobId}-${batchItem.resume_id}`;
             const itemStatus = normalizeScoringStatus(batchItem.status);
             if (itemStatus === 'completed') {
-              updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10 });
+              updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10, matchResult: toMatchResult(batchItem.match_status) });
             } else if (itemStatus === 'failed') {
               updateItemStatus(jobId, itemId, 'Failed', { errorReason: batchItem.error_message || 'Scoring failed' });
             } else if (itemStatus === 'processing') {

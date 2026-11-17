@@ -136,7 +136,8 @@ const readIdentity = (): string | null => {
 
 const isJobActive = (job: ScoringJob) => job.queued > 0 || job.processing > 0;
 
-function toMatchResult(status?: string): ScoringProgressItem['matchResult'] {
+/** Backend match_status → the progress row's verdict (drives Exact Match counts). */
+export function toMatchResult(status?: string): ScoringProgressItem['matchResult'] {
   if (!status) return undefined;
   const s = status.toLowerCase().replace(/_/g, ' ').trim();
   if (s === 'exact match' || s === 'excellent') return 'Exact Match';
