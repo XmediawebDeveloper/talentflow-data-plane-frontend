@@ -198,6 +198,23 @@ export interface BatchScoringStatus {
   items: BatchScoringItem[];
 }
 
+/** One row of GET /scoring/batches/mine — a batch summary, no per-resume items. */
+export interface MyScoringBatch {
+  batch_id: string;
+  jd_id: string;
+  jd_title?: string;
+  jd_job_id?: string;
+  jd_version_number?: number;
+  status: string;
+  total: number;
+  queued: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  created_at?: string;
+}
+
 /** Filters shared by GET /scoring/all and GET /scoring/stats. */
 export interface ScoringListFilters {
   score_min?: number;
@@ -535,6 +552,20 @@ export const scoringService = {
     try {
       const response = await api.get<BatchScoringStatus>(`/scoring/batch/${batchId}/status`);
       return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * The signed-in user's own scoring batches (GET /scoring/batches/mine).
+   * The progress dock reads this so a run shows in every browser / device the
+   * user signs in on — not only the one that started it.
+   */
+  async getMyBatches(params: { status?: 'active' | 'completed' | 'failed' | 'cancelled'; hours?: number; page_size?: number } = {}): Promise<MyScoringBatch[]> {
+    try {
+      const response = await api.get<{ items: MyScoringBatch[] }>('/scoring/batches/mine', { params, dedupe: false });
+      return response.data.items || [];
     } catch (error) {
       throw new Error(handleApiError(error));
     }

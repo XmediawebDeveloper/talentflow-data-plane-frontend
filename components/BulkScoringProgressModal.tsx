@@ -623,6 +623,9 @@ export default function BulkScoringProgressModal({
   const canPick = (item: ScoringProgressItem) =>
     canManageBatch && !!item.resumeId && batchItemByResume.has(item.resumeId)
     && (item.status === 'Failed' || item.status === 'Cancelled');
+  /* Select All + the checkbox column only when some row can be ticked: a run
+     where every resume scored shows no checkboxes at all. */
+  const canSelect = progressData.some(canPick);
   const picked = progressData.filter(item => selected.has(item.id) && canPick(item));
   const filteredIds = new Set(filteredData.map(item => item.id));
   /* Ticked rows the current pill / search / filters hide. */
@@ -1092,7 +1095,7 @@ export default function BulkScoringProgressModal({
                every page / clear). Border 1px + 11px left padding puts the
                checkbox 12px in — the header cell's own px-3 — so the two line
                up. Only failed / cancelled batch rows can be ticked. */
-            beforeSearch={canManageBatch ? (
+            beforeSearch={canSelect ? (
               <div
                 className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border pl-[11px] pr-1 transition-colors ${
                   picked.length
@@ -1331,7 +1334,7 @@ export default function BulkScoringProgressModal({
                       Scored Date, Scored By, Actions. */}
                   <thead className="sticky top-0 z-10">
                     <tr>
-                      {canManageBatch && (
+                      {canSelect && (
                         <th className="tf-th-cell w-10 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">
                           <input
                             type="checkbox"
@@ -1377,7 +1380,7 @@ export default function BulkScoringProgressModal({
                           index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800/50'
                         } ${canViewResult(item) ? 'cursor-pointer' : ''} ${selected.has(item.id) ? '!bg-brand-blue/[0.05]' : ''}`}
                       >
-                        {canManageBatch && (
+                        {canSelect && (
                           <td className="tf-td w-10" onClick={(e) => e.stopPropagation()}>
                             {canPick(item) && (
                               <input
