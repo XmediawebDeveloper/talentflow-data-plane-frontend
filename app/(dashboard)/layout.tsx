@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/hooks/useAuth';
+import { installStripWheelScroll } from '@/lib/scrollHandoff';
 import { getLoginUrl } from '@/lib/services/authService';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
@@ -178,6 +179,10 @@ export default function DashboardLayout({
     document.documentElement.classList.add('tf-app-shell');
     return () => document.documentElement.classList.remove('tf-app-shell');
   }, []);
+
+  // Sideways tab / pill strips (scrollbar hidden): the mouse wheel scrolls them
+  // left-right, so a laptop / tablet with a mouse can reach every tab.
+  useEffect(() => installStripWheelScroll(), []);
 
   useEffect(() => {
     const handleSessionExpired = () => setSessionExpiredVisible(true);

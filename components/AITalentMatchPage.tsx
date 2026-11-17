@@ -4072,7 +4072,7 @@ export default function AITalentMatchPage({
 
             {/* Phones / tablets: the Job Openings list's toolbar card and phone
                 line layout (globals.css, `.tf-jobs-toolbar`), as Resume Scoring. */}
-            <div className="tf-jobs-toolbar tf-toolbar-card mb-4">
+            <div className="tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card mb-4">
               <ListToolbar
                 searchValue={candidateSearchQuery}
                 onSearchChange={candidateSearch.setQuery}
@@ -5716,7 +5716,7 @@ export default function AITalentMatchPage({
             List / Grid. No count badge — the pagination carries the totals.
             Phones / tablets: the Job Openings list's toolbar card and phone line
             layout (globals.css, `.tf-jobs-toolbar`), as Resume Scoring. */}
-        <div className="tf-jobs-toolbar tf-toolbar-card mb-4">
+        <div className="tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card mb-4">
           <ListToolbar
             searchValue={historySearchQuery}
             onSearchChange={historySearch.setQuery}
@@ -6774,10 +6774,11 @@ export default function AITalentMatchPage({
                       )}
                     </>
                   }
-                >
-                  {inlineCandidatesPanel}
-                  {versionsPanel}
-                </MobileRecordCard>
+                  /* Candidates open at the bottom, under the rating tiles and the
+                     buttons — as Resume Scoring's View by Job card — instead of
+                     between the details and the tiles. */
+                  expanded={inlineCandidatesPanel || versionsPanel ? <>{inlineCandidatesPanel}{versionsPanel}</> : undefined}
+                />
               );
               return { key: item.id, mobileCard, card: (
                 <div
@@ -8218,7 +8219,7 @@ export default function AITalentMatchPage({
           /* Phones / tablets: the Job Openings list's toolbar card; phones get its
              line layout (globals.css, `.tf-jobs-toolbar`): search · filter icon ·
              List / Grid, the panel under it, then Actions on a line of its own. */
-          <div className="tf-jobs-toolbar tf-toolbar-card mb-4 space-y-3">
+          <div className="tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card mb-4 space-y-3">
             <ListToolbar
               searchValue={searchQuery}
               onSearchChange={setSearchQuery}

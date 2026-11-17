@@ -818,11 +818,15 @@ export const jdService = {
   },
 
   /**
-   * Get single JD by ID
+   * Get single JD by ID.
+   * `logView` = true writes a JD_VIEWED audit row; only the Job Details page
+   * sends it (on its initial load), never the many other callers of this read.
    */
-  async get(id: string): Promise<JDResponse> {
+  async get(id: string, logView: boolean = false): Promise<JDResponse> {
     try {
-      const response = await api.get<JDResponse>(`/jd/${id}`);
+      const response = await api.get<JDResponse>(`/jd/${id}`, {
+        params: logView ? { log_view: true } : undefined,
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -832,8 +836,8 @@ export const jdService = {
   /**
    * Get single JD by ID (alias for get)
    */
-  async getById(id: string): Promise<JDResponse> {
-    return this.get(id);
+  async getById(id: string, logView: boolean = false): Promise<JDResponse> {
+    return this.get(id, logView);
   },
 
   /**

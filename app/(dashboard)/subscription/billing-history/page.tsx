@@ -352,6 +352,8 @@ export default function BillingHistoryPage() {
     setDownloadingId(inv.id);
     try {
       await generateBillingInvoicePDF(inv, billToFromAuth(user, tenant));
+      // Audit trail: invoice PDF downloaded (built in the browser, so report it).
+      api.post('/billing/log-view', { kind: 'invoice_downloaded', invoice_number: inv.invoice_number }).catch(() => {});
     } catch (error) {
       console.error('PDF generation failed:', error);
       toast.error('Failed to generate PDF. Please try again.');

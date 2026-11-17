@@ -1388,6 +1388,7 @@ export default function SelectSourceModal({
       {/* Progress Modal - Using BulkScoringProgressModal */}
       {showProgressModal && (
         <BulkScoringProgressModal
+          headerJobVersion={jobVersion}
           batchId={progressBatchId}
           onClose={handleCloseProgress}
           progressData={progressItems.map((item): ScoringProgressItem => ({

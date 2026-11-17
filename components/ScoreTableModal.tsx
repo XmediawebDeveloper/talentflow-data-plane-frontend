@@ -59,7 +59,12 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
     jdService.getScoredResumes(jdId, { page_size: 100 })
       .then((res: any) => {
         if (cancelled) return;
-        const match = (res.items || []).find((r: any) => r.id === resume.id);
+        const items = res.items || [];
+        /* Exact score id first. A host that only knows the candidate (the
+           scoring progress popup without a batch score id) falls back to that
+           resume's score on this JD. */
+        const match = items.find((r: any) => r.id === resume.id)
+          || (resume.resumeId ? items.find((r: any) => (r.resume_id || r.resumeId) === resume.resumeId) : undefined);
         setDetail(match || null);
       })
       .catch((err: any) => {
@@ -70,7 +75,7 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [resume.id, resume.jdId, jobId]);
+  }, [resume.id, resume.resumeId, resume.jdId, jobId]);
 
   // Deterministic variation based on the score id, matching
   // CandidateScoringDetailPage's own fallback generator — keeps a criterion
