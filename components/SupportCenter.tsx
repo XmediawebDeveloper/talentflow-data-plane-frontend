@@ -660,8 +660,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
   // Deep link: /support-tickets?tab=unit-disputes (wins over the restored tab).
   useEffect(() => {
-    const tab = new URLSearchParams(window.location.search).get('tab');
+    const url = new URL(window.location.href);
+    const tab = url.searchParams.get('tab');
     if (tab === 'unit-disputes' || tab === 'team' || tab === 'external') setActiveTab(tab);
+    // Applied — clear it, so switching tabs (or the "Support Tickets" crumb)
+    // doesn't leave ?tab=unit-disputes in the address bar.
+    if (tab !== null) {
+      url.searchParams.delete('tab');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search);
+    }
   }, []);
 
   // A restored / linked Unit Disputes tab the user can't see → back to My Support Tickets.

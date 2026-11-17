@@ -151,6 +151,14 @@ export default function JDListPage() {
     if (createParam === 'true') {
       setShowJDSheet(true);
     }
+    // Applied — clear both, so closing the sheet / changing the status filter
+    // isn't contradicted by a ?create=true / ?status=… still in the address bar.
+    if (statusParam !== null || createParam !== null) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('status');
+      url.searchParams.delete('create');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search);
+    }
   }, [searchParams]);
   // JD04: Sort state
   const [sortBy, setSortBy] = useState<string>('latest');

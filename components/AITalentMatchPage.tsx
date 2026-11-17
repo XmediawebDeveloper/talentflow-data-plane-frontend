@@ -657,6 +657,11 @@ export default function AITalentMatchPage({
   const isMatchingInProgress = useRef(false);
   // Track if user manually changed view (to prevent useEffect from resetting)
   const userChangedView = useRef(false);
+  /* The `jdId|view` address the URL effect last acted on. It acts on an
+     address once: a stale `?jdId=…&view=results` left in the bar after the
+     recruiter went back to the list must not pull them into that job's
+     results again when the effect re-runs (job list / lookup settling). */
+  const handledUrlKeyRef = useRef<string>('');
 
   // Helper function to format uploaded by name (avoid showing UUIDs)
   const formatUploadedBy = (name?: string, id?: string) => {
@@ -1151,6 +1156,28 @@ export default function AITalentMatchPage({
   const matchStats = jobsList.stats;
   const facets = matchStats?.facets;
 
+  /* The four stat cards stay standard: always the unfiltered totals. Search,
+     the filters and More Filters narrow the list and the rating pills (they
+     read `matchStats`, which carries the same filters), never the cards.
+     An unfiltered load keeps the snapshot current (new matches, deletes);
+     landing already filtered (restored state) reads it once without filters. */
+  const [cardStats, setCardStats] = useState<AIMatchStats | null>(null);
+  const jobsQueryNarrowed = useMemo(() => {
+    const { page: _p, page_size: _ps, sort_by: _sb, sort_dir: _sd, band: _b, ...rest } = jobsQuery;
+    return Object.values(rest).some((v) => v !== undefined && v !== '');
+  }, [jobsQuery]);
+  useEffect(() => {
+    if (matchStats && !jobsQueryNarrowed) setCardStats(matchStats);
+  }, [matchStats, jobsQueryNarrowed]);
+  useEffect(() => {
+    if (!jobsQueryNarrowed || cardStats) return;
+    let cancelled = false;
+    aiMatchService.getStats({})
+      .then((s) => { if (!cancelled) setCardStats((prev) => prev ?? s); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [jobsQueryNarrowed, cardStats]);
+
   /** This page of matched jobs (latest session per job), as the rows render them. */
   const matchHistory: MatchHistory[] = useMemo(() => jobsList.items.map(toHistoryItem), [jobsList.items]);
   const jobItemById = useMemo(() => new Map(jobsList.items.map(i => [i.id, i])), [jobsList.items]);
@@ -1378,6 +1405,21 @@ export default function AITalentMatchPage({
     } finally {
       setSelectingAll(false);
     }
+  };
+
+  /* Breadcrumb "AI Talent Match" from a job's results / matching screen.
+     Switching the view alone left `?jdId=…&view=results` in the address bar,
+     so the URL effect read it again on its next run (the job list or a lookup
+     settling) and threw the recruiter back into that job's results — the
+     redirect after card → row → breadcrumb. Drop the job from the URL too
+     (push, so Back still returns to the results). */
+  const backToMatchList = () => {
+    userChangedView.current = true;
+    isMatchingInProgress.current = false;
+    setShowMatchingPanel(false);
+    setMatchError(null);
+    setViewMode('history');
+    updateUrlParams({});
   };
 
   const openCandidateMatch = (historyId: string) => {
@@ -2184,7 +2226,9 @@ export default function AITalentMatchPage({
 
     const preselectedJobId = urlJdId || sessionJobId;
 
-    if (!preselectedJobId) return;
+    if (!preselectedJobId) { handledUrlKeyRef.current = ''; return; }
+    const urlKey = `${urlJdId ?? ''}|${urlView ?? ''}`;
+    if (!sessionJobId && urlJdId && handledUrlKeyRef.current === urlKey) return;
     // Wait for the route's JD list (loaded on demand — the landing doesn't need it).
     if (!jobsLoaded) {
       onRequestJobs?.();
@@ -2204,6 +2248,7 @@ export default function AITalentMatchPage({
     }
 
     // Set the selected job
+    handledUrlKeyRef.current = urlKey;
     setSelectedJob(preselectedJobId);
 
     // Determine view based on URL param or sessionStorage flag. `view=details`
@@ -3000,7 +3045,7 @@ export default function AITalentMatchPage({
               className="mb-4 md:mb-6"
               items={[
                 { label: 'Dashboard', href: '/dashboard' },
-                { label: 'AI Talent Match', onClick: () => setViewMode('history') },
+                { label: 'AI Talent Match', onClick: backToMatchList },
                 { label: selectedJobData?.title || 'Matching' },
               ]}
             />
@@ -3989,8 +4034,12 @@ export default function AITalentMatchPage({
           );
           // Distinct candidates holding a match in the band — only once the
           // candidate roll-up is in, so the chip never shows a false 0.
-          const rowsLoaded = matchStats !== null;
-          const peopleInBand = (band: RatingBand) => matchStats?.candidates_by_band?.[band] ?? 0;
+          const rowsLoaded = cardStats !== null;
+          const peopleInBand = (band: RatingBand) => cardStats?.candidates_by_band?.[band] ?? 0;
+          // Unfiltered card figures (see `cardStats`).
+          const cardCounts = { all: cardStats?.all_matches ?? null, exact: cardStats?.rating_exact ?? null, partial: cardStats?.rating_partial ?? null };
+          const cardPeopleReady = cardStats !== null;
+          const cardPeople = cardStats?.total_candidates ?? 0;
           return (
         <div className="mb-4 sm:mb-5">
         <StatsCardGrid className="mb-0">
@@ -4000,14 +4049,14 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={History}
             label="Matched Jobs"
-            value={matchStats ? matchStats.matched_jobs.toLocaleString() : statLoading}
+            value={cardStats ? cardStats.matched_jobs.toLocaleString() : statLoading}
             sparkline={false}
-            title={`${(matchStats?.matched_jobs ?? 0).toLocaleString()} jobs have AI Talent Match results`
-              + (totalMatchedCandidatesReady ? `, matching ${totalMatchedCandidates.toLocaleString()} different candidates` : '')
+            title={`${(cardStats?.matched_jobs ?? 0).toLocaleString()} jobs have AI Talent Match results`
+              + (cardPeopleReady ? `, matching ${cardPeople.toLocaleString()} different candidates` : '')
               + '. Click to view by job.'}
             onClick={() => openHistoryListView()}
           >
-            {totalMatchedCandidatesReady && <StatChip count={totalMatchedCandidates} unit="candidate" />}
+            {cardPeopleReady && <StatChip count={cardPeople} unit="candidate" />}
           </StatsCard>
           <StatsCard
             tone="neutral"
@@ -4015,15 +4064,15 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={User}
             label="All Matches"
-            value={pillCounts.all === null ? statLoading : pillCounts.all.toLocaleString()}
+            value={cardCounts.all === null ? statLoading : cardCounts.all.toLocaleString()}
             sparkline={false}
-            title={pillCounts.all === null ? undefined
-              : `${pillCounts.all.toLocaleString()} candidate–job matches`
-                + (totalMatchedCandidatesReady ? `, from ${totalMatchedCandidates.toLocaleString()} different candidates` : '')
+            title={cardCounts.all === null ? undefined
+              : `${cardCounts.all.toLocaleString()} candidate–job matches`
+                + (cardPeopleReady ? `, from ${cardPeople.toLocaleString()} different candidates` : '')
                 + ' (one candidate matched to 3 jobs counts as 3). Click to view by candidate.'}
             onClick={() => { void openCandidatesView(); }}
           >
-            {totalMatchedCandidatesReady && <StatChip count={totalMatchedCandidates} unit="candidate" />}
+            {cardPeopleReady && <StatChip count={cardPeople} unit="candidate" />}
           </StatsCard>
           <StatsCard
             tone="neutral"
@@ -4031,10 +4080,10 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={CheckCircle2}
             label="Match Rating (10)"
-            value={pillCounts.exact === null ? statLoading : pillCounts.exact.toLocaleString()}
+            value={cardCounts.exact === null ? statLoading : cardCounts.exact.toLocaleString()}
             sparkline={false}
-            title={pillCounts.exact === null ? undefined
-              : `${pillCounts.exact.toLocaleString()} matches rated 10`
+            title={cardCounts.exact === null ? undefined
+              : `${cardCounts.exact.toLocaleString()} matches rated 10`
                 + (rowsLoaded ? `, from ${peopleInBand('exact').toLocaleString()} different candidates` : '')
                 + '. Click to show only these; click again to clear.'}
             onClick={() => pickBand('exact')}
@@ -4047,10 +4096,10 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={PieChart}
             label="Match Rating (9-7)"
-            value={pillCounts.partial === null ? statLoading : pillCounts.partial.toLocaleString()}
+            value={cardCounts.partial === null ? statLoading : cardCounts.partial.toLocaleString()}
             sparkline={false}
-            title={pillCounts.partial === null ? undefined
-              : `${pillCounts.partial.toLocaleString()} matches rated 9 to 7`
+            title={cardCounts.partial === null ? undefined
+              : `${cardCounts.partial.toLocaleString()} matches rated 9 to 7`
                 + (rowsLoaded ? `, from ${peopleInBand('partial').toLocaleString()} different candidates` : '')
                 + '. Click to show only these; click again to clear.'}
             onClick={() => pickBand('partial')}
@@ -5854,7 +5903,7 @@ export default function AITalentMatchPage({
                       value={historyFilterLocation}
                       onChange={(e) => historySearch.setFilter('location', e.target.value)}
                       placeholder="e.g. Chennai"
-                      className={`${selectCls} placeholder:text-gray-400`}
+                      className="tf-input"
                     />
                   </div>
                   <div>
@@ -5864,7 +5913,7 @@ export default function AITalentMatchPage({
                       value={historyFilterPhone}
                       onChange={(e) => historySearch.setFilter('phone', e.target.value)}
                       placeholder="Full or partial number"
-                      className={`${selectCls} placeholder:text-gray-400`}
+                      className="tf-input"
                     />
                   </div>
                   <div>
@@ -5877,7 +5926,7 @@ export default function AITalentMatchPage({
                         placeholder="Min"
                         min={0}
                         aria-label="Minimum candidate experience in years"
-                        className={`${selectCls} placeholder:text-gray-400`}
+                        className="tf-input"
                       />
                       <input
                         type="number"
@@ -5886,7 +5935,7 @@ export default function AITalentMatchPage({
                         placeholder="Max"
                         min={0}
                         aria-label="Maximum candidate experience in years"
-                        className={`${selectCls} placeholder:text-gray-400`}
+                        className="tf-input"
                       />
                     </div>
                   </div>
@@ -8011,7 +8060,7 @@ export default function AITalentMatchPage({
               { label: `AI Talent Match: ${resultsJobTitle || 'Results'}` },
             ] : [
               { label: 'Dashboard', href: '/dashboard' },
-              { label: 'AI Talent Match', onClick: () => setViewMode('history') },
+              { label: 'AI Talent Match', onClick: backToMatchList },
               { label: resultsJobTitle || 'Results' },
             ]}
             // Previous / Next job rides inside the breadcrumb bar, as on the
@@ -8700,7 +8749,7 @@ export default function AITalentMatchPage({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedVersionsCandidate(candidate);
+                          handleAttachmentsClick(candidate);
                         }}
                         className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
                       >
@@ -8904,7 +8953,7 @@ export default function AITalentMatchPage({
                         </button>
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); setSelectedVersionsCandidate(candidate); }}
+                          onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(candidate); }}
                           title="Attachments"
                           aria-label={`Attachments (${candidate.attachmentCount || 1})`}
                           className="tf-btn tf-btn-secondary gap-1 px-2.5 py-2 text-xs border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors whitespace-normal justify-start"
@@ -8999,7 +9048,7 @@ export default function AITalentMatchPage({
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedVersionsCandidate(candidate);
+                        handleAttachmentsClick(candidate);
                       }}
                       title="Attachments"
                       aria-label={`Attachments (${candidate.attachmentCount || 1})`}
@@ -9043,6 +9092,30 @@ export default function AITalentMatchPage({
         </div>
         </div>
       </main>
+      {/* Resume Versions Modal — the results table / cards' Attachments (📎)
+          button opens it. The results view returns before the page's other
+          copies of these popups, so it needs its own. */}
+      {selectedVersionsCandidate && (
+        <ResumeVersionsModal
+          candidate={selectedVersionsCandidate}
+          versions={realVersionsData}
+          loading={loadingVersions}
+          onClose={() => {
+            setSelectedVersionsCandidate(null);
+            setRealVersionsData([]);
+          }}
+        />
+      )}
+
+      {/* Preview — opened from a row's ⋮ menu. */}
+      {previewResume && (
+        <ResumeTextPreviewModal
+          resumeId={previewResume.id}
+          title={previewResume.name}
+          subtitle={previewResume.fileName}
+          onClose={() => setPreviewResume(null)}
+        />
+      )}
       </>
     );
   }
