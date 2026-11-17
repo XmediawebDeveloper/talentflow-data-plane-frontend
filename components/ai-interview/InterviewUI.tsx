@@ -1,0 +1,12935 @@
+"use client";
+
+import Image from "next/image";
+import { useState, useCallback, useRef, useEffect, memo, useSyncExternalStore } from "react";
+import { Button } from "@/components/ui/button";
+import { TalkingHeadAvatar, type TalkingHeadHandle } from "./TalkingHeadAvatar";
+import { Webcam, WebcamRef } from "./Webcam";
+import { MicWaveform } from "./MicWaveform";
+import { useAvatarState } from "@/hooks/useAvatarState";
+import { useHandRaiseDetection } from "@/hooks/useHandRaiseDetection";
+import {
+  useInterviewFaceDetection,
+  useInterviewObjectDetection,
+  useInterviewProctoringMonitor,
+  InterviewProctoringWarnings,
+  InterviewEventBus,
+  EnvironmentVerificationOverlay,
+  markAppOwnedCanvas,
+  type DetectedObjectEvent,
+  type ObjectEventType,
+} from './proctoring';
+import { CandidateInterviewInfo, candidateAIInterviewService, getAiClientSessionId, type ProctorFrameServerEvent } from "@/lib/services/candidateAIInterviewService";
+import { useServerProctorFrames, type ProctorVisionMode } from "./proctoring/useServerProctorFrames";
+import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon } from "./clientLogForwarder";
+import SectionTransitionOverlay from "./SectionTransitionOverlay";
+import { toast } from 'sonner';
+import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
+import { Clock, Timer, LogOut, Mic, Headset, Check, ArrowDown, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera, Loader2, WifiOff, Wifi } from "lucide-react";
+import { isFlexibleDuration, modeFromConfig } from "@/lib/constants/aiInterviewMode";
+import { isTranscriptMeaningful } from "@/lib/utils/whisperFilter";
+import { detectDeviceCapability, type DeviceCapability } from "@/lib/utils/deviceCapability";
+import { checkCameraApproval } from "@/lib/proctoring/cameraDeviceMonitor";
+import { INVALID_CAMERA_SELECTION_MESSAGE } from "@/lib/proctoring/virtualCameraDetection";
+// Side-effect import: arms the global unhandledrejection guard that silences
+// TF.js backend crashes AND benign browser-extension "message channel closed"
+// noise. Idempotent — safe even though face-verification also imports it.
+import "@/lib/tfjs-rejection-guard";
+import { keepAudioContextRunning, loadVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
+
+interface FaceVerificationHandle {
+  startVerification: (videoElement: HTMLVideoElement, intervalMs?: number) => void;
+  stopVerification: () => void;
+  /** Out-of-cadence identity check (face back after missing, 2nd face gone). */
+  verifyNow?: () => void;
+  hasBaseline: () => boolean;
+}
+
+interface VoiceVerificationHandle {
+  verifyVoice: (audioData: Float32Array, sampleRate: number) => void;
+  hasBaseline: () => boolean;
+}
+
+export interface InterviewTimerSnapshot {
+  remainingSeconds: number;
+  questionTimerSeconds: number | null;
+  questionTimerExpired: boolean;
+  questionNumber: number | null;
+  totalQuestions: number | null;
+}
+
+interface InterviewUIProps {
+  token: string;
+  interviewInfo: CandidateInterviewInfo;
+  onInterviewComplete?: () => void;
+  // Fired the moment the server signals the interview reached its NATURAL end
+  // (`interview_ended`), i.e. all questions done + farewell. The portal uses
+  // this to DISARM fullscreen-exit termination while the completion popup is
+  // up — otherwise exiting fullscreen at the "Done" popup would terminate an
+  // already-finished interview and block its evaluation.
+  onInterviewClosing?: () => void;
+  /**
+   * Requests the parent portal terminate the interview for a proctoring
+   * violation the parent owns the full termination flow for (persisted
+   * reason, proctor event, screen-recording tail capture, sticky terminated
+   * page) — mirrors the leave-the-screen termination already implemented
+   * there. Currently fired only when the microphone stays disconnected
+   * through the full 3-minute pause grace window.
+   */
+  onTerminate?: (reason: string) => void;
+  faceVerification?: FaceVerificationHandle;
+  voiceVerification?: VoiceVerificationHandle;
+  copyPasteBlocking?: boolean;
+  onTimerChange?: (state: InterviewTimerSnapshot) => void;
+  /** Detected device tier + feature flags (from the system-check step). When
+   * omitted, the interview assumes a capable device (all features on). */
+  deviceCapability?: DeviceCapability;
+  /** The camera deviceId that passed System Check's webcam validation. When
+   * set, the interview pins <Webcam> to this exact device at acquire time
+   * and monitors for the candidate switching away from it mid-interview
+   * (see the camera-device-lost effect below). Null/undefined (e.g. system
+   * check skipped) falls back to today's unconstrained default-camera
+   * behavior — no pinning, no switch detection. */
+  approvedCameraDeviceId?: string | null;
+  approvedMicDeviceId?: string | null;
+  /** Object URL of the candidate's captured identity photo, used for the "You"
+   * chat avatar. Null/undefined (e.g. identity step skipped) → the "You" text
+   * avatar is shown instead. */
+  candidatePhotoUrl?: string | null;
+}
+
+interface Message {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  /** Timer value (seconds remaining) when the candidate stopped speaking — shown as a frozen badge */
+  responseTimeSeconds?: number;
+  /** IST timestamp string (e.g. "2:34 PM") captured when the message was created */
+  timestamp?: string;
+  /** True if this assistant message is a follow-up question (bundles a previously-volunteered skill or fires as in-slot validation). NOT rendered in the live chat — the "Follow-up" chip + inline note live ONLY on the post-interview Question Analysis (EvaluationDashboardV2) page. Kept on the Message type because saveAiMessage still stamps it from `question_meta` for round-trip parity. */
+  isFollowup?: boolean;
+  /** The interview question number this message belongs to. Assistant bubbles are
+   *  tagged with the question being asked; user answers (especially late, background-
+   *  transcribed ones in the decoupled flow) carry the number of the question they
+   *  answered so they can be attached to the right bubble instead of appended at the bottom. */
+  questionNumber?: number;
+  /** True for candidate-initiated action chips ("Repeat Question" / "Move to
+   *  next question") posted into the chat when those buttons are clicked. These
+   *  render like a candidate bubble but must NEVER be treated as an answer — the
+   *  answer-transcript placement/upgrade logic skips any bubble with this flag so
+   *  a later transcript can't overwrite the request text. */
+  isActionRequest?: boolean;
+}
+
+type ClusterData = import('./SkillCoveragePanel').ClusterData;
+
+type ProctorEventDetails = Record<string, unknown>;
+type ProctorEventPayload = {
+  event_type: string;
+  timestamp?: string;
+  severity?: string;
+  details?: ProctorEventDetails;
+};
+
+type VendorFullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  mozFullScreenElement?: Element | null;
+  msFullscreenElement?: Element | null;
+};
+
+interface BrowserSpeechRecognitionAlternative {
+  transcript: string;
+}
+
+interface BrowserSpeechRecognitionResultLike {
+  0: BrowserSpeechRecognitionAlternative;
+  isFinal: boolean;
+}
+
+interface BrowserSpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<BrowserSpeechRecognitionResultLike>;
+}
+
+interface BrowserSpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: BrowserSpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  // Fires when the engine actually begins capturing mic audio. Used to sync the
+  // "Your turn — speak now" popup with the moment live transcription is truly live.
+  onaudiostart?: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+interface BrowserSpeechRecognitionConstructor {
+  new (): BrowserSpeechRecognitionLike;
+}
+
+type InterviewWindow = Window & {
+  __interviewAudioContext?: AudioContext;
+  /** Delay between a PCM chunk arriving and it becoming AUDIBLE, for the audio
+   *  path TalkingHeadAvatar actually took this turn. 0 for its raw Web Audio
+   *  fallback (plays immediately); null/undefined means the worklet path, so
+   *  TALKING_HEAD_BUFFER_MS applies. Set by TalkingHeadAvatar.streamStart. */
+  __interviewAudibleDelayMs?: number | null;
+  SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+  webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+  __audioFramesDropped?: number;
+  __audioFramesSent?: number;
+  __audioSilentFramesSent?: number;
+  __audioBytesSent?: number;
+  __audioFramesFailed?: number;
+};
+
+interface InterviewVadConfig {
+  silence_threshold?: number;
+  silence_duration_ms?: number;
+}
+
+
+interface InterviewSocketMessage {
+  type?: string;
+  action?: string;
+  answer_type?: 'text' | 'yes_no';
+  buffer_minutes?: number;
+  cluster?: string;
+  clusters?: ClusterData[];
+  coverage_map?: Record<string, unknown>;
+  covered?: string[];
+  current_cluster_id?: string;
+  current_skill?: string;
+  duration_minutes?: number;
+  duration_seconds?: number;
+  elapsed_seconds?: number;
+  follow_skills?: string[];
+  for_previous_question?: boolean;
+  from_cluster?: string;
+  global_remaining_seconds?: number;
+  hr_question_id?: string;
+  hr_topics?: Record<string, string>;
+  is_clarification?: boolean;
+  is_enhanced?: boolean;
+  is_final?: boolean;
+  is_follow_up?: boolean;
+  is_followup?: boolean;
+  kind?: string;
+  linda_spoke_seconds?: number;
+  live_transcript_enabled?: boolean;
+  low_covered?: string[];
+  medium_covered?: string[];
+  message?: string;
+  nice_to_have_skills?: string[];
+  prior_messages?: Array<Pick<Message, "role" | "content">>;
+  prior_question_count?: number;
+  question_count?: number;
+  question_number?: number;
+  questions_asked?: number;
+  realtime_transcription_enabled?: boolean;
+  reason?: string;
+  remaining_seconds?: number;
+  round?: string;
+  round_name?: string;
+  seconds?: number;
+  session_id?: string;
+  stt_model?: string;
+  text?: string;
+  timer_state?: unknown;
+  to_cluster?: string;
+  token?: string;
+  total_questions?: number;
+  total_seconds?: number;
+  uncovered?: string[];
+  vad_config?: InterviewVadConfig;
+  [key: string]: unknown;
+}
+
+function getErrorName(error: unknown): string {
+  if (error instanceof Error) return error.name;
+  if (typeof error === "object" && error !== null && "name" in error && typeof error.name === "string") {
+    return error.name;
+  }
+  return "";
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
+    return error.message;
+  }
+  if (typeof error === "string") return error;
+  return String(error);
+}
+
+/** How long after the candidate's turn opens the "Repeat Question" button stays
+ *  clickable. After this window it disables (so a candidate can't reset their
+ *  answer clock by repeating mid/late answer). One repeat per question. */
+const REPEAT_WINDOW_MS = 30000;
+// Live-interview face identity check cadence, same for every device tier
+// (CPU cost — see the startVerification call). Revisit after R&D.
+const FACE_VERIFY_INTERVAL_MS = 30000;
+// How long after connect a missing face baseline may still arrive (stored
+// Identity photo re-fetched after a reload) before it is logged as unavailable.
+const FACE_BASELINE_GRACE_MS = 15000;
+// Longest the "Preparing your interview…" warm-up may hold back the start.
+const PREPARE_MAX_WAIT_MS = 20000;
+// Stagger inside "Preparing…": object detection (ONNX/WebGPU worker + 28.8 MB
+// model) starts warming only once MediaPipe face detection reports warmed, or
+// after this many ms — whichever first — so the two don't compete for the
+// CPU/GPU at the same moment. The PREPARE_MAX_WAIT_MS cap is unchanged.
+const OBJECT_DETECTION_WARMUP_STAGGER_MS = 3000;
+
+/** Returns current time formatted as IST with AM/PM (e.g. "2:34 PM") */
+function nowIST(): string {
+  return new Date().toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+// Whisper-hallucination filter (isTranscriptMeaningful) is imported at the
+// top of this file from lib/utils/whisperFilter. It is shared with the
+// practice session so both paths reject the same artifacts —
+// "Please help! This is a big problem!", "Transcription by ESO — …",
+// looping n-gram repetitions, etc.
+
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 1 perf helpers (2026-05-28)
+//
+// Background: InterviewUI is a single ~6000-line component. Every setState
+// in here reconciles the whole tree, including the messages list (which
+// grows over the interview) and Bina's live AI bubble. During an AI turn
+// the parent fires setState many times per second (token reveal at 80 ms,
+// silence/timer ticks, WS audio/JSON events). The fix below isolates the
+// two heaviest leaf renders into memoized child components so a parent
+// re-render no longer reconciles them when their own props are unchanged.
+// No business-logic, audio, WS, or scoring code is touched.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Minimum bytes to buffer before flushing a non-final recording segment.
+// S3 multipart-upload requires every part except the last to be >= 5 MiB; we add
+// a small margin so a slightly-undersized flush can't fail CompleteMultipartUpload.
+const RECORDING_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
+// A recorder that has produced no data this long after start is stalled (its
+// audio mix isn't running) — see the watchdog in startRecorder. Two 5 s
+// timeslices plus slack.
+const RECORDING_STALL_CHECK_MS = 12_000;
+const RECORDING_STALL_RECHECK_MS = 6_000;
+// Per-tick reveal tracing (console.debug every 200 ms while Bina speaks).
+// Off in shipped builds; flip locally when tuning caption sync.
+const REVEAL_DEBUG = false;
+// Stall telemetry while Bina speaks: a reveal-tick gap (interval 200 ms) or a
+// long task at least this long is logged on its own line.
+const CAPTION_STALL_LOG_MS = 600;
+// Long tasks shorter than this are ignored (normal render work).
+const LONG_TASK_LOG_MS = 200;
+// The text reveal is anchored to audio playback so caption ≈ voice. But tracking
+// the audio position EXACTLY makes the text always trail the word you already
+// hear ("voice comes before text"). We reveal this many ms AHEAD of the audio
+// clock so each word appears just as/before it's spoken — subtitle-style, which
+// reads as tightly in sync instead of laggy. Kept small so text never finishes
+// noticeably before the audio.
+const REVEAL_LEAD_MS = 550;
+// Shared speech clock (speechSync.ts): a word is shown this long before the
+// candidate HEARS it start. The clock is the audible sample itself, so this is
+// the whole lead — the typewriter (TYPE_TRAIL_MS) finishes the word inside it.
+// REVEAL_LEAD_MS / DEFAULT_REVEAL_CPS / PHASE_A_* only pace the legacy path
+// (a cached worklet without the clock).
+const CAPTION_LEAD_MS = 150;
+// Caption tick. Cheap: the bubble only re-renders when the revealed text
+// changes (a few times a second), and word-level targets need finer than the
+// old 200 ms quantisation to land on the word they belong to.
+const REVEAL_TICK_MS = 50;
+// Phase A reveal rate (chars/sec) used until `audio_end` tells us the TRUE total
+// audio duration. Prior only — replaced by the previous turn's MEASURED rate
+// (chars ÷ actual audio seconds) from the second turn on, so it self-calibrates
+// to voice, language and AI_TTS_SPEED instead of trusting a constant.
+// The prior only paces the FIRST turn — the long intro, whose audio arrives over
+// ~9 s, so its error builds up before audio_end. Measured at AI_TTS_SPEED 0.85
+// (staging 2026-11-02, ai-458fd0bb): intro 890 chars / 52.6 s = 16.9 cps. The
+// old 12 left the caption ~48 chars behind at audio_end, which then typed in a
+// visible burst on "…for the <role> role. In this position" every interview.
+// Kept a little under the measurement: a slight lag catches up gently, running
+// ahead would freeze the caption until the voice catches up.
+// 2026-11-03: that measurement was taken with 0.85 configured but NOT applied
+// (gpt-4o-mini-tts ignores `speed`); the backend now really stretches to 0.85,
+// so 16.9 × 0.85 ≈ 14.4 cps.
+const DEFAULT_REVEAL_CPS = 14;
+// Safety ceiling on Phase A, NOT a pacer (see startRevealingTokens). The rate
+// pacer above governs; this only stops a bad CPS prior from completing the
+// bubble before `audio_end` confirms the total.
+const PHASE_A_MAX_FRACTION = 0.94;
+// COLD-START PRIOR ONLY — no longer the steady-state value.
+// TalkingHead's WORKLET path becomes audible some time after the first PCM
+// chunk arrives (worklet module load on the first turn, then just the audio-
+// thread hop + hardware output latency). Text reveal must wait that long, else
+// the bubble paints while Bina is still silent.
+// TalkingHeadAvatar now MEASURES this per turn — `onAudioStart` (the worklet's
+// `playback-started`) minus first-chunk arrival, plus the context's output
+// latency — and publishes it to `__interviewAudibleDelayMs`, carrying the last
+// measurement forward as the next turn's prior. This constant therefore only
+// applies to the window before the very first measurement of the session lands.
+// It is deliberately generous: over-estimating makes captions trail slightly,
+// under-estimating makes them outrun Bina (and the reveal is monotonic, so an
+// over-reveal cannot be walked back within a turn).
+const TALKING_HEAD_BUFFER_MS = 1500;
+// Longest we hold the "Bina is speaking" UI and the caption after a turn's
+// first PCM chunk while waiting for TalkingHead's audible-start signal. Normal
+// onset is well under 1 s; this only bounds a missing signal.
+const BINA_AUDIBLE_SAFETY_MS = 3500;
+// Within this distance of the bottom the chat still counts as "at the
+// bottom" — a small accidental scroll must not stop the auto-scroll.
+const CHAT_STICK_THRESHOLD_PX = 120;
+// Cap on mic chunks kept per answer for the client voice check (~4096
+// samples each → ≈ 5-11 s of audio, evenly spread across the answer).
+const VOICE_VERIF_MAX_CHUNKS = 128;
+// Delay between chunk arrival and audible output for the path TalkingHeadAvatar
+// actually took this turn — MEASURED, see TalkingHeadAvatar.streamStart's
+// `onAudioStart`. Non-numeric only before the session's first measurement.
+const getAudibleDelayMs = (): number => {
+  const v = (window as InterviewWindow).__interviewAudibleDelayMs;
+  return typeof v === 'number' && v >= 0 ? v : TALKING_HEAD_BUFFER_MS;
+};
+
+const formatTimeMMSS = (seconds: number): string => {
+  const safe = Math.max(0, Math.floor(seconds || 0));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
+// ── DEV: Debug overlay row helper (remove with overlay) ─────────────────
+const Row = ({ label, value, color = 'var(--raw-e2e8f0)' }: { label: string; value: string; color?: string }) => (
+  <div className="flex justify-between gap-2">
+    <span style={{ color: 'var(--raw-64748b)' }}>{label}</span>
+    <span style={{ color }} className="text-right">{value}</span>
+  </div>
+);
+
+const Section = ({ label }: { label: string }) => (
+  <div className="text-purple-300 font-semibold pt-1 pb-0.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>{label}</div>
+);
+
+const Bar = ({ pct, color = 'var(--raw-818cf8)' }: { pct: number; color?: string }) => (
+  <div className="mt-0.5 mb-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+    <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: color }} />
+  </div>
+);
+
+// ── YouAvatar ───────────────────────────────────────────────────────────
+// The candidate's chat avatar. Shows their captured identity photo when
+// available (photoUrl), else the green "You" text circle. Kept tiny (24px) to
+// match Bina's avatar; the photo is cropped to a circle via object-cover.
+const YouAvatar = ({ photoUrl }: { photoUrl?: string | null }) => {
+  if (photoUrl) {
+    return (
+      <img
+        src={photoUrl}
+        alt="You"
+        className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-500/40"
+      />
+    );
+  }
+  return (
+    <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+      <span className="text-white text-2xs font-bold">You</span>
+    </div>
+  );
+};
+
+// ── MessageRow ──────────────────────────────────────────────────────────
+// Single chat bubble. Memoized on the immutable `msg` reference. When
+// `setMessages([...prev, newMsg])` runs, only the newly-appended msg has a
+// new reference; all existing msgs keep the same identity → React.memo's
+// default shallow compare skips their render. Before this extraction every
+// token-reveal tick (12.5 Hz) re-rendered every prior message bubble.
+interface MessageRowProps {
+  msg: Message;
+  candidatePhotoUrl?: string | null;
+}
+
+const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug(`[render] MessageRow id=${msg.id}`);
+  }
+  if (msg.role === 'system') {
+    return (
+      <div className="flex justify-center">
+        <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-full">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+          <p className="text-amber-700 text-xs">{msg.content}</p>
+        </div>
+      </div>
+    );
+  }
+  if (msg.role === 'user' && msg.isActionRequest) {
+    // Candidate quick-action chip (Repeat Question / Next). Rendered as a compact
+    // right-aligned request bubble so it's clearly a candidate action, not a
+    // spoken answer.
+    return (
+      <div className="flex justify-end">
+        <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+          <p className="text-sm font-medium">{msg.content}</p>
+        </div>
+      </div>
+    );
+  }
+  if (msg.role === 'user') {
+    return (
+      <div className="flex gap-2 flex-row-reverse">
+        <YouAvatar photoUrl={candidatePhotoUrl} />
+        <div className="max-w-[80%] min-w-0">
+          <div className="flex items-center justify-end gap-2 mb-0.5">
+            <span className="text-2xs font-semibold text-emerald-600 dark:text-emerald-400">Your Response</span>
+            {msg.responseTimeSeconds != null && (
+              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-2xs font-bold tabular-nums ${
+                msg.responseTimeSeconds <= 30
+                  ? 'bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30'
+                  : msg.responseTimeSeconds <= 60
+                  ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 border border-amber-200 dark:border-amber-500/30'
+                  : 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30'
+              }`}>
+                <Clock className="w-2.5 h-2.5" />
+                {formatTimeMMSS(msg.responseTimeSeconds)} left
+              </span>
+            )}
+          </div>
+          <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
+            <p className="text-sm leading-relaxed break-words">{msg.content}</p>
+          </div>
+          {msg.timestamp && (
+            <p className="tf-micro-hint mt-0.5 text-right">{msg.timestamp}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex gap-2">
+      <img
+        src="/linda-avatar.webp"
+        onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }}
+        alt="Bina"
+        className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
+      />
+      <div className="max-w-[80%] min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-2xs font-semibold text-purple-600 dark:text-purple-400">BINA</span>
+        </div>
+        <div className="px-3 py-2 bg-violet-50 dark:bg-violet-500/10 text-violet-900 dark:text-violet-300 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
+          {/* pre-line: keeps the committed opening warm-up (role summary +
+              AII16 tips) laid out the same way it streamed. */}
+          <p className="text-sm leading-relaxed whitespace-pre-line break-words">{msg.content}</p>
+        </div>
+        {msg.timestamp && (
+          <p className="tf-micro-hint mt-0.5">{msg.timestamp}</p>
+        )}
+      </div>
+    </div>
+  );
+});
+const MessageRowMemo = memo(MessageRow);
+
+// ── LiveAIBubble ────────────────────────────────────────────────────────
+// Bina's streaming-text bubble (token-reveal at 80 ms). Lifted out of the
+// parent JSX so the bubble can re-render on its own without forcing the
+// surrounding messages list / chrome to reconcile. React.memo on the
+// single `text` prop — when token reveal pushes a new substring, only
+// this component renders.
+//
+// The revealed text lives in a tiny store the bubble subscribes to, NOT in
+// InterviewUI state: a state update re-rendered the whole 12k-line component 5x
+// a second while Bina spoke, adding main-thread load. When the main thread
+// stalls, Bina's voice (audio thread) keeps playing while the caption freezes
+// and then jumps ahead (staging 2026-11-02). Now a tick re-renders only this.
+interface CaptionStore {
+  get: () => string;
+  set: (text: string) => void;
+  subscribe: (fn: () => void) => () => void;
+}
+
+function createCaptionStore(): CaptionStore {
+  let text = "";
+  const subs = new Set<() => void>();
+  return {
+    get: () => text,
+    set: (next: string) => {
+      if (next === text) return;
+      text = next;
+      subs.forEach((fn) => fn());
+    },
+    subscribe: (fn: () => void) => {
+      subs.add(fn);
+      return () => { subs.delete(fn); };
+    },
+  };
+}
+
+interface LiveAIBubbleProps {
+  store: CaptionStore;
+}
+
+// Typewriter: the reveal clock moves the TARGET in ~3-char steps every 200 ms
+// (and further after a main-thread stall), which looked word-by-word / jumpy.
+// The bubble types toward the target one letter at a time on animation frames,
+// trailing it by about one tick; after a stall it types the backlog fast but
+// visibly instead of popping it in. Text is written straight to the DOM node,
+// so no React render per letter.
+const TYPE_TRAIL_MS = 110;          // normal lag behind the reveal target (word-level targets: a word types in ~0.1 s, inside CAPTION_LEAD_MS)
+const TYPE_MAX_CPS = 45;            // backlog catch-up: ~2.5x Bina's pace, reads as quick typing, not a fast-forward
+const TYPE_MAX_CATCHUP_MS = 1500;   // never trail a huge backlog longer than this
+
+const LiveAIBubble = (({ store }: LiveAIBubbleProps) => {
+  const text = useSyncExternalStore(store.subscribe, store.get, store.get);
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('[render] LiveAIBubble');
+  }
+  const typedRef = useRef<HTMLSpanElement>(null);
+  const shownRef = useRef(0);        // fractional count of letters on screen
+  const shownTextRef = useRef("");
+  const rafRef = useRef<number | null>(null);
+  const lastFrameRef = useRef(0);
+  useEffect(() => {
+    const target = text;
+    // Text replaced rather than extended (llm_correction): keep only the part
+    // that still matches, then type the rest.
+    if (!target.startsWith(shownTextRef.current)) {
+      let i = 0;
+      const prev = shownTextRef.current;
+      while (i < prev.length && i < target.length && prev[i] === target[i]) i++;
+      shownRef.current = i;
+      shownTextRef.current = target.slice(0, i);
+      if (typedRef.current) typedRef.current.textContent = shownTextRef.current;
+    }
+    if (rafRef.current !== null) return; // loop already running; it reads `text` via store
+    lastFrameRef.current = 0;
+    const step = (now: number) => {
+      const goal = store.get();
+      const dt = lastFrameRef.current ? Math.min(now - lastFrameRef.current, 100) : 16;
+      lastFrameRef.current = now;
+      const backlog = goal.length - shownRef.current;
+      if (backlog <= 0) {
+        rafRef.current = null;
+        return;
+      }
+      const perMs = Math.max(
+        Math.min(backlog / TYPE_TRAIL_MS, TYPE_MAX_CPS / 1000),
+        backlog / TYPE_MAX_CATCHUP_MS,
+      );
+      shownRef.current = Math.min(goal.length, shownRef.current + perMs * dt);
+      const n = Math.floor(shownRef.current);
+      if (n !== shownTextRef.current.length) {
+        shownTextRef.current = goal.slice(0, n);
+        if (typedRef.current) typedRef.current.textContent = shownTextRef.current;
+      }
+      rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+  }, [text, store]);
+  useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+  }, []);
+  return (
+    <div className="flex gap-2">
+      <img
+        src="/linda-avatar.webp"
+        onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }}
+        alt="Bina"
+        className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
+      />
+      <div className="max-w-[80%] min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-2xs font-semibold text-purple-600 dark:text-purple-400">BINA</span>
+        </div>
+        <div className="px-3 py-2 bg-violet-50 dark:bg-violet-500/10 text-violet-900 dark:text-violet-300 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
+          <div className="flex items-center gap-1 mb-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+          {/* pre-line: Bina's opening warm-up carries the AII16 tips as
+              newline-separated lines. Questions have no newlines, so this is a
+              no-op for every other turn. */}
+          {/* Blinking typing cursor at the end of the streaming text — same
+              look as the Practice Session bubble (StepSamplePractice). */}
+          <style>{`@keyframes tfLiveCaret {0%,100%{opacity:1}50%{opacity:0.25}}`}</style>
+          <p className="text-sm leading-relaxed whitespace-pre-line break-words">
+            <span ref={typedRef} />
+            <span className="inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-violet-600 dark:bg-violet-400 align-middle" style={{ animation: 'tfLiveCaret 1.4s ease-in-out infinite' }} aria-hidden="true" />
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+});
+const LiveAIBubbleMemo = memo(LiveAIBubble);
+
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl, approvedCameraDeviceId, approvedMicDeviceId }: InterviewUIProps) {
+  // ── Effective device capability ──────────────────────────────────────────
+  // The portal detects this at the system-check step, but a RESUMED session (or
+  // any entry path that skips system check) arrives with deviceCapability=undefined
+  // → lite mode would never activate and a 2-core machine would load the heavy
+  // 3D avatar. Fallback: detect it HERE on first render (synchronous useState
+  // initializer, so it's ready BEFORE TalkingHead mounts and the audioOnly
+  // decision is correct from the very first frame). The ~one-time benchmark
+  // (~130ms on a slow CPU) is far cheaper than loading the 3D avatar.
+  const [fallbackDeviceCapability] = useState<DeviceCapability | undefined>(() => {
+    if (deviceCapability) return undefined; // prop provided → no fallback needed
+    if (typeof window === 'undefined') return undefined;
+    try {
+      const cap = detectDeviceCapability({ runBenchmark: true });
+      console.log('[InterviewUI] deviceCapability prop missing — detected locally:', cap.tier, `(cores=${cap.cores}, bench=${cap.benchmarkMs?.toFixed(0)}ms)`);
+      return cap;
+    } catch {
+      return undefined;
+    }
+  });
+  const effectiveDeviceCapability = deviceCapability ?? fallbackDeviceCapability;
+
+  // State
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isAiSpeaking, setIsAiSpeaking] = useState(false);
+  const [currentTranscript, setCurrentTranscript] = useState("");
+  const [isCandidateTranscriptProcessing, setIsCandidateTranscriptProcessing] = useState(false);
+  // Ref mirror so stale-closure re-arm paths (setTimeout, WS handlers) can read
+  // the latest value synchronously. Used to block the mic from reopening while a
+  // PREVIOUS answer is still being transcribed — otherwise a same-slot second
+  // utterance can race the first answer (the "spoke 2 min, mic reopened, said a
+  // few words" bug that wiped the real answer).
+  const isCandidateTranscriptProcessingRef = useRef(false);
+  const [backendLiveTranscriptEnabled, setBackendLiveTranscriptEnabled] = useState(false);
+  const [browserSpeechRecognitionSupported, setBrowserSpeechRecognitionSupported] = useState(false);
+  const [realtimeTranscriptionEnabled, setRealtimeTranscriptionEnabled] = useState(false);
+  const realtimeTranscriptionEnabledRef = useRef(false);
+  // When true, the SERVER drives turn-end (provider EndOfTurn). The client must
+  // NOT cut the turn on its own silence timer — it stops only on `server_end_turn`.
+  const serverEotEnabledRef = useRef(false);
+  const [activeMicLabel, setActiveMicLabel] = useState("");
+  const [micInputLevel, setMicInputLevel] = useState(0);
+  // "Mic input low" warning is SUSTAINED-only: it fires solely after several
+  // seconds of continuously low input, never on the normal dips between words.
+  // This stops the distracting warning from flashing while the candidate speaks
+  // normally (each speech peak resets the clock). See the level loop below.
+  const [micInputLow, setMicInputLow] = useState(false);
+  const micInputLowRef = useRef(false);
+  const lastGoodMicAtRef = useRef<number | null>(null);
+  // Sync ref mirror of currentTranscript — the live provider/browser
+  // transcript the candidate sees while speaking.
+  const currentTranscriptRef = useRef("");
+  const liveTranscriptDisplayRef = useRef("");
+  // Bina's revealed caption: text in captionStore (only LiveAIBubble renders
+  // it), plus whether there is any - the only part the parent layout needs.
+  const [captionStore] = useState(createCaptionStore);
+  const [hasAiText, setHasAiText] = useState(false);
+  const setCurrentAiText = useCallback((text: string) => {
+    captionStore.set(text);
+    setHasAiText(text.length > 0);
+  }, [captionStore]);
+  const [status, setStatus] = useState("Connecting...");
+  const [lindaAvatarSrc, setLindaAvatarSrc] = useState("/linda-avatar.webp");
+  /** True while Bina is currently streaming a question that the backend
+   *  flagged as a follow-up (`question_meta` with is_followup=true).
+   *  NOT shown in the live chat (no chip, no note) — the Follow-up chip and
+   *  inline "Reframed as a follow-up" note live ONLY on the post-interview
+   *  Question Analysis page. The ref is still tracked so saveAiMessage can
+   *  stamp `isFollowup` onto the saved Message for transcript/eval parity. */
+  const isCurrentFollowupRef = useRef(false);
+
+  // Interview closing state
+  const [isClosing, setIsClosing] = useState(false);
+  const isClosingRef = useRef(false);
+  const [closingReason, setClosingReason] = useState<string>("");
+
+  // Silence detection — "Are you there?" banner (Req 14b)
+  const [showSilenceBanner, setShowSilenceBanner] = useState(false);
+  const silenceBannerTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const silenceCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Interview completion modal (Req 16)
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  // The server's completion text is still received, but the saving overlay
+  // no longer shows it (it claimed "recorded successfully" before the upload
+  // had finished).
+  const [, setCompletionMessage] = useState("");
+  const shouldDisconnectAfterAudioRef = useRef(false);
+  // Defer the completion modal until Bina's farewell audio actually ends.
+  // Backend sends `interview_completion_message` right after `interview_ended`
+  // without waiting for TTS playback to drain — if we show the modal
+  // immediately it pops up while Bina is still speaking.
+  const pendingCompletionModalRef = useRef(false);
+  // When the "Finishing up…" popup actually appeared, so the final page can
+  // wait until the candidate has seen it (see waitForCompletionPopup).
+  const completionShownAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (showCompletionModal && completionShownAtRef.current === null) {
+      completionShownAtRef.current = Date.now();
+    }
+  }, [showCompletionModal]);
+
+  // 5-minute buffer state (MOM: buffer when allocated time expires)
+  const [isInBuffer, setIsInBuffer] = useState(false);
+  // Ref to block all mic recording after force_mic_off (hard 35-min stop)
+  const isMicForceOffRef = useRef(false);
+
+  // Timed mode — per-question 2-min timer
+  const [questionTimerSeconds, setQuestionTimerSeconds] = useState<number | null>(null);
+  const [questionTimerExpired, setQuestionTimerExpired] = useState(false);
+  const questionTimerExpiredRef = useRef(false); // sync ref — avoids stale closure in setTimeout/setInterval callbacks
+
+  // ── Repeat-Question button gating + timer-freeze during the re-speak ──
+  // canRepeat: the Repeat button is only clickable during the FIRST VAD window
+  // (silence_duration_ms, ~8s) of the candidate's turn — after that it disables.
+  const [canRepeat, setCanRepeat] = useState(false);
+  const repeatWindowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Absolute performance.now() deadline for the repeat window, and the instant
+  // it was last paused (null when running / not armed). Mirrors
+  // questionTimerPausedAtRef below: whenever Bina speaks mid-turn (a silence
+  // nudge, a clarification, a repeat re-speak, a device-outage freeze) the
+  // window is paused instead of silently ticking down, so a candidate who
+  // stays quiet until "Are you there?" still gets a true REPEAT_WINDOW_MS of
+  // USABLE button time — not REPEAT_WINDOW_MS of wall-clock with a gap in the
+  // middle where the button was hidden.
+  const repeatWindowDeadlineAtRef = useRef<number | null>(null);
+  const repeatWindowPausedSinceRef = useRef<number | null>(null);
+  // repeatFreeze: from a Repeat click until Bina finishes re-speaking, the
+  // per-question answer timer is FROZEN (doesn't count down). We snapshot the
+  // remaining seconds at click time and resume from it after the re-speak, so
+  // the repeat's speech never eats the candidate's answer window.
+  const repeatFreezeRef = useRef(false);
+  const repeatFrozenRemainingRef = useRef<number | null>(null);
+  // True once the candidate has used their one repeat for the CURRENT question.
+  // Reset only when a genuinely NEW question starts. Prevents the repeat window
+  // from re-arming after the repeat's own re-speak resume.
+  const repeatUsedThisTurnRef = useRef(false);
+  // Id of the "Let's move on…" skip chip so it can be removed if the candidate
+  // actually spoke and a real transcript lands for the skipped question.
+  const skipChipIdRef = useRef<string | null>(null);
+
+  // Bridge phrase caption — shown while Bina speaks a pre-cached transition
+  // clip after the 2-min hard-cap fires. Distinct from the question card
+  // (rendered as a "Bina · Transition" chip below the avatar) so reviewers
+  // and candidates don't mistake it for an interview question.
+  const [bridgeCaption, setBridgeCaption] = useState<string | null>(null);
+  // Bumped whenever questionTimerPendingRef is set to a new duration. The
+  // pending-timer useEffect uses this as a dependency so it re-fires even
+  // when isAiSpeaking doesn't transition (covers the race where
+  // question_timer_started arrives just AFTER audio_end flipped isAiSpeaking
+  // to false — previously the effect saw nothing changed and the pending
+  // value just sat there, producing the "no timer on Q3" bug).
+  const [questionTimerPendingTick, setQuestionTimerPendingTick] = useState(0);
+  // Set when the server blocks this connection because the interview link is
+  // already open/active in another window or device (single-active-session
+  // guard). Shows a terminal overlay and stops auto-reconnect.
+  const [concurrentBlocked, setConcurrentBlocked] = useState(false);
+  const concurrentBlockedRef = useRef(false);
+  // A 4409 on an AUTO-RECONNECT (this page already had a live interview) is
+  // usually the server still seeing our own dropped socket — retry a few times
+  // (2s, 3s, 5s) before showing the overlay. A first open never retries.
+  const interviewStartedRef = useRef(false);
+  const concurrentRetryRef = useRef(0);
+  // Next-Q debounce: set true the moment the candidate clicks Next Q (so the
+  // button disables immediately and rapid double-clicks can't send multiple
+  // skip_question messages). Cleared when the backend sends the next question's
+  // question_timer_started event, confirming the skip was processed.
+  const [nextSkipInFlight, setNextSkipInFlight] = useState(false);
+  const nextSkipInFlightRef = useRef(false);
+  // Guards the "Repeat Question" action button so a double-click can't fire two
+  // repeat_question messages. Released when the backend re-opens the answer
+  // window (question_timer_started) — same lifecycle as nextSkipInFlight.
+  const [repeatInFlight, setRepeatInFlight] = useState(false);
+  const repeatInFlightRef = useRef(false);
+  // The question text being re-spoken by Repeat. The backend's re-speak sends
+  // audio only (handler._speak — no greeting / llm_token), and tokenBufferRef
+  // was already cleared when the original question was saved, so
+  // speaking_started fed TalkingHead "" → no viseme timeline → Bina's mouth
+  // stayed closed for the whole repeat. speaking_started falls back to this.
+  const repeatTextRef = useRef("");
+  // Tracks whether the BACKEND already sent question_timer_expired for the current
+  // question. When true, the client must NOT send its own skip_question — the
+  // backend's _auto_skip already called handle_skip_question. Cleared when the
+  // next question_timer_started arrives.
+  const backendExpiredRef = useRef(false);
+  const questionTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Wall-clock of the last successful timer tick. The stuck-detection
+  // watchdog compares this against now() — if more than 3 s has passed
+  // while the timer should be running, the interval is presumed dead and
+  // restarted from the cached remaining value. Catches the case where an
+  // `interrupted` event kills the interval but no `question_timer_started`
+  // arrives to restart it (user sees "frozen at 0:39" / "frozen at 1:00").
+  const questionTimerLastTickMsRef = useRef<number>(0);
+  // Ref that mirrors questionTimerSeconds state — readable synchronously in callbacks.
+  // Required for stopRecording to deduct remaining seconds from the global timer.
+  const questionTimerSecondsRef = useRef<number | null>(null);
+  // Initial duration of the current question timer — used as the progress bar reference.
+  const questionTimerTotalRef = useRef<number>(120);
+  // Fix 1 (Server-timestamp-driven timer): anchor the per-question countdown to
+  // a monotonic `performance.now()` taken the instant the timer actually starts
+  // ticking on the client (AFTER Bina finishes and during candidate's turn).
+  // All subsequent ticks compute remaining = duration − elapsed, instead of
+  // the legacy `prev - 1` decrement. This eliminates accumulated drift when
+  // the tab is backgrounded / throttled, and makes the displayed timer match
+  // the backend's monotonic question timer to the nearest second.
+  const questionTimerStartedAtMsRef = useRef<number | null>(null);
+  // Time spent paused (while Bina speaks) — subtracted from wall-clock elapsed.
+  const questionTimerPausedMsRef = useRef<number>(0);
+  const questionTimerPausedAtRef = useRef<number | null>(null);
+
+  // Compute the remaining seconds for the per-question timer using the
+  // monotonic anchor + paused-time accounting. Returns null if the timer
+  // hasn't started yet.
+  const computeQuestionRemaining = useCallback((): number | null => {
+    const startedAt = questionTimerStartedAtMsRef.current;
+    if (startedAt === null) return null;
+    const total = questionTimerTotalRef.current;
+    const now = performance.now();
+    let pausedMs = questionTimerPausedMsRef.current;
+    // If we're currently paused, add the in-progress pause duration.
+    if (questionTimerPausedAtRef.current !== null) {
+      pausedMs += now - questionTimerPausedAtRef.current;
+    }
+    const elapsedSec = Math.floor((now - startedAt - pausedMs) / 1000);
+    return Math.max(0, total - elapsedSec);
+  }, []);
+  // Pending: timer duration received but interval not started yet (waiting for Bina to stop)
+  const questionTimerPendingRef = useRef<number | null>(null);
+  // Timestamp when question_timer_started was received — used to adjust for TTS playback lag
+  const questionTimerReceivedAtRef = useRef<number | null>(null);
+  // Point 4: pause per-question interval during clarification
+  const isClarificationRef = useRef(false);
+  // Question progress counter (sent with question_timer_started)
+  const [questionNumber, setQuestionNumber] = useState<number | null>(null);
+  // AII-20: HR Tagged Question Types. Set from the question_meta WS event
+  // when the upcoming HR question is Text-based or Yes/No/Other — tagged
+  // with the question_number it belongs to so a later question that sends
+  // no question_meta (ordinary free-form questions, unchanged) can never
+  // render stale buttons: the render guard below requires an exact match
+  // against the live `questionNumber`.
+  const [structuredHrPrompt, setStructuredHrPrompt] = useState<{
+    questionNumber: number;
+    answerType: 'yes_no' | 'text';
+    hrQuestionId: string;
+  } | null>(null);
+  // "Need to Explain More" was clicked — hide the buttons and fall through
+  // to the existing voice-answer UI (already recording underneath; this
+  // flag changes nothing about mic/timer, it just stops rendering buttons).
+  const [hrExplainMore, setHrExplainMore] = useState(false);
+  // Guards submitStructuredHrAnswer against a double-click/double-Enter
+  // double-send (see that function for why a ref, not state, is needed).
+  const hrSubmitInFlightRef = useRef(false);
+  // AII-20: hr_question_id (or a question_number fallback) of the structured
+  // HR question we've already armed the UI for. A backend retry/re-speak
+  // path can send `question_meta` again for the SAME still-unanswered
+  // question — without this guard, that re-announcement would reset
+  // hrExplainMore/hrSubmitInFlightRef, making the Yes/No buttons reappear
+  // (or reopen the double-submit window) even after the candidate already
+  // answered or chose "Need to Explain More", producing a duplicate answer.
+  const armedHrQuestionIdRef = useRef<string>('');
+  // AII-20: holds the hr_question_id of a yes_no HR question whose voice
+  // answer must be discarded — read synchronously inside stopRecording /
+  // stopRecordingSilent (stale-closure callbacks) so a stray/overlapping
+  // VAD-ASR turn never gets submitted as a second answer.
+  //
+  // This intentionally does NOT clear the instant Yes/No is clicked
+  // (submitStructuredHrAnswer nulls structuredHrPrompt immediately, but the
+  // mic can still be mid-recording the candidate's simultaneous or trailing
+  // spoken "Yes" — VAD only calls stopRecording once it detects a pause
+  // AFTER that speech, which can land well after the click). Deriving this
+  // from live structuredHrPrompt state used to turn the guard off exactly
+  // at click-time, letting that trailing voice sail through as a real
+  // second ASR answer (observed: "Yes" recorded twice, once via the click's
+  // text_input, once via the candidate's own voice). Instead this ref is
+  // set directly when the question is armed and cleared directly only when
+  // "Need to Explain More" is clicked or a genuinely different question
+  // becomes current — never by a stale-closure re-render.
+  const hrVoiceBlockedForQidRef = useRef<string>('');
+  // question_number the block above applies to. question_meta is only ever
+  // sent for a structured HR question, so an ordinary question that follows
+  // one sends no event to clear the block — question_timer_started fires for
+  // EVERY question instead, so it's used as the reliable "a different
+  // question is now current" signal (comparing against this stored number).
+  const hrVoiceBlockedQuestionNumberRef = useRef<number | null>(null);
+  const [totalQuestions, setTotalQuestions] = useState<number | null>(null);
+  const questionNumberRef = useRef<number | null>(null); // sync ref for stale-closure reads
+  // Clarification mode — true when backend signals is_clarification on a same-Q timer event
+  const [isClarification, setIsClarification] = useState(false);
+  // Follow-up mode — true when backend signals is_follow_up on question_timer_started
+  const [isFollowUp, setIsFollowUp] = useState(false);
+  // Sync ref for isFollowUp — readable synchronously in stale interval callbacks.
+  // Used to let the 2-min timer keep running during Bina's follow-up speech.
+  // Main questions: timer pauses while Bina speaks (candidate gets full window).
+  // Follow-ups: timer runs continuously (remaining time already accounts for Bina's speech).
+  const isFollowUpRef = useRef(false);
+
+  // When true, the per-question countdown is frozen at its initial duration
+  // until the candidate actually starts speaking (detected via VAD or Web
+  // Speech API). Flipped false inside the speech_started paths. This makes
+  // the displayed timer reflect RESPONSE time, not wall-clock since question
+  // was asked — candidates no longer lose seconds while thinking.
+  const questionTimerAwaitingSpeechRef = useRef<boolean>(false);
+
+  // Skill coverage (real-time, timed mode only)
+  const [, setSkillCoverage] = useState<{
+    round: string;
+    round_name?: string;
+    covered: string[];
+    medium_covered: string[];
+    low_covered: string[];
+    uncovered: string[];
+    nice_to_have_skills: string[];
+    total_questions: number;
+    questions_asked: number;
+    hr_topics?: Record<string, string>;
+    clusters?: ClusterData[];
+  } | null>(null);
+
+  // AIU40: Section transition overlay
+  const [sectionTransition, setSectionTransition] = useState<{ message: string; fromCluster: string; toCluster: string } | null>(null);
+
+  // AIU51/AIU72: Repeat-request overlay
+  const [showRepeatRequest, setShowRepeatRequest] = useState(false);
+
+  // Figma UI state
+  // Note (2026-05-28): `waveHeights` state previously fired setState every
+  // 120 ms while Bina was speaking, but the value was never consumed in
+  // any JSX. Dead state removed — saves ~8 full-tree re-renders/sec during
+  // every AI turn. The 120 ms interval effect is gone too (see below).
+  const [isMuted, setIsMuted] = useState(false);
+  const isMutedRef = useRef(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  // Set true when the candidate clicks End WHILE they were mid-answer. We stop
+  // recording first (→ end_turn → the answer is transcribed and shown as a chat
+  // bubble), then send `end_interview` only AFTER that transcript commits — so
+  // Bina's farewell never pre-empts processing the candidate's final answer.
+  const pendingEndAfterTranscriptRef = useRef(false);
+  const [isFullscreenExited, setIsFullscreenExited] = useState(false);
+  // True while the interview window has lost OS focus but is still visible
+  // and still fullscreen — e.g. the candidate clicked Chrome's "<site> is
+  // sharing your screen" bar (Hide/Stop) or a similar browser-chrome overlay.
+  // A real tab switch / minimize is caught separately by
+  // CandidateAIInterviewPortal's document.hidden watcher, which terminates
+  // the interview outright — this state is deliberately non-destructive: it
+  // just blocks interaction and shows a warning until focus returns, so an
+  // innocuous click on the sharing bar can no longer go completely unnoticed
+  // (previously only a low-severity, non-blocking log entry).
+  const [isWindowBlurred, setIsWindowBlurred] = useState(false);
+  // Seconds left in the 10s grace window before the session hard-pauses.
+  // null = no grace period active (either before any exit, or after the
+  // grace elapsed and the session is fully paused).
+  const [gracePeriodRemaining, setGracePeriodRemaining] = useState<number | null>(null);
+  // Ref mirror so timer setIntervals (which close over stale state) can
+  // read the current value synchronously.
+  const isFullscreenExitedRef = useRef(false);
+  useEffect(() => { isFullscreenExitedRef.current = isFullscreenExited; }, [isFullscreenExited]);
+  // Frozen timer values captured at the exact moment fullscreen was exited.
+  // Timer restoration on fullscreen return reads from here instead of from
+  // the server's wall-clock elapsed — that's what lets "Answer time" stay
+  // at the same value across the fullscreen pause instead of jumping
+  // forward by the real-world duration the candidate was away.
+  const frozenGlobalSecondsRef = useRef<number | null>(null);
+  const frozenQuestionSecondsRef = useRef<number | null>(null);
+
+  // Face-not-in-frame blocking
+  const [isFaceBlocked, setIsFaceBlocked] = useState(false);
+  const isFaceBlockedRef = useRef(false);
+
+  // Media permission terminal block.
+  // Set to true when:
+  //   1. navigator.permissions.query() reports camera/mic is "denied"
+  //   2. MediaStreamTrack.ended / muted fires mid-interview (candidate
+  //      revoked the OS-level permission from the browser site settings)
+  //   3. A fresh getUserMedia probe rejects with NotAllowed/PermissionDenied
+  // Once armed, the interview UI is frozen behind a blocking overlay — the
+  // candidate cannot resume, regardless of whether they re-enter fullscreen.
+  // This implements the user-requested "block the interview immediately
+  // if any permission is blocked" rule.
+  const [mediaBlocked, setMediaBlocked] = useState<null | {
+    kind: 'camera' | 'microphone' | 'both';
+    reason: string;
+  }>(null);
+  const mediaBlockedRef = useRef<typeof mediaBlocked>(null);
+  useEffect(() => { mediaBlockedRef.current = mediaBlocked; }, [mediaBlocked]);
+
+  // Mobile QR-based environment verification — set on
+  // "environment_verification_triggered", cleared on
+  // "environment_verification_submitted" (or local expiry).
+  const [envVerification, setEnvVerification] = useState<null | {
+    qrCodeDataUri: string | null;
+    verificationUrl: string | null;
+    expiresAt: string | null;
+    challengeColor: string | null;
+    challengeId: string | null;
+    // False until "environment_verification_opened" arrives — i.e. the
+    // moment the candidate's phone actually opens the verify link. Keeps the
+    // laptop's background dark/neutral until then instead of revealing the
+    // challenge color the instant the QR itself appears.
+    challengeRevealed: boolean;
+    // 5 sequential colors (1 per second) for the phone's first 5s recording
+    // phase — populated by "environment_verification_triggered", cycled
+    // starting from recordingStartedAt (below), NOT from when the QR/link
+    // was opened, so candidate-side delays can't desync the sequence from
+    // what their phone is actually filming.
+    challengeColors: string[] | null;
+    // Set only once "environment_verification_recording_started" arrives —
+    // the phone's confirmed t=0 for the RGB cycle.
+    recordingStartedAt: string | null;
+    // Extracted from verificationUrl (last path segment) — used ONLY to poll
+    // GET /candidate/environment-verify/{token}/status as a fallback when a
+    // WS push (opened/recording_started/submitted) is missed, e.g. because
+    // the candidate's phone request landed on a different backend worker
+    // than the one holding this laptop's socket.
+    verificationToken: string | null;
+  }>(null);
+  // Mirrors envVerification for use inside the WS onopen/onmessage closures,
+  // which are created once by connect() and reused across reconnects — a
+  // stale closure over the state variable itself would never see updates.
+  const envVerificationRef = useRef<typeof envVerification>(null);
+  useEffect(() => { envVerificationRef.current = envVerification; }, [envVerification]);
+  // Guards the resume UI transition (clearing envVerification + stopping the
+  // status-poll loop below) so a WS "submitted" message and a poll tick that
+  // both observe the same submission can't each restart that teardown.
+  // Does NOT guard the session_resume SEND itself — see resumeRetryRef.
+  const envVerificationResumedRef = useRef(false);
+  // A single session_resume send has no delivery guarantee (a real incident:
+  // one was sent here, then didn't reach the backend for ~3 minutes — nothing
+  // resent it because envVerificationResumedRef had already latched, so the
+  // interview just sat paused with no recovery). Retry on a short interval
+  // instead of firing once; the backend treats a session_resume after it's
+  // already resumed as a no-op (see ai_interview_ws.py's own idempotency
+  // guard), so resending is safe.
+  const resumeRetryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const resumeEnvVerification = useCallback(() => {
+    if (envVerificationResumedRef.current) return;
+    envVerificationResumedRef.current = true;
+    setEnvVerification(null);
+    const send = () => { try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* retried below */ } };
+    send();
+    let attempts = 1;
+    resumeRetryIntervalRef.current = setInterval(() => {
+      attempts += 1;
+      if (attempts > 20) { // ~1 minute of retries at 3s apart
+        if (resumeRetryIntervalRef.current) clearInterval(resumeRetryIntervalRef.current);
+        resumeRetryIntervalRef.current = null;
+        return;
+      }
+      send();
+    }, 3000);
+  }, []);
+
+  // Stop retrying the instant the backend actually confirms the interview is
+  // moving again (e.g. the next question starts) — no point still resending
+  // session_resume once it's visibly worked. Any WS message handler that
+  // observes forward progress after a resume should call this.
+  const stopResumeRetries = useCallback(() => {
+    if (resumeRetryIntervalRef.current) {
+      clearInterval(resumeRetryIntervalRef.current);
+      resumeRetryIntervalRef.current = null;
+    }
+  }, []);
+  useEffect(() => () => { if (resumeRetryIntervalRef.current) clearInterval(resumeRetryIntervalRef.current); }, []);
+
+  // Fallback reconciliation against the backend's authoritative status —
+  // covers a WS push (opened/recording_started/submitted) that never
+  // arrived, most commonly because the candidate's phone request landed on a
+  // different backend worker than the one holding THIS laptop socket. Used
+  // both by the polling interval below and once immediately after a WS
+  // reconnect, since a reconnect gap is exactly when a push could be lost.
+  const reconcileEnvVerificationFromStatus = useCallback(async () => {
+    const token = envVerificationRef.current?.verificationToken;
+    if (!token || envVerificationResumedRef.current) return;
+    try {
+      const data = await candidateAIInterviewService.getEnvironmentVerificationStatus(token);
+      if (data.status === 'submitted' || data.status === 'completed') {
+        resumeEnvVerification();
+        return;
+      }
+      if (data.status === 'expired') {
+        // Expired with no submission — resume ourselves rather than relying
+        // solely on the overlay's own countdown (that countdown's effect
+        // tears down the instant envVerification clears, so it can't be the
+        // sole trigger once THIS path is the one clearing it). Guarded by
+        // resumeEnvVerification so a near-simultaneous onExpired firing from
+        // the overlay's own timer never double-sends session_resume.
+        resumeEnvVerification();
+        return;
+      }
+      setEnvVerification(prev => {
+        if (!prev) return prev;
+        if (prev.challengeRevealed && (prev.recordingStartedAt || !data.recording_started_at)) return prev;
+        return {
+          ...prev,
+          challengeRevealed: prev.challengeRevealed || data.status === 'opened' || Boolean(data.recording_started_at),
+          recordingStartedAt: prev.recordingStartedAt || data.recording_started_at,
+        };
+      });
+    } catch {
+      /* best-effort — next poll tick or a subsequent WS push will retry */
+    }
+  }, [resumeEnvVerification]);
+
+  // Polling fallback (spec: "the frontend must NOT remain dependent on
+  // WebSocket delivery"). Only runs while a verification is actually active,
+  // and stops the instant it resolves (submitted/completed/expired) or the
+  // candidate-facing countdown clears it.
+  useEffect(() => {
+    if (!envVerification?.verificationToken) return;
+    const interval = setInterval(() => { void reconcileEnvVerificationFromStatus(); }, 2000);
+    return () => clearInterval(interval);
+  }, [envVerification?.verificationToken, reconcileEnvVerificationFromStatus]);
+
+  // Ref mirror so ws.onopen (defined once inside connect(), reused across
+  // reconnects — see "Stable callback refs" below) always calls the LATEST
+  // reconciliation function instead of closing over a stale one.
+  const reconcileEnvVerificationRef = useRef(reconcileEnvVerificationFromStatus);
+  useEffect(() => { reconcileEnvVerificationRef.current = reconcileEnvVerificationFromStatus; }, [reconcileEnvVerificationFromStatus]);
+
+  // Session ID — populated from `connected` WS event, used for violation event logging
+  const sessionIdRef = useRef<string | null>(null);
+
+  // WebSocket keepalive / reconnect refs
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Network strength for the candidate's camera overlay. Display only:
+  // averaged over the last 3 samples; null until the first sample. Measured
+  // by an HTTP probe (see the network-probe effect), NOT the keepalive ping:
+  // the server answers that ping inside the receive loop that waits for Bina
+  // to finish speaking after a skip/Next, and the pong is only timed once
+  // this tab's main thread is free — so a slow TTS provider or a busy page
+  // showed "Poor" on a 250 Mbps line (staging 2026-10-13).
+  const rttSamplesRef = useRef<number[]>([]);
+  const [networkRttMs, setNetworkRttMs] = useState<number | null>(null);
+  // Network probe: every 5 s while connected, request an empty 204 from the
+  // API and read its duration from the browser's Resource Timing entry. Those
+  // timestamps are taken by the network stack, so a busy main thread can't
+  // inflate them (a performance.now() around the fetch would). A
+  // PerformanceObserver is used because the resource-timing buffer fills up
+  // over a long interview and getEntriesByName would stop seeing new probes.
+  useEffect(() => {
+    // Runs from mount — it's a plain HTTP probe, independent of the interview
+    // WebSocket — so the indicator has a real reading during "Preparing your
+    // interview…" instead of "Offline".
+    if (typeof window === 'undefined' || typeof PerformanceObserver === 'undefined') return;
+    const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '');
+    const probeBase = `${apiBase}/candidate/ai-interview-net-probe`;
+    let stopped = false;
+    const observer = new PerformanceObserver((list) => {
+      for (const e of list.getEntries() as PerformanceResourceTiming[]) {
+        if (stopped || !e.name.startsWith(probeBase)) continue;
+        // With Timing-Allow-Origin (sent by the endpoint) use request→response
+        // (pure network + trivial handler); otherwise the whole entry.
+        const ms = e.requestStart > 0 && e.responseStart > 0 ? e.responseStart - e.requestStart : e.duration;
+        if (!(ms > 0)) continue;
+        rttSamplesRef.current = [...rttSamplesRef.current, ms].slice(-3);
+        setNetworkRttMs(rttSamplesRef.current.reduce((a, b) => a + b, 0) / rttSamplesRef.current.length);
+      }
+    });
+    try { observer.observe({ type: 'resource', buffered: false }); } catch { return; }
+    const probe = () => {
+      if (stopped || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+      // no-cors: only the timing is needed, never the (empty) body.
+      void fetch(`${probeBase}?_=${Date.now()}`, { cache: 'no-store', mode: 'no-cors', credentials: 'omit' }).catch(() => {});
+    };
+    probe();
+    const iv = setInterval(probe, 5000);
+    return () => { stopped = true; clearInterval(iv); observer.disconnect(); };
+  }, []);
+  // Set once the interview WebSocket has opened: before that, "not connected"
+  // just means "still starting", not offline.
+  const everConnectedRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+  // Separate fast-retry counter for the "WS connected before /start flipped the
+  // interview to in_progress" race (backend rejects 4003 "not in progress").
+  // /start usually completes within 1-3s, so we retry quickly a few times
+  // instead of giving up (which forced the candidate to manually refresh).
+  const preStartRetryRef = useRef(0);
+  const PRE_START_MAX_RETRIES = 15;
+  const CONCURRENT_RECONNECT_DELAYS = [2000, 3000, 5000]; // ~10s, then the overlay
+  const isUnmountedRef = useRef(false);
+  const connectRef = useRef<() => void>(() => {});
+
+  // Timer modes:
+  //   isFlexibleMode      = duration 0 (legacy unlimited) → count UP, pause while Bina speaks
+  //   isNewFlexibleMode   = duration > 0, interview_mode='flexible' → count DOWN, runs NON-STOP
+  //   timed / fixed       = duration > 0, interview_mode='fixed'  → count DOWN
+  //                         Both timers pause while Bina speaks; run during candidate
+  //                         recording, processing, and idle phases.
+  // Flexible mode is now determined by special_instructions.interview_mode
+  // (authoritative). duration_minutes holds the real budget (30 / 35 / N),
+  // not a sentinel. Legacy records with duration_minutes=0 still fall back
+  // to "flexible" via the helper.
+  const resolvedMode = modeFromConfig(
+    (interviewInfo as CandidateInterviewInfo & {
+      special_instructions?: string | Record<string, unknown> | null;
+    }).special_instructions,
+    interviewInfo.duration_minutes,
+  );
+  const isFlexibleMode = resolvedMode === 'flexible' && isFlexibleDuration(interviewInfo.duration_minutes);
+  const isNewFlexibleMode = resolvedMode === 'flexible' && !isFlexibleMode;
+  const isBraveBrowser = typeof navigator !== 'undefined' && 'brave' in navigator;
+  const [remainingSeconds, setRemainingSeconds] = useState(
+    isFlexibleMode ? 30 * 60 : (interviewInfo.duration_minutes || 30) * 60
+  );
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!isConnected || isClosing) return;
+    timerIntervalRef.current = setInterval(() => {
+      // Global timer pauses — mirrors the per-question timer:
+      //   - clarification: Bina re-explains → don't burn 30-min budget
+      //   - Bina is speaking (non-silence-prompt): between-question TTS
+      //     and the next main-question TTS should NOT eat the candidate's
+      //     global budget either. The per-question timer isn't running
+      //     during those windows (it was cleared at end_turn and only
+      //     starts again after Bina finishes), so pausing global here
+      //     keeps both clocks visually aligned.
+      // Silence prompts ("Are you there?") are explicitly excluded — those
+      // fire DURING the candidate's answer window and the global clock
+      // must keep ticking so the 30-min budget is enforced.
+      if (isClarificationRef.current) return;
+      // Both global AND per-question timer only tick during the candidate's
+      // turn (when they can actually speak). Pause during Bina's regular
+      // speech. EXCEPTION: keep ticking during the silence nudge ("Are you
+      // there?") — candidate is still "on the clock" even while Bina prompts
+      // them. Combined with the slot-deduct logic in stopRecording (which
+      // jumps global to the next 2-min boundary on answer), this gives the
+      // slot-based global semantics: 30:00 → 28:00 → 26:00 per Q.
+      if (isAiSpeakingRef.current && !isSilencePromptRef.current) return;
+      // Camera/mic disconnected — the whole interview is held (backend timer
+      // cancelled, per-question clock frozen). The 30-min budget must freeze
+      // with it, otherwise a candidate who reconnects promptly still comes
+      // back to a shorter interview than they paused with, which is the exact
+      // opposite of "resume from where it was paused".
+      if (isMediaPausedRef.current) return;
+      setRemainingSeconds(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, [isConnected, isClosing]);
+
+  // Frozen timer snapshot — captured at the moment stopRecording fires, attached to the transcript message.
+  const frozenResponseTimeRef = useRef<number | null>(null);
+
+  // Keep questionTimerSecondsRef in sync with state so stopRecording can read it synchronously.
+  useEffect(() => {
+    questionTimerSecondsRef.current = questionTimerSeconds;
+  }, [questionTimerSeconds]);
+
+  // Notify parent of timer state changes (used by portal fullscreen overlay to show timers)
+  useEffect(() => {
+    onTimerChange?.({ remainingSeconds, questionTimerSeconds, questionTimerExpired, questionNumber, totalQuestions });
+  }, [remainingSeconds, questionTimerSeconds, questionTimerExpired, questionNumber, totalQuestions, onTimerChange]);
+  useEffect(() => { questionNumberRef.current = questionNumber; }, [questionNumber]);
+  useEffect(() => { currentTranscriptRef.current = currentTranscript; }, [currentTranscript]);
+  // Keep isClarificationRef in sync with state — used as a gate in timer intervals
+  useEffect(() => { isClarificationRef.current = isClarification; }, [isClarification]);
+
+  // ── Pre-turn "get ready" countdown (Change 1) ────────────────────────────
+  // After Bina finishes speaking, before the mic opens, we show a big 5→1
+  // countdown under the question ("Get ready… 5,4,3,2,1 → Now it's your turn").
+  // The mic and the per-question answer timer stay OFF until it reaches 0.
+  const [preTurnCountdown, setPreTurnCountdown] = useState<number | null>(null);
+  const preTurnCountdownRef = useRef<number | null>(null);
+  const preTurnCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const PRE_TURN_COUNTDOWN_FROM = 3; // numbers shown: 3..2..1
+  // How long each number stays up. 1.25s (was 1s) so the slow shine animation
+  // (cdShine) has room; the whole get-ready step is 3.75s. The animation length
+  // below is tied to this value.
+  const PRE_TURN_TICK_MS = 1250;
+  // Assigned in a useEffect (like startRecordingInternalRef) so finalizePlayback
+  // and message handlers always call the freshest closure.
+  const runPreTurnCountdownRef = useRef<(onComplete: () => void) => void>(() => {});
+  const cancelPreTurnCountdownRef = useRef<() => void>(() => {});
+  // Armed by every `question_timer_started` (a real question / follow-up /
+  // clarification / repeat turn) and CONSUMED when the pre-turn countdown runs.
+  // Silence-ladder nudges ("Are you there?" / move-on) do NOT send
+  // question_timer_started, so this stays false for them and the mic reopens
+  // immediately with no get-ready countdown after a nudge.
+  const getReadyArmedRef = useRef(false);
+  // ── AII14-PARKED: mid-speech silence COUNTDOWN (the old auto-advance) ─────
+  // DISABLED, NOT DELETED. Previously: after ~5s of silence a 10→1 countdown
+  // appeared and, when it ran out, the turn ended and the interview moved on by
+  // itself. AII14 AC3 forbids that ("shall not automatically move to the next
+  // question based only on silence detection") — a confirmation popup with a
+  // Submit button replaces it (see midSilenceConfirm below).
+  //
+  // The state below is intentionally LEFT LIVE: the shared countdown overlay and
+  // `bannerVisible` still reference it, and AC1's pre-turn 3..2..1 shares that
+  // overlay. It is simply never set to a non-null value any more, so the
+  // mid-silence branch never renders. Full original code (driver + overlay
+  // branch + VAD auto end-turn) is preserved verbatim in
+  // ./parked/silence-auto-advance.parked.md
+  //
+  // const SILENCE_COUNTDOWN_WINDOW_MS = 10000; // final 10s of the 15s window (5s silent, then 10→1)
+  const [midSilenceCountdown, setMidSilenceCountdown] = useState<number | null>(null);
+  const midSilenceCountdownRef = useRef<number | null>(null);
+  const setMidSilenceCountdown_ = useCallback((val: number | null) => {
+    if (midSilenceCountdownRef.current !== val) {
+      midSilenceCountdownRef.current = val;
+      setMidSilenceCountdown(val);
+    }
+  }, []);
+
+  // ── AII14: "Are you done with your response?" confirmation ────────────────
+  // Shown after DONE_CONFIRM_SILENCE_MS of CONTINUOUS silence following the
+  // candidate's speech. It does NOT end the turn — the mic stays open and
+  // recording continues. The candidate either speaks again (popup closes, the
+  // 15s window restarts) or clicks Submit to finalize and move on.
+  const DONE_CONFIRM_SILENCE_MS = 15000; // AC2: 15 seconds
+  // How much speech the candidate must produce before the "Are you done?"
+  // popup closes. Without a gate the popup dismissed on the VAD's first
+  // qualifying audio chunk, so a cough or a nearby voice closed it and it
+  // reappeared 15s later.
+  //
+  // CUMULATIVE, not continuous: this counts TOTAL speech since the popup was
+  // raised, so ordinary thinking pauses do not wipe progress. A continuous
+  // gate at this length could strand the popup on screen forever — someone
+  // resuming as "So... the main challenge was... handling the framework"
+  // never produces 2.5s of unbroken sound, yet is plainly answering.
+  //
+  // ONE window, counted directly from the VAD's own per-frame speech decision
+  // (`_frameIsActive` in the analyser loop) — NOT from silence-clock resets,
+  // which would stack the VAD's SUSTAINED_ACTIVE_MS run in front of this count.
+  // Closing the popup also resets the silence clock, so the next popup is a
+  // full DONE_CONFIRM_SILENCE_MS after this speech.
+  const SPEECH_RESUME_CONFIRM_MS = 3000;
+  // Silence clock (Option A) — see the "AII14 silence clock" block in the
+  // analyser loop. A speech segment resets the clock once it holds this much
+  // voice, of which this much is strong (clearly the candidate's own voice).
+  const SILENCE_RESET_MIN_VOICE_MS = 600;
+  const SILENCE_RESET_MIN_STRONG_MS = 200;
+  // Logging thresholds only: log a counted segment when the pause before it
+  // was at least this long, and an ignored sound when it was at least this long.
+  const SILENCE_CLOCK_LOG_PAUSE_MS = 3000;
+  const SILENCE_CLOCK_LOG_IGNORED_MS = 150;
+  type SilenceClock = {
+    /** speechDetectedAtRef value of the turn this clock belongs to. */
+    turnKey: number | null;
+    /** Silence anchor: end of the last counted speech. */
+    voiceAt: number;
+    source: 'speech_onset' | 'voice' | 'transcript_fallback' | 'popup_dismiss';
+    /** Any voice frame, counted or not (diagnostics). */
+    lastAnyVoiceAt: number | null;
+    /** True once the VAD counted a segment this turn — disables the transcript fallback. */
+    vadHeard: boolean;
+    segLastAt: number | null;
+    segVoicedMs: number;
+    segStrongMs: number;
+    segCounted: boolean;
+    ignoredSinceAnchor: number;
+  };
+  const newSilenceClock = (voiceAt: number, turnKey: number | null): SilenceClock => ({
+    turnKey, voiceAt, source: 'speech_onset', lastAnyVoiceAt: null, vadHeard: false,
+    segLastAt: null, segVoicedMs: 0, segStrongMs: 0, segCounted: false, ignoredSinceAnchor: 0,
+  });
+  const silenceClockRef = useRef<SilenceClock>(newSilenceClock(0, null));
+  // AII14 Plan B: true once the backend's Silero pause detector reports
+  // `ready` for the current answer — it then raises/closes "Are you done?"
+  // and the browser clock above is fallback only. Cleared on `unavailable`
+  // and when the WebSocket closes.
+  const serverVadActiveRef = useRef(false);
+  // Safety net over Plan B: if the server has not raised "Are you done?" this
+  // long after the browser clock reached DONE_CONFIRM_SILENCE_MS, the browser
+  // raises it itself (server audio arrived late / a server-side rule held it).
+  // A popup raised this way is closed by the browser's own speech check, since
+  // the server never knew about it and will not send speech_resumed.
+  const SERVER_POPUP_GRACE_MS = 7000;
+  const popupByClientFallbackRef = useRef(false);
+  // Total speech-like ms observed since the popup was raised. Reset when the
+  // popup is raised (fresh cycle) and when it closes — never by a pause.
+  const speechAccumMsRef = useRef(0);
+  // Previous analyser-frame timestamp while the popup is up, for per-frame dt.
+  const popupVadFrameAtRef = useRef<number | null>(null);
+  const [midSilenceConfirm, setMidSilenceConfirm] = useState(false);
+  const midSilenceConfirmRef = useRef(false);
+  const setMidSilenceConfirm_ = useCallback((val: boolean) => {
+    if (!val) popupByClientFallbackRef.current = false;
+    if (midSilenceConfirmRef.current !== val) {
+      midSilenceConfirmRef.current = val;
+      setMidSilenceConfirm(val);
+    }
+  }, []);
+
+  // "Now Speak" banner — shown when mic opens for candidate after Bina stops
+  const [showNowSpeakBanner, setShowNowSpeakBanner] = useState(false);
+  const nowSpeakShownForSessionRef = useRef(false); // prevents re-show within same recording session
+  // Sync gates for the "Your turn — speak now" popup. The banner shows only once
+  // BOTH the local capture pipeline (mic + worklet) is live AND — on the Web
+  // Speech (batch) path — the browser recognizer is actually capturing audio
+  // (onaudiostart). This keeps the popup, the listening bubble and the live
+  // transcript appearing together instead of the popup leading by 2-5s.
+  const turnPipelineReadyRef = useRef(false);    // mic + worklet connected this turn
+  const webSpeechListeningRef = useRef(false);   // recognizer onaudiostart fired this turn
+  const nowSpeakBannerFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── DEV DEBUG OVERLAY (remove before production release) ──────────────
+  // Gate the whole overlay + its /debug/system-stats polling behind an OPT-IN
+  // so candidates never see it and never trigger the 404 (the endpoint only
+  // exists when the backend runs with DEBUG=True). OPT-IN ONLY via ?debug=1
+  // (persisted) / ?debug=0 (cleared). We deliberately do NOT auto-enable on
+  // non-production builds: STAGING is a non-production build too, so the old
+  // `NODE_ENV !== 'production'` default leaked the overlay + a /debug/system-stats
+  // 404 to real candidates on staging. Developers who want it just add ?debug=1
+  // once (it persists in localStorage).
+  const [devMonitorEnabled] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const flag = params.get('debug');
+      if (flag === '1') { window.localStorage.setItem('tf_dev_monitor', '1'); return true; }
+      if (flag === '0') { window.localStorage.removeItem('tf_dev_monitor'); return false; }
+      if (window.localStorage.getItem('tf_dev_monitor') === '1') return true;
+    } catch { /* localStorage blocked — fall through */ }
+    return false;
+  });
+  const [debugOpen, setDebugOpen] = useState(true);
+  const [debugPos, setDebugPos] = useState({ x: 12, y: 12 });
+  const [debugStats, setDebugStats] = useState({
+    heapUsed: 0, heapTotal: 0, heapLimit: 0,
+    wsState: 'N/A',
+    avgLevel: 0, silenceThresh: 0, ambient: 0, voiceRatio: 1,
+    silenceSince: null as number | null,
+    silenceDurationMs: 5000,
+    speechDetected: false,
+    inTurnFrames: 0,
+    audioCtxState: 'N/A',
+    chunksPerSec: 0,
+    sysRamUsed: -1, sysRamTotal: -1, sysRamPct: -1,
+    sysCpu: -1,
+    procRss: -1,
+  });
+  const _dbgChunkCountRef = useRef(0);
+  const _dbgLastChunkSecRef = useRef(Date.now());
+  const _dbgAvgLevelRef = useRef(0);
+  // Voice-band spectral ratio (0..1) of the current frame — fraction of mic
+  // spectral energy inside the human-voice band. High for speech, low for
+  // broadband noise / low hum / music. Surfaced in the dev overlay + key logs
+  // so the VOICE_BAND_MIN_RATIO threshold can be calibrated from real audio.
+  const _dbgVoiceRatioRef = useRef(1);
+  // Uint8Array<ArrayBuffer>, not bare Uint8Array: since TS 5.7 typed arrays are generic
+  // over their buffer and default to ArrayBufferLike, which getByteFrequencyData rejects.
+  const freqBufRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  // drag state — all in refs so dragging never triggers re-render
+  const _dbgDragRef = useRef({ dragging: false, ox: 0, oy: 0 });
+
+  // Poll browser stats every 500ms — ONLY for the dev overlay. Ungated, this
+  // re-rendered the whole (~12k-line) interview component twice a second for
+  // every candidate, though nothing outside the overlay reads debugStats.
+  useEffect(() => {
+    if (!devMonitorEnabled) return;
+    const id = setInterval(() => {
+      const mem = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+      const now = Date.now();
+      const elapsed = (now - _dbgLastChunkSecRef.current) / 1000;
+      const cps = elapsed > 0 ? Math.round(_dbgChunkCountRef.current / elapsed) : 0;
+      _dbgChunkCountRef.current = 0;
+      _dbgLastChunkSecRef.current = now;
+      setDebugStats(prev => ({
+        ...prev,
+        heapUsed: mem ? Math.round(mem.usedJSHeapSize / 1048576) : -1,
+        heapTotal: mem ? Math.round(mem.totalJSHeapSize / 1048576) : -1,
+        heapLimit: mem ? Math.round(mem.jsHeapSizeLimit / 1048576) : -1,
+        wsState: wsRef.current
+          ? (['CONNECTING','OPEN','CLOSING','CLOSED'][wsRef.current.readyState] ?? 'UNKNOWN')
+          : 'NO WS',
+        avgLevel: _dbgAvgLevelRef.current,
+        silenceThresh: silenceThresholdRef.current,
+        ambient: ambientNoiseFloorRef.current,
+        voiceRatio: _dbgVoiceRatioRef.current,
+        silenceSince: silenceStartRef.current,
+        silenceDurationMs: silenceDurationMsRef.current,
+        speechDetected: speechDetectedRef.current,
+        inTurnFrames: inTurnSpeechFrameCountRef.current,
+        audioCtxState: (audioContextRef as React.MutableRefObject<AudioContext | null>)?.current?.state ?? 'N/A',
+        chunksPerSec: cps,
+      }));
+    }, 500);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devMonitorEnabled]);
+
+  // Poll server system stats every 2s — only when the dev monitor is enabled,
+  // so candidate sessions never hit the (DEBUG-gated) endpoint or log a 404.
+  useEffect(() => {
+    if (!devMonitorEnabled) return;
+    let sysStatsAvailable = true;
+    const fetchSys = async () => {
+      if (!sysStatsAvailable) return;
+      try {
+        const r = await fetch('/api/v1/debug/system-stats');
+        if (r.status === 404) { sysStatsAvailable = false; return; }
+        if (!r.ok) return;
+        const d = await r.json();
+        setDebugStats(prev => ({
+          ...prev,
+          sysRamUsed: d.ram_used_mb ?? -1,
+          sysRamTotal: d.ram_total_mb ?? -1,
+          sysRamPct: d.ram_percent ?? -1,
+          sysCpu: d.cpu_percent ?? -1,
+          procRss: d.process_rss_mb ?? -1,
+        }));
+      } catch { /* silent */ }
+    };
+    fetchSys();
+    const id = setInterval(fetchSys, 2000);
+    return () => clearInterval(id);
+  }, [devMonitorEnabled]);
+
+  // Drag handlers — attached to document while dragging
+  const _dbgOnPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    _dbgDragRef.current = { dragging: true, ox: e.clientX - debugPos.x, oy: e.clientY - debugPos.y };
+  };
+  const _dbgOnPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!_dbgDragRef.current.dragging) return;
+    const x = Math.max(0, Math.min(window.innerWidth - 20, e.clientX - _dbgDragRef.current.ox));
+    const y = Math.max(0, Math.min(window.innerHeight - 20, e.clientY - _dbgDragRef.current.oy));
+    setDebugPos({ x, y });
+  };
+  const _dbgOnPointerUp = () => { _dbgDragRef.current.dragging = false; };
+  // ── END DEV DEBUG OVERLAY ─────────────────────────────────────────────
+
+  // Bug C fix: flips true ONLY inside TalkingHead's onAudioEnd callback — the
+  // canonical "audio actually finished playing" signal. Stays false while
+  // `audio_end` has been received from backend but the client-side buffer is
+  // still playing (most common on Q1 when AudioContext is cold). Flips back
+  // to false on `speaking_started` so the next turn starts clean. The "Your
+  // turn" banner gates on this instead of just `!isAiSpeaking`, because
+  // setIsAiSpeaking(false) in the audio_end path can race ahead of the
+  // actual audible end of Bina's speech.
+  const candidatePlaybackEndedRef = useRef(false);
+  const [candidatePlaybackEnded, setCandidatePlaybackEnded] = useState(false);
+
+  // Waveform animation interval removed (2026-05-28). The state was never
+  // rendered anywhere; the interval was forcing ~8 full-tree React re-renders
+  // per second during every AI turn. If a future visual waveform is needed,
+  // implement it inside an isolated React.memo component with its own local
+  // state so parent reconciliation isn't triggered on each amplitude tick.
+
+  // "Now Speak" banner — visible for the ENTIRE candidate-turn window.
+  //
+  // It is shown in sync with REAL listening: once the capture pipeline is live
+  // AND (on the Web Speech path) the recognizer is actually capturing audio
+  // (onaudiostart) — see markListeningStarted(). So the popup and the right-side
+  // listening bubble appear together. This effect resets the per-turn sync gates
+  // when the turn ends.
+  useEffect(() => {
+    if (!isRecording) {
+      // Reset for next recording session
+      nowSpeakShownForSessionRef.current = false;
+      turnPipelineReadyRef.current = false;
+      webSpeechListeningRef.current = false;
+      if (nowSpeakBannerFallbackTimerRef.current) {
+        clearTimeout(nowSpeakBannerFallbackTimerRef.current);
+        nowSpeakBannerFallbackTimerRef.current = null;
+      }
+      setShowNowSpeakBanner(false);
+    }
+  }, [isRecording]);
+
+  // Bulletproof hide: whenever Bina starts speaking (any path — greeting,
+  // follow-up, clarification, interstitial), tear down the banner AND the
+  // pending show-timer. This is the last line of defence against the
+  // "Your turn — speak now" popup appearing while Bina is mid-sentence.
+  useEffect(() => {
+    if (isAiSpeaking) {
+      setShowNowSpeakBanner(false);
+    }
+  }, [isAiSpeaking]);
+
+  // Use module-level helper so this isn't re-created each parent render.
+  // (Phase 1 perf — see formatTimeMMSS declaration near the top of file.)
+  const formatTime = formatTimeMMSS;
+
+  // No-response detection state
+  const [showMicPopup, setShowMicPopup] = useState(false);
+  const noResponseTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const noResponseRetryRef = useRef(0); // 0=first attempt, 1=asked "are you there?"
+  const micPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Hard cap: stop recording after a mode-specific limit regardless of VAD.
+  // Conversational mode needs a much larger cap so long answers are not cut off.
+  const maxRecordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const handleNoResponseRef = useRef<() => void>(() => {});
+  const stopRecordingSilentRef = useRef<() => void>(() => {});
+  const abortRecordingForSkipRef = useRef<() => void>(() => {});
+  // Media-pause counterpart to abortRecordingForSkip: releases the mic but
+  // PRESERVES the in-progress answer so it can be continued after the outage.
+  const holdRecordingForOutageRef = useRef<() => void>(() => {});
+  // Set by holdRecordingForOutage, consumed by the next startRecordingInternal:
+  // marks that the mic is reopening into an answer that is ALREADY IN PROGRESS
+  // (interrupted by a device outage) rather than starting a fresh one.
+  const resumingHeldAnswerRef = useRef(false);
+
+  // Clear no-response timer helper — declared early because it's referenced in
+  // many setInterval / ws.onmessage callbacks that appear before the former
+  // declaration site (line ~2556). Moving it here prevents a potential TDZ
+  // violation in minified builds where const reordering can surface.
+  const clearNoResponseTimer = useCallback(() => {
+    if (noResponseTimerRef.current) {
+      clearTimeout(noResponseTimerRef.current);
+      noResponseTimerRef.current = null;
+    }
+  }, []);
+
+  // Clear max recording timer helper
+  const clearMaxRecordingTimer = useCallback(() => {
+    if (maxRecordingTimerRef.current) {
+      clearTimeout(maxRecordingTimerRef.current);
+      maxRecordingTimerRef.current = null;
+    }
+  }, []);
+
+  // Safety-net: if TalkingHead's onAudioEnd callback never fires (e.g., AudioContext
+  // suspended after streamStart returns early), start the mic after a short delay.
+  const audioEndFallbackRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fix #1 (avatar-decoupled playback_complete): a DEDICATED wall-clock timer
+  // whose ONLY job is to deliver `playback_complete` to the backend, derived
+  // purely from the known audio duration. Independent of the 3D avatar
+  // (TalkingHead), the playback-tracker AudioContext, and the mic/UI state
+  // guards on the bundled safety-net. The backend gates its per-question
+  // silence clock on playback_complete; when the avatar fails to initialise or
+  // the AudioContext stays suspended, the tracker/onended path never fires and
+  // the guarded safety-net can be skipped — so the backend burns its full 30s
+  // timeout PER QUESTION ("playback_complete timeout — proceeding anyway",
+  // making the whole interview feel frozen). This timer guarantees the signal
+  // arrives on time regardless. Sending it is idempotent on the backend, so
+  // overlapping with the tracker/safety-net paths is harmless.
+  const playbackCompleteSignalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Webcam ref for hand detection
+  const webcamRef = useRef<WebcamRef>(null);
+  const [webcamReady, setWebcamReady] = useState(false);
+
+  // Avatar ready state — WebSocket connects only after avatar is loaded
+  const [avatarReady, setAvatarReady] = useState(false);
+  // "Preparing your interview…" — the WebSocket (and so Bina) waits until the
+  // proctoring models have loaded and run once, or PREPARE_MAX_WAIT_MS passed.
+  const [preparingDone, setPreparingDone] = useState(false);
+  // Fix #2: true when the 3D avatar (TalkingHead) fails to initialise OR is
+  // taking too long to load. When set, we render a static Bina image over the
+  // (blank) 3D canvas so the candidate sees a proper face. Audio still plays via
+  // TalkingHead's internal Web Audio fallback, and playback_complete is
+  // delivered by the avatar-decoupled timer from fix #1 — so the interview runs
+  // at full speed with only the visual downgraded.
+  // NOTE (2026-05-26): the earlier proactive lite-mode trip based on
+  // hardwareConcurrency was REVERTED — per product spec the 3D avatar must
+  // load for ALL systems. The fallback now triggers ONLY on a real failure
+  // path (the existing onFallback + watchdog at :~4512). For single-core
+  // perf the real fix is GLB compression (Meshopt/Draco + KTX2 textures),
+  // not preemptively skipping the 3D render.
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  // Display only (avatarFailed above also drives the WS connect and the
+  // timers — left untouched). Which Bina to SHOW:
+  //  - avatar3DCantRun: the 3D genuinely can't be used here — load error,
+  //    FPS watchdog, or a low-tier device (use3DAvatar === false).
+  //  - avatar3DLoaded: the 3D finished loading.
+  // The 12s "slow" timer sets only avatarFailed, so on a capable machine the
+  // static image covers the wait and the 3D takes over once it loads.
+  const [avatar3DCantRun, setAvatar3DCantRun] = useState(false);
+  const [avatar3DLoaded, setAvatar3DLoaded] = useState(false);
+  const showStaticBina = avatarFailed && (avatar3DCantRun || !avatar3DLoaded);
+
+  // Video recording refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  // First chunk the live MediaRecorder emitted. It alone carries the WebM
+  // header (EBML + Segment + Tracks); a file assembled without it has
+  // "0 real headers" and will not play. Kept so segment 0 can always start
+  // with it, even if the buffer was trimmed (staging c810f95f, 2026-11-03).
+  const recordingHeaderChunkRef = useRef<Blob | null>(null);
+  const webcamStreamRef = useRef<MediaStream | null>(null);
+  // Keeps the recording-audio boost graph alive (a GC'd AudioContext would stop
+  // the boost). Used to make quiet headset mics clearly audible in the saved video.
+  const recordingAudioCtxRef = useRef<AudioContext | null>(null);
+  // Removes keepAudioContextRunning's listeners for the mix context.
+  const recordingAudioKeepAliveRef = useRef<(() => void) | null>(null);
+  // Close the boost AudioContext on unmount so it doesn't leak across sessions.
+  useEffect(() => () => {
+    recordingAudioKeepAliveRef.current?.();
+    recordingAudioKeepAliveRef.current = null;
+    try { recordingAudioCtxRef.current?.close(); } catch { /* already closed */ }
+    recordingAudioCtxRef.current = null;
+  }, []);
+  // Live handles into the recording graph built once in handleVideoReady, kept
+  // reachable so a later device reacquire (mic unplug/replug) can swap in the
+  // NEW tracks instead of leaving mediaRecorderRef silently recording from
+  // tracks Webcam.tsx is about to .stop(). See handleTracksReplaced below.
+  const recordStreamRef = useRef<MediaStream | null>(null);
+  // Canvas relay that gives the recorder a video track immune to camera
+  // reacquires (see handleVideoReady). Timer drives the draw loop; the track
+  // is kept so it can be stopped on unmount.
+  const recordRelayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordVideoRelayTrackRef = useRef<MediaStreamTrack | null>(null);
+  const recordingDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const recordingBoostRef = useRef<GainNode | null>(null);
+  const recordingMicSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  // Checkpoint upload refs — periodic flushes protect against tab-throttle/abrupt close
+  const checkpointTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const checkpointInProgressRef = useRef(false);
+  const isFinalizingUploadRef = useRef(false);
+  const uploadCheckpointRef = useRef<() => Promise<void>>(async () => {});
+  const uploadRecordingRef = useRef<() => Promise<void>>(async () => {});
+  // SINGLE-FLIGHT guard for the FINAL recording flush. The final upload is
+  // triggered from several places that can all fire for one interview close —
+  // the ws.onclose handlers and the unmount cleanup. Each used to POST its own
+  // final segment; landing on two uvicorn workers at once, they interleaved
+  // upload_part/complete on the same multipart upload and the loser died with
+  // `InvalidPart` → 502 → recording lost. Holding the in-flight promise here
+  // means every later caller AWAITS the first upload instead of starting a
+  // second one. This is the client half of that fix; the server half is the
+  // per-key lock + idempotent completion in recording_mpu_service.py.
+  const finalUploadPromiseRef = useRef<Promise<void> | null>(null);
+  // S3 multipart-upload segment index (0-based → backend part_number = idx + 1).
+  // recordedChunksRef now holds only the UNFLUSHED clusters since the last
+  // segment; we flush a segment once the buffer reaches RECORDING_MIN_SEGMENT_BYTES.
+  // Camera-recording segment index. PERSISTED in sessionStorage (survives a
+  // page reload in the same tab) so a reconnect-triggered refresh RESUMES the
+  // segment numbering instead of restarting at 0. Restarting at 0 made the
+  // backend MPU service abort the pre-refresh multipart upload
+  // (recording_mpu_service: segment_index==0 → _abort_all_for_key_sync), which
+  // DISCARDED all pre-refresh video and left the recording un-concatenated.
+  const _recSegKey = `tf_rec_seg_cam_${token}`;
+  const recordingSegmentIndexRef = useRef<number>((() => {
+    try {
+      const v = typeof window !== 'undefined' ? window.sessionStorage.getItem(_recSegKey) : null;
+      const n = v != null ? parseInt(v, 10) : 0;
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch { return 0; }
+  })());
+  const _saveRecSeg = (next: number) => {
+    try { if (typeof window !== 'undefined') window.sessionStorage.setItem(_recSegKey, String(next)); } catch { /* ignore */ }
+  };
+  // Segment 0 is the start of the stored file, so it MUST begin with the
+  // recorder's header chunk. If the buffer lost it, re-attach it rather than
+  // upload a headerless (unplayable) recording. Later segments are mid-stream
+  // continuations and never carry a header.
+  const withRecordingHeader = (chunks: Blob[], segmentIndex: number): Blob[] => {
+    const header = recordingHeaderChunkRef.current;
+    if (segmentIndex !== 0 || !header || chunks.length === 0 || chunks.includes(header)) return chunks;
+    console.warn(`[Recording] Segment 0 buffer is missing the WebM header chunk (${chunks.length} chunks) — re-attaching it so the recording is playable`);
+    return [header, ...chunks];
+  };
+
+  // Avatar state controller
+  const avatarState = useAvatarState();
+  // (Removed: a 60 Hz requestAnimationFrame loop that posted avatar state
+  // 30×/s to a BroadcastChannel for a separate 3D scene that is never
+  // mounted — pure main-thread + GC cost for every candidate.)
+
+  // Hand raise detection — DISABLED (2026-10-17). It ran MediaPipe Hands on
+  // the main thread at 10 fps for the whole interview, yet nothing shows the
+  // result: the Webcam hand indicator is off (showHandIndicator={false}) and
+  // TalkingHeadAvatar never receives avatarState. Its lazy WASM load also
+  // overlapped FaceMesh's and clobbered MediaPipe's shared global `Module`
+  // (the "dependency: … hands … face_mesh …" warnings every 10 s). Set
+  // disabled: false only together with a visible use of the result.
+  const handDetection = useHandRaiseDetection({
+    disabled: true,
+    enabled: webcamReady,
+    onHandRaised: () => avatarState.raiseHand(),
+    onHandLowered: () => avatarState.lowerHand(),
+    onWaveDetected: () => avatarState.wave(),
+  });
+
+  // Proctoring (decoupled — no warning state here)
+  const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
+  // Stable callback so Webcam's second effect doesn't re-fire on every render
+  const handleStream = useCallback((stream: MediaStream) => {
+    webcamStreamRef.current = stream;
+    const sharedAudioTrack = stream.getAudioTracks().find(track => track.readyState === 'live');
+    if (sharedAudioTrack?.label) {
+      setActiveMicLabel(sharedAudioTrack.label);
+    }
+    setWebcamStream(stream);
+  }, []);
+  const reportProctorEvent = useCallback(async (t: string, event: ProctorEventPayload) => {
+    return candidateAIInterviewService.reportProctorEvent(t, event);
+  }, []);
+
+  // Server proctor-frame mode (see useServerProctorFrames below). Mirrored
+  // into a ref here because the proctoring monitor is created before the
+  // hook (it needs the attention handlers, which need this monitor).
+  const proctorVisionModeRef = useRef<ProctorVisionMode>('pending');
+  const { state: proctoringState, emitEvent, flushEvents, initialMicDeviceId } = useInterviewProctoringMonitor({
+    token,
+    stream: webcamStream,
+    enabled: isConnected,
+    copyPasteBlocking,
+    voiceDetectionSensitivity: 50,
+    obstructionThreshold: 30,
+    reportEvent: reportProctorEvent,
+    // Suppress voice_detected while Bina is speaking (TTS echo), while we are
+    // actively recording the candidate's answer, OR during the between-question
+    // "Hold On — get ready" transition (isProcessing). All three are expected /
+    // transient states where ambient room noise must NOT raise a false "Voice
+    // Activity Detected" toast. (This check is UI-only; the server speaker-ID
+    // layer is the authoritative "another voice" signal.)
+    shouldSuppressVoiceCheck: () =>
+      isAiSpeakingRef.current || isRecordingRef.current
+      || isProcessingRef.current || isCandidateTranscriptProcessingRef.current,
+    // Server mode: the server judges + persists camera_obstructed.
+    shouldSuppressObstructionEvent: () => proctorVisionModeRef.current === 'server',
+  });
+  // Stable ref so ws.onclose closure can always call the latest flush function
+  const flushProctoringEventsRef = useRef(flushEvents);
+  useEffect(() => { flushProctoringEventsRef.current = flushEvents; }, [flushEvents]);
+
+  // ── Device recovery (2026-06-05) ───────────────────────────────────────────
+  // <Webcam> acquires getUserMedia ONCE on mount and never re-acquires, so after
+  // the candidate unplugs / denies and then re-plugs / re-grants a device, the
+  // proctoring monitor keeps watching the DEAD stream → the blocking "… Disabled"
+  // overlay stays forever and they're stuck (interview runs behind it). When the
+  // monitor reports a device disabled, poll Webcam.reacquire() until a fresh LIVE
+  // stream returns; that re-feeds the monitor (onStream → setWebcamStream) so it
+  // sees live tracks and clears the overlay + refreshes the preview. The answer
+  // mic is opened separately per turn, so this recovery path is now scoped to the
+  // webcam/proctoring stream only. getUserMedia here needs BOTH cam+mic, so
+  // recovery only succeeds once the full candidate media path is back — exactly
+  // the condition for resuming.
+  useEffect(() => {
+    if (!isConnected) return;
+    // NOTE: deliberately NOT gated on "a device is reported disabled".
+    //
+    // Recovery used to start only once proctoringState flipped a device to
+    // inactive. That created a deadlock the moment the monitor learned to hold
+    // its report back while a verified mic fallback is available (see
+    // InterviewProctoringMonitor): the report is what triggered recovery, so
+    // suppressing the report also suppressed the swap that was supposed to make
+    // the report unnecessary. The tick below decides purely from actual TRACK
+    // liveness, so it repairs a dead track whether or not anything has been
+    // reported yet — and does nothing at all while both tracks are healthy.
+    // Camera and microphone are recovered INDEPENDENTLY, each with a request
+    // that names only its own device.
+    //
+    // The combined reacquire() asks getUserMedia for video AND audio in one
+    // call, which is all-or-nothing. On a machine with no built-in camera and
+    // no built-in mic (both are peripherals), unplugging both and replugging
+    // only ONE left that single call still failing on the other's constraint —
+    // so a replugged camera stayed dark until the headset came back too, and
+    // vice versa. Splitting them lets each device come back the moment its own
+    // hardware returns.
+    //
+    // Each side is also decided from the TRACK, not from proctoringState: a
+    // video track can be reported inactive while still perfectly alive (Chrome
+    // transiently MUTES it while renegotiating after an audio device change).
+    // Re-acquiring a healthy camera would mint a new video track for nothing,
+    // so only a genuinely dead/absent one is rebuilt.
+    let cancelled = false;
+    let attemptInFlight = false;
+    const attempt = async () => {
+      if (cancelled || attemptInFlight) return;
+      attemptInFlight = true;
+      try { await runRecovery(); } finally { attemptInFlight = false; }
+    };
+    const runRecovery = async () => {
+      if (cancelled) return;
+      const videoAlive = webcamStreamRef.current
+        ?.getVideoTracks?.().some(t => t.readyState === 'live') ?? false;
+      const audioAlive = webcamStreamRef.current
+        ?.getAudioTracks?.().some(t => t.readyState === 'live') ?? false;
+
+      if (!videoAlive) {
+        try {
+          // Target the device the interview STARTED on (approved in System
+          // Check), mirroring reacquireAudio(initialMicDeviceId) below — so a
+          // replugged approved camera is recognized as "restored" instead of
+          // silently landing on whatever the OS currently calls default.
+          if (await webcamRef.current?.reacquireVideo(interviewCameraDeviceIdRef.current)) {
+            console.log('[InterviewUI] Device recovery: CAMERA re-acquired independently');
+          }
+        } catch { /* camera still unavailable — keep polling */ }
+      }
+
+      if (!audioAlive || !proctoringStateRef.current.isMicrophoneActive) {
+        try {
+          // Re-acquire onto a CONCRETE device id — never the bare default.
+          //
+          // Asking for audio with no deviceId makes Chrome return a track whose
+          // getSettings().deviceId is the literal string "default". That is an
+          // ALIAS, not a device, and the verified set stores only real hardware
+          // ids (enumerateAudioInputIds filters 'default'/'communications' out).
+          // So the monitor compared "default" against the baseline, found it
+          // absent from the accepted set, and reported device_swapped — every
+          // single time. Recovery kept succeeding, the monitor kept rejecting
+          // it, and the two looped against each other once a second forever
+          // with the interview stuck paused.
+          //
+          // Preference order: the device the interview is pinned to (a replug
+          // must be recognised as "restored"), then any system-check-verified
+          // device that is actually present, then whatever real device exists.
+          // Every one of those is a concrete id, so the resulting track carries
+          // an id the monitor can actually match.
+          const inputs = (await navigator.mediaDevices.enumerateDevices())
+            .filter(d => d.kind === 'audioinput' && d.deviceId
+              && d.deviceId !== 'default' && d.deviceId !== 'communications');
+          const pinned = interviewMicDeviceIdRef.current ?? initialMicDeviceId ?? undefined;
+          const target =
+            (pinned && inputs.some(d => d.deviceId === pinned) ? pinned : undefined)
+            ?? inputs.find(d => verifiedMicIdsRef.current.has(d.deviceId))?.deviceId
+            ?? inputs[0]?.deviceId;
+          if (target && await webcamRef.current?.reacquireAudio(target)) {
+            console.log(`[InterviewUI] Device recovery: MICROPHONE re-acquired on ${target.slice(0, 8)}…`);
+          }
+        } catch { /* mic still unavailable — keep polling */ }
+      }
+
+      // Stop only once BOTH sides are genuinely healthy. The old loop exited on
+      // the first success, which on a two-device outage abandoned the polling
+      // while the second device was still missing.
+      // No self-cancel. This watcher stays armed for the whole interview so the
+      // SECOND unplug is repaired as promptly as the first; when both tracks are
+      // live the tick above does nothing at all.
+    };
+
+    // EVENT-DRIVEN first, polling only as the safety net. `devicechange` fires
+    // the instant the OS re-enumerates a replugged camera/headset, so recovery
+    // starts immediately instead of waiting out a poll tick. Waiting for the
+    // tick was the single biggest contributor to the 5-10s resume lag: the
+    // candidate plugs the cable back in and nothing even ATTEMPTS to reacquire
+    // until the interval comes round.
+    const onDeviceChange = () => { void attempt(); };
+    navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
+    // Poll kept (and tightened from 2500ms) because devicechange is not
+    // reliable on every driver/OS combination, and because a device can be
+    // enumerated a moment before getUserMedia will actually open it — the
+    // retry is what covers that settling window.
+    const id = setInterval(() => { void attempt(); }, 700);
+    void attempt();  // don't wait a full tick for the first try either
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
+    };
+  }, [isConnected, proctoringState.isCameraActive, proctoringState.isMicrophoneActive, initialMicDeviceId]);
+
+  // ── Camera/mic disconnect: pause + 3-minute grace, then terminate ──────────
+  // ANY device loss — camera, mic (headset included, via
+  // InterviewProctoringMonitor's deviceId-swap poll for the "OS silently
+  // fell back to the built-in mic" case), or both together — pauses the
+  // backend's question timer and gives the candidate 3 minutes to reconnect
+  // before the interview is terminated. Camera and mic get IDENTICAL
+  // handling here; which one is actually down only changes the overlay's
+  // wording/icon (computed straight from proctoringState at render time,
+  // not tracked separately) and which specific proctor event(s) get logged.
+  //
+  // Recovery needs no extra polling of its own: the existing device-recovery
+  // effect above already drives reacquire()/reacquireAudio() attempts (mic-
+  // only uses the audio-only path so it never disturbs a healthy camera —
+  // see Webcam.tsx), and InterviewProctoringMonitor's own health-check flips
+  // isCameraActive/isMicrophoneActive back to true automatically once the
+  // device is live again — this effect just reacts to that transition.
+  const MEDIA_PAUSE_GRACE_MS = 180000; // 3 minutes
+
+  const [isMediaPaused, setIsMediaPaused] = useState(false);
+  const [mediaPauseSecondsRemaining, setMediaPauseSecondsRemaining] = useState<number | null>(null);
+  const isMediaPausedRef = useRef(false);
+  const mediaPauseStartMsRef = useRef<number | null>(null);
+  // True when the PINNED microphone device disappeared (e.g. wired headset
+  // unplugged). The mic MediaStreamTrack does NOT always end on unplug — when a
+  // built-in mic exists (e.g. "Microphone Array (Realtek)") the OS silently
+  // swaps to it on the same live track, so `isMicrophoneActive` stays true and
+  // the interview would keep running (Bina keeps speaking). This flag detects
+  // the device-list change directly and feeds the SAME media-pause machinery,
+  // so unplugging the mic pauses the interview like covering the camera does.
+  const [audioDeviceLost, setAudioDeviceLost] = useState(false);
+  const audioDeviceLostRef = useRef(false);
+  // The audio-input device the interview STARTED on — captured ONCE and never
+  // reassigned. `pinnedAudioDeviceIdRef` cannot be used for unplug detection
+  // because it FOLLOWS the fallback: when the headset is pulled and the answer
+  // mic reopens on the built-in device, the pin is rewritten to that built-in,
+  // so a "does the pinned device still exist?" check would always say yes. This
+  // ref stays on the ORIGINAL device so its disappearance is detectable.
+  // Seeded from the approvedMicDeviceId prop — the mic the candidate verified
+  // at System Check. Before this existed the ref waited on the first live
+  // answer-mic track, which meant the interview pinned whatever the OS called
+  // "default" and the candidate's explicit Device Settings choice was lost.
+  const interviewMicDeviceIdRef = useRef<string | undefined>(approvedMicDeviceId ?? undefined);
+  // Mics that were connected and working when the candidate passed the system
+  // check. A mid-interview swap to one of these is an ALLOWED fallback rather
+  // than a proctoring pause (the proctoring monitor logs it as
+  // `microphone_switched`). Empty set => strict pinning, so a session with no
+  // recorded system check can never silently gain a weaker rule.
+  const verifiedMicIdsRef = useRef<Set<string>>(new Set());
+
+  // True when the live camera track is no longer the one approved during
+  // System Check — either it switched to a DIFFERENT physical device, or it
+  // switched to a known virtual/mobile-relay camera. Rides the exact same
+  // pause/grace/terminate path as a camera or mic-track drop (see anyDown
+  // below) — mirrors audioDeviceLost above, but for video.
+  const [cameraDeviceLost, setCameraDeviceLost] = useState(false);
+  const cameraDeviceLostRef = useRef(false);
+  const [cameraDeviceLostReason, setCameraDeviceLostReason] = useState<'virtual' | 'switched' | null>(null);
+  // The camera device the interview is pinned to — seeded directly from the
+  // approvedCameraDeviceId prop (known upfront from System Check, unlike the
+  // mic's interviewMicDeviceIdRef which has to wait on the live stream
+  // because no upstream id exists for audio).
+  const interviewCameraDeviceIdRef = useRef<string | undefined>(approvedCameraDeviceId ?? undefined);
+  const mediaPauseCountdownIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mediaPauseTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors proctoringState so the setTimeout fired at ARM time can read
+  // whatever is ACTUALLY down 3 minutes later (not what was down when the
+  // timer started) when building the termination reason.
+  const proctoringStateRef = useRef(proctoringState);
+  useEffect(() => { proctoringStateRef.current = proctoringState; }, [proctoringState]);
+
+  // Seed interviewMicDeviceIdRef from the proctoring stream's own baseline
+  // device id the instant it's known. getDedicatedRecordingAudioStream /
+  // getSharedRecordingAudioStream (below) only set this ref lazily, on the
+  // candidate's FIRST answer recording — so without this seed, a mic pulled
+  // any time before that (e.g. while Bina is still asking the first
+  // question) leaves `orig` undefined and both activeTrackSwapped() and
+  // origMissingFromList() unconditionally return false ("can't judge —
+  // present"), so the unplug is silently never detected.
+  useEffect(() => {
+    if (initialMicDeviceId && !interviewMicDeviceIdRef.current) {
+      interviewMicDeviceIdRef.current = initialMicDeviceId;
+    }
+  }, [initialMicDeviceId]);
+
+  // Ref mirrors of pause/resumeQuestionTimer. Those are declared FAR below this
+  // effect, so naming them directly in its dependency array would evaluate the
+  // binding during render, before the `const` initializes (TDZ crash). Both are
+  // stable useCallback([],[]) identities, wired up right after their
+  // definitions — see the assignment effect there.
+  const pauseQuestionTimerRef = useRef<() => void>(() => {});
+  const resumeQuestionTimerRef = useRef<() => void>(() => {});
+  // Same TDZ reason as above — stopVisemeLoop is declared far below. Lets the
+  // pause-arm branch immediately silence the avatar instead of leaving it
+  // animating/"speaking" in the background while the interview is paused.
+  const stopVisemeLoopRef = useRef<() => void>(() => {});
+  // Same TDZ reason again. stopVisemeLoop only stops the LIP-SYNC animation —
+  // Bina's actual audio lives in TalkingHead's AudioWorklet, which keeps
+  // playing its whole buffered queue unless streamStop() is called. This
+  // mirror gives the pause-arm branch the real "cut her off now" action.
+  const hardStopBinaRef = useRef<(opts?: { noFreeze?: boolean }) => void>(() => {});
+  // Set when End cuts Bina off mid-question: drop that question's late PCM
+  // until the farewell's speaking_started, so its tail can't restart playback.
+  const dropPcmUntilNextTurnRef = useRef(false);
+  // Thaws a FROZEN turn (see hardStopBinaPlayback) — resumes Bina's voice and
+  // the text reveal from the exact point the disconnect interrupted them.
+  const resumeBinaRef = useRef<() => void>(() => {});
+  // True while Bina's turn is SUSPENDED rather than torn down: her remaining
+  // audio is still sitting in TalkingHead's worklet and the question text is
+  // still in tokenBufferRef, both held in place by a suspended AudioContext.
+  const binaFrozenRef = useRef(false);
+  // Wall-clock at the moment of the freeze — used to shift TalkingHead's
+  // performance.now()-based viseme clock forward by the outage duration so the
+  // lip-sync doesn't run ahead of the voice after the thaw.
+  const binaFrozenAtMsRef = useRef<number | null>(null);
+
+  const clearMediaPauseTimers = useCallback(() => {
+    if (mediaPauseCountdownIdRef.current) { clearInterval(mediaPauseCountdownIdRef.current); mediaPauseCountdownIdRef.current = null; }
+    if (mediaPauseTimeoutIdRef.current) { clearTimeout(mediaPauseTimeoutIdRef.current); mediaPauseTimeoutIdRef.current = null; }
+  }, []);
+
+  // 'camera_disconnected' | 'microphone_disconnected' | 'camera_and_microphone_disconnected'
+  const mediaDownReason = useCallback((camOk: boolean, micOk: boolean): string => {
+    if (!camOk && !micOk) return 'camera_and_microphone_disconnected';
+    return !camOk ? 'camera_disconnected' : 'microphone_disconnected';
+  }, []);
+
+  // ── Headset (microphone) disconnect tracking — no strike limit ───────────
+  // Every microphone disconnect gets the SAME pause/resume treatment,
+  // however many times it happens in the interview — there is no 3rd-strike
+  // termination. This effect still counts episodes (one true → false
+  // transition of isMicrophoneActive) purely as audit data on the proctor
+  // event (disconnect_count) — the count no longer gates anything or renders
+  // anywhere — and still owns reporting `microphone_disabled` for the same
+  // coverage reason as before (the pause effect only reports the camera one).
+  //
+  // "No strike limit" is about the NUMBER of disconnects, and is unrelated to
+  // the DURATION rule in the pause effect below: any single disconnect that
+  // lasts longer than MEDIA_PAUSE_GRACE_MS does terminate the interview. A
+  // candidate can disconnect ten times without penalty, as long as each one is
+  // reconnected inside the grace window.
+  const headsetDisconnectCountRef = useRef(0);
+  // Tracks the PREVIOUS mic state so we count transitions, not renders.
+  const micWasActiveRef = useRef(true);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    if (proctoringState.isMicrophoneActive) { micWasActiveRef.current = true; return; }
+    if (!micWasActiveRef.current) return;         // same episode, already counted
+    micWasActiveRef.current = false;
+    if (isClosingRef.current) return;
+
+    const count = headsetDisconnectCountRef.current + 1;
+    headsetDisconnectCountRef.current = count;
+
+    candidateAIInterviewService.reportProctorEvent(token, {
+      event_type: 'microphone_disabled',
+      severity: 'severe',
+      details: {
+        phase: 'in_interview',
+        reason: 'headset_disconnected',
+        disconnect_count: count,
+      },
+    }).catch(() => { /* best-effort */ });
+  }, [isConnected, proctoringState.isMicrophoneActive, token]);
+
+  // ── Camera disconnect tracking ──────────────────────────────────────────
+  // Exact mirror of the microphone effect above, for the same reason: the
+  // Integrity Check tab needs EVERY camera drop on the timeline with its
+  // occurrence number, so a recruiter can see "unplugged 4 times" rather than a
+  // single undifferentiated "camera turned off".
+  //
+  // This lives in its own effect rather than in the pause-arm branch because
+  // the arm fires only ONCE per pause episode — a camera that drops while the
+  // interview is already paused for the mic would never have been reported at
+  // all.
+  const cameraDisconnectCountRef = useRef(0);
+  const camWasActiveRef = useRef(true);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    if (proctoringState.isCameraActive) { camWasActiveRef.current = true; return; }
+    if (!camWasActiveRef.current) return;        // same episode, already counted
+    camWasActiveRef.current = false;
+    if (isClosingRef.current) return;
+
+    const count = cameraDisconnectCountRef.current + 1;
+    cameraDisconnectCountRef.current = count;
+
+    candidateAIInterviewService.reportProctorEvent(token, {
+      event_type: 'camera_disabled',
+      severity: 'severe',
+      details: {
+        phase: 'in_interview',
+        reason: 'camera_disconnected',
+        disconnect_count: count,
+        grace_period_ms: MEDIA_PAUSE_GRACE_MS,
+      },
+    }).catch(() => { /* best-effort */ });
+  }, [isConnected, proctoringState.isCameraActive, token]);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    // `audioDeviceLost` covers the wired-unplug case where the mic track stays
+    // live (built-in mic silently takes over) — without it, that unplug would
+    // NOT pause. It rides the exact same pause/grace/terminate path as a camera
+    // or mic-track drop, so Bina stops and the answer clock freezes identically.
+    const anyDown = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive || audioDeviceLost || cameraDeviceLost;
+
+    if (anyDown && !isMediaPausedRef.current) {
+      // ARM: a device just went down — start the pause+grace window.
+      if (isClosingRef.current) return; // interview already wrapping up — don't arm
+      isMediaPausedRef.current = true;
+      setIsMediaPaused(true);
+      mediaPauseStartMsRef.current = Date.now();
+      // Camera AND microphone now share ONE grace-then-terminate rule: the
+      // candidate has MEDIA_PAUSE_GRACE_MS to reconnect whichever device
+      // dropped, and the interview ends if it is still missing when that runs
+      // out. (Reverses the earlier "a mic-only pause waits forever" policy — an
+      // interview cannot proceed without a microphone any more than without a
+      // camera, and an indefinite hold left sessions parked open.)
+      //
+      // audioDeviceLost counts as mic-down: that is the wired-unplug case where
+      // the track stays live because the OS silently fell back to another input,
+      // so isMicrophoneActive alone would read healthy.
+      const micIsDown = !proctoringState.isMicrophoneActive || audioDeviceLost;
+      // cameraDeviceLost counts as camera-down: the candidate switched to an
+      // unapproved (different, or virtual/mobile-relay) camera, so the track
+      // may still read "active" even though it's no longer a device this
+      // interview should be trusting.
+      const camIsDown = !proctoringState.isCameraActive || cameraDeviceLost;
+      const graceApplies = camIsDown || micIsDown;
+      setMediaPauseSecondsRemaining(graceApplies ? Math.ceil(MEDIA_PAUSE_GRACE_MS / 1000) : null);
+      const armReason = mediaDownReason(!camIsDown, proctoringState.isMicrophoneActive);
+      console.warn(`[INTERVIEW-DEBUG][PAUSE] INTERVIEW PAUSED — reason=${armReason} isCameraActive=${proctoringState.isCameraActive} isMicrophoneActive=${proctoringState.isMicrophoneActive} audioDeviceLost=${audioDeviceLost} cameraDeviceLost=${cameraDeviceLost}`);
+      // Strict mic requirement: nothing may keep running in the background
+      // while paused. Silence the avatar immediately (no more lip-sync/
+      // "speaking" animation), drop any still-queued TTS audio so nothing
+      // further plays out, and stop any in-progress answer recording —
+      // WITHOUT submitting it. abortRecordingForSkip does local cleanup only
+      // (no end_turn, no transcript submission), unlike stopRecordingSilent
+      // which would send whatever was captured so far for processing. A mic
+      // drop must never turn a partial answer into a submitted one.
+      stopVisemeLoopRef.current();
+      audioQueueRef.current = [];
+      // audioQueueRef is a COUNTER only (see its declaration) and isPlayingRef
+      // is a flag TalkingHead never reads — clearing them silenced nothing.
+      // Bina kept speaking out of the worklet's own buffer and the question
+      // text kept streaming in behind the blurred overlay. hardStopBina stops
+      // the worklet, the token reveal and the turn-scoped playback state for
+      // real, and COMMITS the question she was asking so it stays on screen
+      // for the whole pause (do NOT discard it — the backend's
+      // tts_pause_interrupted_question re-speak almost never fires; see
+      // hardStopBinaPlayback for why).
+      hardStopBinaRef.current();
+      console.log('[INTERVIEW-DEBUG][PAUSE] BINA SPEECH PAUSED — worklet stopped, token reveal stopped, question committed to transcript');
+      // HOLD the answer, don't abandon it. abortRecordingForSkip() (used here
+      // before) wiped speechDetectedRef, the live transcript and the streaming
+      // state, so everything the candidate had already said was thrown away and
+      // the resume started them from a blank answer. holdRecordingForOutage
+      // releases only the mic hardware and the per-turn watchdogs; the answer,
+      // its transcript and its backend utterance stay open, so reopening the
+      // mic on resume simply continues it. Still no end_turn — the answer is
+      // SUSPENDED, never submitted, which was the original intent all along.
+      try { holdRecordingForOutageRef.current(); } catch { /* ignore */ }
+      console.log('[INTERVIEW-DEBUG][PAUSE] CANDIDATE ANSWER HELD (not submitted, not discarded)');
+      // Freeze the per-question answer clock the instant the device drops.
+      // The backend cancels its own auto-skip task on session_pause and shifts
+      // question_start_time forward on resume, but it never re-sends a
+      // question_timer_started — so without this the LOCAL wall-clock keeps
+      // draining behind the overlay and the candidate returns to a shorter
+      // (or already-expired) answer window. Idempotent.
+      pauseQuestionTimerRef.current();
+      console.log('[INTERVIEW-DEBUG][PAUSE] TIMER STOPPED');
+
+      const reason = mediaDownReason(!camIsDown, proctoringState.isMicrophoneActive);
+      try {
+        wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason }));
+        console.log(`[INTERVIEW-DEBUG][PAUSE] LIVE STREAM PAUSED — session_pause sent (reason=${reason})`);
+      } catch { /* best-effort */ }
+      // NOTE: `camera_disabled` and `microphone_disabled` are BOTH reported by
+      // their own dedicated transition effects above, not here — this arm fires
+      // once per pause episode, so a second device dropping mid-pause would
+      // never have been recorded. (The camera report used to live here, which
+      // is exactly why a camera drop during a mic pause went unlogged.)
+      // NOTE: the `microphone_disabled` event is reported by the headset
+      // allowance effect above (it sees every mic drop, including ones that
+      // happen while this pause is already armed for the camera).
+
+      clearMediaPauseTimers();
+      if (graceApplies) {
+        mediaPauseCountdownIdRef.current = setInterval(() => {
+          const startedAt = mediaPauseStartMsRef.current;
+          if (startedAt === null) return;
+          const left = Math.max(0, Math.ceil((MEDIA_PAUSE_GRACE_MS - (Date.now() - startedAt)) / 1000));
+          setMediaPauseSecondsRemaining(left);
+        }, 200);
+        mediaPauseTimeoutIdRef.current = setTimeout(() => {
+          clearMediaPauseTimers();
+          // Still down after the full grace window — terminate, mirroring the
+          // "left the interview screen" termination path in the parent portal.
+          //
+          // Reads CURRENT state, never the state at arm time: the device that
+          // triggered the pause may have come back while a DIFFERENT one
+          // dropped, and either way what matters is whether the interview is
+          // usable NOW. Terminate only if the camera or the mic is still
+          // missing at this instant; if everything recovered, the resume branch
+          // below has already torn the pause down and this is a no-op.
+          const cur = proctoringStateRef.current;
+          const micStillDown = !cur.isMicrophoneActive || audioDeviceLostRef.current;
+          const camStillDown = !cur.isCameraActive || cameraDeviceLostRef.current;
+          if (camStillDown || micStillDown) {
+            onTerminate?.(`${mediaDownReason(!camStillDown, !micStillDown)}_timeout`);
+          }
+        }, MEDIA_PAUSE_GRACE_MS);
+      }
+    } else if (!anyDown && isMediaPausedRef.current) {
+      // RECOVERED within the window (both camera and mic — the ORIGINAL mic
+      // device by deviceId — are live again) — tear down the pause and
+      // resume the backend's question timer.
+      clearMediaPauseTimers();
+      const startedAt = mediaPauseStartMsRef.current;
+      const pauseDurationMs = startedAt !== null ? Math.max(0, Date.now() - startedAt) : null;
+      mediaPauseStartMsRef.current = null;
+      isMediaPausedRef.current = false;
+      setIsMediaPaused(false);
+      setMediaPauseSecondsRemaining(null);
+      console.warn(`[INTERVIEW-DEBUG][PAUSE] INTERVIEW RESUMED — pauseDurationMs=${pauseDurationMs} isCameraActive=${proctoringState.isCameraActive} isMicrophoneActive=${proctoringState.isMicrophoneActive} audioDeviceLost=${audioDeviceLost} cameraDeviceLost=${cameraDeviceLost}`);
+
+      try {
+        wsRef.current?.send(JSON.stringify({ type: 'session_resume' }));
+        console.log('[INTERVIEW-DEBUG][PAUSE] LIVE STREAM RESUMED — session_resume sent');
+      } catch { /* best-effort */ }
+      // Unfreeze the answer clock at exactly the value it held when the
+      // device dropped — pause/resumeQuestionTimer accumulate the paused
+      // span into questionTimerPausedMsRef, which computeQuestionRemaining
+      // subtracts, so no part of the outage counts against the candidate.
+      resumeQuestionTimerRef.current();
+      // Thaw a mid-question freeze BEFORE anything else looks at speaking
+      // state: Bina's voice and the question text pick up from the exact point
+      // the disconnect interrupted them. No-ops when the turn was torn down
+      // instead of frozen (candidate was answering, or her audio was
+      // incomplete) — in that case the recording restart below is what matters.
+      resumeBinaRef.current();
+      console.log('[INTERVIEW-DEBUG][PAUSE] TIMER RESUMED, BINA SPEECH/RECORDING ALLOWED AGAIN');
+      // Recording itself does NOT come back on its own: the ARM branch above
+      // calls abortRecordingForSkipRef.current() to kill any in-flight answer
+      // capture, and nothing else watches this pause→resume transition to
+      // restart it. Without this, a disconnect mid-answer left the candidate
+      // stuck — timer/Bina/stream all "resumed" but no mic was ever reopened
+      // to capture the rest of their answer, until the backend's own
+      // question-timer timeout eventually auto-skipped the question. Same
+      // guard as the one-shot device-change retry above: only fire into an
+      // open candidate turn, never over Bina still speaking or mid-processing.
+      setTimeout(() => {
+        if (
+          isRecordingRef.current === false &&
+          wsRef.current?.readyState === WebSocket.OPEN &&
+          !isAiSpeakingRef.current &&
+          !isProcessingRef.current &&
+          !isMutedRef.current &&
+          !isFaceBlockedRef.current
+        ) {
+          console.log('[INTERVIEW-DEBUG][PAUSE] Restarting candidate recording after resume');
+          startRecordingInternalRef.current();
+        }
+      }, 100);
+      candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: 'session_resumed',
+        severity: 'low',
+        details: {
+          reason: 'media_reconnected',
+          pause_duration_ms: pauseDurationMs,
+          pause_duration_seconds: pauseDurationMs !== null ? Math.round(pauseDurationMs / 1000) : null,
+        },
+      }).catch(() => { /* best-effort */ });
+    }
+  }, [isConnected, proctoringState.isMicrophoneActive, proctoringState.isCameraActive, audioDeviceLost, cameraDeviceLost, token, onTerminate, clearMediaPauseTimers, mediaDownReason]);
+
+  // Keep the audioDeviceLost ref mirror current for the always-on listener.
+  useEffect(() => { audioDeviceLostRef.current = audioDeviceLost; }, [audioDeviceLost]);
+
+  // Load the system-check-verified mic set once per interview.
+  useEffect(() => {
+    verifiedMicIdsRef.current = loadVerifiedAudioInputs(token);
+  }, [token]);
+
+  // Keep the cameraDeviceLost ref mirror current for the always-on listener
+  // (see the camera-device-lost effect below, mirrors the mic pattern above).
+  useEffect(() => { cameraDeviceLostRef.current = cameraDeviceLost; }, [cameraDeviceLost]);
+
+  // Detect the PINNED microphone device disappearing / reappearing via the
+  // devicechange event (fires even when the track survives a fallback swap).
+  // Pause when the interview's mic device vanishes; resume when it returns.
+  useEffect(() => {
+    if (!isConnected) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return;
+    let cancelled = false;
+    // The original device must be SEEN present at least once before its absence
+    // counts as an unplug — guards against a transient enumerate that omits it,
+    // and against a stale captured id that never actually matched a listed
+    // device (which would otherwise false-fire for a no-headset candidate).
+    // Seed this from interviewMicDeviceIdRef itself when it's already set:
+    // that ref is ONLY ever populated from a track that was actually LIVE at
+    // capture time (see getDedicatedRecordingAudioStream/getSharedRecording-
+    // AudioStream), so presence was already confirmed once. Without this,
+    // every WS reconnect (isConnected is a dependency below, and reconnects
+    // are routine — keepalive pings, network blips) tears down and rebuilds
+    // this effect, resetting the flag to false — so a headphone pulled
+    // before the next fresh poll landed was silently ignored (never counted
+    // as missing), even though the device really was gone.
+    let origConfirmedPresent = Boolean(interviewMicDeviceIdRef.current);
+
+    // SIGNAL A — the ACTIVE answer-mic track is now on a DIFFERENT device than
+    // the interview started on. This is the reliable signal for a wired unplug
+    // where the OS silently swaps to the built-in mic on a surviving track (the
+    // device stays enumerated, the track stays live, but its deviceId changes).
+    const activeTrackSwapped = (): boolean => {
+      const orig = interviewMicDeviceIdRef.current;
+      if (!orig) return false;
+      // mediaStreamRef only holds a live track WHILE an answer is actively
+      // recording (startRecordingInternal sets it, stop clears it) — outside
+      // that window (e.g. while Bina is speaking) it's empty, so this signal
+      // would go dark for most of the interview. webcamStreamRef holds the
+      // proctoring stream acquired once at interview start and kept live
+      // throughout, so fall back to it whenever no recording is in flight.
+      const t = mediaStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live')
+        ?? webcamStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live');
+      if (!t) return false;
+      const cur = t.getSettings?.().deviceId;
+      if (!cur || cur === 'default' || cur === 'communications' || cur === orig) return false;
+      // A swap to a mic that was already connected and working at system-check
+      // time is an ALLOWED fallback (the candidate had it before the interview
+      // began, so it can't be a device introduced to reroute audio). Re-pin to
+      // it so later comparisons track the device actually in use, and let the
+      // proctoring monitor own logging the switch — duplicating the event here
+      // would double-count it on the recruiter's timeline.
+      if (verifiedMicIdsRef.current.has(cur)) {
+        console.warn(`[INTERVIEW-DEBUG] Mic swapped to a system-check-verified device (${cur.slice(0, 8)}…) — allowed, not pausing`);
+        interviewMicDeviceIdRef.current = cur;
+        return false;
+      }
+      return true;
+    };
+
+    // SIGNAL B — the original device is no longer in the device list.
+    const origMissingFromList = async (): Promise<boolean> => {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter(
+        d => d.kind === 'audioinput' && d.deviceId
+          && d.deviceId !== 'default' && d.deviceId !== 'communications'
+      );
+      const orig = interviewMicDeviceIdRef.current;
+      if (!orig || inputs.length === 0) return false; // can't judge → present
+      const present = inputs.some(d => d.deviceId === orig);
+      if (present) origConfirmedPresent = true;
+      if (!origConfirmedPresent || present) return false;
+      // The pinned device is gone — but if one of the system-check-verified
+      // mics is still connected, that is an allowed fallback rather than a
+      // lost-audio pause. Re-pin to it so the interview continues on a device
+      // the candidate had before it began. Fails closed: an empty verified set
+      // (no system check recorded, storage unavailable) finds no alternative
+      // and the strict pause applies exactly as before.
+      const alt = inputs.find(d => verifiedMicIdsRef.current.has(d.deviceId));
+      if (alt) {
+        console.warn(`[INTERVIEW-DEBUG] Pinned mic gone; falling back to verified device ${alt.deviceId.slice(0, 8)}… — not pausing`);
+        interviewMicDeviceIdRef.current = alt.deviceId;
+        return false;
+      }
+      return true;
+    };
+
+    let lastMicDiag = '';
+    const check = async (trigger: string) => {
+      try {
+        // Same recording-stream-first, webcam-stream-fallback order as
+        // activeTrackSwapped() above, so this diagnostic snapshot reflects
+        // the track that signal actually inspected instead of always
+        // reading "no-track" whenever no answer is currently being recorded.
+        const liveTrack = mediaStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live')
+          ?? webcamStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live');
+        const anyTrack = mediaStreamRef.current?.getAudioTracks?.()[0] ?? webcamStreamRef.current?.getAudioTracks?.()[0];
+        const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [] as MediaDeviceInfo[]);
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+        const swapped = activeTrackSwapped();
+        const missing = swapped ? true : await origMissingFromList();
+        if (cancelled) return;
+        const lost = swapped || missing;
+        // Full diagnostic snapshot on every devicechange event, and on a poll
+        // tick whenever ANYTHING in it changed — so a disconnect test's log
+        // still shows exactly what the detection logic saw at each transition.
+        // An unchanged poll tick is skipped: logging (and shipping to the
+        // backend) an identical line every 500 ms was ~1,500 lines per 9 min.
+        const diag = JSON.stringify({
+          originalDeviceId: interviewMicDeviceIdRef.current ?? null,
+          currentLiveTrackDeviceId: liveTrack?.getSettings?.().deviceId ?? null,
+          trackReadyState: anyTrack?.readyState ?? 'no-track',
+          trackMuted: anyTrack?.muted ?? null,
+          enumeratedAudioInputs: audioInputs.map(d => ({ deviceId: d.deviceId, label: d.label || '(no label)' })),
+          origConfirmedPresent,
+          swapped,
+          missing,
+          lost,
+          audioDeviceLostState: audioDeviceLostRef.current,
+        });
+        if (trigger !== 'poll' || diag !== lastMicDiag) {
+          lastMicDiag = diag;
+          console.log('[INTERVIEW-DEBUG][MIC-DIAG]', `{"trigger":${JSON.stringify(trigger)},${diag.slice(1)}`);
+        }
+        if (lost && !audioDeviceLostRef.current) {
+          if (!swapped) {
+            // Device-list signal can flicker → re-confirm briefly. Kept short
+            // (not removed) — a real recording showed ~3s between the OS
+            // reporting the mic gone and this pause actually engaging, which
+            // came from this delay stacked with the poll interval below;
+            // still non-zero so a one-tick enumerate glitch can't
+            // false-pause a candidate who never touched their mic.
+            await new Promise(r => setTimeout(r, 300));
+            if (cancelled) return;
+            if (!activeTrackSwapped() && !(await origMissingFromList())) {
+              console.log(`[INTERVIEW-DEBUG][MIC-DIAG] recheck cleared trigger=${trigger} — treating as flicker, NOT pausing`);
+              return;
+            }
+          }
+          console.warn(`[INTERVIEW-DEBUG] Audio device lost (trigger=${trigger}, swapped=${swapped}) — pausing interview (orig=${interviewMicDeviceIdRef.current})`);
+          setAudioDeviceLost(true);
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'microphone_disabled',
+            severity: 'severe',
+            details: { phase: 'in_interview', reason: 'audio_device_unplugged', trigger },
+          }).catch(() => { /* best-effort */ });
+        } else if (!lost && audioDeviceLostRef.current) {
+          // enumerateDevices() listing the original device again is NOT proof
+          // it's usable — Windows can disable a mic at the OS level while
+          // Chrome keeps it listed (and the track just goes to muted, or a
+          // fresh getUserMedia() still throws). Confirm a REAL stream can be
+          // opened on the exact original device before clearing the pause.
+          // Probe stream is stopped immediately either way — never touches
+          // mediaStreamRef (the app's actual recording stream).
+          const origId = interviewMicDeviceIdRef.current;
+          console.log(`[MIC][RESUME] resume check started deviceId=${origId ?? 'unknown'} trigger=${trigger}`);
+          let usable = true;
+          let probeStream: MediaStream | null = null;
+          if (origId) {
+            try {
+              probeStream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: origId } } });
+              const probeTrack = probeStream.getAudioTracks()[0];
+              usable = Boolean(probeTrack && probeTrack.readyState === 'live' && !probeTrack.muted);
+              console.log(`[MIC][RESUME] microphone validation result=${usable} readyState=${probeTrack?.readyState} muted=${probeTrack?.muted}`);
+            } catch (err: any) {
+              usable = false;
+              console.warn(`[MIC][GUM] error name=${err?.name} message=${err?.message} deviceId=${origId}`);
+            } finally {
+              probeStream?.getTracks().forEach(t => t.stop());
+            }
+          }
+          if (cancelled) return;
+          if (!usable) {
+            // Stay paused — enumerateDevices() says it's back but a real
+            // stream can't be opened yet (still OS-disabled, still settling
+            // after re-enable, etc). Next poll tick / devicechange retries.
+            console.log(`[MIC][RESUME] not usable yet (trigger=${trigger}) — remaining paused`);
+            return;
+          }
+          console.log(`[INTERVIEW-DEBUG] Audio device restored (trigger=${trigger}) — resuming interview`);
+          console.log(`[MIC][RESUME] INTERVIEW_RESUMED deviceId=${origId ?? 'unknown'}`);
+          setAudioDeviceLost(false);
+        }
+      } catch (e) {
+        console.warn(`[INTERVIEW-DEBUG][MIC-DIAG] check() threw (trigger=${trigger})`, e);
+      }
+    };
+    const onDeviceChange = () => { void check('devicechange'); };
+    navigator.mediaDevices.addEventListener('devicechange', onDeviceChange);
+    // Poll as well: devicechange does not fire on a silent same-track swap, and
+    // an unplugged jack may stay enumerated — the active-track deviceId check
+    // catches those. Mirrors how fullscreen relies on a reliable recurring signal.
+    // 500ms (was 1500ms) — enumerateDevices() is cheap, and the slower value
+    // was directly responsible for part of the ~3s gap seen in a real test
+    // between the OS reporting the mic gone and the pause actually engaging.
+    const pollId = setInterval(() => { void check('poll'); }, 500);
+    void check('mount'); // baseline + catch an already-removed device
+    return () => {
+      cancelled = true;
+      clearInterval(pollId);
+      navigator.mediaDevices.removeEventListener('devicechange', onDeviceChange);
+    };
+  }, [isConnected, token]);
+
+  // Detect the live CAMERA track no longer being the approved device — either
+  // it swapped to a DIFFERENT physical camera, or to a known virtual/mobile-
+  // relay driver (DroidCam, Moto Connect, OBS Virtual Camera, etc.). Mirrors
+  // the mic effect above, but video's own live track carries its device id
+  // and label directly — unlike audio there's no 'default'/'communications'
+  // alias for Chrome to silently swap a live video track onto, so no separate
+  // enumerateDevices()-based "missing from list" signal is needed here: the
+  // live track's own getSettings().deviceId/label IS the ground truth,
+  // updated the moment Webcam.tsx acquires any new stream (mount, full
+  // reacquire, or a targeted reacquireVideo after the original device died).
+  useEffect(() => {
+    if (!isConnected) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices) return;
+    let cancelled = false;
+
+    const check = async (trigger: string) => {
+      try {
+        const track = webcamStreamRef.current?.getVideoTracks?.().find(t => t.readyState === 'live');
+        // No live track — camera is genuinely down, which proctoringState.
+        // isCameraActive / the existing camera-disconnected overlay already
+        // covers. Nothing for the approval check to validate here.
+        if (!track) return;
+        const result = checkCameraApproval({
+          approvedDeviceId: interviewCameraDeviceIdRef.current,
+          liveTrackDeviceId: track.getSettings?.().deviceId,
+          liveTrackLabel: track.label,
+        });
+        if (cancelled) return;
+        if (!result.valid && !cameraDeviceLostRef.current) {
+          console.warn(`[INTERVIEW-DEBUG] Camera device lost (trigger=${trigger}, reason=${result.reason}) — pausing interview (approved=${interviewCameraDeviceIdRef.current ?? 'unset'})`);
+          setCameraDeviceLostReason(result.reason);
+          setCameraDeviceLost(true);
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'camera_disabled',
+            severity: 'severe',
+            details: {
+              phase: 'in_interview',
+              reason: result.reason === 'virtual' ? 'virtual_camera_detected' : 'camera_switched',
+              trigger,
+            },
+          }).catch(() => { /* best-effort */ });
+        } else if (result.valid && cameraDeviceLostRef.current) {
+          console.log(`[INTERVIEW-DEBUG] Camera device restored (trigger=${trigger}) — resuming interview`);
+          setCameraDeviceLost(false);
+          setCameraDeviceLostReason(null);
+        }
+      } catch (e) {
+        console.warn(`[INTERVIEW-DEBUG] camera check() threw (trigger=${trigger})`, e);
+      }
+    };
+
+    const onDeviceChange = () => { void check('devicechange'); };
+    navigator.mediaDevices.addEventListener('devicechange', onDeviceChange);
+    // Poll as well, same reasoning as the mic effect: a reacquired track can
+    // land without a devicechange event ever firing.
+    const pollId = setInterval(() => { void check('poll'); }, 1000);
+    void check('mount');
+    return () => {
+      cancelled = true;
+      clearInterval(pollId);
+      navigator.mediaDevices.removeEventListener('devicechange', onDeviceChange);
+    };
+  }, [isConnected, token]);
+
+  // Belt-and-braces cleanup on unmount so a stray timer can never fire into
+  // an unmounted tree (mirrors the pattern used for other proctoring timers).
+  useEffect(() => () => clearMediaPauseTimers(), [clearMediaPauseTimers]);
+
+  // Fullscreen — disabled (no popup/overlay)
+  // Face detection & gaze tracking (Phase 2 & 3)
+  // Violations log to backend only — they MUST NOT stop the mic, kill the
+  // per-question timer, end the turn, or show a blocking overlay.
+  // stopRecordingSilent had heavy side-effects (clears interval, deducts
+  // global timer, sends end_turn) so calling it on every violation was
+  // freezing the question slot mid-answer; the full-screen "Face Not
+  // Detected" overlay made it worse by hiding the question + timer from
+  // the candidate. Violation is still surfaced via the toast warning system
+  // (InterviewProctoringWarnings) and logged to the recruiter timeline.
+  // ── Held attention warnings (face_missing / gaze_away / multiple_faces) ──
+  // These no longer go through emitEvent's 2s toast + 8s cooldown. Each
+  // occurrence is an EPISODE: the warning stays on screen until the face is
+  // back / the candidate looks back / is alone again, then disappears; the
+  // next occurrence shows it again (no cooldown). Every episode is logged to
+  // the recruiter timeline:
+  //   start -> `face_missing` / `gaze_away` / `multiple_faces` (the violation)
+  //   end   -> `<kind>_ended` (info, not scored)
+  // paired by episode_id and carrying the duration.
+  // The warning is the normal proctoring toaster (bottom-right), emitted as a
+  // HELD toast: no auto-dismiss, removed via InterviewEventBus.release(id).
+  // Face first, gaze second: the detector closes an open gaze episode
+  // (ended_by "face_missing") before it raises face_missing, so an empty
+  // camera shows "Face not detected", never "Looking away".
+  type AttentionKind = 'face_missing' | 'gaze_away' | 'multiple_faces';
+  // `server`: opened from a server proctor-frame event — already persisted
+  // server-side (and closed there too), so neither its start nor its end is
+  // POSTed to /proctor-event from here.
+  interface AttentionEpisode { id: string; startedAt: number; details: Record<string, any>; server?: boolean }
+  const attentionEpisodesRef = useRef<Partial<Record<AttentionKind, AttentionEpisode>>>({});
+
+  const startAttentionEpisode = useCallback((kind: AttentionKind, details: Record<string, any>, opts?: { server?: boolean }) => {
+    if (attentionEpisodesRef.current[kind]) return; // already open; detector only fires on the edge anyway
+    const startedAt = Date.now();
+    const id = `${kind}-${startedAt}-${Math.random().toString(36).slice(2, 8)}`;
+    attentionEpisodesRef.current[kind] = { id, startedAt, details, server: !!opts?.server };
+    InterviewEventBus.emitHeld(kind, id, details);
+    if (opts?.server) return; // server already persisted it
+    candidateAIInterviewService.reportProctorEvent(token, {
+      event_type: kind,
+      timestamp: new Date(startedAt).toISOString(),
+      details: { ...details, episode_id: id, started_at: new Date(startedAt).toISOString() },
+    }).catch(() => { /* best-effort */ });
+  }, [token]);
+
+  const endAttentionEpisode = useCallback((kind: AttentionKind, endedBy: 'restored' | 'face_missing' | 'interview_end') => {
+    const ep = attentionEpisodesRef.current[kind];
+    if (!ep) return;
+    delete attentionEpisodesRef.current[kind];
+    InterviewEventBus.release(ep.id);
+    if (ep.server) return; // server closes its own episodes (event / POST /end)
+    const endedAt = Date.now();
+    const durationMs = Math.max(0, endedAt - ep.startedAt);
+    candidateAIInterviewService.reportProctorEvent(token, {
+      event_type: `${kind}_ended`,
+      timestamp: new Date(endedAt).toISOString(),
+      details: {
+        ...ep.details,
+        episode_id: ep.id,
+        started_at: new Date(ep.startedAt).toISOString(),
+        ended_at: new Date(endedAt).toISOString(),
+        duration_ms: durationMs,
+        duration_seconds: Math.round(durationMs / 1000),
+        ended_by: endedBy,
+      },
+    }).catch(() => { /* best-effort */ });
+  }, [token]);
+
+  const handleFaceMissing = useCallback(() => {
+    startAttentionEpisode('face_missing', { reason: 'no_face_detected' });
+  }, [startAttentionEpisode]);
+
+  const handleFaceRestored = useCallback(() => {
+    // We never blocked the interview — just take the held warning down and
+    // log how long the face was gone.
+    endAttentionEpisode('face_missing', 'restored');
+    // A substitute sits down exactly here — check identity now, not up to
+    // FACE_VERIFY_INTERVAL_MS later.
+    faceVerification?.verifyNow?.();
+  }, [endAttentionEpisode, faceVerification]);
+
+  const handleMultipleFaces = useCallback((count: number) => {
+    startAttentionEpisode('multiple_faces', { face_count: count });
+  }, [startAttentionEpisode]);
+
+  const handleMultipleFacesCleared = useCallback(() => {
+    endAttentionEpisode('multiple_faces', 'restored');
+    // Back to one face — make sure it is still the registered candidate.
+    faceVerification?.verifyNow?.();
+  }, [endAttentionEpisode, faceVerification]);
+
+  const handleGazeAway = useCallback((direction: string, metrics?: Record<string, any>) => {
+    startAttentionEpisode('gaze_away', { direction, ...(metrics ?? {}) });
+  }, [startAttentionEpisode]);
+
+  const handleGazeRestored = useCallback((reason: 'restored' | 'face_missing') => {
+    endAttentionEpisode('gaze_away', reason);
+  }, [endAttentionEpisode]);
+
+  // Distinct (event_type:object_class) keys already screenshotted this session —
+  // see handleObjectDetected below. A ref (not state) so tracking it never
+  // triggers a re-render.
+  const capturedObjectScreenshotTypesRef = useRef<Set<string>>(new Set());
+
+  // Prohibited object on camera (phone / second screen / book).
+  // The whole payload is forwarded verbatim so `object_class` — the model's own
+  // class string — lands in the stored violation. The recruiter's Integrity
+  // Check tab reads it back to name the exact item; never a generic "object".
+  const handleObjectDetected = useCallback(
+    (eventType: ObjectEventType, det: DetectedObjectEvent) => {
+      emitEvent(eventType, {
+        object_class: det.object_class,
+        object_label: det.object_label,
+        confidence: Number(det.confidence.toFixed(3)),
+        box: det.box.map(n => Number(n.toFixed(4))),
+        consecutive_frames: det.consecutive_frames,
+        detector: det.detector,
+      });
+
+      // One evidence screenshot per distinct violation TYPE per session — keyed
+      // exactly like the recruiter UI's "Times" grouping (groupKeyOf in
+      // violationTaxonomy.ts: event_type + object_class), NOT per repeated
+      // re-arm of the same class. Best-effort and fire-and-forget: any failure
+      // here (no frame, network error) is caught below and never touches the
+      // emitEvent() call above or the rest of the proctoring pipeline.
+      const captureKey = `${eventType}:${det.object_class}`;
+      if (!capturedObjectScreenshotTypesRef.current.has(captureKey)) {
+        capturedObjectScreenshotTypesRef.current.add(captureKey);
+        try {
+          const video = webcamRef.current?.getVideoElement?.();
+          if (video && video.readyState >= 2 && video.videoWidth > 0) {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              canvas.toBlob((blob) => {
+                if (!blob) return;
+                // The event just emitted above is only QUEUED locally — the
+                // backend batches proctoring events and normally flushes every
+                // BACKEND_FLUSH_INTERVAL (5s, InterviewProctoringMonitor.ts).
+                // Uploading the screenshot immediately would routinely race
+                // ahead of that flush, arriving before the matching
+                // proctoring_events row even exists, so the backend finds
+                // nothing to attach it to and silently drops it (confirmed: a
+                // real violation showed in the Event log with no Violation
+                // Evidence card). Force-flush the queue now and wait for it
+                // before uploading, so the row is guaranteed to exist first.
+                flushEvents()
+                  .catch(() => { /* upload still attempted below; worst case
+                                    the backend just finds no row to attach to,
+                                    same as before this fix */ })
+                  .finally(() => {
+                    candidateAIInterviewService
+                      .uploadProctorEventScreenshot(token, eventType, det.object_class, blob)
+                      .catch(() => { /* already logged inside the service call */ });
+                  });
+              }, 'image/jpeg', 0.85);
+            }
+          }
+        } catch (captureErr) {
+          console.warn('[PROCTOR-SCREENSHOT] capture failed (non-blocking):', captureErr);
+        }
+      }
+    },
+    [emitEvent, flushEvents, token],
+  );
+
+  // Detection is best-effort: it needs WebGPU (Safari/Firefox may not have it)
+  // and the vendored model+runtime to be present on the server.
+  //
+  // Record the failure as a proctoring event, not just a console line. A
+  // detector that never started produces an interview with zero phone flags,
+  // which is indistinguishable from a genuinely clean one — so the recruiter
+  // MUST be able to see that the check didn't run. Persisted as "info"
+  // severity server-side, so it never counts against the candidate.
+  const handleObjectDetectionUnavailable = useCallback((reason: string) => {
+    console.warn('[INTERVIEW_OBJECT_DETECTION] Unavailable —', reason);
+    emitEvent('object_detection_unavailable', { reason });
+  }, [emitEvent]);
+
+  // ── Server proctor frames (PROCTOR_VISION_SERVER_ENABLED) ──────────────
+  // Server events are ALREADY persisted server-side: here they only drive the
+  // same candidate UI the browser detectors drive — never /proctor-event.
+  //   face_missing / multiple_faces  → held attention toast (server episode)
+  //   phone_detected / unauthorized_object / camera_obstructed → toast
+  //   face_mismatch / face_identity_changed / face_unverifiable → toast
+  //     (`__server` stops the monitor's identity subscription re-queuing it)
+  //   *_unavailable → diagnostics, no candidate UI
+  const handleServerProctorEvents = useCallback((events: ProctorFrameServerEvent[]) => {
+    for (const ev of events) {
+      const type = ev.event_type || '';
+      const isEnd = ev.phase === 'end' || type.endsWith('_ended');
+      const base = type.replace(/_ended$/, '');
+      const details: Record<string, any> = { ...(ev.details ?? {}), __server: true };
+      switch (base) {
+        case 'face_missing':
+          if (isEnd) {
+            endAttentionEpisode('face_missing', 'restored');
+          } else {
+            // Face first, gaze second: no face means no "looking away".
+            endAttentionEpisode('gaze_away', 'face_missing');
+            startAttentionEpisode('face_missing', details, { server: true });
+          }
+          break;
+        case 'multiple_faces':
+          if (isEnd) endAttentionEpisode('multiple_faces', 'restored');
+          else startAttentionEpisode('multiple_faces', { face_count: ev.details?.face_count ?? ev.details?.faces, ...details }, { server: true });
+          break;
+        case 'phone_detected':
+        case 'unauthorized_object':
+        case 'camera_obstructed':
+        case 'face_mismatch':
+        case 'face_identity_changed':
+        case 'face_unverifiable':
+          if (!isEnd) InterviewEventBus.emit(base as Parameters<typeof InterviewEventBus.emit>[0], details);
+          break;
+        case 'face_verification_unavailable':
+        case 'object_detection_unavailable':
+          console.warn(`[INTERVIEW-DEBUG] Server proctoring: ${base}`, ev.details?.reason ?? '');
+          break;
+        default:
+          break;
+      }
+    }
+  }, [startAttentionEpisode, endAttentionEpisode]);
+
+  const proctorVision = useServerProctorFrames({
+    token,
+    streaming: isConnected && webcamReady && !isClosing && !isMediaPaused,
+    ended: isClosing,
+    getVideoElement: () => webcamRef.current?.getVideoElement?.() ?? null,
+    onServerEvents: handleServerProctorEvents,
+  });
+  proctorVisionModeRef.current = proctorVision.mode;
+  const serverVision = proctorVision.mode === 'server';
+  const localVision = proctorVision.mode === 'local';
+
+  // Fell back server → browser mid-session: take down any held server
+  // episode (the browser detector re-raises it if still true). The face-api
+  // identity loop is started by the faceVerification effect (keyed on mode).
+  const prevVisionModeRef = useRef<ProctorVisionMode>('pending');
+  useEffect(() => {
+    const prev = prevVisionModeRef.current;
+    prevVisionModeRef.current = proctorVision.mode;
+    if (prev !== 'server' || proctorVision.mode !== 'local') return;
+    (['face_missing', 'multiple_faces'] as const).forEach(kind => {
+      if (attentionEpisodesRef.current[kind]?.server) endAttentionEpisode(kind, 'restored');
+    });
+  }, [proctorVision.mode, endAttentionEpisode]);
+
+  // Set by the stagger effect below (after faceDetection): face detection
+  // warms first, object detection follows (see OBJECT_DETECTION_WARMUP_STAGGER_MS).
+  const [objectDetectionWarmupGo, setObjectDetectionWarmupGo] = useState(false);
+  const objectDetection = useInterviewObjectDetection({
+    // Browser RF-DETR only in 'local' mode — never loads (nor warms) while the
+    // proctor-frame config is pending or the server does object detection.
+    enabled: isConnected && webcamReady && localVision,
+    // Load + warm up during "Preparing your interview…" (see preparingDone),
+    // staggered after face detection's warm-up.
+    warmup: webcamReady && objectDetectionWarmupGo && localVision,
+    // No GPU inference while Bina speaks (her audio + lip-sync stuttered).
+    paused: isAiSpeaking,
+    lowTier: effectiveDeviceCapability?.tier === 'low',
+    onObjectDetected: handleObjectDetected,
+    onUnavailable: handleObjectDetectionUnavailable,
+  });
+
+  // Face verification event handlers (identity check, not just presence)
+  // Webcam element continuous face verification runs against (set in handleVideoReady).
+  const faceVerifyVideoRef = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    if (!faceVerification || !isConnected) return;
+    // The faceVerification hook calls callbacks internally, but we need to wire
+    // them to emitEvent. Since the callbacks are set at hook creation time in the
+    // portal, we handle this via a subscription-like pattern in InterviewUI.
+    // The callbacks are already set up in CandidateAIInterviewPortal if needed.
+    // The baseline can land AFTER the camera was ready (reload straight into the
+    // interview → the stored Identity photo is re-fetched), in which case
+    // handleVideoReady skipped starting — start it here. startVerification is
+    // idempotent (it replaces any running interval).
+    // Server proctor-frame mode: identity is checked server-side — the
+    // face-api loop must not run. Re-runs on fallback to 'local'.
+    if (!localVision) return;
+    const video = faceVerifyVideoRef.current;
+    if (video && faceVerification.hasBaseline()) {
+      faceVerification.startVerification(video, FACE_VERIFY_INTERVAL_MS);
+    }
+    return () => {
+      faceVerification.stopVerification();
+    };
+  }, [faceVerification, isConnected, localVision]);
+
+  // No face baseline (face models failed to load, or no face found in the
+  // identity photo / system-check frames) → no identity check runs at all this
+  // session. Record it once the proctor pipeline is live (emitEvent drops
+  // events before connect) so "no identity flags" is never misread as
+  // "checked and clean".
+  // Grace period: after a reload the portal is still re-fetching the stored
+  // Identity photo (fetch + 8s registration cap) when the socket connects.
+  const faceVerifyUnavailableSentRef = useRef(false);
+  useEffect(() => {
+    if (!isConnected || faceVerifyUnavailableSentRef.current) return;
+    // Server mode reports its own face_verification_unavailable.
+    if (!localVision) return;
+    if (faceVerification?.hasBaseline()) return;
+    const t = setTimeout(() => {
+      if (faceVerifyUnavailableSentRef.current) return;
+      faceVerifyUnavailableSentRef.current = true;
+      console.warn('[INTERVIEW-DEBUG] Face verification unavailable — no baseline registered');
+      emitEvent('face_verification_unavailable', { reason: 'no_face_baseline' });
+    }, FACE_BASELINE_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [isConnected, faceVerification, emitEvent, localVision]);
+
+  const faceDetection = useInterviewFaceDetection({
+    // Waits for the proctor-frame config so it never loads FaceDetection only
+    // to tear it down again. Server mode: gaze (FaceMesh) only, face count
+    // from the server's latest answer.
+    enabled: isConnected && webcamReady && proctorVision.mode !== 'pending',
+    warmup: webcamReady && proctorVision.mode !== 'pending',
+    faceCountSource: serverVision ? 'external' : 'local',
+    externalFaceCountRef: proctorVision.latestRef,
+    enableGazeTracking: true,
+    lowTier: effectiveDeviceCapability?.tier === 'low',
+    onFaceMissing: handleFaceMissing,
+    onFaceRestored: handleFaceRestored,
+    onMultipleFaces: handleMultipleFaces,
+    onMultipleFacesCleared: handleMultipleFacesCleared,
+    onGazeAway: handleGazeAway,
+    onGazeRestored: handleGazeRestored,
+  });
+
+  // Warm-up stagger: release object detection's warm-up once face detection
+  // has warmed (MediaPipe FaceDetection + FaceMesh, initialised serially inside
+  // useInterviewFaceDetection — untouched), or after the stagger delay. Latches
+  // true; `enabled` (connect) starts object detection regardless.
+  useEffect(() => {
+    if (objectDetectionWarmupGo || !webcamReady) return;
+    const startedAt = performance.now();
+    const iv = setInterval(() => {
+      const fdWarm = faceDetection.warmedUpRef.current;
+      const waited = performance.now() - startedAt;
+      if (fdWarm || waited >= OBJECT_DETECTION_WARMUP_STAGGER_MS) {
+        clearInterval(iv);
+        console.log(
+          `[INTERVIEW-DEBUG] Object-detection warm-up released after ${Math.round(waited)} ms ` +
+          `(${fdWarm ? 'face detection warmed' : 'stagger timeout'})`,
+        );
+        setObjectDetectionWarmupGo(true);
+      }
+    }, 100);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webcamReady, objectDetectionWarmupGo]);
+
+  // ── Pre-interview warm-up gate ──────────────────────────────────────────
+  // Object detection (28.8 MB model + WebGPU session + a slow first
+  // inference) and MediaPipe face/gaze used to start loading the moment the
+  // WebSocket connected — exactly when Bina began her introduction. Staging
+  // 2026-10-13: page at 2.2 fps, detector ready only 22 s later, the intro
+  // stuttered until ~30-60 s in. Both now warm up first (results discarded)
+  // and the connect effect waits for this — never longer than the cap, so a
+  // slow machine still starts on time (anything unfinished keeps loading in
+  // the background, as before).
+  useEffect(() => {
+    if (preparingDone) return;
+    const startedAt = performance.now();
+    const iv = setInterval(() => {
+      const visionMode = proctorVisionModeRef.current;
+      // Server mode: the browser object detector never runs — nothing to wait
+      // for. While the config is still pending nothing has started warming.
+      const odWarm = visionMode === 'server' || (visionMode === 'local' && objectDetection.warmedUpRef.current);
+      const fdWarm = visionMode !== 'pending' && faceDetection.warmedUpRef.current;
+      const waited = performance.now() - startedAt;
+      if ((odWarm && fdWarm) || waited >= PREPARE_MAX_WAIT_MS) {
+        clearInterval(iv);
+        // Don't let a detector that missed the warm-up window finish loading
+        // (and run a multi-second GPU frame) on top of Bina's intro.
+        if (!odWarm && visionMode === 'local') objectDetection.abandonIfNotWarm(waited);
+        console.log(
+          `[INTERVIEW-DEBUG] Preparing done in ${Math.round(waited)} ms ` +
+          `(vision=${visionMode}, objectDetection=${visionMode === 'server' ? 'server' : odWarm ? 'ready' : 'still loading'}, ` +
+          `faceDetection=${fdWarm ? 'ready' : 'still loading'})`,
+        );
+        setPreparingDone(true);
+      }
+    }, 250);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preparingDone]);
+
+  // Close any open attention episode when detection stops (interview ending /
+  // camera gone) or on unmount, so its duration is still logged.
+  const faceDetectionActive = isConnected && webcamReady;
+  useEffect(() => {
+    if (faceDetectionActive && !isClosing) return;
+    endAttentionEpisode('face_missing', 'interview_end');
+    endAttentionEpisode('gaze_away', 'interview_end');
+    endAttentionEpisode('multiple_faces', 'interview_end');
+  }, [faceDetectionActive, isClosing, endAttentionEpisode]);
+  useEffect(() => () => {
+    endAttentionEpisode('face_missing', 'interview_end');
+    endAttentionEpisode('gaze_away', 'interview_end');
+    endAttentionEpisode('multiple_faces', 'interview_end');
+  }, [endAttentionEpisode]);
+
+  // Stable video-ready callback: use the stable setVideoElement methods from each hook
+  // (both are useCallback([], []) — same ref across renders) so handleVideoReady
+  // won't change on every render and won't cause Webcam's second effect to re-fire.
+  const handleVideoReady = useCallback((video: HTMLVideoElement) => {
+    handDetection.setVideoElement(video);
+    faceDetection.setVideoElement(video);
+    objectDetection.setVideoElement(video);
+    setWebcamReady(true);
+
+    // Start video recording from webcam stream.
+    // Low bitrate: 200 Kbps video + 64 Kbps audio = ~264 Kbps total.
+    // 30-min interview ≈ 59 MB — well within upload limits.
+    const stream = video.srcObject as MediaStream;
+    if (stream) {
+      webcamStreamRef.current = stream;
+
+      // ── Stable VIDEO leg for the recorder ────────────────────────────────
+      // The MediaRecorder must own a video track that OUTLIVES every camera
+      // reacquire. A raw getUserMedia track does not: reacquire() mints a new
+      // one and stops the old, and swapping tracks on the recorder's own
+      // MediaStream trips the MediaStream Recording spec's hard rule — the UA
+      // must stop recording, DISCARD everything already gathered, fire
+      // InvalidModificationError and go inactive. With no restart path that
+      // silently lost the whole candidate recording (BUG25).
+      //
+      // So relay through a canvas fed by the SAME <video> element the preview
+      // uses. Webcam.tsx keeps that element pointed at whichever camera is
+      // live, so the relay follows device swaps with no track change at all —
+      // exactly how the audio leg already survives them (its track comes from
+      // an AudioContext destination; only the source node is rewired).
+      //
+      // If the camera really does go away, the last frame simply freezes and
+      // the recording keeps running, instead of dying outright.
+      const RELAY_FPS = 15; // low-tier CPU headroom; the encoder targets 200 Kbps anyway
+      let stableVideoTrack: MediaStreamTrack | null = null;
+      try {
+        const relayCanvas = document.createElement('canvas');
+        relayCanvas.width = video.videoWidth || 640;
+        relayCanvas.height = video.videoHeight || 480;
+        const relayCtx = relayCanvas.getContext('2d', { alpha: false });
+        if (relayCtx) {
+          // Tell the screen-recording guard this canvas is ours. Without it the
+          // captureStream() below is refused, the candidate is shown "Screen
+          // Recording Not Allowed", a high-confidence proctoring violation is
+          // logged against them, AND the catch below silently drops us to the
+          // raw camera track — which dies on the next camera reacquire (BUG25).
+          markAppOwnedCanvas(relayCanvas);
+          if (recordRelayTimerRef.current) clearInterval(recordRelayTimerRef.current);
+          recordRelayTimerRef.current = setInterval(() => {
+            // Resolve the LIVE element each tick rather than closing over the
+            // one captured here. If <Webcam> ever swaps its <video> (it did
+            // when a device error replaced the whole subtree), a captured
+            // reference would point at a detached element and the recording
+            // would freeze on its last frame while the camera ran fine.
+            const src = webcamRef.current?.getVideoElement?.() ?? video;
+            const camTrackLive = webcamStreamRef.current
+              ?.getVideoTracks?.().some(t => t.readyState === 'live') ?? false;
+            // The canvas MUST be repainted every tick, even with no camera.
+            //
+            // Skipping the draw (what this did before) stops modifying the
+            // canvas, so captureStream emits NO frames at all — the encoder
+            // then gets a multi-second hole with zero video, which is what made
+            // the stored recording stall/stutter at exactly the unplug
+            // interval. Painting a placeholder keeps frames flowing at a steady
+            // rate, so the file stays continuous and seekable.
+            //
+            // It is also the honest thing to record: a <video> holds its LAST
+            // FRAME after the track ends, so drawing that would put a frozen
+            // face in the recording for the whole outage — indistinguishable,
+            // to a recruiter, from the candidate sitting very still.
+            if (src && src.readyState >= 2 && camTrackLive) {
+              try { relayCtx.drawImage(src, 0, 0, relayCanvas.width, relayCanvas.height); } catch { /* frame skipped */ }
+            } else {
+              const w = relayCanvas.width, h = relayCanvas.height;
+              relayCtx.fillStyle = 'var(--raw-0f1929)';
+              relayCtx.fillRect(0, 0, w, h);
+              relayCtx.fillStyle = 'var(--raw-94a3b8)';
+              relayCtx.textAlign = 'center';
+              relayCtx.textBaseline = 'middle';
+              relayCtx.font = `${Math.max(12, Math.round(h / 18))}px system-ui, sans-serif`;
+              relayCtx.fillText('Camera disconnected', w / 2, h / 2);
+            }
+          }, Math.round(1000 / RELAY_FPS));
+          stableVideoTrack = relayCanvas.captureStream(RELAY_FPS).getVideoTracks()[0] ?? null;
+        }
+      } catch (e) {
+        console.warn('[Recording] Canvas video relay unavailable — recording the raw camera track (dies on reacquire):', e);
+      }
+      // Fall back to the raw track only if the relay could not be built.
+      const videoLeg = stableVideoTrack ? [stableVideoTrack] : stream.getVideoTracks();
+      recordVideoRelayTrackRef.current = stableVideoTrack;
+
+      // ── Build the RECORDING audio mix: boosted candidate mic + Bina's clean
+      // TTS tap. Mirrors the screen-recording mix in CandidateAIInterviewPortal
+      // so both saved views have the same two-voice balance.
+      //
+      // Mic: boosted via gain → limiter because raw webcam audio is too quiet on
+      // headphones/earbuds. The VIDEO track passes through untouched. Non-
+      // destructive: the original audio track stays live for proctoring, and the
+      // ASR/transcription path uses its own separately-boosted stream.
+      //
+      // Bina: taken from the DIRECT tap (__interviewRecordingDest), never from
+      // mic bleed. The webcam mic runs echoCancellation ON (Webcam.tsx), so her
+      // voice off the speakers is mostly cancelled — without this tap the saved
+      // Candidate View is one-sided (candidate only, questions inaudible) with
+      // hollow half-cancelled residue where she spoke. Trimmed to 0.75 so the
+      // boosted candidate sits at a comparable level instead of under her.
+      //
+      // If Web Audio setup fails for any reason we record the raw audio, but
+      // still through the stable video leg when one was built.
+      const rawAudioFallbackStream = (): MediaStream =>
+        stableVideoTrack ? new MediaStream([...videoLeg, ...stream.getAudioTracks()]) : stream;
+      let recordStream: MediaStream = rawAudioFallbackStream();
+      try {
+        const aTracks = stream.getAudioTracks();
+        if (aTracks.length > 0) {
+          const Ctx: typeof AudioContext =
+            window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          const actx = new Ctx();
+          recordingAudioCtxRef.current = actx;
+          // A mix context that isn't running makes the recorder save NOTHING
+          // (a 0-byte recording) — keep it running for the whole interview.
+          recordingAudioKeepAliveRef.current?.();
+          recordingAudioKeepAliveRef.current = keepAudioContextRunning(actx, 'Webcam');
+          const dest = actx.createMediaStreamDestination();
+
+          const srcNode = actx.createMediaStreamSource(new MediaStream(aTracks));
+          const boost = actx.createGain();
+          boost.gain.value = 3.0; // lift quiet headset/earbud speech
+          // Limiter prevents the 3× boost from clipping a loud built-in mic.
+          const limiter = actx.createDynamicsCompressor();
+          limiter.threshold.value = -3;
+          limiter.knee.value = 0;
+          limiter.ratio.value = 20;
+          limiter.attack.value = 0.003;
+          limiter.release.value = 0.1;
+          srcNode.connect(boost).connect(limiter).connect(dest);
+
+          // Bina's voice — direct tap only. The dest is created by the portal
+          // BEFORE TalkingHead mounts (that's when the avatar wires itself into
+          // it), so only use an existing one; creating it this late would route
+          // nothing. Absent in flows without a screen-recording mix — the
+          // recording then stays mic-only, exactly as before.
+          const lindaDest = (window as any).__interviewRecordingDest as MediaStreamAudioDestinationNode | null;
+          let binaMixed = false;
+          if (lindaDest && lindaDest.stream.getAudioTracks().length > 0) {
+            const lindaGain = actx.createGain();
+            // 1.1× — the mic leg isn't just boosted 3×, it's also run through a
+            // 20:1 limiter, which raises its AVERAGE loudness well beyond the
+            // nominal 3× peak gain (classic loudness-war compression). Bina's
+            // path has no compressor, so leaving her at the old 0.75× trim made
+            // her sound faint/buried next to the mic even though both signals
+            // were technically present in the recording.
+            lindaGain.gain.value = 1.1;
+            actx.createMediaStreamSource(lindaDest.stream).connect(lindaGain).connect(dest);
+            binaMixed = true;
+          }
+
+          recordStream = new MediaStream([
+            ...videoLeg,
+            ...dest.stream.getAudioTracks(),
+          ]);
+          // Keep the mix graph reachable so handleTracksReplaced can rewire a
+          // fresh mic source into `boost` on reacquire, instead of the
+          // recording silently going dead when the old track is stopped.
+          recordingDestRef.current = dest;
+          recordingBoostRef.current = boost;
+          recordingMicSourceRef.current = srcNode;
+          console.log(
+            `[Recording] audio mix active (mic gain 3× + limiter${binaMixed ? ', Bina tap @1.1' : ', Bina tap unavailable — mic only'})`,
+          );
+        }
+      } catch (e) {
+        console.warn('[Recording] audio mix setup failed — recording raw audio:', e);
+        recordStream = rawAudioFallbackStream();
+      }
+      // Reachable by handleTracksReplaced regardless of which path above ran.
+      // NOTE: its track set must never be mutated while the recorder is live —
+      // that is precisely what used to destroy the recording (see the stable
+      // video leg above and handleTracksReplaced below).
+      recordStreamRef.current = recordStream;
+
+      const RECORDER_OPTIONS: MediaRecorderOptions = {
+        videoBitsPerSecond: 200_000,  // 200 Kbps — clear face video at talking-head scale
+        audioBitsPerSecond: 64_000,   // 64 Kbps — clearer voice (was 32 Kbps)
+      };
+      const startRecorder = (opts: MediaRecorderOptions) => {
+        // Device-recovery (camera/mic reacquire after a drop) calls this again
+        // on the SAME component instance, with recordingSegmentIndexRef still
+        // holding whatever segment was in flight. A prior segment that failed
+        // upload sits queued in recordedChunksRef for the next checkpoint
+        // retry — but the recorder restart runs first and used to blow that
+        // buffer away with recordedChunksRef.current = [] before the retry
+        // ever got a chance, permanently losing that footage. Ship it now,
+        // best-effort, under the segment index it was already queued at,
+        // before resetting.
+        if (recordedChunksRef.current.length > 0) {
+          const staleChunks = recordedChunksRef.current;
+          const staleIndex = recordingSegmentIndexRef.current;
+          const staleMime = (mediaRecorderRef.current?.mimeType || opts.mimeType || 'video/webm').split(';')[0];
+          const staleBlob = new Blob(withRecordingHeader(staleChunks, staleIndex), { type: staleMime });
+          candidateAIInterviewService
+            .uploadRecording(token, staleBlob, staleIndex, false)
+            .then(() => { recordingSegmentIndexRef.current = staleIndex + 1; })
+            .catch((err) => console.warn(`[Recording] Pre-restart flush of segment ${staleIndex} failed — footage lost: ${getErrorMessage(err)}`));
+        }
+        const recorder = new MediaRecorder(recordStream, opts);
+        recordedChunksRef.current = [];
+        let gotData = false;
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            // A new recorder's first chunk is its stream header.
+            if (!gotData) recordingHeaderChunkRef.current = e.data;
+            gotData = true;
+            recordedChunksRef.current.push(e.data);
+          }
+        };
+        // The recorder going inactive on its own (all recorded tracks ended,
+        // UA stop) used to be silent: the checkpoint no-ops on a non-recording
+        // state and the interview just ends with whatever was buffered. Make it
+        // visible in the client log and on the proctor timeline.
+        const describeTracks = () =>
+          recordStream.getTracks().map((t) => `${t.kind}:${t.readyState}`).join(',') || 'none';
+        recorder.onstop = () => {
+          if (isFinalizingUploadRef.current || isUnmountedRef.current || mediaRecorderRef.current !== recorder) return;
+          console.error(
+            `[Recording] MediaRecorder stopped unexpectedly mid-interview (tracks=${describeTracks()}, buffered=${recordedChunksRef.current.length} chunks, segment=${recordingSegmentIndexRef.current}) — recording will not continue`,
+          );
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'recording_failed',
+            severity: 'high',
+            details: { error: 'recorder_stopped', tracks: describeTracks(), segment_index: recordingSegmentIndexRef.current },
+          }).catch(() => { /* best-effort */ });
+        };
+        recordStream.getTracks().forEach((t) => {
+          t.addEventListener('ended', () => {
+            if (isFinalizingUploadRef.current || isUnmountedRef.current || mediaRecorderRef.current !== recorder) return;
+            console.error(`[Recording] Recorded ${t.kind} track ended mid-interview (label='${t.label}', recorder=${recorder.state})`);
+          }, { once: true });
+        });
+        // Stall watchdog. If the audio mix's AudioContext isn't running, Chrome's
+        // MediaRecorder emits nothing for the WHOLE interview and a 0-byte
+        // recording is saved (staging ai-d7eff074). keepAudioContextRunning
+        // usually prevents that. If the recorder is still empty after two
+        // timeslices AND the mix is not running, stop depending on Web Audio and
+        // record the raw mic track (Bina's voice tap is lost from this view, the
+        // candidate is not). "Empty" alone is not enough: under start-up load
+        // (face/object models loading) the first chunk can land after 12 s with a
+        // healthy mix — swapping then would throw that footage away. So with a
+        // running mix it just keeps checking until data arrives.
+        const checkStall = () => {
+          if (gotData || isUnmountedRef.current || isFinalizingUploadRef.current) return;
+          if (mediaRecorderRef.current !== recorder || recorder.state !== 'recording') return;
+          const mixState = recordingAudioCtxRef.current?.state ?? 'none';
+          const micTracks = stream.getAudioTracks();
+          // Already on the raw mic (the mix was never built) → nothing to fall back to.
+          const alreadyRaw = recordStream.getAudioTracks().some((t) => micTracks.includes(t));
+          if (mixState === 'running' || alreadyRaw || micTracks.length === 0) {
+            window.setTimeout(checkStall, RECORDING_STALL_RECHECK_MS);
+            return;
+          }
+          console.error(
+            `[Recording] No data ${Math.round((performance.now() - startedAt) / 1000)}s after start and the audio mix is '${mixState}' — restarting on the raw mic track`,
+          );
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'recording_stalled',
+            severity: 'medium',
+            details: { audio_mix_state: mixState, fell_back_to_raw_audio: true },
+          }).catch(() => { /* best-effort */ });
+          recorder.ondataavailable = null;
+          recorder.onerror = null;
+          recorder.onstop = null; // deliberate stop — not an unexpected one
+          try { recorder.stop(); } catch { /* already stopped */ }
+          recordStream = rawAudioFallbackStream();
+          recordStreamRef.current = recordStream;
+          startRecorder(opts);
+        };
+        const startedAt = performance.now();
+        window.setTimeout(checkStall, RECORDING_STALL_CHECK_MS);
+        // The recorder dying used to be completely silent: the 30 s checkpoint
+        // no-ops on a non-'recording' state and the final upload ships an empty
+        // part, so a lost recording only surfaced when a recruiter opened it.
+        // Log it, flag it on the proctor timeline, and salvage whatever the UA
+        // left us (nothing at all in the InvalidModificationError case — hence
+        // the stable video leg that prevents it in the first place).
+        recorder.onerror = (e: Event) => {
+          const name = (e as unknown as { error?: { name?: string } }).error?.name ?? 'unknown';
+          console.error(`[Recording] MediaRecorder error (${name}) — recorder state=${recorder.state}; recording will not continue`);
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'recording_failed',
+            severity: 'high',
+            details: { error: name, segment_index: recordingSegmentIndexRef.current },
+          }).catch(() => { /* best-effort */ });
+          uploadCheckpointRef.current().catch(() => { /* best-effort salvage */ });
+        };
+        recorder.start(5000); // 5-second chunks — fewer objects, same result
+        mediaRecorderRef.current = recorder;
+        console.log(`[Recording] Started: mimeType=${recorder.mimeType}, videoBps=${opts.videoBitsPerSecond}, audioBps=${opts.audioBitsPerSecond}`);
+
+        // Periodic checkpoint uploads every 30s — make sure SOMETHING reaches the
+        // server even if the tab is later throttled (background) or closed before
+        // the normal completion-time upload path runs. Backend writes to a
+        // deterministic filename keyed on interview id so each checkpoint
+        // overwrites in place.
+        if (checkpointTimerRef.current) clearInterval(checkpointTimerRef.current);
+        checkpointTimerRef.current = setInterval(() => {
+          uploadCheckpointRef.current().catch(() => {});
+        }, 30_000);
+      };
+      // Use isTypeSupported() to select the best available codec across browsers:
+      // - Chrome/Brave: vp9 > vp8 webm
+      // - Firefox: vp8 webm (vp9 may not have HW encode; ogg is audio-only)
+      // - Safari: no WebM support at all — needs mp4/avc1
+      const codecCandidates = [
+        "video/webm;codecs=vp9",
+        "video/webm;codecs=vp8",
+        "video/mp4;codecs=avc1",  // Safari 14.1+
+        "video/mp4",              // Safari fallback
+      ];
+      const supportedMime = typeof MediaRecorder !== 'undefined'
+        ? codecCandidates.find(m => MediaRecorder.isTypeSupported(m))
+        : undefined;
+      try {
+        startRecorder(supportedMime ? { ...RECORDER_OPTIONS, mimeType: supportedMime } : RECORDER_OPTIONS);
+      } catch (err) {
+        console.error("[Recording] MediaRecorder not supported:", err);
+      }
+    }
+    // Start continuous face-identity verification at a 30s cadence on EVERY
+    // tier (2026-10-14, product decision pending R&D). face-api/TF.js runs on
+    // the CPU on the main thread (~0.5-1.5s per check on a 4-core laptop), and
+    // the old 10s cadence for non-low tiers tripled that load — noticeable
+    // once 4-core machines started classifying as 'mid'. 30s still catches a
+    // substituted candidate within ~30s.
+    faceVerifyVideoRef.current = video;
+    // Only in browser-vision mode; a still-pending config is picked up by the
+    // faceVerification effect once it resolves to 'local'.
+    if (proctorVisionModeRef.current === 'local' && faceVerification?.hasBaseline()) {
+      faceVerification.startVerification(video, FACE_VERIFY_INTERVAL_MS);
+      console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${FACE_VERIFY_INTERVAL_MS / 1000}s cadence)`);
+    }
+  }, [handDetection, faceDetection, objectDetection, faceVerification, effectiveDeviceCapability]);
+
+  // Called by Webcam.tsx SYNCHRONOUSLY right after it acquires a fresh
+  // getUserMedia stream on reacquire (device unplug/replug) — BEFORE it stops
+  // the old stream's tracks. Without this, the still-running mediaRecorderRef
+  // keeps its recordStream wired to tracks that are about to be permanently
+  // .stop()-ed, silently killing the stored recording's video+audio for the
+  // remainder of the interview while the live preview/transcript recover fine
+  // (they're fed by different streams/paths).
+  //
+  // No-ops before the recorder exists (recordStreamRef is only set once
+  // handleVideoReady's setup above has run) — nothing to swap onto yet.
+  const handleTracksReplaced = useCallback((newStream: MediaStream) => {
+    const rs = recordStreamRef.current;
+    if (!rs) return;
+
+    // Video needs NO swap. recordStream carries the canvas relay track built in
+    // handleVideoReady, which is fed by the <video> element and therefore
+    // already follows the new camera track by itself. This is deliberate:
+    // adding/removing a track on a stream a MediaRecorder is recording forces
+    // the UA to stop, DISCARD everything gathered so far and go inactive
+    // (InvalidModificationError) — which is exactly how the stored recording
+    // used to be lost the moment a device was reacquired. Never mutate `rs`.
+    //
+    // (If the relay could not be built, recordStream holds the raw camera track
+    // and that footage freezes at the reacquire — degraded, but the recording
+    // survives, which the swap did not allow.)
+
+    const newAudioTrack = newStream.getAudioTracks()[0];
+    if (!newAudioTrack) return;
+
+    const dest = recordingDestRef.current;
+    const boost = recordingBoostRef.current;
+    if (dest && boost) {
+      // Web-Audio mix path: recordStream's audio track comes from `dest`,
+      // which doesn't die on its own — it just goes silent once its only
+      // live input (the old, now-ending mic track) ends. Rewire a fresh
+      // source into the existing boost→limiter→dest chain; no change needed
+      // to recordStream's own track list.
+      try { recordingMicSourceRef.current?.disconnect(); } catch { /* already dead */ }
+      const actx = recordingAudioCtxRef.current;
+      if (actx) {
+        try {
+          const freshSource = actx.createMediaStreamSource(new MediaStream([newAudioTrack]));
+          freshSource.connect(boost);
+          recordingMicSourceRef.current = freshSource;
+          console.log('[Recording] Mic reconnected into recording graph after device reacquire');
+        } catch (e) {
+          console.warn('[Recording] Failed to rewire mic into recording graph on reacquire:', e);
+        }
+      }
+    } else {
+      // No Web Audio mix (setup failed at record-start) — recordStream carries
+      // the raw audio track directly. Swapping it here would destroy the
+      // recorder for the same spec reason as the video swap above, so accept
+      // silent audio from this point rather than losing the entire recording.
+      // The mix path is the normal case; this branch only runs when AudioContext
+      // setup already failed.
+      console.warn('[Recording] No audio mix graph — mic swap not applied (mutating the live recorder stream would destroy the recording)');
+    }
+  }, []);
+
+  // TalkingHead avatar ref — visual lip-sync (audio played by Web Audio API separately)
+  const talkingHeadRef   = useRef<TalkingHeadHandle>(null);
+  // (thStreamActive removed — no longer sending audio to TalkingHead)
+
+  const visemeRafRef     = useRef<number | null>(null);
+
+  // Refs
+  const wsRef = useRef<WebSocket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  // Device tracking for the ACTIVE recording session. Seeded from the mic the
+  // candidate approved at System Check so the FIRST answer turn already captures
+  // on their chosen device — it used to start undefined, so turn 1 opened the OS
+  // default and their selection never took effect.
+  //
+  // The pin is dropped only when the pinned device is unplugged mid-answer (see
+  // handleDeviceChange) — a skip or a normal turn end keeps it. When it is
+  // gone, getDedicatedRecordingAudioStream tries the System Check mic
+  // (homeMicDeviceIdRef) before any unconstrained default.
+  const pinnedAudioDeviceIdRef = useRef<string | undefined>(approvedMicDeviceId ?? undefined);
+  // The mic the candidate approved at System Check (or, without one, the
+  // proctoring stream's first device). Never rewritten — interviewMicDeviceIdRef
+  // follows allowed swaps, this stays the known-good device to return to.
+  const homeMicDeviceIdRef = useRef<string | undefined>(approvedMicDeviceId ?? undefined);
+  useEffect(() => {
+    if (!homeMicDeviceIdRef.current && initialMicDeviceId) homeMicDeviceIdRef.current = initialMicDeviceId;
+  }, [initialMicDeviceId]);
+  // Answer mics that were open but delivered no signal (see noteMicSignal).
+  // A device leaves the set as soon as it carries sound again.
+  const deadMicIdsRef = useRef<Set<string>>(new Set());
+  const micSignalRef = useRef<{ deviceId?: string; label?: string; lastSignalAt: number; lastFrameAt: number; hadSignal: boolean; flagged: boolean }>({
+    lastSignalAt: 0, lastFrameAt: 0, hadSignal: false, flagged: true,
+  });
+  const [micNoSignal, setMicNoSignal] = useState(false);
+  const micNoSignalRef = useRef(false);
+  const audioDeviceChangeListenerRef = useRef<(() => void) | null>(null);
+  // AnalyserNode tapped off the mic source for the live recording waveform UI.
+  // Passive sink (source→analyser only, never →destination, so no echo).
+  const micAnalyserRef = useRef<AnalyserNode | null>(null);
+  const candidateAudioStreamingRef = useRef(false);
+  const candidateAudioFrameCountRef = useRef(0);
+  const micLevelLastUpdateRef = useRef(0);
+  const processorRef = useRef<ScriptProcessorNode | AudioWorkletNode | null>(null);
+  // Mic source feeding processorRef, and the capture generation. Every answer
+  // opens a new source + chunker on the SAME AudioContext; a node that is only
+  // output-disconnected keeps running on its (ended → silent) source and keeps
+  // calling processAudioChunk. Only the current generation may send audio.
+  const micSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const audioCaptureGenRef = useRef(0);
+  const recordingContextRef = useRef<AudioContext | null>(null);
+  // Tracks whether 'pcm-processor' has been registered in the current recordingContext.
+  // AudioWorklet processors can only be registered once per AudioContext — re-registration
+  // throws NotSupportedError. Since we reuse the context across recording sessions we skip
+  // addModule() on subsequent calls and go straight to new AudioWorkletNode().
+  const pcmWorkletRegisteredRef = useRef(false);
+  const voiceVerifBufferRef = useRef<Float32Array[]>([]);
+  const voiceVerifStrideRef = useRef({ stride: 1, seen: 0 });
+  const audioQueueRef = useRef<AudioBuffer[]>([]); // kept for proctoring load-shedding count only
+  const isPlayingRef = useRef(false);
+  // Scheduled playback — gapless audio via Web Audio API clock
+  const nextPlayTimeRef = useRef(0);   // ctx.currentTime when next buffer should start
+  const pendingBuffersRef = useRef(0); // buffers scheduled but not yet finished
+
+  // ── Audio playback tracker ──
+  // The REAL "Bina's audio has finished" signal. A dedicated, silent
+  // AudioContext that mirrors every PCM chunk TalkingHead receives by
+  // scheduling a gain=0 AudioBufferSourceNode of the same length. Tracked
+  // fields:
+  //   playbackTrackerCtxRef             — the dedicated AudioContext
+  //   playbackScheduledEndAtRef         — ctx.currentTime seconds when the
+  //                                        last-scheduled buffer ends
+  //   playbackTrackerPendingRef         — count of buffers scheduled but
+  //                                        not yet finished (from onended)
+  // Because AudioContext.currentTime is driven by the hardware audio clock
+  // it's the browser's authoritative playback clock — we can't be wrong
+  // about whether audio has finished as long as we schedule a silent mirror
+  // of every real chunk. No TalkingHead internals, no wall-clock guesses.
+  const playbackTrackerCtxRef = useRef<AudioContext | null>(null);
+  const playbackScheduledEndAtRef = useRef<number>(0); // in ctx seconds
+  const playbackTrackerPendingRef = useRef<number>(0);
+  // True once at least one chunk for the current turn was successfully
+  // scheduled on the tracker context. Used by `whenTrackedPlaybackEnds` to
+  // decide whether the tracker's state is trustworthy or we need to fall
+  // back to the wall-clock heuristic (happens on first question when the
+  // AudioContext is still suspended, pre-user-gesture).
+  const trackedThisTurnRef = useRef(false);
+  // Ref shim — populated below in a useEffect so the `ws.onmessage` closure
+  // (created once when `connect()` runs) always sees the latest callback.
+  const trackPlaybackChunkRef = useRef<(pcmData: ArrayBuffer) => void>(() => {});
+  // Pending callbacks waiting for audio to truly finish. Each entry is
+  // a function that will be called once `playbackScheduledEndAtRef <= ctx.currentTime`
+  // AND audio_end was received. Used by finalizePlayback to defer its
+  // work until the real end-of-playback, with no wall-clock guessing.
+  const awaitingAudioEndCallbacksRef = useRef<Array<() => void>>([]);
+
+  // Ensure we have a tracker context. Reuses a single instance for the
+  // entire session; AudioContext creation is not free, so we avoid
+  // spawning one per Bina turn. The tracker prefers to share the
+  // pre-created, already-unlocked `__interviewAudioContext` (set by the
+  // fullscreen-prompt user-gesture button in CandidateAIInterviewPortal)
+  // so it starts in the 'running' state even on the very first question.
+  const getPlaybackTracker = useCallback((): AudioContext | null => {
+    if (typeof window === 'undefined') return null;
+    let ctx = playbackTrackerCtxRef.current;
+    if (!ctx || ctx.state === 'closed') {
+      try {
+        // Prefer the pre-warmed context if TalkingHead hasn't claimed it yet.
+        const preCreated = (window as InterviewWindow).__interviewAudioContext;
+        if (preCreated && preCreated.state !== 'closed' && preCreated.sampleRate === 24000) {
+          ctx = preCreated;
+        } else {
+          ctx = new AudioContext({ sampleRate: 24000 });
+        }
+        playbackTrackerCtxRef.current = ctx;
+      } catch {
+        return null;
+      }
+    }
+    if (ctx.state === 'suspended' && !binaFrozenRef.current) {
+      // Fire-and-forget resume. Any gesture during the interview will
+      // unlock it; until then the tracker will lag behind real audio,
+      // in which case we fall back to wall-clock anchors.
+      //
+      // Skipped while a turn is FROZEN: there the suspension is deliberate
+      // (it is what holds Bina's voice and the text reveal in place across a
+      // device disconnect), and auto-resuming here would un-pause her behind
+      // the blocking overlay. resumeBinaPlayback owns the resume in that case.
+      ctx.resume().catch(() => { /* ignore */ });
+    }
+    return ctx;
+  }, []);
+
+  // Schedule a silent mirror of an Int16 PCM @ 24 kHz chunk. The chunk's
+  // duration is encoded in its byteLength; we convert to a same-length
+  // AudioBuffer so its onended fires at exactly the wall-clock moment
+  // the real chunk finishes playing through TalkingHead.
+  const trackPlaybackChunk = useCallback((pcmData: ArrayBuffer) => {
+    const ctx = getPlaybackTracker();
+    if (!ctx) return;
+    // If the context is suspended (first call before user gesture takes
+    // effect), aggressively try to resume it. On subsequent chunks it
+    // should be 'running'. If still suspended after the resume attempt,
+    // skip this chunk — the wall-clock fallback in whenTrackedPlaybackEnds
+    // will kick in.
+    if (ctx.state !== 'running') {
+      // A FROZEN turn suspends this context ON PURPOSE (device disconnect).
+      // Resuming here is what let Bina carry on talking behind the blocking
+      // overlay: chunks keep arriving during the outage (the backend no longer
+      // cancels her pipeline on session_pause, precisely so the turn can be
+      // completed on resume), and every one of them hit this line and undid the
+      // freeze. Never resume while frozen — resumeBinaPlayback owns that.
+      //
+      // Scheduling below still works on a suspended context: currentTime is
+      // frozen, so these silent mirror buffers queue in order and play from the
+      // thaw, keeping playbackScheduledEndAtRef correct across the outage.
+      if (!binaFrozenRef.current) {
+        ctx.resume().catch(() => { /* ignore */ });
+        // resume() can flip state to 'running' synchronously in some browsers;
+        // re-read through AudioContextState to defeat TS's earlier narrowing.
+        if ((ctx.state as AudioContextState) !== 'running') return;
+      }
+    }
+    try {
+      const sampleCount = pcmData.byteLength / 2; // Int16 = 2 bytes/sample
+      if (sampleCount <= 0) return;
+      const buf = ctx.createBuffer(1, sampleCount, 24000);
+      // leave channel silent — we only need the DURATION to be correct
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      // gain=0 node to prevent any accidental audible click even if hw mixer
+      // ever routes this through speakers on a misconfigured browser
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(gain).connect(ctx.destination);
+      const startAt = Math.max(ctx.currentTime, playbackScheduledEndAtRef.current);
+      src.start(startAt);
+      // First chunk of this turn: anchor the reveal's audible-start to the
+      // actual scheduled start time (not ctx.currentTime in queueAudio). This
+      // is the spec-correct anchor — the ctx second when this buffer begins
+      // playing through TalkingHead after its ~700ms internal buffering.
+      // Store the RAW scheduled start. The audible-delay shift is applied by the
+      // reveal loop at READ time, not here: this runs BEFORE streamStart (see the
+      // chunk handler), so the active audio path — and therefore the correct
+      // delay — isn't known yet on the first chunk of a turn.
+      if (firstChunkStartCtxSecRef.current === null) {
+        firstChunkStartCtxSecRef.current = startAt;
+      }
+      playbackScheduledEndAtRef.current = startAt + buf.duration;
+      playbackTrackerPendingRef.current += 1;
+      trackedThisTurnRef.current = true;
+      src.onended = () => {
+        playbackTrackerPendingRef.current = Math.max(0, playbackTrackerPendingRef.current - 1);
+        // If this was the last pending chunk AND audio_end was already
+        // received, fire any deferred callbacks.
+        if (
+          playbackTrackerPendingRef.current === 0 &&
+          audioEndReceivedRef.current &&
+          awaitingAudioEndCallbacksRef.current.length > 0
+        ) {
+          const pending = awaitingAudioEndCallbacksRef.current.splice(0);
+          pending.forEach(cb => { try { cb(); } catch { /* ignore */ } });
+        }
+      };
+    } catch (err) {
+      console.warn('[PlaybackTracker] schedule failed:', err);
+    }
+  }, [getPlaybackTracker]);
+
+  // Wait until the tracker confirms every scheduled buffer has been played.
+  // Returns immediately if audio is already drained. Otherwise schedules the
+  // callback to fire from the last chunk's onended handler. Includes a
+  // safety wall-clock timeout so we can't hang forever if the tracker
+  // context is frozen.
+  const whenTrackedPlaybackEnds = useCallback((cb: () => void, safetyTimeoutMs = 20000) => {
+    const ctx = playbackTrackerCtxRef.current;
+    const pendingCount = playbackTrackerPendingRef.current;
+    const scheduledEnd = playbackScheduledEndAtRef.current;
+    const nowSec = ctx?.currentTime ?? 0;
+    // If the tracker context never accepted any chunks this turn (e.g. it
+    // was suspended pre-user-gesture on the very first question), we
+    // CANNOT trust its "pending=0" signal — it would fire immediately.
+    // Fall back to the wall-clock heuristic instead.
+    if (!trackedThisTurnRef.current) {
+      const lastPcmAt = lastPcmAtMsRef.current ?? firstPcmAtMsRef.current ?? Date.now();
+      const expectedEndMs = lastPcmAt + AUDIO_TAIL_MARGIN_MS;
+      const remainingMs = Math.max(0, expectedEndMs - Date.now());
+      if (remainingMs > 0) {
+        setTimeout(() => { try { cb(); } catch { /* ignore */ } }, remainingMs);
+      } else {
+        try { cb(); } catch { /* ignore */ }
+      }
+      return;
+    }
+    // Already drained?
+    if (
+      pendingCount === 0 &&
+      (!ctx || nowSec >= scheduledEnd - 0.01)
+    ) {
+      try { cb(); } catch { /* ignore */ }
+      return;
+    }
+    // Defer until the tracker says we're done.
+    let fired = false;
+    const wrapped = () => {
+      if (fired) return;
+      fired = true;
+      try { cb(); } catch { /* ignore */ }
+    };
+    awaitingAudioEndCallbacksRef.current.push(wrapped);
+    // Wall-clock safety net — if the tracker context is suspended (browser
+    // doesn't allow AudioContext before a user gesture on first question)
+    // we still need to advance at some point.
+    const armSafety = (ms: number) => setTimeout(() => {
+      // A FROZEN turn suspends this context deliberately (device disconnect),
+      // so "the tracker isn't advancing" is expected, not a stall. Firing here
+      // would finalize the turn mid-outage — open the mic, commit the question
+      // and move on while the candidate is still reconnecting. Defer instead;
+      // the thaw gives it a fresh full window.
+      if (binaFrozenRef.current) { armSafety(safetyTimeoutMs); return; }
+      const idx = awaitingAudioEndCallbacksRef.current.indexOf(wrapped);
+      if (idx >= 0) {
+        awaitingAudioEndCallbacksRef.current.splice(idx, 1);
+        console.warn('[PlaybackTracker] safety timeout — firing deferred callback');
+        wrapped();
+      }
+    }, ms);
+    armSafety(safetyTimeoutMs);
+  }, []);
+  const isRecordingRef = useRef(false);
+  const audioEndReceivedRef = useRef(false);
+  const currentAiTextRef = useRef("");
+  const recognitionRef = useRef<BrowserSpeechRecognitionLike | null>(null);
+  // Preemptive-restart timer — fires at 55s to stop the session cleanly before
+  // Chrome/Edge's 60s hard kill or Safari's 15-30s kill causes a forced gap.
+  const webSpeechPreemptiveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastBrowserTranscriptTextRef = useRef("");
+  const lastBrowserTranscriptUpdateAtRef = useRef<number | null>(null);
+  const lastLiveTranscriptTextRef = useRef("");
+  const lastLiveTranscriptUpdateAtRef = useRef<number | null>(null);
+  const turnHasLiveTranscriptRef = useRef(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Scroll container for the chat — used to pin the view to the bottom
+  // (WhatsApp-style) so the newest question/response is always visible.
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  // Wraps every chat bubble — its size is what the auto-scroll observes.
+  const chatContentRef = useRef<HTMLDivElement>(null);
+  // Follow the newest content. Cleared only by the candidate's own scroll.
+  const chatStickRef = useRef(true);
+  const [chatUnpinned, setChatUnpinned] = useState(false);
+  // Last wheel/touch/pointer/key input on the chat. A scroll event shortly
+  // after one is the candidate's; any other (our own pin, a padding clamp)
+  // must not stop the auto-scroll.
+  const chatUserInputAtRef = useRef(0);
+  const [chatScrolling, setChatScrolling] = useState(false);
+  const chatScrollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pinChatToBottom = useCallback((force = false) => {
+    if (force) { chatStickRef.current = true; setChatUnpinned(false); }
+    const el = chatScrollRef.current;
+    if (!el || !chatStickRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
+  const noteChatUserInput = useCallback(() => {
+    chatUserInputAtRef.current = performance.now();
+  }, []);
+  const handleChatScroll = useCallback(() => {
+    const el = chatScrollRef.current;
+    if (!el || performance.now() - chatUserInputAtRef.current > 1000) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < CHAT_STICK_THRESHOLD_PX;
+    chatStickRef.current = nearBottom;
+    setChatUnpinned(!nearBottom);
+    // Darken the scrollbar while the candidate is scrolling.
+    setChatScrolling(true);
+    if (chatScrollingTimerRef.current) clearTimeout(chatScrollingTimerRef.current);
+    chatScrollingTimerRef.current = setTimeout(() => setChatScrolling(false), 1200);
+  }, []);
+  useEffect(() => () => {
+    if (chatScrollingTimerRef.current) clearTimeout(chatScrollingTimerRef.current);
+  }, []);
+  const isAiSpeakingRef = useRef(false);
+  // True while Bina is speaking the "Are you there?" silence prompt — timer must NOT pause during this.
+  const isSilencePromptRef = useRef(false);
+  // True while Bina is speaking the opening "About the role" warm-up message.
+  // It's an uncounted preamble that must NOT open the mic when its audio ends —
+  // the mic opens for the "tell me about yourself" question that immediately
+  // follows. finalizePlayback checks this and skips the mic-open (then it's
+  // cleared by the next speaking_started / greeting).
+  const roleIntroActiveRef = useRef(false);
+  // Role-message text kept ONLY for TalkingHead lip-sync. The role message is
+  // committed as a static bubble (tokenBufferRef is cleared, so it doesn't
+  // stream), but the speaking_started handler feeds tokenBufferRef to
+  // TalkingHead for phoneme lip-sync — which for the role turn would be "" and
+  // leave Bina's mouth static ("audio plays, Bina silent"). We stash the role
+  // text here so speaking_started can feed it to TalkingHead without putting it
+  // in the reveal buffer.
+  const roleIntroTextRef = useRef("");
+  const isProcessingRef = useRef(false);
+  // Cancellable ref for the 800ms "start recording after Bina stops" setTimeout.
+  // Cancelled by the Next Q handler to prevent stale recording after a skip.
+  const startRecordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Callback to execute after speak_text TTS finishes (replaces browser speechSynthesis)
+  const speakTextCallbackRef = useRef<(() => void) | null>(null);
+
+  // Stable callback refs — prevent WebSocket reconnection on re-renders
+  const queueAudioRef = useRef<(pcmData: ArrayBuffer) => void>(() => {});
+  const handleMessageRef = useRef<(data: InterviewSocketMessage) => void>(() => {});
+  // Deferred streamStart: stored here by speaking_started, called on first audio chunk.
+  // Prevents TalkingHead from receiving streamStart with an empty buffer (causes early
+  // onAudioEnd on Q1 when AudioContext is cold or TalkingHead is still initialising).
+  const pendingStreamStartRef = useRef<(() => void) | null>(null);
+  // This turn's end-of-playback callback, kept after streamStart consumes
+  // pendingStreamStartRef so a worklet re-armed after a mid-sentence TTS stall
+  // still runs it (countdown → mic). Cleared once it has run.
+  const playbackEndedCbRef = useRef<(() => void) | null>(null);
+  // Set true when TalkingHead's worklet fires onAudioEnd BEFORE backend audio_end —
+  // i.e. its internal buffer drained during a streaming hiccup. New PCM chunks
+  // arriving after this point would go to a stopped worklet and be silently lost
+  // (the "Bina's voice cuts mid-sentence" bug). When set, the next chunk that
+  // arrives must call streamStart() again to wake the worklet back up.
+  const talkingHeadEndedEarlyRef = useRef(false);
+
+  // Total PCM audio received for the current Bina turn (ms).
+  // Used to set the audio_end fallback timeout so it always fires AFTER
+  // TalkingHead finishes playing — not after a fixed 3s regardless of length.
+  const currentTurnAudioMsRef = useRef(0);
+  // Wall-clock timestamp (Date.now()) of when the FIRST PCM chunk for the
+  // current Bina turn was received. Used by the token-reveal system to
+  // compute audio progress (once audio_end fires).
+  const firstPcmAtMsRef = useRef<number | null>(null);
+  // True once Bina's voice is ACTUALLY audible for the current turn
+  // (TalkingHeadAvatar `onAudible`). `isAiSpeaking` flips as soon as the
+  // backend announces a turn — on the intro that was ~10 s before any audio
+  // (a stalled TTS request), so the candidate saw "Bina is speaking" with
+  // silence. `isAiSpeaking` still gates the mic/timers; this only gates what
+  // the candidate SEES (speaking banner/pill/glow) and the caption reveal.
+  const [binaAudible, setBinaAudible] = useState(false);
+  // First time in this session Bina became audible — ends the centred
+  // "Preparing your interview…" loading card.
+  const [binaHasSpoken, setBinaHasSpoken] = useState(false);
+  const binaAudibleRef = useRef(false);
+  const binaAudibleSafetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // When this turn's voice actually became audible, on the tracker clock and
+  // the wall clock. The caption clock never starts before it. Needed on the
+  // FIRST utterance (intro + tips): the worklet loads cold, so the onset can
+  // land well after the delay estimate (1.5 s prior, 4 s clamp) or after the
+  // 3.5 s safety unlock — and the reveal, being monotonic, then stayed seconds
+  // ahead of Bina for the whole intro ("text streams fast, then she reads it").
+  const audibleAtCtxSecRef = useRef<number | null>(null);
+  const audibleAtMsRef = useRef<number | null>(null);
+  const realOnsetSeenRef = useRef(false);
+  const stampAudibleOnset = useCallback((fromSafety: boolean) => {
+    // First REAL onset of the turn wins (later ones are a stall re-arm mid-turn);
+    // the safety unlock only stands in until a real one arrives.
+    if (realOnsetSeenRef.current) return;
+    if (fromSafety && audibleAtMsRef.current !== null) return;
+    if (!fromSafety) realOnsetSeenRef.current = true;
+    const ctx = playbackTrackerCtxRef.current;
+    const outSec = ctx ? ((ctx as AudioContext & { outputLatency?: number }).outputLatency || 0) : 0;
+    audibleAtCtxSecRef.current = ctx && ctx.state === 'running' ? ctx.currentTime + outSec : null;
+    audibleAtMsRef.current = Date.now() + outSec * 1000;
+  }, []);
+  // Called bare by TalkingHead's onAudible (a real onset); `true` from the
+  // safety timer; 'no-anchor' when the safety moment is not a usable start.
+  const markBinaAudible = useCallback((fromSafety?: unknown) => {
+    if (fromSafety !== 'no-anchor') stampAudibleOnset(fromSafety === true);
+    if (binaAudibleSafetyRef.current) { clearTimeout(binaAudibleSafetyRef.current); binaAudibleSafetyRef.current = null; }
+    if (binaAudibleRef.current) return;
+    binaAudibleRef.current = true;
+    setBinaAudible(true);
+    setBinaHasSpoken(true);
+  }, [stampAudibleOnset]);
+  // Backstop: audio is in flight but no audible signal arrived (e.g. the
+  // worklet failed and its chunks were dropped) — don't hold the UI forever.
+  // `anchorCaption`: the safety moment also stands in as the caption's start
+  // (false when audio was already playing at announce — then it isn't one).
+  const armBinaAudibleSafety = useCallback((anchorCaption = true) => {
+    if (binaAudibleRef.current || binaAudibleSafetyRef.current) return;
+    binaAudibleSafetyRef.current = setTimeout(() => {
+      binaAudibleSafetyRef.current = null;
+      if (!binaAudibleRef.current) {
+        console.warn(`[INTERVIEW-DEBUG] no audible-start signal ${BINA_AUDIBLE_SAFETY_MS}ms after first chunk — showing Bina as speaking anyway`);
+        markBinaAudible(anchorCaption ? true : 'no-anchor');
+      }
+    }, BINA_AUDIBLE_SAFETY_MS);
+  }, [markBinaAudible]);
+  // A new Bina turn has been announced; nothing of it is audible yet.
+  const resetBinaAudible = useCallback(() => {
+    if (binaAudibleSafetyRef.current) { clearTimeout(binaAudibleSafetyRef.current); binaAudibleSafetyRef.current = null; }
+    binaAudibleRef.current = false;
+    setBinaAudible(false);
+    audibleAtCtxSecRef.current = null;
+    audibleAtMsRef.current = null;
+    realOnsetSeenRef.current = false;
+    // Announced while audio is already playing → no new onset will come.
+    if (isPlayingRef.current) armBinaAudibleSafety(false);
+  }, [armBinaAudibleSafety]);
+  useEffect(() => () => {
+    if (binaAudibleSafetyRef.current) clearTimeout(binaAudibleSafetyRef.current);
+  }, []);
+  // Wall-clock timestamp of the LAST PCM chunk received for the current
+  // Bina turn. Updated on every queueAudio call. This is the right anchor
+  // for "when does playback actually end on the speakers":
+  //   trueEndMs = lastPcmAtMs + AUDIO_TAIL_MARGIN_MS
+  // (the margin covers TalkingHead's internal buffer + the last chunk's
+  // own playback duration). `firstPcmAt + audioMs` is NOT correct for
+  // this because chunks stream in real-time — so at end-of-stream,
+  // `firstPcm + audioMs ≈ now`, and finalizePlayback would fire right
+  // when the backend stopped sending (not when the speakers went silent).
+  const lastPcmAtMsRef = useRef<number | null>(null);
+  // Wall-clock fallback margin — applied ONLY when the AudioBufferSourceNode
+  // tracker is unavailable (e.g. first question with a suspended
+  // AudioContext). Previously 1200 ms, bumped to 3000 ms after field reports
+  // of "Your turn" still surfacing mid-speech on long TTS responses. With
+  // the tracker path working, this margin is rarely reached — it's the
+  // safety net, not the primary signal.
+  const AUDIO_TAIL_MARGIN_MS = 3000;
+  // (TALKING_HEAD_BUFFER_MS + getAudibleDelayMs() now live at module scope.)
+  // Set to true to pipe reveal timing to the browser console — invaluable
+  // for diagnosing text-before-voice reports from candidates.
+  // Tracker-clock second (in AudioContext seconds) at which the FIRST PCM chunk
+  // of this turn was scheduled — RAW, with no audible-delay shift applied.
+  // The reveal loop adds getAudibleDelayMs() to derive the audible start, so the
+  // shift always reflects the audio path actually in use this turn (which isn't
+  // known yet at stamp time). This — NOT wall-clock, NOT chunk rates — is the
+  // basis for "how far into Bina's voice are we".
+  const firstChunkStartCtxSecRef = useRef<number | null>(null);
+
+  // Token reveal system
+  const tokenBufferRef = useRef("");
+  const revealedCharsRef = useRef(0);
+  // Bina's MEASURED speaking rate (chars/sec), learned from completed turns:
+  // chars ÷ actual audio seconds. Phase A of the reveal uses it instead of
+  // DEFAULT_REVEAL_CPS from the second turn on, so pacing self-calibrates to the
+  // deployed voice/AI_TTS_SPEED/language rather than trusting a hardcoded prior.
+  const measuredRevealCpsRef = useRef<number | null>(null);
+  // Caption ticks served by the shared speech clock vs the legacy pacing —
+  // logged per turn with the sync stats (saveAiMessage).
+  const captionClockTicksRef = useRef(0);
+  // This turn's own audio has started (its first PCM chunk began the speech
+  // clock). Closed when a new turn is announced — the first llm_token or
+  // speaking_started — so nothing of the new text shows before Bina's voice.
+  // Without it, the caption loop read the PREVIOUS turn's finished clock and
+  // revealed the next question as the LLM streamed it, then wiped and retyped
+  // it on llm_correction (staging 2026-11-06, ai-424c44e6 / ai-67486e95).
+  const turnAudioStartedRef = useRef(false);
+  const captionLegacyTicksRef = useRef(0);
+  const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Main-thread stall telemetry while Bina speaks (staging 2026-11-02: voice
+  // kept playing, caption froze for seconds then jumped). Reset at the first
+  // chunk of each Bina turn, summarised once in saveAiMessage.
+  const revealLastTickMsRef = useRef(0);
+  const binaStallStatsRef = useRef({ longTasks: 0, blockedMs: 0, maxTaskMs: 0, captionStalls: 0, maxStallMs: 0, maxJumpChars: 0 });
+  const startRecordingInternalRef = useRef<() => void>(() => {});
+  const disconnectRef = useRef<() => void>(() => {});
+
+  // Keep refs in sync with state — refs are always current inside stale closures
+  useEffect(() => {
+    isAiSpeakingRef.current = isAiSpeaking;
+    // Clear silence prompt flag when Bina stops speaking
+    if (!isAiSpeaking) isSilencePromptRef.current = false;
+  }, [isAiSpeaking]);
+  useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
+  useEffect(() => { isFollowUpRef.current = isFollowUp; }, [isFollowUp]);
+
+  // ==========================================================================
+  // Per-question timer — single source of truth.
+  //
+  // Historically there were 5+ ad-hoc setInterval blocks managing this timer
+  // (anchored / decrement variants scattered across the pending-timer effect,
+  // audio_end inline path, silent_discard resume, audio_end safety-net,
+  // follow-up question_timer_started, and the new-question path). They drifted
+  // apart, used different pause logic, and were the source of two bugs:
+  //   1. Timer "stuck" — a missed WS event left the interval cleared with no
+  //      restart path.
+  //   2. Timer "jumps" 5–15 s — the 1000 ms tick was throttled by event-loop
+  //      pressure (TTS streaming, MediaRecorder, viseme rAF) and the next
+  //      tick snapped the displayed value to wall-clock truth.
+  //
+  // Fixes baked in here:
+  //   - One implementation (`ensureQuestionTimerRunning`). All call sites
+  //     route through this. No setInterval for the timer lives anywhere else.
+  //   - 200 ms tick + monotonic anchor → smooth countdown, still drift-free
+  //     vs. backend.
+  //   - `startQuestionTimerExpiry` collects every "time's up" side effect in
+  //     one place so all expiry paths behave identically.
+  //   - Watchdog effect below restarts the interval if it ever ends up null
+  //     while the candidate still has remaining seconds (no more "stuck"
+  //     state when a WS event is dropped).
+  //   - Clarification-cap effect below force-clears `isClarification` after
+  //     60 s so a missing follow-up event can't perma-pause the countdown.
+  // ==========================================================================
+  const startQuestionTimerExpiry = useCallback(() => {
+    setQuestionTimerExpired(true);
+    questionTimerExpiredRef.current = true;
+    setIsClarification(false);
+    isClarificationRef.current = false;
+    setShowSilenceBanner(false);
+    if (silenceCountdownRef.current) {
+      clearInterval(silenceCountdownRef.current);
+      silenceCountdownRef.current = null;
+    }
+    setStatus("Time's up — moving to the next question...");
+    setIsProcessing(false);
+    isProcessingRef.current = false;
+    clearNoResponseTimer();
+    stopRecordingSilentRef.current();
+    // Backend now handles the 2-min hard cap natively in _timer_from_speech:
+    // it flushes captured audio (<=120s) into the natural end_turn pipeline
+    // and sends `question_window_hard_cap` to us. The client used to also
+    // send skip_question(source=timer_expired) here as a fallback, which
+    // raced with the backend's flush and cancelled Bina's TTS mid-sentence.
+    // Don't send anything from the client — let the backend drive the
+    // advance. The watchdog below still has the 25s stuck-detection re-send.
+  }, [clearNoResponseTimer]);
+
+  const ensureQuestionTimerRunning = useCallback((durSeconds: number) => {
+    if (durSeconds <= 0) return;
+    questionTimerTotalRef.current = durSeconds;
+    questionTimerStartedAtMsRef.current = performance.now();
+    questionTimerPausedMsRef.current = 0;
+    questionTimerPausedAtRef.current = null;
+    setQuestionTimerSeconds(durSeconds);
+    questionTimerSecondsRef.current = durSeconds;
+    if (questionTimerIntervalRef.current) {
+      clearInterval(questionTimerIntervalRef.current);
+    }
+    // 200 ms tick: keeps the displayed value visibly in sync with wall-clock
+    // remaining even when the event loop is busy. The compute is monotonic
+    // (`computeQuestionRemaining`), so accuracy vs. backend is preserved.
+    questionTimerIntervalRef.current = setInterval(() => {
+      // (2026-07-20, per user spec) The per-question answer clock runs ONLY
+      // during the candidate's turn ("Your Turn"). Whenever Bina is speaking —
+      // a question repeat (Repeat button or voice-asked), an "Are you there?"
+      // nudge, or any prompt — the timer PAUSES, and resumes when the mic
+      // reopens. pauseQuestionTimer()/resumeQuestionTimer() drive
+      // questionTimerPausedAtRef; computeQuestionRemaining() subtracts paused
+      // time, so while paused the displayed value freezes. (This replaces the
+      // older "repeat time counts against the candidate" behavior.) We do NOT
+      // auto-clear the pause each tick anymore — the pause is sticky until an
+      // explicit resume.
+      // HARD freeze while a camera/mic disconnect is being ridden out. The
+      // arithmetic pause (questionTimerPausedAtRef, subtracted by
+      // computeQuestionRemaining) is the primary mechanism, but it is only as
+      // good as every path that stamps and clears that ref — a single missed
+      // stamp and the answer clock drains behind the overlay while the
+      // candidate is plugging their headset back in. Gating the tick itself on
+      // the pause flag makes the freeze unconditional: no path can advance the
+      // displayed clock during an outage. Also keeps questionTimerLastTickMsRef
+      // fresh so the stuck-timer watchdog below doesn't see a false stall.
+      if (isMediaPausedRef.current) {
+        questionTimerLastTickMsRef.current = performance.now();
+        return;
+      }
+      const remaining = computeQuestionRemaining();
+      if (remaining === null) return;
+      setQuestionTimerSeconds(remaining);
+      questionTimerSecondsRef.current = remaining;
+      // Record wall-clock of last successful tick — used by the
+      // stuck-detection watchdog to spot a frozen UI even when the
+      // interval itself was killed by a stray event.
+      questionTimerLastTickMsRef.current = performance.now();
+      if (remaining <= 0) {
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        setTimeout(() => startQuestionTimerExpiry(), 0);
+      }
+    }, 200);
+  }, [computeQuestionRemaining, startQuestionTimerExpiry]);
+
+  // Pause the per-question answer clock while Bina is speaking (repeat / "Are
+  // you there?" / any prompt). Idempotent; only pauses a timer that is actually
+  // running (started, not already paused). The displayed value freezes until
+  // resumeQuestionTimer() is called when the candidate's turn reopens.
+  const pauseQuestionTimer = useCallback(() => {
+    if (
+      questionTimerStartedAtMsRef.current !== null &&
+      questionTimerPausedAtRef.current === null
+    ) {
+      questionTimerPausedAtRef.current = performance.now();
+    }
+    // Pause the Repeat-Question window too, for the same reason: while Bina
+    // is speaking the candidate cannot click it anyway (it's hidden), so that
+    // time must not count against the one-shot REPEAT_WINDOW_MS budget —
+    // otherwise a silence nudge alone can burn through most/all of it before
+    // the candidate ever gets a usable chance to click Repeat.
+    if (repeatWindowTimerRef.current && repeatWindowPausedSinceRef.current === null) {
+      clearTimeout(repeatWindowTimerRef.current);
+      repeatWindowTimerRef.current = null;
+      repeatWindowPausedSinceRef.current = performance.now();
+    }
+  }, []);
+
+  // Resume the per-question clock when "Your Turn" opens — folds the elapsed
+  // pause into the accumulated paused time so the remaining window is unchanged.
+  const resumeQuestionTimer = useCallback(() => {
+    if (questionTimerPausedAtRef.current !== null) {
+      questionTimerPausedMsRef.current += performance.now() - questionTimerPausedAtRef.current;
+      questionTimerPausedAtRef.current = null;
+    }
+    // Resume the Repeat-Question window: push its deadline forward by exactly
+    // how long it was paused, then re-arm a timeout for whatever's left.
+    if (repeatWindowPausedSinceRef.current !== null) {
+      const pausedForMs = performance.now() - repeatWindowPausedSinceRef.current;
+      repeatWindowPausedSinceRef.current = null;
+      if (repeatWindowDeadlineAtRef.current !== null) {
+        repeatWindowDeadlineAtRef.current += pausedForMs;
+        const remainingMs = repeatWindowDeadlineAtRef.current - performance.now();
+        if (remainingMs > 0) {
+          repeatWindowTimerRef.current = setTimeout(() => {
+            setCanRepeat(false);
+            repeatWindowTimerRef.current = null;
+            repeatWindowDeadlineAtRef.current = null;
+          }, remainingMs);
+        } else {
+          setCanRepeat(false);
+          repeatWindowDeadlineAtRef.current = null;
+        }
+      }
+    }
+  }, []);
+
+  // Publish both to the refs the camera/mic pause effect (declared above this
+  // point) reads — see the comment on their declaration for why it can't call
+  // these directly.
+  useEffect(() => {
+    pauseQuestionTimerRef.current = pauseQuestionTimer;
+    resumeQuestionTimerRef.current = resumeQuestionTimer;
+  }, [pauseQuestionTimer, resumeQuestionTimer]);
+
+  const startPendingQuestionTimer = useCallback((source: string) => {
+    const pendingDur = questionTimerPendingRef.current;
+    if (pendingDur === null) return;
+    const timestamp = new Date().toISOString();
+    console.log(`[Timer ${timestamp}] Starting pending timer from ${source}: ${pendingDur}s`);
+    questionTimerPendingRef.current = null;
+    questionTimerReceivedAtRef.current = null;
+    questionTimerAwaitingSpeechRef.current = false;
+    if (questionTimerExpiredRef.current) {
+      setQuestionTimerExpired(false);
+      questionTimerExpiredRef.current = false;
+    }
+    ensureQuestionTimerRunning(pendingDur);
+
+    // ── Arm the Repeat-Question window ──
+    // The candidate may click "Repeat Question" only during the FIRST
+    // REPEAT_WINDOW_MS of the turn. After that it disables, so a candidate can't
+    // reset their clock by repeating mid/late answer. A repeat-resume
+    // (repeatFreezeRef path) does NOT re-arm — one repeat per turn. Skipped for
+    // follow-ups/clarifications (same slot continuing, not a fresh window).
+    if (repeatWindowTimerRef.current) { clearTimeout(repeatWindowTimerRef.current); repeatWindowTimerRef.current = null; }
+    repeatWindowDeadlineAtRef.current = null;
+    repeatWindowPausedSinceRef.current = null;
+    if (!repeatUsedThisTurnRef.current && !repeatFreezeRef.current && !isFollowUpRef.current && !isClarificationRef.current) {
+      setCanRepeat(true);
+      repeatWindowDeadlineAtRef.current = performance.now() + REPEAT_WINDOW_MS;
+      repeatWindowTimerRef.current = setTimeout(() => {
+        setCanRepeat(false);
+        repeatWindowTimerRef.current = null;
+        repeatWindowDeadlineAtRef.current = null;
+      }, REPEAT_WINDOW_MS);
+    }
+  }, [ensureQuestionTimerRunning]);
+
+  // Self-healing watchdog: if the interval is null but seconds > 0 and we are
+  // NOT legitimately paused (Bina speaking, clarification, fullscreen exit,
+  // expired, awaiting a pending dispatch), restart from the frozen value.
+  // Catches the "stuck timer" class of bugs caused by missed/dropped WS
+  // events (interrupted without a follow-up question_timer_started, etc.).
+  useEffect(() => {
+    if (!isConnected || isClosing) return;
+    let tickCounter = 0;
+    const id = setInterval(() => {
+      const cur = questionTimerSecondsRef.current;
+      tickCounter += 1;
+      // Heartbeat log every 5s while a timer is active — lets you confirm
+      // the timer is alive in DevTools, and spot exactly when it stops
+      // ticking if it gets stuck.
+      if (tickCounter % 5 === 0 && cur !== null) {
+        console.log('[INTERVIEW-DEBUG] timer heartbeat', {
+          questionTimerSeconds: cur,
+          intervalAlive: questionTimerIntervalRef.current !== null,
+          isAiSpeaking: isAiSpeakingRef.current,
+          isRecording: isRecordingRef.current,
+          isProcessing: isProcessingRef.current,
+          isClarification: isClarificationRef.current,
+          isFullscreenExited: isFullscreenExitedRef.current,
+          questionTimerExpired: questionTimerExpiredRef.current,
+          questionTimerPending: questionTimerPendingRef.current,
+          speechDetected: speechDetectedRef.current,
+        });
+      }
+      // Stuck detection — TWO conditions can leave the timer frozen:
+      //   (a) interval ref is null (e.g. cleared by `interrupted` and no
+      //       fresh question_timer_started arrived to restart it)
+      //   (b) interval is "alive" but hasn't actually ticked for > 3 s
+      //       (e.g. tab throttling didn't recover, or a stuck flag is
+      //       holding the inner pause branch). Wall-clock check.
+      const _now_ms = performance.now();
+      const _last_tick = questionTimerLastTickMsRef.current;
+      const _no_tick_ms = _last_tick > 0 ? _now_ms - _last_tick : 0;
+      const _interval_dead = questionTimerIntervalRef.current === null;
+      const _interval_stalled = _last_tick > 0 && _no_tick_ms > 3000;
+      const _should_be_running = (
+        cur !== null
+        && cur > 0
+        && !questionTimerExpiredRef.current
+        && !isAiSpeakingRef.current
+        && !isProcessingRef.current
+        && !isMediaPausedRef.current  // camera/mic outage — the clock is frozen
+                                      // deliberately; "not ticking" is the
+                                      // CORRECT state, so restarting it here
+                                      // would resume the candidate's answer
+                                      // window mid-disconnect.
+        && !isFullscreenExitedRef.current
+        && !repeatFreezeRef.current   // Repeat re-speak in progress — timer is
+                                      // intentionally frozen; do NOT auto-restart
+                                      // it (that was un-freezing it right after
+                                      // the Repeat click, before speaking_started).
+        && questionTimerPendingRef.current === null
+      );
+      // Force-clear a stuck clarification flag if the timer has been
+      // frozen for >5 s under it (in case the 60-s clarification
+      // watchdog hasn't fired yet but the candidate is clearly waiting).
+      if (
+        _should_be_running
+        && isClarificationRef.current
+        && _interval_stalled
+        && _no_tick_ms > 5000
+      ) {
+        console.warn(
+          '[INTERVIEW-DEBUG] STUCK CLARIFICATION FLAG — auto-clearing after stalled timer',
+          { remaining: cur, no_tick_ms: Math.round(_no_tick_ms) }
+        );
+        setIsClarification(false);
+        isClarificationRef.current = false;
+      }
+      if (
+        _should_be_running
+        && !isClarificationRef.current
+        && (_interval_dead || _interval_stalled)
+      ) {
+        console.warn('[INTERVIEW-DEBUG] STUCK TIMER detected — restarting', {
+          remaining: cur,
+          isRecording: isRecordingRef.current,
+          isProcessing: isProcessingRef.current,
+          interval_dead: _interval_dead,
+          interval_stalled: _interval_stalled,
+          no_tick_ms: Math.round(_no_tick_ms),
+        });
+        ensureQuestionTimerRunning(cur);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isConnected, isClosing, ensureQuestionTimerRunning]);
+
+  // Clarification-pause cap: if backend never sends the clearing event,
+  // force-clear after 60 s so the timer cannot be paused indefinitely.
+  useEffect(() => {
+    if (!isClarification) return;
+    const t = setTimeout(() => {
+      console.warn("[Timer watchdog] Clarification pause exceeded 60s — auto-clearing");
+      setIsClarification(false);
+      isClarificationRef.current = false;
+    }, 60_000);
+    return () => clearTimeout(t);
+  }, [isClarification]);
+
+  // (Watchdog removed.) The previous "post-expiry stuck recovery" watchdog
+  // fired a skip_question after 25-90s when the candidate stayed on the
+  // "TIME UP" screen. It was wrong: the backend's natural end-of-question
+  // pipeline (ASR + LLM evaluation + LLM next-Q + TTS) takes 15-40s, so a
+  // watchdog firing mid-pipeline DISCARDED a successfully captured answer
+  // (observed on session ai-1f145baf Q#3 — full 2-min Tamil/English
+  // transcript captured then dropped by the 25s watchdog before Bina
+  // finished generating Q#4). Trust the hard-cap + the backend's own 180s
+  // pipeline-level timeout. If Bina's pipeline genuinely hangs, the
+  // backend cancels and unblocks itself.
+
+  // Fullscreen-exit watchdog: the per-question + global timers both pause
+  // while `isFullscreenExited` is true. If the browser misses the return
+  // event (alt-tab race, OS workspace switch, `fullscreenchange` doesn't
+  // re-fire) the flag stays true forever and the timer appears frozen. Poll
+  // every 2s — if the flag is true but the page IS visible AND we are still
+  // inside fullscreen, the exit isn't real anymore; clear the flag and let
+  // the timers resume. This is a safety net; the normal recovery paths are
+  // `handleFullscreenChange` and `handleVisibilityChange` above.
+  useEffect(() => {
+    if (!isFullscreenExited) return;
+    const id = setInterval(() => {
+      if (!isFullscreenExitedRef.current) return;
+      const fullscreenDocument = document as VendorFullscreenDocument;
+      const isActuallyExited =
+        document.hidden ||
+        !(
+          document.fullscreenElement ||
+          fullscreenDocument.webkitFullscreenElement ||
+          fullscreenDocument.mozFullScreenElement ||
+          fullscreenDocument.msFullscreenElement
+        );
+      if (!isActuallyExited) {
+        console.warn('[Timer watchdog] isFullscreenExited stuck true while page is visible + fullscreen — auto-clearing');
+        isFullscreenExitedRef.current = false;
+        setIsFullscreenExited(false);
+      }
+    }, 2000);
+    return () => clearInterval(id);
+  }, [isFullscreenExited]);
+
+  // Generic "timer didn't decrement" watchdog. If questionTimerSeconds hasn't
+  // changed in N seconds AND no legitimate pause flag is set, the timer is
+  // stuck — likely because a pause condition flipped true and never flipped
+  // back. Logs the full flag state for diagnostics + force-restarts from the
+  // current frozen value. Catches the cases the more specific watchdogs miss
+  // (e.g. all pause flags are false but the interval got cleared during a GC
+  // pause and was never re-armed).
+  useEffect(() => {
+    if (!isConnected || isClosing) return;
+    let lastSeen = questionTimerSecondsRef.current;
+    let stableSinceMs = performance.now();
+    const id = setInterval(() => {
+      const cur = questionTimerSecondsRef.current;
+      // Reset the "stable since" stopwatch whenever the value changes (timer
+      // is alive) or the timer is null (no active question).
+      if (cur === null || cur !== lastSeen) {
+        lastSeen = cur;
+        stableSinceMs = performance.now();
+        return;
+      }
+      // Value unchanged. If we're inside a legitimate pause window, that's
+      // expected — keep waiting.
+      if (
+        isAiSpeakingRef.current
+        || isProcessingRef.current
+        || isClarificationRef.current
+        || isFullscreenExitedRef.current
+        || questionTimerExpiredRef.current
+        || questionTimerPendingRef.current !== null
+      ) {
+        stableSinceMs = performance.now();
+        return;
+      }
+      // If the interval is still ticking, a temporarily unchanged whole-second
+      // display is not itself evidence of a stuck timer. Only self-heal when
+      // the visible value is frozen AND the underlying interval stopped
+      // ticking too.
+      const lastTickMs = questionTimerLastTickMsRef.current;
+      const intervalAlive = questionTimerIntervalRef.current !== null;
+      const tickStalled = lastTickMs > 0 && (performance.now() - lastTickMs) > 3000;
+      if (intervalAlive && !tickStalled) {
+        stableSinceMs = performance.now();
+        return;
+      }
+      // No pause excuse — if it's been > 3s without a tick, the timer is
+      // stuck. Restart from the frozen value.
+      const stuckMs = performance.now() - stableSinceMs;
+      if (stuckMs > 3000 && cur > 0) {
+        console.warn('[Timer watchdog] Per-Q timer hasn\'t decremented in', Math.round(stuckMs), 'ms — restarting', {
+          frozenValue: cur,
+          intervalAlive,
+          tickStalled,
+          isAiSpeaking: isAiSpeakingRef.current,
+          isRecording: isRecordingRef.current,
+          isProcessing: isProcessingRef.current,
+        });
+        ensureQuestionTimerRunning(cur);
+        stableSinceMs = performance.now();
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isConnected, isClosing, ensureQuestionTimerRunning]);
+
+  // ── Pending Timer Watchdog ──────────────────────────────────────────────
+  // Recovery for the "Bina finished but timer stuck" race. Three known
+  // causes: (1) avatar 3D load timeout breaks the playback-ended callback,
+  // (2) WebSocket drops the audio_end event so audioEndReceivedRef stays
+  // false, (3) playback-ended fires before audio_end arrives and the guard
+  // rejects it. In all three cases isAiSpeaking stays TRUE indefinitely and
+  // the pending timer never starts.
+  //
+  // 20s threshold: normal Bina TTS playback completes in 5-15s. If we still
+  // have a pending dur AND isAiSpeaking is still true after 20s, the
+  // playback callback chain is broken — force-flip and start the timer so
+  // the candidate isn't frozen.
+  useEffect(() => {
+    if (questionTimerPendingRef.current === null) return;
+    const stuckGuard = setTimeout(() => {
+      if (questionTimerPendingRef.current === null) return;
+      if (!isAiSpeakingRef.current) return; // resolved naturally
+      console.warn('[INTERVIEW-DEBUG] Pending timer STUCK — forcing recovery', {
+        pendingDur: questionTimerPendingRef.current,
+        audioEndReceived: audioEndReceivedRef.current,
+      });
+      isAiSpeakingRef.current = false;
+      setIsAiSpeaking(false);
+      avatarState.onAiStopSpeaking();
+      setStatus("Your turn — speak now...");
+      // Re-open mic if it was disabled while Bina was "speaking" but never
+      // re-enabled (since the normal handleAllAudioFinished path didn't run).
+      if (mediaStreamRef.current && !isMutedRef.current) {
+        mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
+      }
+      if (wsRef.current?.readyState === WebSocket.OPEN
+          && !isMutedRef.current
+          && !isProcessingRef.current
+          && !isRecordingRef.current
+          && !isFaceBlockedRef.current) {
+        startRecordingInternalRef.current();
+      }
+    }, 20000);
+    return () => clearTimeout(stuckGuard);
+  }, [questionTimerPendingTick, avatarState]);
+
+  // ── Message-Independent Speaking-State Watchdog ────────────────────────
+  // The pending-timer watchdog above only fires when `question_timer_started`
+  // has been received and stored as pending. If the WebSocket back-pressures
+  // (audio chunks pile up in the receive buffer, JSON messages get queued
+  // behind them, the browser's onmessage drainer falls behind), that
+  // `question_timer_started` message can be lost — and the candidate sees
+  // a frozen UI with no timer and no "Your turn" prompt.
+  //
+  // This second watchdog has NO dependency on backend messages: it fires
+  // purely off the local `isAiSpeaking` flag and the audio-chunk arrival
+  // anchor. Trigger: 30s after isAiSpeaking flipped true, if no chunks
+  // have arrived in the last 5s and the flag is still true, force-recover.
+  // Falls back to a 120s timer (the standard timed-mode per-question budget)
+  // since the actual duration message may have been dropped.
+  useEffect(() => {
+    if (!isAiSpeaking) return;
+    const startedAt = Date.now();
+    const watchdog = setTimeout(() => {
+      if (!isAiSpeakingRef.current) return; // resolved naturally
+      const lastChunkAt = lastPcmAtMsRef.current;
+      const sinceLastChunk = lastChunkAt ? Date.now() - lastChunkAt : Infinity;
+      if (sinceLastChunk < 5000) {
+        // Chunks still flowing — playback is genuinely ongoing, don't intervene.
+        return;
+      }
+      console.warn('[InterviewUI] Speaking-state watchdog firing — likely dropped audio_end/timer_started', {
+        isAiSpeakingDurationMs: Date.now() - startedAt,
+        sinceLastChunkMs: sinceLastChunk === Infinity ? 'no_chunks_ever' : sinceLastChunk,
+        hasPendingTimer: questionTimerPendingRef.current !== null,
+      });
+      isAiSpeakingRef.current = false;
+      setIsAiSpeaking(false);
+      avatarState.onAiStopSpeaking();
+      const dur = questionTimerPendingRef.current ?? 120;
+      questionTimerPendingRef.current = dur;
+      questionTimerTotalRef.current = dur;
+      questionTimerReceivedAtRef.current = questionTimerReceivedAtRef.current ?? Date.now();
+      setStatus("Your turn — speak now...");
+      if (mediaStreamRef.current && !isMutedRef.current) {
+        mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
+      }
+      if (wsRef.current?.readyState === WebSocket.OPEN
+          && !isMutedRef.current
+          && !isProcessingRef.current
+          && !isRecordingRef.current
+          && !isFaceBlockedRef.current) {
+        startRecordingInternalRef.current();
+      }
+    }, 30000);
+    return () => clearTimeout(watchdog);
+  }, [isAiSpeaking, avatarState]);
+
+  // When the per-question timer expires, the client sends skip_question to the
+  // backend (see the timer-expiry block above). The backend's handle_skip_question
+  // advances to the next question and sends question_timer_started, which resets
+  // the client timer via the question_timer_started handler. No client-side
+  // auto-restart is needed — the backend is the single source of truth for
+  // question progression.
+
+  // VAD settings
+  const silenceStartRef = useRef<number | null>(null);
+  // AII14 — one-shot guard so the "holding turn open" line is logged once per
+  // pause instead of every analyser frame. Reset when speech resumes / the turn
+  // changes (see the confirmation driver effect).
+  const silenceHoldLoggedRef = useRef(false);
+  const speechDetectedRef = useRef(false);
+  const speechDetectedAtRef = useRef<number | null>(null);
+  const speechStartSentRef = useRef(false); // fires speech_started once per recording session
+  const silenceThresholdRef = useRef(0.005);
+  const silenceDurationMsRef = useRef(15000); // pre-connect fallback; overridden by vad_config.silence_duration_ms from backend .env (now 15s → 5s silent + 10→1 counter)
+  const MAX_CLIENT_SPEECH_THRESHOLD = 0.008;
+  const POSSIBLE_SPEECH_LEVEL = 0.0018;
+  const MIN_POSSIBLE_SPEECH_FRAMES = 6;
+  // Soft streaming gate: voiced frames (~85 ms each) needed to START sending
+  // PCM. Leaky, not "N in a row": a non-voice frame takes one step back
+  // instead of resetting, so a quiet or broken short answer ("yes", "40 LPA")
+  // still opens it. The old 6-in-a-row rule never opened for some short quiet
+  // answers, so the server got no audio at all (Oct 26 test, aiu3 Q14).
+  const SOFT_GATE_OPEN_FRAMES = 4;
+  const QUIET_SPEECH_ACTIVITY_LEVEL = 0.0032;
+  // Ceiling for what counts as "ambient/room noise" that the noise floor may
+  // learn. The OLD code only learned ambient while avgLevel < QUIET_SPEECH_
+  // ACTIVITY_LEVEL (0.0032), so once the mic-gain-amplified room noise sat
+  // ABOVE that (fans, chatter, keyboard), the floor saturated and every
+  // adaptive threshold (ambient×mult) stayed too low → noise was treated as
+  // speech. This higher cap lets the floor track real noise up to ~0.012 while
+  // still excluding true speech (amplified speech peaks are ~0.03–0.06, well
+  // above this), so the thresholds rise ABOVE the noise and only real speech
+  // trips them. (Quiet rooms are unaffected — the floor just stays low.)
+  const AMBIENT_LEARN_CAP = 0.012;
+  // Voice-band spectral gate. Human speech concentrates its energy in roughly
+  // 200–3400 Hz (fundamental + formants). Broadband noise (fans, hiss), low
+  // rumble/hum, and much music spread energy outside that band, so their
+  // in-band fraction is lower. A frame only counts as "speech" if BOTH loud
+  // enough AND voice-like. Threshold is deliberately LENIENT (real speech is
+  // ~0.6–0.9; flat broadband noise ~0.15) so it rejects clearly-non-voice sound
+  // without ever blocking a real voice. Tune via ?debug=1 (shows live ratio).
+  const VOICE_BAND_LOW_HZ = 200;
+  const VOICE_BAND_HIGH_HZ = 3400;
+  const VOICE_BAND_MIN_RATIO = 0.35;
+  const POSSIBLE_SPEECH_NOISE_MULTIPLIER = 2.2;
+  const POSSIBLE_SPEECH_MARGIN = 0.0012;
+  const IN_TURN_NOISE_MULTIPLIER = 2.2;
+  const IN_TURN_ACTIVITY_MARGIN = 0.0015;
+  const STRONG_IN_TURN_NOISE_MULTIPLIER = 3.1;
+  const STRONG_IN_TURN_ACTIVITY_MARGIN = 0.0024;
+  const MIN_STRONG_IN_TURN_LEVEL = 0.0056;
+  const TRANSCRIPT_ACTIVITY_GRACE_MS = 1800;
+  const REALTIME_TRANSCRIPT_BOOTSTRAP_GRACE_MS = 2500;
+  // Safety net for server-side EndOfTurn (streaming providers). Normally the
+  // SERVER decides when the turn ends, so the client silence cutoff is disabled.
+  // But if the provider's EndOfTurn signal never fires after the candidate goes
+  // quiet, the turn would sit idle until the 130 s hard cap — the reported
+  // "answer finished but interview stays idle" bug. If TRUE silence persists this
+  // long (well beyond a natural thinking pause and far past when EndOfTurn should
+  // have fired), the client force-ends the turn. Generous on purpose so it never
+  // pre-empts the provider's smarter semantic end-of-turn during normal pauses.
+  const SERVER_EOT_SILENCE_FALLBACK_MS = 15000;
+  const LIVE_BATCH_CHAR_THRESHOLD = 320;
+  const liveBatchSentCharsRef = useRef(0);
+  const liveBatchIndexRef = useRef(0);
+  const liveBatchStopRequestedRef = useRef(false);
+
+  // VAD warmup: suppress speech detection for the first N ms after the mic opens.
+  // The browser echo canceller needs a few hundred ms of audio to build its model.
+  // Without this, Bina's TTS echo can trigger VAD immediately after she stops speaking.
+  const VAD_WARMUP_MS = 600;
+  const vadWarmupUntilRef = useRef<number>(0); // timestamp after which VAD is live
+
+  // Fix 3: ALSO suppress VAD for a short window after TalkingHead's audible
+  // playback actually ends. 600ms of post-mic-open warmup isn't enough for
+  // Bluetooth headsets or rooms with long reverb tails — Bina's TTS tail can
+  // bleed through the echo canceller for 500–1500ms and trigger a false
+  // speech_started, which in turn cancels the backend's silence nudge and
+  // triggers bogus follow-up flows. `playbackEchoGuardUntilRef` is stamped
+  // inside the onAudioEnd callback (pendingStreamStartRef) and also inside
+  // the safety-net fallback so every end-of-playback path is covered.
+  const PLAYBACK_ECHO_GUARD_MS = 800;
+  const playbackEchoGuardUntilRef = useRef<number>(0);
+
+  // Consecutive frames above threshold before confirming speech (speech ONSET
+  // → sends speech_started, which suppresses the initial 20s "Are you there?"
+  // nudge). At ~93ms/frame, 5 frames ≈ 460ms of CONTINUOUS voice-like sound.
+  // Raised 3→5 so a short background burst (cough, one nearby word, door click)
+  // can't falsely register as the candidate starting to speak and cancel the
+  // 20s nudge. The counter resets to 0 on any quiet/non-voice frame, so it must
+  // be 5 IN A ROW. The pre-speech ring buffer still captures the first words, so
+  // the slightly longer confirmation window loses no audio.
+  const speechFrameCountRef = useRef(0);
+  // TEST (was MIN_SPEECH_FRAMES = 5, ~460ms): onset now needs ~3s of voice,
+  // matching SUSTAINED_ACTIVE_MS. The 10s pre-speech ring buffer still holds
+  // the first words spoken during the window.
+  const SPEECH_ONSET_CONFIRM_MS = 3000;
+  const onsetStreakStartRef = useRef<number | null>(null);
+  const onsetLastVoiceAtRef = useRef<number | null>(null);
+
+  // ── Adaptive mic gain (headset / low-gain mic normalization) ──────────────
+  // autoGainControl is OFF (it distorts levels for ASR), so quiet mics —
+  // wired earbuds, Bluetooth headsets — produce low-amplitude audio. With the
+  // amplitude-based VAD that caused two headphone bugs: (1) speech confirmed
+  // late → opening words dropped, (2) quiet ongoing speech read as silence →
+  // turn auto-cut to the next question mid-answer. We track a slowly-decaying
+  // recent peak and boost both the VAD level AND the PCM sent to ASR toward a
+  // target, bounded so noise can't be over-amplified. Built-in mics already
+  // near the target get gain≈1 (unchanged). Ambient-relative thresholds + the
+  // RNNoise worklet scale with the boost, so noise rejection still holds.
+  const micRecentPeakRef = useRef(0);
+  // Previous frame's raw level: the peak may only rise to min(prev, current),
+  // i.e. a level sustained for 2 consecutive frames. A lone transient (cough,
+  // desk knock) no longer collapses the gain for the next ~10-20 s.
+  const micPrevRawLevelRef = useRef(0);
+  const MIC_GAIN_TARGET_PEAK = 0.045; // desired avg-abs level for confident VAD/ASR
+  const MIC_GAIN_PEAK_FLOOR = 0.012;  // never divide by less than this (caps silence-time gain)
+
+  // ── Mic device profile — ONE source of truth for all device-dependent audio
+  // handling. The detected type maps to four condition-based knobs:
+  //   (1) gainMax            → software gain ceiling (quiet mics need more)
+  //   (2) echoCancellation   → OFF for headphones (no speaker→mic echo path)
+  //   (3) isBluetooth        → HFP is quietest + laggiest → most lenient knobs
+  //   (4) silenceMultiplier  → stretch the VAD silence window for quiet/laggy
+  //                            mics so a real answer isn't cut off mid-sentence
+  // Built-in mic = strict defaults; wired headset = relaxed; Bluetooth = most
+  // relaxed; unknown = safe middle ground (echo cancellation stays ON).
+  type MicType = 'builtin' | 'wired_headphone' | 'bluetooth' | 'unknown';
+  const micTypeRef = useRef<MicType>('unknown');
+  const micGainMaxRef = useRef(6);            // (1) gain ceiling
+  // Per-device target level. This — NOT gainMax — is the real gain lever: the
+  // achievable gain is TARGET / PEAK_FLOOR, so a higher target = louder mic.
+  // Headphone/earbud mics run quiet, so they get a higher target for clearer ASR.
+  const micGainTargetRef = useRef(MIC_GAIN_TARGET_PEAK);
+  const micSilenceMultiplierRef = useRef(1);  // (4) silence-window multiplier
+
+  // Track the room's baseline energy and the candidate's recent speech peak so
+  // quiet headset audio can keep the turn alive, while background office noise
+  // still allows the 5s silence timeout to close the turn.
+  const ambientNoiseFloorRef = useRef(POSSIBLE_SPEECH_LEVEL * 0.5);
+  const lastMeaningfulAudioAtRef = useRef<number | null>(null);
+  const speechPeakLevelRef = useRef(0);
+  const inTurnSpeechFrameCountRef = useRef(0);
+  const MIN_IN_TURN_SPEECH_FRAMES = 3;
+  // Timestamp of the last STRONG voice-band frame (clears strongInTurnActivity-
+  // Threshold). Real speech — even quiet — produces these; steady mic/Bluetooth
+  // self-noise (which reads "voice-like" at ratio ~0.6-0.7 and sits just above
+  // ambient×1.5 on Realtek/BT mics) does NOT. Used to stop the soft-voice guard
+  // from resetting the silence clock forever on noisy mics, so the 8s end-turn
+  // actually fires instead of idling to the 2-min hard cap. Confirmed via the
+  // ?debug=1 overlay: Realtek idle noise Level≈0.0091, VoiceRatio≈0.70, so the
+  // old soft-voice guard (ambient×1.5≈0.008) reset the clock every noise blip.
+  const lastStrongVoiceAtRef = useRef<number | null>(null);
+  // Sustained-activity gate for the silence-clock RESET. The VAD runs on ~90ms
+  // frames; the old code reset the silence countdown on a SINGLE active frame,
+  // so one ~90ms blip (a cough, a door click, one background word) restarted the
+  // whole 8s countdown → with any intermittent room noise the turn never ended.
+  // We now require the active streak to last at least SUSTAINED_ACTIVE_MS of
+  // CONTINUOUS voice-like frames before it counts as "real speech" and resets
+  // the clock. A momentary blip (< this) is ignored, so the countdown keeps
+  // running through it. `activeStreakStartRef` = when the current unbroken run
+  // of active frames began (null when the last frame was inactive).
+  const activeStreakStartRef = useRef<number | null>(null);
+  // TEST (was 400): 3s of CONTINUOUS voice (gaps up to STREAK_DIP_GRACE_MS
+  // allowed) before it counts. Product choice over the "1.5s within 3s" window
+  // rule. Known risk: speech with pauses > STREAK_DIP_GRACE_MS between phrases
+  // (common on quiet wired/BT headsets) may not reset the silence clock, so the
+  // "Are you done?" popup can appear while the candidate is still talking.
+  const SUSTAINED_ACTIVE_MS = 3000;
+  // Dip tolerance ("hangover") for the active streak. Natural speech is not a
+  // solid block of above-threshold frames — there are ~50-150ms gaps between
+  // words, unstressed syllables, and after plosives that dip BELOW the
+  // peak-relative in-turn threshold. The old code nulled the streak on the
+  // FIRST such frame (activeStreakStartRef = null), so `_sustained` (streak >=
+  // 300ms) could never accumulate for an ordinary speaker: every couple of
+  // frames a dip restarted it from zero. On realtime providers the
+  // transcript-driven reset hid this; on BATCH providers (gpt-4o-transcribe,
+  // gemini, sarvam, assemblyai) there is NO live transcript, so the streak was
+  // the only thing keeping the turn alive — and continuous speech wound up to
+  // the 8s silence clock and got cut off mid-answer. We now let the streak
+  // survive short sub-threshold dips: the streak is only broken when the gap
+  // since the last active frame exceeds STREAK_DIP_GRACE_MS. `lastActiveFrameAtRef`
+  // = timestamp of the most recent active frame within the current streak.
+  const lastActiveFrameAtRef = useRef<number | null>(null);
+  const STREAK_DIP_GRACE_MS = 400; // tolerate ~4-5 frames of inter-word gap
+  // "1.5s of voice within the last 3s" — the windowed rule the comment above
+  // mentions, now used ALONGSIDE the 3s-continuous streak to reset the silence
+  // clock. Natural speech pauses longer than STREAK_DIP_GRACE_MS between
+  // phrases, so on quiet wired/BT headsets the continuous streak alone never
+  // completed and "Are you done?" popped up mid-answer (staging 2026-10-13,
+  // moto buds: 4 popups in one interview, each closed ~5s later by the
+  // cumulative dismiss rule). Same kind of measure as the dismiss, so the
+  // popup can no longer open on speech that would immediately close it.
+  const activeFrameWindowRef = useRef<Array<{ at: number; ms: number; strong: boolean }>>([]);
+  const lastVadFrameAtRef = useRef<number | null>(null);
+  const WINDOWED_ACTIVE_SPAN_MS = 3000;
+  const WINDOWED_ACTIVE_MIN_MS = 1500;
+  // ...of which at least this much must be STRONG voice. Real speech always
+  // has strong frames (word onsets/stress); light background noise that reads
+  // "voice-like" never does — without this it kept resetting the silence clock
+  // and "Are you done?" never appeared after 15 s of silence (2026-10-14).
+  const WINDOWED_STRONG_MIN_MS = 300;
+
+  // Pre-speech audio ring buffer. Captures PCM frames during the VAD warmup
+  // (~600ms) and the speech-confirmation window (~280ms) so the candidate's
+  // FIRST WORD is not lost. Without this, ~850ms of audio gets dropped before
+  // `speechDetectedRef` flips true → Whisper transcribes from the middle of
+  // the answer ("half la irunthuthan eduthkuthu" symptom).
+  // On speech confirmation, the buffer is flushed to backend BEFORE live
+  // frames start flowing. Sized at 16000 samples/s × 10s = 160000 Int16s.
+  const preSpeechPCMRingRef = useRef<Int16Array[]>([]);
+  const preSpeechPCMSampleCountRef = useRef(0);
+  const PRE_SPEECH_BUFFER_MAX_SAMPLES = 160000; // ~10s at 16kHz
+
+  // Fix 4: playback_complete delivery is the single gate that unblocks the
+  // backend's silence clock. Dropping this one message stalls the 8s silence
+  // detection for up to 30 s (until the backend's safety timeout fires). To
+  // harden against a single dropped frame, send it twice: immediately, then
+  // ~150 ms later. Backend sets asyncio.Event() which is idempotent, so two
+  // arrivals cause no duplicate processing.
+  const sendPlaybackComplete = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (shouldDisconnectAfterAudioRef.current || isClosingRef.current) return;
+    const msgId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`;
+    const payload = JSON.stringify({ type: 'playback_complete', client_msg_id: msgId });
+    try { ws.send(payload); } catch { /* first send may race with a just-closed socket */ }
+    setTimeout(() => {
+      const ws2 = wsRef.current;
+      if (!ws2 || ws2.readyState !== WebSocket.OPEN) return;
+      if (shouldDisconnectAfterAudioRef.current || isClosingRef.current) return;
+      try { ws2.send(payload); } catch { /* ignore */ }
+    }, 150);
+  }, []);
+
+  const removeAudioDeviceChangeListener = () => {
+    if (audioDeviceChangeListenerRef.current) {
+      navigator.mediaDevices.removeEventListener('devicechange', audioDeviceChangeListenerRef.current);
+      audioDeviceChangeListenerRef.current = null;
+    }
+  };
+
+  // Fully stop the answer-capture nodes. disconnect() alone only cut the
+  // chunker's OUTPUT: its input stayed wired to the old mic source, so every
+  // past answer's chunker kept posting (silent) chunks into processAudioChunk.
+  // Staging 2026-10-27: answer N streamed N copies of audio (N-1 of them
+  // zeros) — the server pause clock ran N× fast ("Are you done?" mid-speech,
+  // never closing) and the interleaved zeros garbled ASR into other languages.
+  const releaseAudioCaptureNodes = useCallback(() => {
+    audioCaptureGenRef.current += 1;
+    const proc = processorRef.current;
+    processorRef.current = null;
+    if (proc) {
+      try { proc.disconnect(); } catch { /* already disconnected */ }
+      if (proc instanceof AudioWorkletNode) {
+        try { proc.port.onmessage = null; proc.port.close(); } catch { /* closed */ }
+      } else {
+        try { proc.onaudioprocess = null; } catch { /* gone */ }
+      }
+    }
+    try { micSourceNodeRef.current?.disconnect(); } catch { /* already disconnected */ }
+    micSourceNodeRef.current = null;
+  }, []);
+
+  const teardownRecordingMedia = useCallback((clearPinnedDevice: boolean = false) => {
+    removeAudioDeviceChangeListener();
+    // Keep the answer-capture device pinned across turns so Q2+ stays on the
+    // same headset/mic that worked for Q1 unless we explicitly clear it.
+    if (clearPinnedDevice) {
+      pinnedAudioDeviceIdRef.current = undefined;
+    }
+    mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+    mediaStreamRef.current = null;
+    releaseAudioCaptureNodes();
+    micAnalyserRef.current = null;
+    // The no-signal check re-arms when the next mic opens.
+    micSignalRef.current = { ...micSignalRef.current, flagged: true };
+    if (micNoSignalRef.current) {
+      micNoSignalRef.current = false;
+      setMicNoSignal(false);
+    }
+  }, [releaseAudioCaptureNodes]);
+
+  // Classify the active mic from its device label. Heuristic (labels vary by
+  // OS/browser/locale) but the common ones are stable. Bluetooth is matched
+  // FIRST and kept distinct from wired headsets because its HFP profile is the
+  // quietest + laggiest and needs the most lenient handling. Falls back to
+  // 'unknown' → safe defaults (echo cancellation ON).
+  const classifyMicType = useCallback((label: string): MicType => {
+    const l = (label || '').toLowerCase();
+    if (!l) return 'unknown';
+    // (3) Bluetooth / hands-free profile — check first (most specific).
+    if (/bluetooth|hands[\s-]?free|\bhfp\b|\bhsp\b|airpod|earpods|galaxy buds|\bbuds\b|\bwh-|\bwf-/.test(l)) {
+      return 'bluetooth';
+    }
+    // Wired headsets / earphones — no speaker→mic acoustic echo path.
+    if (/headset|headphone|earphone|earbud|jabra|\bplantronics\b|\bsennheiser\b/.test(l)) {
+      return 'wired_headphone';
+    }
+    // Built-in / internal mics — laptop speaker echo IS a real path.
+    if (/built[\s-]?in|internal|realtek|macbook|microphone array|digital microphone|intel smart sound|default/.test(l)) {
+      return 'builtin';
+    }
+    return 'unknown';
+  }, []);
+
+  const isHeadphoneType = useCallback(
+    (t: MicType) => t === 'wired_headphone' || t === 'bluetooth',
+    [],
+  );
+
+  // Resolve the per-device profile and set the four condition-based knobs.
+  // Called once on device detection; the hot audio loop reads the refs.
+  const applyMicProfile = useCallback((type: MicType) => {
+    micTypeRef.current = type;
+    switch (type) {
+      case 'bluetooth':
+        // (1) quietest mic → highest gain + highest target.
+        micGainMaxRef.current = 12;
+        micGainTargetRef.current = 0.090;   // ~2× builtin → up to ~7.5× gain
+        // Silence window is UNIFORM 8s for every mic type (multiplier 1.0). The
+        // gain boost above lifts quiet BT/wired audio above the VAD threshold,
+        // so the old stretched windows (×1.6/×1.4 → 11-13s) are no longer needed
+        // — and they made these mics wait far too long before ending the turn.
+        micSilenceMultiplierRef.current = 1.0;
+        break;
+      case 'wired_headphone':
+        micGainMaxRef.current = 10;
+        micGainTargetRef.current = 0.10;    // louder for quiet wired headset mics → up to ~8.3× gain
+        micSilenceMultiplierRef.current = 1.0;  // uniform 8s (see bluetooth note)
+        break;
+      case 'builtin':
+        // Quiet built-in mics (e.g. laptop Realtek) can sit at ~0.006 avgLevel —
+        // BELOW the VAD activity threshold (0.0076) and never reaching the
+        // strong threshold (0.0107) — so the candidate is cut off as "silence"
+        // while actually speaking (production auto-skips, console 1.txt: Q8/Q10
+        // ended ~12s in at avgLevel 0.004-0.006). Raise the gain ceiling + target
+        // so quiet built-in audio is boosted (~6.8×) above the activity/strong
+        // thresholds. The peak-relative thresholds scale with the boosted signal
+        // too, but the FIXED absolute floors (activity 0.0076 / strong 0.0107)
+        // are what quiet speech now clears. silenceMultiplier stays 1.0 — NO
+        // grace window, so a genuinely finished answer still ends promptly.
+        micGainMaxRef.current = 10;
+        micGainTargetRef.current = 0.080;   // ~6.8× effective gain (was 0.045 → 3.8×)
+        micSilenceMultiplierRef.current = 1.0;
+        break;
+      default: // unknown — safe middle ground
+        micGainMaxRef.current = 8;
+        micGainTargetRef.current = 0.055;
+        micSilenceMultiplierRef.current = 1.0;  // uniform 8s (see bluetooth note)
+    }
+    console.log('[InterviewUI] Mic profile applied', {
+      type,
+      gainMax: micGainMaxRef.current,
+      gainTarget: micGainTargetRef.current,
+      maxEffectiveGain: (micGainTargetRef.current / MIC_GAIN_PEAK_FLOOR).toFixed(1),
+      silenceMultiplier: micSilenceMultiplierRef.current,
+      echoCancellation: !isHeadphoneType(type),
+    });
+  }, [isHeadphoneType]);
+
+  // (2) Echo cancellation: OFF for headphones (no speaker→mic echo to cancel;
+  // leaving it on can duck/attenuate the candidate's own quiet speech). ON for
+  // built-in/unknown (laptop speaker echo is real). Uses applyConstraints
+  // (no re-acquire → no permission re-prompt). Best-effort.
+  const tuneTrackForMicType = useCallback(async (track: MediaStreamTrack, micType: MicType) => {
+    if (!isHeadphoneType(micType)) return; // builtin/unknown keep EC on (the acquisition default)
+    try {
+      await track.applyConstraints({
+        echoCancellation: false,
+        noiseSuppression: true,
+        autoGainControl: false,
+      });
+      console.log(`[InterviewUI] ${micType} detected — echo cancellation disabled for clearer near-end speech`);
+    } catch (err) {
+      console.warn('[InterviewUI] applyConstraints for headphone tuning failed (non-fatal):', err);
+    }
+  }, [isHeadphoneType]);
+
+  const getSharedRecordingAudioStream = useCallback(async (): Promise<MediaStream> => {
+    const findSharedTrack = () =>
+      webcamStreamRef.current
+        ?.getAudioTracks()
+        .find(track => track.readyState === 'live');
+
+    let sharedTrack = findSharedTrack();
+    if (!sharedTrack) {
+      // Audio-only recovery. This fallback is reached mid-turn — often right
+      // as a just-reconnected headset is still settling — so the camera is
+      // almost always fine; dragging it through a full reacquire() here would
+      // restart the live video track for a problem that was never video's,
+      // producing exactly the visible refocus/"blur" a candidate would see.
+      // reacquireAudio() never touches videoRef.current.srcObject or the video
+      // track, so the on-screen camera feed is untouched either way.
+      console.warn('[InterviewUI] Shared webcam audio track unavailable — attempting audio-only reacquire');
+      const reacquired = (await webcamRef.current?.reacquireAudio()) ?? false;
+      if (!reacquired) {
+        throw new Error('Shared webcam stream unavailable');
+      }
+      sharedTrack = findSharedTrack();
+    }
+
+    if (!sharedTrack) {
+      throw new Error('No live shared microphone track found');
+    }
+
+    if (sharedTrack.label) {
+      setActiveMicLabel(sharedTrack.label);
+    }
+    const sharedDeviceId = sharedTrack.getSettings?.().deviceId;
+    if (sharedDeviceId) {
+      pinnedAudioDeviceIdRef.current = sharedDeviceId;
+      // Capture the ORIGINAL device once (never overwrite) for unplug detection.
+      if (!interviewMicDeviceIdRef.current) interviewMicDeviceIdRef.current = sharedDeviceId;
+    }
+
+    const micType = classifyMicType(sharedTrack.label);
+    applyMicProfile(micType);
+    const cloned = sharedTrack.clone();
+    await tuneTrackForMicType(cloned, micType);
+    return new MediaStream([cloned]);
+  }, [classifyMicType, applyMicProfile, tuneTrackForMicType]);
+
+  const getDedicatedRecordingAudioStream = useCallback(async (): Promise<MediaStream> => {
+    const headsetFriendlyAudio: MediaTrackConstraints = {
+      channelCount: { ideal: 1 },
+      echoCancellation: true,   // browser WebRTC handles speaker echo
+      noiseSuppression: true,   // browser suppression as baseline; RNNoise worklet layers on top
+      autoGainControl: false,   // keep off — AGC distorts quiet speech levels for ASR
+    };
+
+    const attempts: Array<{ label: string; constraints: MediaStreamConstraints }> = [];
+    const exactAttempt = (label: string, deviceId: string) => ({
+      label,
+      constraints: { audio: { ...headsetFriendlyAudio, deviceId: { exact: deviceId } } },
+    });
+    // Specific devices before any unconstrained request: an unconstrained
+    // getUserMedia is not guaranteed to pick the OS default — on a desktop
+    // with a USB mic it opened the empty Realtek jack (staging 2026-11-02).
+    // A device that just gave no signal goes behind the System Check mic.
+    const pinnedId = pinnedAudioDeviceIdRef.current;
+    const homeId = homeMicDeviceIdRef.current;
+    const pinnedDead = Boolean(pinnedId && deadMicIdsRef.current.has(pinnedId));
+    if (pinnedId && !pinnedDead) attempts.push(exactAttempt("pinned_device", pinnedId));
+    if (homeId && homeId !== pinnedId) attempts.push(exactAttempt("system_check_device", homeId));
+    if (pinnedId && pinnedDead) attempts.push(exactAttempt("pinned_device", pinnedId));
+    attempts.push({
+      label: "headset_friendly_audio",
+      constraints: { audio: headsetFriendlyAudio },
+    });
+    attempts.push({
+      label: "browser_default_audio",
+      constraints: { audio: true },
+    });
+
+    let lastError: unknown = null;
+    for (const attempt of attempts) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(attempt.constraints);
+        const liveTrack = stream.getAudioTracks().find(track => track.readyState === 'live');
+        if (!liveTrack) {
+          stream.getTracks().forEach(track => track.stop());
+          throw new Error('No live dedicated microphone track found');
+        }
+        if (liveTrack.label) {
+          setActiveMicLabel(liveTrack.label);
+        }
+        const actualDeviceId = liveTrack.getSettings?.().deviceId;
+        if (actualDeviceId) {
+          pinnedAudioDeviceIdRef.current = actualDeviceId;
+          if (!interviewMicDeviceIdRef.current) interviewMicDeviceIdRef.current = actualDeviceId;
+        }
+        // Detect device type, set its profile (gain/silence/EC), and tune EC.
+        const micType = classifyMicType(liveTrack.label);
+        applyMicProfile(micType);
+        await tuneTrackForMicType(liveTrack, micType);
+        console.log('[InterviewUI] Dedicated answer microphone opened', {
+          attempt: attempt.label,
+          label: liveTrack.label || 'unknown',
+          deviceId: actualDeviceId || 'unknown',
+          micType,
+        });
+        return stream;
+      } catch (err) {
+        lastError = err;
+        console.warn(`[InterviewUI] Dedicated answer microphone attempt failed (${attempt.label})`, err);
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Dedicated microphone unavailable');
+  }, [classifyMicType, applyMicProfile, tuneTrackForMicType]);
+
+  const getRecordingAudioStream = useCallback(async (): Promise<MediaStream> => {
+    let stream: MediaStream;
+    try {
+      stream = await getDedicatedRecordingAudioStream();
+    } catch (dedicatedErr) {
+      console.warn('[InterviewUI] Dedicated answer microphone unavailable — falling back to webcam audio track', dedicatedErr);
+      stream = await getSharedRecordingAudioStream();
+    }
+    // Point the screen-recording audio mix at the SAME device the candidate is
+    // answering on. That mix is built in CandidateAIInterviewPortal before this
+    // component mounts, so its first capture may be the OS default (often the
+    // laptop array mic) even when the candidate speaks into a headset — which
+    // made them almost inaudible in the saved Interview View. Best-effort: the
+    // portal ignores the call when no mix is active.
+    try {
+      const pinned = pinnedAudioDeviceIdRef.current;
+      if (pinned) {
+        // Global so a mid-interview re-share rebuilds the mix on the right device
+        // immediately, instead of waiting for the next answer turn to retarget.
+        (window as any).__interviewMicDeviceId = pinned;
+        void (window as any).__interviewSetRecordingMic?.(pinned);
+      }
+    } catch { /* best-effort — never block mic acquisition */ }
+    return stream;
+  }, [getDedicatedRecordingAudioStream, getSharedRecordingAudioStream]);
+
+  const flushPreSpeechAudioToBackend = useCallback(() => {
+    if (
+      wsRef.current?.readyState === WebSocket.OPEN &&
+      !isAiSpeakingRef.current &&
+      preSpeechPCMRingRef.current.length > 0
+    ) {
+      for (const buf of preSpeechPCMRingRef.current) {
+        wsRef.current.send(buf.buffer);
+      }
+    }
+    preSpeechPCMRingRef.current = [];
+    preSpeechPCMSampleCountRef.current = 0;
+  }, []);
+
+  // Save AI message — called from finalizePlayback at the TRUE end-of-audio.
+  // Stop any ongoing reveal loop and flush the live bubble into the chat
+  // as one committed assistant message. Because finalizePlayback is gated
+  // on firstPcmAt + audioMs, this can only fire AFTER the audio has
+  // actually finished playing — guaranteeing the live bubble transitioning
+  // into the chat message coincides with Bina's audio ending, which is
+  // exactly when "Your turn" should surface.
+  const saveAiMessage = useCallback(() => {
+    if (revealTimerRef.current) {
+      clearInterval(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+    // Always use full tokenBuffer — currentAiTextRef may be partially revealed
+    const text = tokenBufferRef.current.trim();
+    {
+      const st = binaStallStatsRef.current;
+      if (text && (st.longTasks > 0 || st.captionStalls > 0)) {
+        console.log('[INTERVIEW-DEBUG] Bina turn main-thread summary', {
+          question: questionNumberRef.current,
+          audioSec: Number((currentTurnAudioMsRef.current / 1000).toFixed(1)),
+          longTasks: st.longTasks,
+          blockedMs: Math.round(st.blockedMs),
+          maxTaskMs: Math.round(st.maxTaskMs),
+          captionStalls: st.captionStalls,
+          maxStallMs: Math.round(st.maxStallMs),
+          maxJumpChars: st.maxJumpChars,
+        });
+      }
+      binaStallStatsRef.current = { longTasks: 0, blockedMs: 0, maxTaskMs: 0, captionStalls: 0, maxStallMs: 0, maxJumpChars: 0 };
+    }
+    {
+      // Speech-sync summary: which clock paced lips + caption, and how many of
+      // Bina's pauses became word anchors. anchors≈0 with pauses>0 means the
+      // text and the audio disagree (worth a look); clock=legacy means the
+      // browser ran an old cached playback worklet.
+      const sync = talkingHeadRef.current?.getSyncStats();
+      if (text && sync) {
+        console.log('[TalkingHead] speech-sync turn summary', {
+          question: questionNumberRef.current,
+          ...sync,
+          captionClockTicks: captionClockTicksRef.current,
+          captionLegacyTicks: captionLegacyTicksRef.current,
+        });
+      }
+      captionClockTicksRef.current = 0;
+      captionLegacyTicksRef.current = 0;
+    }
+    // Learn Bina's real speaking rate from this completed turn so the NEXT
+    // turn's Phase A paces off measurement instead of DEFAULT_REVEAL_CPS. Runs
+    // here because this is the one place where both the final text length and
+    // the final audio duration are known (currentTurnAudioMsRef is reset by the
+    // next turn's first token, not before). Short clips are skipped — their
+    // ratio is dominated by leading/trailing silence. Smoothed so one odd turn
+    // (a long pause mid-sentence) can't skew the next, and clamped to a sane
+    // speech range so a bad sample can never make the caption race.
+    const turnAudioSec = currentTurnAudioMsRef.current / 1000;
+    if (text.length > 20 && turnAudioSec > 1.5) {
+      const sample = text.length / turnAudioSec;
+      if (sample >= 6 && sample <= 30) {
+        const prev = measuredRevealCpsRef.current;
+        measuredRevealCpsRef.current = prev === null ? sample : prev * 0.7 + sample * 0.3;
+        if (REVEAL_DEBUG) {
+          console.debug(`[Reveal] cps sample=${sample.toFixed(1)} smoothed=${measuredRevealCpsRef.current.toFixed(1)} (chars=${text.length} audio=${turnAudioSec.toFixed(2)}s)`);
+        }
+      }
+    }
+    if (text) {
+      const wasFollowup = isCurrentFollowupRef.current;
+      setMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: text,
+        timestamp: nowIST(),
+        isFollowup: wasFollowup,
+        // Tag with the question being asked so a late background-transcribed
+        // answer (decoupled flow) can be attached right after its own bubble.
+        questionNumber: questionNumberRef.current ?? undefined,
+      }]);
+      // Reset for the next turn — backend will re-set if the next question
+      // is also a follow-up.
+      isCurrentFollowupRef.current = false;
+      currentAiTextRef.current = "";
+      tokenBufferRef.current = "";
+      revealedCharsRef.current = 0;
+      setCurrentAiText("");
+    }
+  }, []);
+
+  // The opening instruction (role_intro) must always be in the chat ahead of
+  // the first question. Normally finalizePlayback commits it when its audio
+  // ends. If the first question arrives first (a playback timer or the
+  // server's fallback released it early), commit it now — otherwise the
+  // question's text replaced the live bubble and the instruction was never
+  // shown. `endIntro` false keeps the intro flag so its own finalizePlayback
+  // still skips the mic-open (used when only the text is being rescued).
+  const commitPendingRoleIntro = useCallback((endIntro: boolean) => {
+    if (!roleIntroActiveRef.current) return;
+    if (endIntro) roleIntroActiveRef.current = false;
+    if (!tokenBufferRef.current.trim() && roleIntroTextRef.current.trim()) {
+      tokenBufferRef.current = roleIntroTextRef.current;
+    }
+    saveAiMessage();
+    roleIntroTextRef.current = ""; // committed — never add it a second time
+  }, [saveAiMessage]);
+
+  // Token reveal system — the live "Bina" bubble that reveals tokens as
+  // they stream.
+  //
+  // There are TWO reveal phases, because the total audio duration is
+  // unknown until the backend sends `audio_end`:
+  //
+  //   Phase A (streaming): audio_end not yet received, so the total TTS
+  //   duration is UNKNOWN — every "end of audio" figure available
+  //   (`currentTurnAudioMsRef`, the tracker's scheduled end) describes only
+  //   what has ARRIVED so far. Fraction math is therefore invalid here: it
+  //   divides the played position by a partial total, which inflates progress
+  //   toward 1 and reveals text the voice hasn't reached — worst at the start
+  //   of a turn, where the partial total is smallest. So Phase A paces by
+  //   RATE (chars/sec, see DEFAULT_REVEAL_CPS) instead of by fraction. Rate
+  //   pacing cannot inflate, because it never divides by an unknown.
+  //
+  //   Phase B (post-audio_end): the totals are final, so fraction math is
+  //   exact. Progress is measured against the AUDIBLE span and drives the
+  //   reveal to land REVEAL_LEAD_MS before the voice stops.
+  //
+  // The reveal loop KEEPS ticking while Bina is still audible, even once
+  // all text is revealed, so the bubble cannot "finish" before audio does.
+  // `saveAiMessage` (which commits the bubble into the chat) is triggered
+  // exclusively by `finalizePlayback`, which itself fires at true end-of-
+  // audio — so the chat-message transition is bound to audio end, not to
+  // text-reveal completion.
+  const startRevealingTokens = useCallback(() => {
+    // Never start (or restart) the reveal while the interview is paused for a
+    // camera/mic disconnect — the question would stream in behind the blocking
+    // overlay while Bina is silent. The resume re-speak starts it again.
+    if (isMediaPausedRef.current) return;
+    if (revealTimerRef.current) {
+      clearInterval(revealTimerRef.current);
+    }
+    revealLastTickMsRef.current = 0;
+    revealTimerRef.current = setInterval(() => {
+      // Interval is 200 ms; a much longer gap means the main thread was
+      // blocked, so the caption froze while the voice played on.
+      const tickNow = performance.now();
+      const tickGapMs = revealLastTickMsRef.current > 0 ? tickNow - revealLastTickMsRef.current : 0;
+      revealLastTickMsRef.current = tickNow;
+      const charsBeforeTick = revealedCharsRef.current;
+      const fullText = tokenBufferRef.current;
+      if (fullText.length === 0) return;
+      // Captions never lead an inaudible voice: hold until TalkingHead reports
+      // the voice started (bounded by BINA_AUDIBLE_SAFETY_MS). The math below
+      // then catches up to the REVEAL_LEAD_MS lead on the very next tick.
+      if (!binaAudibleRef.current) return;
+      // And never before THIS turn's audio: binaAudible is only reset at
+      // speaking_started, but the next question's tokens stream in before it.
+      if (!turnAudioStartedRef.current) return;
+      const firstPcmAt = firstPcmAtMsRef.current;
+      let target = revealedCharsRef.current;
+      // Seconds of Bina's voice actually heard so far (negative before she is
+      // audible). Legacy Phase A paces off this directly — no division, no inflation.
+      let playedSec = 0;
+
+      // Shared speech clock (TalkingHeadAvatar + speechSync.ts): every word
+      // whose start is within CAPTION_LEAD_MS of the sample the candidate is
+      // HEARING. Same clock as the lips; it stops when the voice stops
+      // (network starvation, frozen turn), and word starts come from the
+      // pauses in Bina's own audio — no rate guess, no audio_end phase switch.
+      const clockReveal = talkingHeadRef.current?.getCaptionReveal(fullText, CAPTION_LEAD_MS) ?? null;
+      if (clockReveal === "hold") return;
+      if (typeof clockReveal === "number") {
+        captionClockTicksRef.current += 1;
+        target = Math.max(target, clockReveal);
+      } else {
+        captionLegacyTicksRef.current += 1;
+
+        // Reveal progress. Primary clock: AudioContext's scheduled timeline.
+        // Fallback: wall-clock (used when the tracker context is suspended,
+        // which happens post-fullscreen-exit / cold start — the exact failure
+        // mode where "text appears only after Bina finishes speaking").
+        const pbCtx = playbackTrackerCtxRef.current;
+        // Put BOTH ends of the span on the AUDIBLE timeline using ONE delay lookup.
+        // The silent mirror buffers are scheduled from chunk ARRIVAL, but the
+        // speakers start `delay` later, so the real voice occupies
+        // [mirrorStart + delay, mirrorEnd + delay]. Shifting only the start (the
+        // original bug) leaves the span short by the whole delay, which made the
+        // reveal finish ~2 s before Bina stopped speaking on every turn. Shifting
+        // them with different values would reintroduce it — hence one `delaySec`.
+        const delaySec = getAudibleDelayMs() / 1000;
+        const rawStart = firstChunkStartCtxSecRef.current;
+        let ctxStart = rawStart === null ? null : rawStart + delaySec;
+        let ctxEnd = playbackScheduledEndAtRef.current + delaySec;
+        // The voice became audible LATER than the estimate (cold worklet on the
+        // intro): slide the whole span to the real onset — start and end by the
+        // SAME amount, so its length stays the audio's duration.
+        const audibleAt = audibleAtCtxSecRef.current;
+        if (ctxStart !== null && audibleAt !== null && audibleAt > ctxStart) {
+          const slip = audibleAt - ctxStart;
+          ctxStart += slip;
+          ctxEnd += slip;
+        }
+        const ctxAvailable =
+          !!pbCtx &&
+          pbCtx.state === "running" &&
+          ctxStart !== null &&
+          Number.isFinite(ctxEnd) &&
+          ctxEnd > ctxStart;
+
+        let progress: number | null = null;
+
+        if (ctxAvailable) {
+          const now = pbCtx!.currentTime;
+          // Start the reveal REVEAL_LEAD_MS before the audio becomes audible so the
+          // first words are already on screen as Bina starts speaking (fixes
+          // "voice comes before text").
+          if (now < ctxStart! - REVEAL_LEAD_MS / 1000) {
+            if (REVEAL_DEBUG) console.debug(`[Reveal] ctx-wait now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)}`);
+            return;  // inside buffer delay
+          }
+          playedSec = now - ctxStart!;
+          progress = (playedSec + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
+          // On a slow connection chunks arrive slower than real time and the voice
+          // has gaps; `now - start` counts those gaps as speech, so the caption ran
+          // ahead of a halting Bina (staging 2026-10-29). Pace Phase A by what was
+          // actually HEARD: everything received minus what is still scheduled.
+          const heardSec = currentTurnAudioMsRef.current / 1000 - Math.max(0, ctxEnd - now);
+          playedSec = Math.min(playedSec, heardSec);
+          if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} delay=${(delaySec * 1000).toFixed(0)}ms played=${playedSec.toFixed(3)} prog=${progress.toFixed(3)}`);
+        } else if (firstPcmAt !== null) {
+          // Fallback: wall-clock math so streaming reveal works even when the
+          // tracker AudioContext is stalled. `audibleStartMs` waits out the active
+          // path's audible delay (0 on TalkingHead's Web Audio fallback); in
+          // Phase B the denominator is the accumulated — and by then total —
+          // audio duration.
+          const audibleStartMs = Math.max(firstPcmAt + getAudibleDelayMs(), audibleAtMsRef.current ?? 0);
+          const elapsedMs = Date.now() - audibleStartMs + REVEAL_LEAD_MS;
+          if (elapsedMs < 0) {
+            if (REVEAL_DEBUG) console.debug(`[Reveal] wc-wait elapsed=${elapsedMs}`);
+            return;
+          }
+          playedSec = (Date.now() - audibleStartMs) / 1000;
+          const receivedMs = currentTurnAudioMsRef.current;
+          if (receivedMs <= 0) return;
+          progress = elapsedMs / receivedMs;
+          if (REVEAL_DEBUG) console.debug(`[Reveal] wc elapsed=${elapsedMs} received=${receivedMs} prog=${progress.toFixed(3)} ctxState=${pbCtx?.state} ctxStart=${ctxStart}`);
+        } else {
+          if (REVEAL_DEBUG) console.debug(`[Reveal] no-anchor firstPcmAt=${firstPcmAt} ctxAvailable=${ctxAvailable}`);
+          return;
+        }
+
+        if (progress === null) return;
+        if (audioEndReceivedRef.current) {
+          // ── Phase B: totals are final → fraction math is exact. With ctxEnd now
+          // on the audible timeline the span equals the real audio duration, so
+          // this lands REVEAL_LEAD_MS before the voice stops — no cap needed
+          // beyond the natural 1.0.
+          progress = Math.max(0, Math.min(1, progress));
+          target = Math.floor(progress * fullText.length);
+        } else {
+          // ── Phase A: pace by RATE, not fraction. `progress` here divides by a
+          // PARTIAL total and would inflate (see the header note), so it is only
+          // logged, never used to position the text.
+          const cps = measuredRevealCpsRef.current ?? DEFAULT_REVEAL_CPS;
+          const paced = Math.floor(Math.max(0, playedSec + REVEAL_LEAD_MS / 1000) * cps);
+          // Ceiling is a backstop against a bad CPS prior, not the pacer.
+          target = Math.min(paced, Math.floor(fullText.length * PHASE_A_MAX_FRACTION));
+          if (REVEAL_DEBUG) console.debug(`[Reveal] phaseA cps=${cps.toFixed(1)} paced=${paced} target=${target} len=${fullText.length} (unused prog=${progress.toFixed(3)})`);
+        }
+      }
+      if (target > revealedCharsRef.current) {
+        revealedCharsRef.current = target;
+        const revealedText = fullText.substring(0, target);
+        currentAiTextRef.current = revealedText;
+        setCurrentAiText(revealedText);
+      }
+      if (tickGapMs >= CAPTION_STALL_LOG_MS && isPlayingRef.current) {
+        const jumpChars = revealedCharsRef.current - charsBeforeTick;
+        const st = binaStallStatsRef.current;
+        st.captionStalls += 1;
+        st.maxStallMs = Math.max(st.maxStallMs, tickGapMs);
+        st.maxJumpChars = Math.max(st.maxJumpChars, jumpChars);
+        console.warn('[INTERVIEW-DEBUG] caption stalled - main thread blocked while Bina spoke', {
+          gapMs: Math.round(tickGapMs),
+          jumpChars,
+          revealed: revealedCharsRef.current,
+          total: fullText.length,
+          playedSec: Number(playedSec.toFixed(1)),
+          question: questionNumberRef.current,
+        });
+      }
+      // NOTE: We intentionally do NOT clear the interval when the text is
+      // fully revealed. The loop keeps running so we remain ready for
+      // streamed additions, and `saveAiMessage` (called by finalizePlayback
+      // at true end-of-audio) is the single owner of end-of-bubble cleanup.
+      //
+      // Phase 1 perf (2026-05-28): cadence raised 80 ms → 200 ms. Reveal
+      // pacing is anchored to the AudioContext clock (Phase B), not the
+      // poll cadence — slowing the interval just makes the loop catch up
+      // in larger character batches per tick. Visually imperceptible, but
+      // drops the LiveAIBubble re-render rate from 12.5 Hz → 5 Hz, which
+      // matters for low-end candidates running heavy MediaPipe proctoring
+      // alongside Bina's speech.
+      // 2026-11-03: REVEAL_TICK_MS (50 ms). The clock path reveals whole words
+      // on the audible timeline; 200 ms quantisation put a word up to 0.2 s
+      // late. The bubble still re-renders only when the text changes.
+    }, REVEAL_TICK_MS);
+  }, []);
+
+  const stopRevealingTokens = useCallback(() => {
+    if (revealTimerRef.current) {
+      clearInterval(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => { stopRevealingTokens(); };
+  }, [stopRevealingTokens]);
+
+  // Long tasks (main thread busy >= LONG_TASK_LOG_MS) while Bina's voice plays:
+  // counted into the per-turn summary; the big ones are logged individually so
+  // the next test shows WHEN the caption froze and for how long.
+  useEffect(() => {
+    if (typeof PerformanceObserver === 'undefined') return;
+    if (!(PerformanceObserver.supportedEntryTypes || []).includes('longtask')) return;
+    const obs = new PerformanceObserver((list) => {
+      if (!isPlayingRef.current) return;
+      for (const entry of list.getEntries()) {
+        if (entry.duration < LONG_TASK_LOG_MS) continue;
+        const st = binaStallStatsRef.current;
+        st.longTasks += 1;
+        st.blockedMs += entry.duration;
+        st.maxTaskMs = Math.max(st.maxTaskMs, entry.duration);
+        if (entry.duration >= CAPTION_STALL_LOG_MS) {
+          const attr = (entry as PerformanceEntry & { attribution?: Array<{ containerType?: string; containerName?: string; containerSrc?: string }> }).attribution?.[0];
+          console.warn('[INTERVIEW-DEBUG] long task while Bina spoke', {
+            durationMs: Math.round(entry.duration),
+            container: attr ? `${attr.containerType || ''} ${attr.containerName || attr.containerSrc || ''}`.trim() : undefined,
+            question: questionNumberRef.current,
+          });
+        }
+      }
+    });
+    try { obs.observe({ type: 'longtask', buffered: false }); } catch { return; }
+    return () => obs.disconnect();
+  }, []);
+
+  // Web Speech API for real-time transcription
+  // Accumulates ALL finalized segments + current interim so the user
+  // sees their complete speech in the live transcript bubble.
+  const webSpeechFinalizedRef = useRef("");
+
+  const sendLiveTranscriptBatch = useCallback((text: string, trigger: string) => {
+    // No-op: Browser Web Speech API removed; Whisper provides the final
+    // transcript via the audio pipeline. live_transcript_batch is no longer
+    // sent — backend now treats Whisper's output as the canonical source.
+    void text;
+    void trigger;
+    return;
+  }, []);
+
+  const buildStableLiveTranscriptPreview = useCallback((incomingText: string) => {
+    const next = incomingText.replace(/\s+/g, ' ').trim();
+    // Only reject empty or pure-punctuation/symbol text. Do NOT run the full
+    // isTranscriptMeaningful filter here — the accumulated live partial grows
+    // to 200+ words over a long answer and looksRomanizedTamil false-positives
+    // on English words (formula, Kerala, Australia) trigger after ~1 minute,
+    // blanking the display and breaking the VAD silence timer.
+    if (!next || ![...next].some(ch => /\p{L}|\p{N}/u.test(ch))) return "";
+    // Keep the live bubble as close as possible to the raw provider/browser
+    // transcript. The older prefix-stability logic avoided visible rewrites,
+    // but it also dropped legitimate sentence updates when the recognizer
+    // revised earlier words or emitted a shorter replacement segment.
+    liveTranscriptDisplayRef.current = next;
+    return next;
+  }, []);
+
+  const snapshotVisibleLiveTranscript = useCallback(() => {
+    const visible = currentTranscriptRef.current.replace(/\s+/g, ' ').trim();
+    if (visible) return visible;
+    return webSpeechFinalizedRef.current.replace(/\s+/g, ' ').trim();
+  }, []);
+
+  // Idempotent "now listening" trigger for the "Your turn — speak now" popup.
+  // Shows once the capture pipeline (mic + worklet) is live. (Batch models no
+  // longer use the Web Speech API, and streaming models are backend-driven, so
+  // pipeline-ready is the single gate for every provider.)
+  const markListeningStarted = useCallback(() => {
+    if (
+      nowSpeakShownForSessionRef.current ||
+      !isRecordingRef.current ||
+      isAiSpeakingRef.current ||
+      isProcessingRef.current ||
+      isClosingRef.current ||
+      !turnPipelineReadyRef.current
+    ) {
+      return;
+    }
+    nowSpeakShownForSessionRef.current = true;
+    setShowNowSpeakBanner(true);
+  }, []);
+
+  const startWebSpeechRecognition = useCallback(() => {
+    // Frontend-only live transcript for batch/final-only ASR models. This is
+    // UI feedback only — the backend transcript still remains the canonical
+    // answer for evaluation and final chat save.
+    webSpeechFinalizedRef.current = "";
+    webSpeechListeningRef.current = false;
+    liveBatchSentCharsRef.current = 0;
+    liveBatchIndexRef.current = 0;
+    liveBatchStopRequestedRef.current = false;
+    lastBrowserTranscriptTextRef.current = "";
+    lastBrowserTranscriptUpdateAtRef.current = null;
+    lastLiveTranscriptTextRef.current = "";
+    lastLiveTranscriptUpdateAtRef.current = null;
+    turnHasLiveTranscriptRef.current = false;
+    liveTranscriptDisplayRef.current = "";
+    setCurrentTranscript("");
+    if (typeof window === 'undefined') return;
+    const interviewWindow = window as InterviewWindow;
+    const SpeechRecognition =
+      interviewWindow.SpeechRecognition || interviewWindow.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      return;
+    }
+    setBrowserSpeechRecognitionSupported(true);
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+    }
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    // Engine has begun capturing mic audio → live transcription is truly live.
+    // Surface the "Your turn — speak now" popup in sync with the listening bubble.
+    // markListeningStarted is idempotent and also gated on the capture pipeline
+    // being ready, so this can't show the banner prematurely.
+    recognition.onaudiostart = () => {
+      webSpeechListeningRef.current = true;
+      markListeningStarted();
+    };
+    recognition.onresult = (event: BrowserSpeechRecognitionEventLike) => {
+      // HARD GUARD: if Bina is currently speaking (or the post-playback echo
+      // guard is still armed), whatever the Web Speech API picked up is almost
+      // certainly Bina's own TTS bleeding back in through the speakers — NOT
+      // the candidate. Drop those results entirely so they can't contaminate
+      // the finalized buffer OR the live "speaking…" bubble. This is what was
+      // showing "what strategies do you use to" (verbatim echo of Bina's
+      // question) under the candidate's live transcript.
+      //
+      // Also drop during the silence nudge ("Are you there?") — per spec,
+      // candidate's answer must only be captured AFTER the nudge finishes.
+      if (isAiSpeakingRef.current) return;
+      if (Date.now() < playbackEchoGuardUntilRef.current) return;
+
+      // Use event.resultIndex so we only process NEW results in this event.
+      // Iterating from 0 would re-accumulate old finalized segments and overwrite
+      // the ref after a session restart, losing all previously captured text.
+      let newFinalizedText = '';
+      let interimText = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          newFinalizedText += transcript;
+        } else {
+          interimText += transcript;
+        }
+      }
+      if (newFinalizedText) {
+        // Append (not replace) — preserves text from earlier recognition sessions.
+        webSpeechFinalizedRef.current = (webSpeechFinalizedRef.current + ' ' + newFinalizedText).trim();
+        const finalizedText = webSpeechFinalizedRef.current;
+        const unsentText = finalizedText.slice(liveBatchSentCharsRef.current).trim();
+        if ((isFlexibleMode || isNewFlexibleMode) && unsentText.length >= LIVE_BATCH_CHAR_THRESHOLD) {
+          sendLiveTranscriptBatch(unsentText, "character_threshold");
+          liveBatchSentCharsRef.current = finalizedText.length;
+        }
+      }
+      // Show everything: all finalized segments + current interim.
+      // Lowered threshold from 3 → 0 so short words ("yes", "ok", "hi") stream live
+      // instead of sitting hidden until the buffer grows — makes the bubble feel real-time.
+      const fullText = (webSpeechFinalizedRef.current + (interimText ? ' ' + interimText : '')).trim();
+      if (fullText.length > 0) {
+        const displayText = buildStableLiveTranscriptPreview(fullText);
+        if (!displayText) {
+          setCurrentTranscript("");
+          currentTranscriptRef.current = "";
+          return;
+        }
+        const nowMs = Date.now();
+        const normalizedFullText = fullText.replace(/\s+/g, ' ').trim();
+        if (normalizedFullText && normalizedFullText !== lastBrowserTranscriptTextRef.current) {
+          lastBrowserTranscriptTextRef.current = normalizedFullText;
+          lastBrowserTranscriptUpdateAtRef.current = nowMs;
+          lastLiveTranscriptTextRef.current = normalizedFullText;
+          lastLiveTranscriptUpdateAtRef.current = nowMs;
+          turnHasLiveTranscriptRef.current = true;
+          lastMeaningfulAudioAtRef.current = nowMs;
+          if (!candidateAudioStreamingRef.current && !isAiSpeakingRef.current) {
+            candidateAudioStreamingRef.current = true;
+            candidateAudioFrameCountRef.current = MIN_POSSIBLE_SPEECH_FRAMES;
+            flushPreSpeechAudioToBackend();
+            console.log('[INTERVIEW-DEBUG] Browser transcript triggered early audio streaming');
+          }
+        }
+        setCurrentTranscript(displayText);
+        currentTranscriptRef.current = displayText;
+        // Bridge: Web Speech API detected real speech — also set the VAD's
+        // speechDetectedRef and send speech_started to the backend. This
+        // prevents the "Are you there?" prompt from firing when the candidate
+        // IS speaking but their mic amplitude stays below the VAD threshold
+        // (quiet voice, Bluetooth headset, browser gain normalization). The
+        // VAD and Web Speech API are independent; without this bridge the
+        // no-response timer only checks speechDetectedRef (VAD) and fires
+        // even though the transcript bubble is visibly showing text.
+        if (!speechDetectedRef.current) {
+          speechDetectedRef.current = true;
+          speechDetectedAtRef.current = nowMs;
+          lastMeaningfulAudioAtRef.current = nowMs;
+          speechPeakLevelRef.current = Math.max(speechPeakLevelRef.current, QUIET_SPEECH_ACTIVITY_LEVEL);
+          // Unfreeze the per-question timer — candidate is talking now.
+          questionTimerAwaitingSpeechRef.current = false;
+          if (!speechStartSentRef.current) {
+            speechStartSentRef.current = true;
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: "speech_started" }));
+            }
+          }
+        }
+        // Clear the no-response timer — candidate is actively speaking.
+        if (noResponseTimerRef.current) {
+          clearTimeout(noResponseTimerRef.current);
+          noResponseTimerRef.current = null;
+        }
+        noResponseRetryRef.current = 0;
+      }
+    };
+    // Track fatal errors (permission denied) that should suppress restart.
+    // Local to this recognition instance — reset automatically when
+    // startWebSpeechRecognition creates a fresh recognition object.
+    let _fatalError = false;
+    // Prevents a double-restart when both onerror(aborted) AND onend fire for
+    // the same stop event (Safari behaviour — see onerror below).
+    let _restartScheduled = false;
+
+    // Arms a 55s preemptive-stop so we cleanly restart before Chrome/Edge's
+    // 60s hard kill (or Safari's 15-30s kill). onend fires from the clean stop
+    // → _scheduleRestart() → 150ms → recognition.start() → re-arm.
+    const _armPreemptiveTimer = () => {
+      if (webSpeechPreemptiveTimerRef.current !== null) {
+        clearTimeout(webSpeechPreemptiveTimerRef.current);
+      }
+      webSpeechPreemptiveTimerRef.current = setTimeout(() => {
+        webSpeechPreemptiveTimerRef.current = null;
+        if (recognitionRef.current === recognition && isRecordingRef.current && !isAiSpeakingRef.current) {
+          try { recognition.stop(); } catch {}
+        }
+      }, 55_000);
+    };
+
+    const _scheduleRestart = () => {
+      if (_restartScheduled) return;          // already queued — don't double-fire
+      _restartScheduled = true;
+      // Clear any pending preemptive timer — the new session will re-arm it.
+      if (webSpeechPreemptiveTimerRef.current !== null) {
+        clearTimeout(webSpeechPreemptiveTimerRef.current);
+        webSpeechPreemptiveTimerRef.current = null;
+      }
+      setTimeout(() => {
+        _restartScheduled = false;
+        if (
+          recognitionRef.current !== recognition ||
+          !isRecordingRef.current ||
+          isAiSpeakingRef.current
+        ) {
+          return;
+        }
+        try {
+          recognition.start();
+          _armPreemptiveTimer();
+        } catch {}
+      }, 150);
+    };
+
+    // Counts not-allowed/service-not-allowed occurrences for this recognition instance.
+    // Chrome fires service-not-allowed transiently on the very first Web Speech API
+    // call in a session (service cold-start). One retry fixes Q1; a second occurrence
+    // means genuine permission denial and we mark fatal.
+    let _permissionErrorCount = 0;
+
+    recognition.onerror = (event: { error: string }) => {
+      const err = (event?.error || '');
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
+        _permissionErrorCount++;
+        if (_permissionErrorCount === 1 && isRecordingRef.current && !isAiSpeakingRef.current) {
+          // First occurrence may be transient (Chrome service cold-start on Q1).
+          // Retry once with a longer delay so the service has time to initialize.
+          console.warn('[WebSpeech] Permission/service error on first call — retrying once:', err);
+          setTimeout(() => {
+            if (recognitionRef.current === recognition && isRecordingRef.current && !isAiSpeakingRef.current) {
+              try { recognition.start(); _armPreemptiveTimer(); } catch {}
+            }
+          }, 500);
+        } else {
+          // Second occurrence or not recording — genuine denial, stop retrying.
+          _fatalError = true;
+          console.warn('[WebSpeech] Permission denied — disabling browser recognition:', err);
+        }
+      } else {
+        // aborted (Safari/iOS), no-speech, network, audio-capture — all transient.
+        // _scheduleRestart() is idempotent: onend still fires on Chrome/Edge after
+        // onerror, so the second call is a no-op. On Safari, onend may NOT fire
+        // after these errors — so schedule here as a safety net for all browsers.
+        if (!_fatalError && isRecordingRef.current && !isAiSpeakingRef.current) {
+          _scheduleRestart();
+        }
+      }
+    };
+
+    recognition.onend = () => {
+      // Only auto-restart if:
+      //   • no fatal (permission) error
+      //   • candidate mic is open
+      //   • Bina is not speaking (avoids picking up her TTS)
+      //   • past the post-Bina echo-guard window
+      //   • this recognition object is still the active one (not replaced by
+      //     stopWebSpeechRecognition/startWebSpeechRecognition)
+      if (
+        _fatalError ||
+        !isRecordingRef.current ||
+        isAiSpeakingRef.current ||
+        Date.now() < playbackEchoGuardUntilRef.current
+      ) {
+        return;
+      }
+      // Delay restart by 150 ms so Chrome/Edge's engine fully tears down before
+      // start() is called. Without this, start() throws InvalidStateError
+      // synchronously inside onend — caught silently — and recognition never
+      // resumes, causing the live transcript to freeze mid-speech for all
+      // batch ASR providers (Gemini, Whisper, Sarvam, etc.).
+      // _scheduleRestart() is idempotent: if onerror(aborted) already queued a
+      // restart (Safari path), this is a no-op.
+      _scheduleRestart();
+    };
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      _armPreemptiveTimer();
+    } catch {}
+  }, [buildStableLiveTranscriptPreview, flushPreSpeechAudioToBackend, sendLiveTranscriptBatch, isFlexibleMode, isNewFlexibleMode, markListeningStarted]);
+
+  const stopWebSpeechRecognition = useCallback(() => {
+    if (webSpeechPreemptiveTimerRef.current !== null) {
+      clearTimeout(webSpeechPreemptiveTimerRef.current);
+      webSpeechPreemptiveTimerRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); recognitionRef.current = null; } catch {}
+    }
+    // Do NOT clear webSpeechFinalizedRef here — stopRecording() reads it for the
+    // final flexible-mode batch send (line ~4413) and snapshotVisibleLiveTranscript()
+    // falls back to it for browser_transcript. Clearing it here wipes speech captured
+    // before a silence nudge restarts the recognizer, causing second-round speech to
+    // be lost from browser_transcript. webSpeechFinalizedRef is reset in two places:
+    //   • startWebSpeechRecognition() — new question, intentional fresh start
+    //   • explicitly in the "Bina starts speaking" handler — clears stale display text
+    liveTranscriptDisplayRef.current = "";
+    lastBrowserTranscriptTextRef.current = "";
+    lastBrowserTranscriptUpdateAtRef.current = null;
+    lastLiveTranscriptTextRef.current = "";
+    lastLiveTranscriptUpdateAtRef.current = null;
+    turnHasLiveTranscriptRef.current = false;
+  }, []);
+
+  // Question number of the most recent provisional answer. Provisional chat
+  // commits are disabled for English-only enforcement, but the transcript
+  // handler still understands this ref for older in-flight sessions.
+  const provisionalAnswerQnRef = useRef<number | null>(null);
+
+  // ── Real-time viseme loop ────────────────────────────────────────────────────
+  // Driven by a Web Audio AnalyserNode tapped into the playback graph.
+  // Runs every animation frame while AI audio is playing, reads RMS amplitude,
+  // maps it to an Oculus viseme, and pushes it directly to head.animQueue at
+  // the current head.animClock (no scheduling or timing calculations needed).
+
+  const stopVisemeLoop = useCallback(() => {
+    if (visemeRafRef.current !== null) {
+      cancelAnimationFrame(visemeRafRef.current);
+      visemeRafRef.current = null;
+    }
+  }, []);
+  useEffect(() => {
+    stopVisemeLoopRef.current = stopVisemeLoop;
+  }, [stopVisemeLoop]);
+
+  // ── Gapless scheduled audio playback ────────────────────────────────────────
+  // Instead of onended → playNextBuffer (which has JS-event-loop gaps = clicks),
+  // each buffer is scheduled on the Web Audio clock so it starts exactly where
+  // the previous one ends.  pendingBuffersRef tracks how many have been scheduled
+  // but not yet finished — when it hits 0 AND audioEndReceivedRef is true we know
+  // playback is complete and it's time to start recording.
+
+  const queueAudio = useCallback((pcmData: ArrayBuffer) => {
+    // Paused with the turn TORN DOWN — this chunk is being dropped by the
+    // ws.onmessage gate, so it must not stamp playback anchors or flip
+    // isAiSpeaking back on either. A FROZEN turn still books its chunks: they
+    // are buffered for the thaw, and currentTurnAudioMsRef must count them so
+    // the turn's true audio length stays correct.
+    if (isMediaPausedRef.current && !binaFrozenRef.current) return;
+    // TalkingHead handles audio playback (gain:1) + lip sync.
+    // Accumulate turn audio duration so the audio_end fallback timeout is
+    // proportional to how long Bina actually spoke (not a fixed 3 s).
+    // Int16 PCM @ 24 kHz: byteLength / 2 samples × (1000 ms / 24000 samples)
+    currentTurnAudioMsRef.current += (pcmData.byteLength / 2 / 24000) * 1000;
+    // Stamp the wall-clock of the most recent chunk — the TRUE anchor for
+    // end-of-playback (buffered audio ends at lastPcmAt + tail margin).
+    lastPcmAtMsRef.current = Date.now();
+
+    if (!isPlayingRef.current) {
+      // First chunk of this turn — stamp the wall-clock anchor (still used
+      // by a few legacy code paths for timeouts). The authoritative audio-
+      // clock anchor (firstChunkStartCtxSecRef) is stamped inside
+      // trackPlaybackChunk, which has the real scheduled start time.
+      firstPcmAtMsRef.current = Date.now();
+      binaStallStatsRef.current = { longTasks: 0, blockedMs: 0, maxTaskMs: 0, captionStalls: 0, maxStallMs: 0, maxJumpChars: 0 };
+      revealLastTickMsRef.current = 0;
+      isPlayingRef.current = true;
+      isAiSpeakingRef.current = true;
+      setIsAiSpeaking(true);
+      avatarState.onAiStartSpeaking();
+      armBinaAudibleSafety();
+      if (!revealTimerRef.current && tokenBufferRef.current.length > 0) {
+        startRevealingTokens();
+      }
+    }
+  }, [avatarState, startRevealingTokens, armBinaAudibleSafety]);
+
+  // Cut Bina off IMMEDIATELY — audio, lip-sync state and on-screen text.
+  //
+  // Used by the camera/mic pause arm. Mirrors the `interrupted` WS handler's
+  // playback teardown, plus the text-stream teardown that handler does not
+  // need (an `interrupted` is always followed by a fresh speaking_started that
+  // resets the reveal; a media pause is not — the reveal interval would just
+  // keep painting the question behind the blocking overlay).
+  //
+  // streamStop() is the load-bearing call: TalkingHead buffers PCM inside an
+  // AudioWorklet, so a pause that only clears queues/flags leaves several
+  // seconds of Bina still audible.
+  //
+  // `noFreeze`: always tear down, never suspend. Used by End — the farewell
+  // plays on the same AudioContext, so a suspended one would silence it.
+  const hardStopBinaPlayback = useCallback((opts?: { noFreeze?: boolean }) => {
+    // ── FREEZE path ──────────────────────────────────────────────────────
+    // If Bina is mid-question AND the backend already delivered the whole
+    // turn (audio_end received), every byte she has left to say is sitting in
+    // TalkingHead's AudioWorklet and the full question text is in
+    // tokenBufferRef. Nothing needs to be stored or replayed — SUSPENDING the
+    // AudioContext freezes the voice mid-sample, and because the token reveal
+    // paces off `ctx.currentTime` of that SAME context (see
+    // getPlaybackTracker: it deliberately reuses __interviewAudioContext), the
+    // text freezes at exactly the same instant and stays in sync on resume.
+    //
+    // The silent mirror buffers that drive end-of-playback detection are
+    // scheduled on that context too, so `whenTrackedPlaybackEnds` keeps
+    // working across the outage with no re-arming — its deadline is in
+    // context-seconds, which stop advancing while suspended.
+    //
+    // Works whether or not audio_end has arrived yet. The backend deliberately
+    // does NOT cancel Bina's pipeline for a media pause (see the session_pause
+    // handler in ai_interview_ws.py), so any part of the question still being
+    // synthesised keeps streaming in and accumulates in the suspended worklet —
+    // the ws PCM gate lets chunks through while frozen for exactly this reason.
+    // The turn is therefore complete by the time it thaws, in every case.
+    const ctx = playbackTrackerCtxRef.current;
+    const canFreeze =
+      !opts?.noFreeze &&
+      (isPlayingRef.current || isAiSpeakingRef.current) &&
+      !!ctx && ctx.state === 'running';
+
+    if (canFreeze) {
+      binaFrozenRef.current = true;
+      binaFrozenAtMsRef.current = Date.now();
+      // Stop the reveal INTERVAL (so nothing paints behind the overlay). The
+      // reveal POSITION — revealedCharsRef / tokenBufferRef — is deliberately
+      // left untouched so the thaw continues from the same character.
+      if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
+      // Wall-clock safety nets must not fire mid-outage and force-end the turn.
+      // The context-clocked primary path above survives on its own; these are
+      // re-armed by resumeBinaPlayback.
+      if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+      if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
+      ctx.suspend().catch((e) => console.warn('[Pause] AudioContext suspend failed:', e));
+      console.log(`[Pause] Bina FROZEN mid-question — ${tokenBufferRef.current.length - revealedCharsRef.current} chars and the rest of her audio held for resume`);
+      return;
+    }
+
+    // ── TEAR-DOWN path ───────────────────────────────────────────────────
+    // Bina is not mid-question (candidate was answering), or her audio is
+    // incomplete. Nothing coherent to resume — stop her for real.
+    //
+    // Un-freeze first if a previous turn left the context suspended: a
+    // suspended AudioContext silences EVERY later turn, so it must never
+    // outlive the turn that froze it.
+    if (binaFrozenRef.current) {
+      binaFrozenRef.current = false;
+      binaFrozenAtMsRef.current = null;
+      playbackTrackerCtxRef.current?.resume().catch(() => { /* ignore */ });
+    }
+    talkingHeadRef.current?.streamStop();
+    isPlayingRef.current = false;
+    isAiSpeakingRef.current = false;
+    setIsAiSpeaking(false);
+    setIsProcessing(false);
+    isProcessingRef.current = false;
+    avatarState.onAiStopSpeaking();
+    // Turn-scoped playback state — re-armed by the next turn's own
+    // speaking_started, so clearing it here cannot leak into the next turn.
+    pendingStreamStartRef.current = null;
+    playbackEndedCbRef.current = null;
+    pendingBuffersRef.current = 0;
+    audioEndReceivedRef.current = false;
+    if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+    if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
+    // COMMIT the question instead of discarding it. saveAiMessage() stops the
+    // reveal interval (so no more text streams in behind the overlay) and moves
+    // the FULL buffered question text into `messages` as a permanent bubble.
+    //
+    // This must not be a wipe, for two independent reasons:
+    //
+    //  1. finalizePlayback() — which calls saveAiMessage() — is queued ASYNC on
+    //     the tracker AudioContext via whenTrackedPlaybackEnds. streamStop()
+    //     above triggers it, but it runs AFTER this function returns. Clearing
+    //     tokenBufferRef synchronously here meant saveAiMessage() then read an
+    //     empty buffer, committed nothing, and the question vanished from the
+    //     screen entirely — live bubble gone AND no transcript bubble.
+    //  2. There is no second chance to repaint it. The backend only stashes
+    //     tts_pause_interrupted_question when session.is_ai_speaking is true,
+    //     and that flag flips False the moment the last TTS byte is SENT — long
+    //     before the client finishes playing it (see message_handler.py). So the
+    //     resume re-speak effectively never fires; a real disconnect log shows
+    //     zero "TTS-interrupt resume" lines across five pause/resume cycles.
+    //
+    // saveAiMessage() is safe to call twice: it clears tokenBufferRef after
+    // committing, so the later finalizePlayback() call is a no-op. When Bina
+    // was not speaking at all (the common case — the candidate unplugs mid
+    // ANSWER) the buffer is already empty and this only stops the interval.
+    saveAiMessage();
+  }, [avatarState, saveAiMessage]);
+
+  useEffect(() => { hardStopBinaRef.current = hardStopBinaPlayback; }, [hardStopBinaPlayback]);
+
+  /**
+   * Thaw a turn frozen by hardStopBinaPlayback — Bina picks up mid-sentence
+   * and the question text keeps revealing from the same character.
+   *
+   * Resuming the AudioContext restores BOTH: the worklet continues from the
+   * exact sample it stopped on, and `ctx.currentTime` starts advancing again
+   * so the reveal loop's pacing maths land exactly where they left off.
+   * No-ops when nothing is frozen.
+   */
+  const resumeBinaPlayback = useCallback(() => {
+    if (!binaFrozenRef.current) return;
+    const ctx = playbackTrackerCtxRef.current;
+    const frozenAt = binaFrozenAtMsRef.current;
+    const outageMs = frozenAt === null ? 0 : Math.max(0, Date.now() - frozenAt);
+    binaFrozenRef.current = false;
+    binaFrozenAtMsRef.current = null;
+
+    // TalkingHead times its visemes off performance.now(), which kept running
+    // through the outage. Without this shift her mouth would be `outageMs`
+    // ahead of her voice for the rest of the question.
+    talkingHeadRef.current?.shiftSpeechClock?.(outageMs);
+
+    ctx?.resume()
+      .then(() => console.log(`[Pause] Bina THAWED after ${outageMs}ms — voice and text resume mid-question`))
+      .catch((e) => console.warn('[Pause] AudioContext resume failed:', e));
+
+    // Restart the reveal interval. revealedCharsRef was never reset, so it
+    // continues from the exact character the outage interrupted.
+    startRevealingTokens();
+  }, [startRevealingTokens]);
+
+  useEffect(() => { resumeBinaRef.current = resumeBinaPlayback; }, [resumeBinaPlayback]);
+
+  // WebSocket handlers
+  const handleMessage = useCallback((data: InterviewSocketMessage) => {
+    const timestamp = new Date().toISOString();
+    // Per-event trace with the payload — except the high-frequency ones
+    // (one per LLM token / keepalive), whose payload objects the console
+    // would otherwise retain for the whole interview.
+    if (data.type !== "llm_token" && data.type !== "pong") {
+      console.log(`[WS ${timestamp}] Event: ${data.type}`, data);
+    }
+
+    switch (data.type) {
+      case "pong":
+        // Keepalive only — network strength comes from the HTTP probe.
+        break;
+      case "concurrent_session_blocked":
+        // The interview link is already open/active in another window/device.
+        // Stop everything and show a terminal message — do NOT reconnect (the
+        // server will just block again). The close (code 4409) follows this.
+        console.warn(`[WS ${timestamp}] Concurrent session blocked by server`);
+        if (interviewStartedRef.current && concurrentRetryRef.current < CONCURRENT_RECONNECT_DELAYS.length) {
+          // Our own reconnect — the 4409 close branch retries; no overlay yet.
+          setStatus("Connection lost — reconnecting...");
+          break;
+        }
+        // NOTE: do NOT set isClosingRef here — the onclose handler treats
+        // isClosing as a NORMAL completion ("Interview completed"). The 4409
+        // close branch + concurrentBlockedRef already suppress auto-reconnect.
+        concurrentBlockedRef.current = true;
+        setConcurrentBlocked(true);
+        setStatus(typeof data.message === 'string' ? data.message : 'This interview is already open in another window or device.');
+        try { stopRecordingSilentRef.current?.(); } catch { /* ignore */ }
+        break;
+      case "viseme_timeline":
+        // Deprecated — lip sync is now driven by real-time amplitude analysis.
+        console.log(`[WS ${timestamp}] Viseme timeline received (deprecated)`);
+        break;
+      case "connected":
+        interviewStartedRef.current = true;
+        concurrentRetryRef.current = 0;
+        console.log(`[WS ${timestamp}] Connected: session_id=${data.session_id}, total_questions=${data.total_questions}, duration_minutes=${data.duration_minutes}, remaining_seconds=${data.remaining_seconds}`);
+          setBackendLiveTranscriptEnabled(Boolean(data.live_transcript_enabled));
+        {
+          const isRealtime =
+            Boolean(data.realtime_transcription_enabled) ||
+            (typeof data.stt_model === "string" &&
+              (data.stt_model.endsWith("-live") || data.stt_model === "gpt-realtime-whisper"));
+          realtimeTranscriptionEnabledRef.current = isRealtime;
+          setRealtimeTranscriptionEnabled(isRealtime);
+        }
+        serverEotEnabledRef.current = Boolean(data.server_side_eot_enabled);
+        if (serverEotEnabledRef.current) {
+          console.log(`[WS ${timestamp}] Server-side EndOfTurn ENABLED — client silence-cutoff disabled; waiting for server_end_turn`);
+        }
+        if (data.session_id) {
+          sessionIdRef.current = data.session_id;
+        }
+        if (data.vad_config) {
+          const serverThreshold = Number(data.vad_config.silence_threshold);
+          const serverSilenceMs = Number(data.vad_config.silence_duration_ms);
+          silenceThresholdRef.current = Number.isFinite(serverThreshold)
+            ? Math.min(serverThreshold, MAX_CLIENT_SPEECH_THRESHOLD)
+            : MAX_CLIENT_SPEECH_THRESHOLD;
+          silenceDurationMsRef.current = Number.isFinite(serverSilenceMs)
+            ? serverSilenceMs
+            : silenceDurationMsRef.current;
+          console.log(`[WS ${timestamp}] VAD config: server_threshold=${data.vad_config.silence_threshold}, effective_threshold=${silenceThresholdRef.current}, server_silence_ms=${data.vad_config.silence_duration_ms}, effective_silence_ms=${silenceDurationMsRef.current}`);
+        }
+        // Sync global timer from backend — accounts for resumed sessions with elapsed time.
+        if (data.remaining_seconds != null && data.remaining_seconds >= 0) {
+          console.log(`[WS ${timestamp}] Syncing global timer from backend: ${data.remaining_seconds}s remaining`);
+          setRemainingSeconds(prev => {
+            if (isFlexibleMode || isNewFlexibleMode) {
+              return Math.min(prev, data.remaining_seconds);
+            }
+            return data.remaining_seconds;
+          });
+        }
+        if (data.timer_state) {
+          console.log(`[WS ${timestamp}] Timer state:`, data.timer_state);
+        }
+        break;
+      case "session_resumed": {
+        console.log(`[WS ${timestamp}] Session resumed: prior_question_count=${data.prior_question_count}, elapsed_seconds=${data.elapsed_seconds}`);
+        // Restore prior conversation messages so the candidate sees their history
+        const priorMsgs: Array<{ role: string; content: string }> = data.prior_messages || [];
+        if (priorMsgs.length > 0) {
+          setMessages(
+            priorMsgs.map((m, i) => ({
+              id: `restored-${i}`,
+              role: m.role as "user" | "assistant",
+              content: m.content,
+            }))
+          );
+        }
+        // Restore global timer ONLY if we're not currently mid-fullscreen-exit.
+        if (data.elapsed_seconds && data.elapsed_seconds > 0) {
+          const totalSeconds = (isFlexibleMode || isNewFlexibleMode) ? 30 * 60 : interviewInfo.duration_minutes * 60;
+          const restored = Math.max(0, totalSeconds - data.elapsed_seconds);
+          setRemainingSeconds(prev => {
+            if (isFlexibleMode || isNewFlexibleMode) {
+              return Math.min(prev, restored);
+            }
+            return restored;
+          });
+        }
+        // Trust the backend's authoritative `prior_question_count` (the number
+        // of questions Bina actually asked) instead of deriving it from
+        // `elapsed_seconds / 120`. The elapsed-based formula over-counts by
+        // assuming every question consumes the full 2-min slot, which is why
+        // candidates saw "Q12/15" after only 7 real questions: elapsed was
+        // 24 min but actual asked count was 7.
+        if (!(isFlexibleMode || isNewFlexibleMode) && typeof data.prior_question_count === "number") {
+          const maxQ = totalQuestions ?? interviewInfo.total_questions ?? 15;
+          const nextQ = Math.min(maxQ, Math.max(1, data.prior_question_count + 1));
+          if (nextQ > (questionNumber ?? 0)) {
+            setQuestionNumber(nextQ);
+            questionNumberRef.current = nextQ;
+          }
+        }
+        const _priorDisplay = data.prior_question_count ?? 0;
+        setStatus(`Session resumed — continuing from question ${_priorDisplay + 1}`);
+        break;
+      }
+      case "environment_verification_triggered": {
+        console.log(`[WS ${timestamp}] Environment verification triggered`);
+        const _verificationUrl = typeof data.verification_url === 'string' ? data.verification_url : null;
+        envVerificationResumedRef.current = false;
+        setEnvVerification({
+          qrCodeDataUri: typeof data.qr_code_data_uri === 'string' ? data.qr_code_data_uri : null,
+          verificationUrl: _verificationUrl,
+          expiresAt: typeof data.expires_at === 'string' ? data.expires_at : null,
+          challengeColor: typeof data.challenge_color === 'string' ? data.challenge_color : null,
+          challengeId: typeof data.challenge_id === 'string' ? data.challenge_id : null,
+          challengeRevealed: false,
+          challengeColors: Array.isArray(data.challenge_colors) ? data.challenge_colors : null,
+          recordingStartedAt: null,
+          verificationToken: _verificationUrl ? _verificationUrl.split('/').filter(Boolean).pop() ?? null : null,
+        });
+        setStatus('Interview paused — verify your environment on your phone');
+        break;
+      }
+      case "environment_verification_opened": {
+        // Candidate's phone actually opened the verify link — reveal the
+        // challenge color/ID on the laptop now, synced to this moment rather
+        // than showing it from when the QR first appeared.
+        console.log(`[WS ${timestamp}] Environment verification link opened on phone — revealing challenge`);
+        setEnvVerification(prev => prev ? { ...prev, challengeRevealed: true } : prev);
+        break;
+      }
+      case "environment_verification_recording_started": {
+        // Phone confirmed MediaRecorder is actually recording — this is the
+        // authoritative t=0 the 1-color-per-second cycle is keyed against.
+        console.log(`[WS ${timestamp}] Environment verification recording started — beginning RGB cycle`);
+        setEnvVerification(prev => prev ? {
+          ...prev,
+          challengeRevealed: true,
+          recordingStartedAt: typeof data.recording_started_at === 'string' ? data.recording_started_at : null,
+          challengeColors: Array.isArray(data.challenge_colors) ? data.challenge_colors : prev.challengeColors,
+        } : prev);
+        break;
+      }
+      case "environment_verification_submitted": {
+        console.log(`[WS ${timestamp}] Environment verification submitted — resuming`);
+        resumeEnvVerification();
+        break;
+      }
+      case "greeting":
+        console.log(`[WS ${timestamp}] Greeting received: text_length=${data.text?.length}`);
+        // The FIRST question ("Tell me about yourself") and the reconnect resume
+        // ack are delivered as a `greeting` (not the normal question stream), and
+        // their question_timer_started arrives LATER (via on_speaking_done) — too
+        // late to arm the pre-turn countdown before finalizePlayback opens the
+        // mic. Arm it here so Q1 gets the 5→1 "get ready" countdown like every
+        // other turn. (Nudges use interstitial_prompt, not greeting, so they
+        // still correctly get NO countdown.)
+        getReadyArmedRef.current = true;
+        // Keep the opening instruction in the chat ABOVE this first question,
+        // even if the question arrived before the instruction finished playing.
+        commitPendingRoleIntro(true);
+        tokenBufferRef.current = data.text;
+        revealedCharsRef.current = 0;
+        isAiSpeakingRef.current = true;
+        setIsAiSpeaking(true);
+        resetBinaAudible();
+        avatarState.onAiStartSpeaking();
+        audioEndReceivedRef.current = false;
+        talkingHeadEndedEarlyRef.current = false;
+        setStatus("Bina is speaking...");
+        startRevealingTokens();
+        // Feed text for word-level phoneme lip sync
+        talkingHeadRef.current?.setText(data.text);
+        break;
+      case "interstitial_prompt":
+        // Bina says a hardcoded line that bypasses the LLM (e.g. the silence
+        // nudge "Are you there?"). Seed the token buffer so it:
+        //   1) renders in the chat panel as an assistant message (saved on audio_end)
+        //   2) is fed to TalkingHead for lip sync
+        // PAUSE the per-question clock while she speaks the nudge — it resumes
+        // when the candidate's turn reopens (mic start). (speaking_started from
+        // this nudge's _speak also pauses; this is just the earliest point.)
+        console.log(`[WS ${timestamp}] Interstitial prompt: kind=${data.kind}, text_length=${data.text?.length}`);
+        pauseQuestionTimer();
+        tokenBufferRef.current = (data.text as string) ?? "";
+        revealedCharsRef.current = 0;
+        isAiSpeakingRef.current = true;
+        setIsAiSpeaking(true);
+        resetBinaAudible();
+        avatarState.onAiStartSpeaking();
+        audioEndReceivedRef.current = false;
+        talkingHeadEndedEarlyRef.current = false;
+        if (["silence_nudge", "silence_follow_up", "silence_move_on"].includes(String(data.kind || ""))) {
+          isSilencePromptRef.current = true;
+        }
+        setStatus("Bina is speaking...");
+        startRevealingTokens();
+        talkingHeadRef.current?.setText((data.text as string) ?? "");
+        break;
+      case "role_intro":
+        // Opening "About the role" warm-up. Stream + lip-sync it EXACTLY like a
+        // normal Bina turn (progressive token reveal), so it looks identical to
+        // every other message (previously it popped in as a STATIC bubble — the
+        // reported "intro doesn't work like others"). The ONLY difference: it is
+        // NOT a question — roleIntroActiveRef makes finalizePlayback COMMIT the
+        // bubble (via saveAiMessage) but SKIP the mic-open AND the pre-turn
+        // countdown for this message only.
+        //
+        // Streaming via the shared live bubble is safe NOW because the backend
+        // defers the first question until THIS role message's playback_complete
+        // (see send_greeting's deferral). So the role's finalizePlayback — which
+        // runs saveAiMessage BEFORE the roleIntro early-return — always commits
+        // the role bubble before Q1's tokens arrive. That closes the old race
+        // that made the bubble vanish / delayed Q1's mic.
+        // AII16 — the coaching tips are part of `data.text` itself (Bina speaks
+        // the role summary + tips as ONE utterance), so they stream into this
+        // bubble like any other message. Nothing extra to render.
+        console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}`);
+        roleIntroActiveRef.current = true;
+        roleIntroTextRef.current = (data.text as string) ?? "";  // lip-sync fallback in speaking_started
+        tokenBufferRef.current = (data.text as string) ?? "";     // STREAM it, like the greeting / questions
+        revealedCharsRef.current = 0;
+        currentAiTextRef.current = "";
+        setCurrentAiText("");
+        isAiSpeakingRef.current = true;
+        setIsAiSpeaking(true);
+        resetBinaAudible();
+        avatarState.onAiStartSpeaking();
+        audioEndReceivedRef.current = false;
+        talkingHeadEndedEarlyRef.current = false;
+        setStatus("Bina is speaking...");
+        startRevealingTokens();
+        talkingHeadRef.current?.setText((data.text as string) ?? "");
+        break;
+      case "server_end_turn": {
+        // Server-side EndOfTurn: the provider's neural turn detector decided the
+        // candidate finished. Stop recording now (which sends the normal end_turn,
+        // reusing the whole existing pipeline). Only act while actually recording
+        // and not during Bina's speech, so a stray signal can't misfire.
+        if (isRecordingRef.current && !isAiSpeakingRef.current) {
+          console.log(`[WS ${timestamp}] server_end_turn → stopRecording`);
+          stopRecording();
+        }
+        break;
+      }
+      case "server_vad": {
+        // AII14 Plan B — the backend measures the pause with Silero VAD on the
+        // answer audio and drives "Are you done?". While active, the client's
+        // own clock (silenceClockRef) only runs for logging/fallback.
+        const ev = data.event as string;
+        const sc = silenceClockRef.current;
+        if (ev === 'ready') {
+          serverVadActiveRef.current = true;
+          console.log('[INTERVIEW-DEBUG] AII14-server: pause detection active for this answer', {
+            turn: data.turn, doneAfterMs: data.done_after_ms, resumeSpeechMs: data.resume_speech_ms,
+            voiceVeto: data.voice_veto,
+          });
+        } else if (ev === 'unavailable') {
+          serverVadActiveRef.current = false;
+          console.warn('[INTERVIEW-DEBUG] AII14-server: unavailable — using the browser silence clock', { turn: data.turn });
+        } else if (ev === 'speech_onset') {
+          // Silero heard real speech. The browser's own onset check needs 3 s of
+          // unbroken voice (SPEECH_ONSET_CONFIRM_MS) and never fired for short
+          // answers like "30 days" (staging 2026-10-14: speech at 12:53:40,
+          // browser "Speech DETECTED" only at 12:55:08). Same bridge as the
+          // live-transcript one below.
+          console.log('[INTERVIEW-DEBUG] AII14-server: speech onset', {
+            turn: data.turn, browserAlreadyDetected: speechDetectedRef.current,
+          });
+          if (!speechDetectedRef.current && isRecordingRef.current && !isAiSpeakingRef.current) {
+            const nowMs = Date.now();
+            speechDetectedRef.current = true;
+            speechDetectedAtRef.current = nowMs;
+            lastMeaningfulAudioAtRef.current = nowMs;
+            speechPeakLevelRef.current = Math.max(speechPeakLevelRef.current, QUIET_SPEECH_ACTIVITY_LEVEL);
+            questionTimerAwaitingSpeechRef.current = false;
+            clearNoResponseTimer();
+            noResponseRetryRef.current = 0;
+            if (!speechStartSentRef.current) {
+              speechStartSentRef.current = true;
+              try { wsRef.current?.send(JSON.stringify({ type: 'speech_started' })); } catch {}
+            }
+          }
+        } else if (ev === 'done_prompt') {
+          console.log('[INTERVIEW-DEBUG] AII14-server: "Are you done?" raised', {
+            turn: data.turn,
+            serverSilenceMs: data.silence_ms,
+            ignoredSoundsInPause: data.ignored_sounds_in_pause,
+            vetoedOtherVoiceSegments: data.vetoed_other_voice_segments,
+            // Comparison with the browser clock (diagnostics only).
+            clientClockSilenceMs: Date.now() - sc.voiceAt,
+          });
+          if (serverVadActiveRef.current && isRecordingRef.current && !isAiSpeakingRef.current && !isProcessingRef.current
+              && !midSilenceConfirmRef.current) {
+            speechAccumMsRef.current = 0;
+            setMidSilenceConfirm_(true);
+          }
+        } else if (ev === 'speech_resumed') {
+          console.log('[INTERVIEW-DEBUG] AII14-server: popup closed after speech', { turn: data.turn, speechMs: data.speech_ms });
+          if (serverVadActiveRef.current && midSilenceConfirmRef.current) {
+            speechAccumMsRef.current = 0;
+            popupVadFrameAtRef.current = null;
+            sc.voiceAt = Date.now();
+            sc.source = 'popup_dismiss';
+            silenceHoldLoggedRef.current = false;
+            setMidSilenceConfirm_(false);
+          }
+        }
+        break;
+      }
+      case "live_transcript": {
+        // Any backend live-transcript provider can stream interim text while
+        // the candidate speaks. Drive the live "You" bubble directly from
+        // these partials. The final canonical transcript still arrives via the
+        // "transcript" (is_final) message, which clears this bubble and
+        // commits the chat message.
+        const liveText = (data.text ?? "").trim();
+        // Echo guard: ignore partials that arrive while Bina is talking or
+        // during the post-playback echo window — those are her TTS bleeding
+        // back through the mic, not the candidate.
+        if (isAiSpeakingRef.current) break;
+        if (Date.now() < playbackEchoGuardUntilRef.current) break;
+        // Only show the live "speaking…" bubble while the candidate is ACTUALLY
+        // recording an answer. After end_turn (isRecording=false) the Deepgram
+        // stream re-emits the just-finished answer's final transcript one more
+        // time — without this guard it reappeared as a live bubble even though
+        // the answer was already committed as a "You" message (the duplicate).
+        if (!isRecordingRef.current) break;
+        if (liveText.length > 0) {
+          // For live partials, only check that the text has at least one real
+          // character — don't run the full hallucination/Tamil filter here.
+          // The full filter operates on complete Whisper batch output (short
+          // clips). Live partials are accumulated turn text (grows to 200+ words
+          // over a 1-minute answer) — running looksRomanizedTamil on long English
+          // answers causes false positives that clear the display and break the
+          // VAD silence timer, stopping the transcript after ~1 minute.
+          const meaningfulLiveText = [...liveText].some(ch => /\p{L}|\p{N}/u.test(ch));
+          if (meaningfulLiveText) {
+            const nowMs = Date.now();
+            const normalizedLiveText = liveText.replace(/\s+/g, ' ').trim();
+            if (normalizedLiveText && normalizedLiveText !== lastLiveTranscriptTextRef.current) {
+              lastLiveTranscriptTextRef.current = normalizedLiveText;
+              lastLiveTranscriptUpdateAtRef.current = nowMs;
+              turnHasLiveTranscriptRef.current = true;
+              lastMeaningfulAudioAtRef.current = nowMs;
+            }
+            const displayText = buildStableLiveTranscriptPreview(liveText);
+            setCurrentTranscript(displayText);
+            currentTranscriptRef.current = displayText;
+          } else {
+            setCurrentTranscript("");
+            currentTranscriptRef.current = "";
+          }
+          // Bridge to VAD: real speech detected — mark speechDetected so the
+          // "Are you there?" no-response timer doesn't fire mid-answer.
+          if (meaningfulLiveText && !speechDetectedRef.current) {
+            speechDetectedRef.current = true;
+            const nowMs = Date.now();
+            speechDetectedAtRef.current = nowMs;
+            lastMeaningfulAudioAtRef.current = nowMs;
+            speechPeakLevelRef.current = Math.max(speechPeakLevelRef.current, QUIET_SPEECH_ACTIVITY_LEVEL);
+            questionTimerAwaitingSpeechRef.current = false;
+            if (!speechStartSentRef.current) {
+              speechStartSentRef.current = true;
+              try { wsRef.current?.send(JSON.stringify({ type: 'speech_started' })); } catch {}
+            }
+          }
+        }
+        break;
+      }
+      case "transcript":
+        console.log('[INTERVIEW-DEBUG] transcript received from Whisper', {
+          is_final: data.is_final,
+          text_length: data.text?.length ?? 0,
+          text_preview: (data.text ?? '').slice(0, 80),
+          is_enhanced: data.is_enhanced,
+        });
+        console.log(`[WS ${timestamp}] Transcript: is_final=${data.is_final}, text_length=${data.text?.length}, is_enhanced=${data.is_enhanced}`);
+        if (data.is_final) {
+          const transcriptText = (data.text ?? "").trim();
+          // Validate: reject empty text, noise artifacts, and Whisper hallucinations.
+          if (transcriptText && isTranscriptMeaningful(transcriptText)) {
+            // Clear live bubble only now — it atomically transitions to a chat message.
+            // Never clear before this point: keeps transcript visible during processing gap.
+            setCurrentTranscript("");
+            currentTranscriptRef.current = "";
+            liveTranscriptDisplayRef.current = "";
+            setIsCandidateTranscriptProcessing(false);
+            // The candidate actually spoke this turn (a real transcript landed),
+            // so drop any "Let's move on…" skip chip we optimistically posted on
+            // a Next click — the transcript IS the record; the chip on top of it
+            // would be redundant/confusing.
+            if (skipChipIdRef.current) {
+              const _chipId = skipChipIdRef.current;
+              skipChipIdRef.current = null;
+              setMessages(prev => prev.filter(m => m.id !== _chipId));
+            }
+            // End-while-answering: the candidate clicked End mid-answer; we held
+            // the close until their answer was transcribed. It's committed now —
+            // send end_interview so Bina's farewell starts AFTER their answer
+            // bubble is on screen (not before).
+            if (pendingEndAfterTranscriptRef.current) {
+              pendingEndAfterTranscriptRef.current = false;
+              setStatus("Ending interview…");
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+              }
+            }
+            // The decoupled/background flow tags late transcripts with the
+            // question they answered. `qn` is that number (or null for the
+            // synchronous flow, where the answer is always the most recent one).
+            const qn: number | null =
+              data.for_previous_question && typeof data.question_number === "number"
+                ? data.question_number
+                : null;
+            if (data.is_enhanced) {
+              // SHOW-CORRECTED-IN-CHAT (2026-06-10): replace the raw answer
+              // bubble with the context-aware enhanced transcript — the SAME
+              // text used for scoring + the Question Analysis report. (Supersedes
+              // the earlier RAW-IN-CHAT policy.) The enhancer's guards
+              // (length/overlap rejection in transcript_enhancer.py) + the
+              // deterministic pre-pass keep substitutions in check; if it ever
+              // shows a wrong word, the raw is still in the backend logs.
+              // Upgrade the existing bubble IN PLACE — never add a duplicate.
+              setMessages(prev => {
+                const updated = [...prev];
+                for (let i = updated.length - 1; i >= 0; i--) {
+                  if (
+                    updated[i].role === "user" &&
+                    !updated[i].isActionRequest &&
+                    (qn == null || updated[i].questionNumber === qn)
+                  ) {
+                    if (updated[i].content !== transcriptText) {
+                      updated[i] = { ...updated[i], content: transcriptText };
+                    }
+                    return updated;
+                  }
+                }
+                // No raw bubble yet (enhanced arrived first) — add it.
+                updated.push({
+                  id: crypto.randomUUID(),
+                  role: "user",
+                  content: transcriptText,
+                  timestamp: nowIST(),
+                  questionNumber: qn ?? undefined,
+                });
+                return updated;
+              });
+            } else {
+              // Raw Whisper transcript — add as new user message, stamping the
+              // frozen timer value captured when the candidate stopped speaking.
+              const frozenTime = frozenResponseTimeRef.current;
+              frozenResponseTimeRef.current = null; // consume — don't reuse for next message
+              const _userMsg: Message = {
+                id: crypto.randomUUID(),
+                role: "user",
+                content: transcriptText,
+                responseTimeSeconds: frozenTime ?? undefined,
+                timestamp: nowIST(),
+                questionNumber: qn ?? undefined,
+              };
+              // targetQn is the question this Whisper text belongs to: qn for
+              // the decoupled flow, else an older in-flight provisional answer's
+              // question number.
+              const provQn = provisionalAnswerQnRef.current;
+              const targetQn = qn !== null ? qn : provQn;
+              setMessages(prev => {
+                const updated = [...prev];
+                // ── CLARIFICATION: always a DISTINCT bubble ───────────────
+                // During a clarification, this transcript event is the SOLE add.
+                // Append each clarify utterance as its own bubble under the CURRENT
+                // question — never upgrade/collapse onto a prior same-question
+                // bubble. That keeps BOTH the 1st and 2nd clarify visible even
+                // when the candidate repeats the IDENTICAL phrase ("Please
+                // clarify the question." twice). isClarification is only true
+                // from Bina's repeat onward, so the 1st clarify still flows
+                // through the normal provisional→upgrade path below.
+                if (isClarificationRef.current) {
+                  updated.push({
+                    ..._userMsg,
+                    questionNumber: questionNumberRef.current ?? _userMsg.questionNumber,
+                  });
+                  return updated;
+                }
+                // ── DEDUP GUARD (2026-05-26) ──────────────────────────────
+                // A long-answer pipeline hang/timeout (run_pipeline HARD
+                // TIMEOUT at 180s, or leftover audio bleeding into the next
+                // turn's ASR) can re-fire the SAME transcript against the NEXT
+                // slot, so a Q1 answer reappears under Q2 (session e2509090).
+                // Drop a final transcript whose normalized text already exists
+                // under a DIFFERENT question. Scoped to >= 8 words so a
+                // candidate legitimately repeating a SHORT answer ("I don't
+                // know", "yes") still renders under each question. The
+                // same-question bubble is exempt (questionNumber === targetQn)
+                // so the provisional→final upgrade in step 1 still works.
+                const _normalize = (t: string) => t.trim().toLowerCase().replace(/\s+/g, ' ');
+                const _normNew = _normalize(transcriptText);
+                if (_normNew.split(' ').filter(Boolean).length >= 8) {
+                  const _dupElsewhere = updated.some(m =>
+                    m.role === "user" &&
+                    (targetQn == null || m.questionNumber !== targetQn) &&
+                    _normalize(m.content) === _normNew
+                  );
+                  if (_dupElsewhere) {
+                    console.warn('[Transcript] Dropping duplicate answer already shown for another question (long-answer re-fire guard)');
+                    return prev;
+                  }
+                }
+                // 1. Upgrade the existing answer bubble for this question (the
+                //    provisional live transcript) in place — no duplicate.
+                if (targetQn != null) {
+                  for (let i = updated.length - 1; i >= 0; i--) {
+                    if (updated[i].role === "user" && !updated[i].isActionRequest && updated[i].questionNumber === targetQn) {
+                      updated[i] = { ...updated[i], content: transcriptText };
+                      return updated;
+                    }
+                  }
+                }
+                // 2. Decoupled flow with no provisional bubble: insert right
+                //    after the matching question bubble (fallback: before the
+                //    most recent assistant message) so ordering stays sane.
+                if (data.for_previous_question) {
+                  let insertAt = -1;
+                  if (qn !== null) {
+                    for (let i = 0; i < updated.length; i++) {
+                      if (updated[i].role === "assistant" && updated[i].questionNumber === qn) {
+                        insertAt = i + 1;
+                        while (
+                          insertAt < updated.length &&
+                          updated[insertAt].role === "user" &&
+                          !updated[insertAt].isActionRequest &&
+                          updated[insertAt].questionNumber === qn
+                        ) {
+                          insertAt++;
+                        }
+                        break;
+                      }
+                    }
+                  }
+                  if (insertAt === -1) {
+                    insertAt = updated.length;
+                    for (let i = updated.length - 1; i >= 0; i--) {
+                      if (updated[i].role === "assistant") { insertAt = i; break; }
+                    }
+                  }
+                  updated.splice(insertAt, 0, _userMsg);
+                  return updated;
+                }
+                // 3. Synchronous flow — append at the bottom.
+                updated.push(_userMsg);
+                return updated;
+              });
+              // Provisional has been reconciled with the real transcript.
+              if (provQn != null) provisionalAnswerQnRef.current = null;
+            }
+            currentAiTextRef.current = "";
+            setCurrentAiText("");
+          }
+          // If transcript is empty or fails validation, do not show it. The backend
+          // will send silent_discard for rejected/off-language speech.
+        } else {
+          // Partial transcript from backend (VAD-enhanced) — intentionally ignored.
+          // The live transcript bubble is driven solely by the Web Speech API
+          // (startWebSpeechRecognition) which shows the raw candidate speech.
+          // Applying VAD corrections here caused words to jump/correct mid-sentence.
+        }
+        break;
+      case "long_answer_batch_processed":
+        if (data.action === "continue" || data.action === "conclude") {
+          break;
+        }
+        if (liveBatchStopRequestedRef.current) {
+          break;
+        }
+        liveBatchStopRequestedRef.current = true;
+        if (data.action === "intervene") {
+          setStatus("Intervening...");
+        }
+        setTimeout(() => {
+          if (isRecordingRef.current && !isProcessingRef.current) {
+            stopRecordingSilentRef.current();
+          }
+        }, 150);
+        break;
+      case "question_meta":
+        // Backend signals that the upcoming question is a follow-up (bundles
+        // a previously-volunteered skill, or fires as an in-slot validation
+        // turn). The flag is tracked so it gets stamped onto the saved
+        // Message (for transcript/eval round-trip), but the LIVE CHAT does
+        // NOT render any chip or inline note — the Follow-up indicator and
+        // "Reframed as a follow-up…" note are post-interview-only and live
+        // on the Question Analysis (EvaluationDashboardV2) page.
+        console.log(`[INTERVIEW-DEBUG][WS ${timestamp}] question_meta: is_followup=${data.is_followup}, skills=${JSON.stringify(data.follow_skills)}, answer_type=${data.answer_type}, question_number=${data.question_number}, hr_question_id=${data.hr_question_id}, live_questionNumber=${questionNumberRef.current}`);
+        if (data.is_followup) {
+          isCurrentFollowupRef.current = true;
+        } else {
+          isCurrentFollowupRef.current = false;
+        }
+        // AII-20: HR Tagged Question Types — backend sends this when the
+        // upcoming HR question is Text-based or Yes/No/Other and has been
+        // forced verbatim. Tag with question_number so the render guard
+        // self-invalidates once the interview moves to a different
+        // question, even on a later turn that sends no question_meta at
+        // all (ordinary free-form questions — completely unaffected).
+        if (data.answer_type === 'yes_no' || data.answer_type === 'text') {
+          const _hrQid = data.hr_question_id || `q${data.question_number}`;
+          // See armedHrQuestionIdRef's declaration: ignore a re-announcement
+          // of the same still-unanswered question instead of re-arming it.
+          if (armedHrQuestionIdRef.current !== _hrQid) {
+            armedHrQuestionIdRef.current = _hrQid;
+            setStructuredHrPrompt({
+              questionNumber: data.question_number,
+              answerType: data.answer_type,
+              hrQuestionId: data.hr_question_id || '',
+            });
+            setHrExplainMore(false);
+            hrSubmitInFlightRef.current = false;
+            // Only yes_no blocks voice (until "Need to Explain More" is
+            // clicked) — text-type behaves like an ordinary question, voice
+            // is always the answer path for it.
+            if (data.answer_type === 'yes_no') {
+              hrVoiceBlockedForQidRef.current = _hrQid;
+              hrVoiceBlockedQuestionNumberRef.current = data.question_number;
+            } else {
+              hrVoiceBlockedForQidRef.current = '';
+              hrVoiceBlockedQuestionNumberRef.current = null;
+            }
+          } else {
+            console.log(`[INTERVIEW-DEBUG][WS ${timestamp}] question_meta: duplicate re-announcement of hr_question_id=${_hrQid} ignored (armedHrQuestionIdRef already set to this id)`);
+          }
+        } else {
+          // Ordinary free-form question (no HR tag at all) — make sure no
+          // stale block from a prior yes_no question lingers onto it.
+          hrVoiceBlockedForQidRef.current = '';
+          hrVoiceBlockedQuestionNumberRef.current = null;
+        }
+        break;
+      case "llm_token":
+        tokenBufferRef.current += data.token;
+        // Feed updated text for word-level phoneme lip sync
+        talkingHeadRef.current?.setText(tokenBufferRef.current);
+        // Mark Bina as speaking the moment she starts *generating* text.
+        // Without this, there's a 1-3s gap between the last LLM token and
+        // `speaking_started` (TTS synthesis latency) during which
+        // isAiSpeaking flips false → the "Your turn — speak now" banner
+        // flashes before Bina's voice actually begins. Holding this true
+        // from first-token closes that window.
+        if (!isAiSpeakingRef.current) {
+          isAiSpeakingRef.current = true;
+          setIsAiSpeaking(true);
+          audioEndReceivedRef.current = false;
+          // Reset the early-end recovery flag for this new turn (the previous
+          // turn's mid-sentence-cutoff recovery shouldn't carry over).
+          talkingHeadEndedEarlyRef.current = false;
+          candidatePlaybackEndedRef.current = false;
+          setCandidatePlaybackEnded(false);
+          // Reset turn-scoped audio anchors so Fix 2's reveal gate works for
+          // THIS turn. Without this, `firstPcmAtMsRef` stays set from the
+          // previous question's audio — Phase A sees it as non-null, runs
+          // immediately with CPS pacing, and Q2+ text races ahead of Bina's
+          // voice while Q1 correctly waits.
+          firstPcmAtMsRef.current = null;
+          lastPcmAtMsRef.current = null;
+          currentTurnAudioMsRef.current = 0;
+          firstChunkStartCtxSecRef.current = null;
+          turnAudioStartedRef.current = false;
+        }
+        if (!revealTimerRef.current) {
+          startRevealingTokens();
+        }
+        if (!isPlayingRef.current) {
+          setStatus("Bina is thinking...");
+        }
+        break;
+      case "tts_failed":
+        // TTS produced no audio even after a backend retry. Per the sync
+        // requirement, do NOT leave silent question text on screen — SUPPRESS it:
+        // clear the live token buffer so nothing is revealed and saveAiMessage()
+        // on finalize commits no bubble. The audio_end that follows still opens
+        // the mic; the backend's silence ladder handles the (rare) blank turn.
+        // The opening instruction is not a question: if its voice failed, still
+        // SHOW it (the candidate must read it before the first question) rather
+        // than suppressing it.
+        if (roleIntroActiveRef.current) {
+          console.warn(`[WS ${timestamp}] tts_failed on the opening instruction — showing its text`);
+          commitPendingRoleIntro(false);
+          break;
+        }
+        // Same for a question: the mic still opens for an answer, so hiding the
+        // text left the candidate answering a question they never saw or heard
+        // (staging 2026-11-10 Q14, OpenAI credit exhausted). Show it in full now
+        // — there is no voice to pace the reveal — and finalize commits it.
+        console.warn(`[WS ${timestamp}] tts_failed — no voice; showing the text in full`);
+        if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
+        {
+          const fullText = tokenBufferRef.current;
+          currentAiTextRef.current = fullText;
+          revealedCharsRef.current = fullText.length;
+          setCurrentAiText(fullText);
+        }
+        break;
+      case "llm_correction":
+        // Backend replaced the streamed response (validation retry/fallback OR a
+        // post-processed skip-path question). Swap the token buffer so the
+        // displayed text matches what Bina actually says.
+        console.log(`[WS ${timestamp}] LLM correction received: text_length=${data.text?.length}`);
+        if (data.text) {
+          tokenBufferRef.current = data.text;
+          revealedCharsRef.current = 0;
+          talkingHeadRef.current?.setText(data.text);
+          stopRevealingTokens();
+          startRevealingTokens();
+        }
+        break;
+      case "speaking_started":
+        console.log(`[WS ${timestamp}] Speaking started`);
+        dropPcmUntilNextTurnRef.current = false;
+        // A NEW turn supersedes anything a disconnect left pending — including
+        // a held answer that the backend has since moved past. Clearing this
+        // stops a stale flag from preserving speechDetected into an unrelated
+        // later question.
+        resumingHeldAnswerRef.current = false;
+        // A NEW turn supersedes anything a disconnect froze. Release the
+        // suspended AudioContext now — leaving it suspended would silence this
+        // turn and every one after it. Harmless no-op when nothing is frozen.
+        if (binaFrozenRef.current) {
+          console.log('[Pause] New turn started while a frozen turn was pending — releasing the freeze');
+          resumeBinaRef.current();
+        }
+        // Bina is speaking again — abort any in-progress pre-turn "get ready"
+        // countdown and any pending mic-open timer (they belong to a turn that
+        // is no longer opening) + the mid-speech silence countdown.
+        cancelPreTurnCountdownRef.current();
+        if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
+        setMidSilenceCountdown_(null);
+        // Bina is speaking (question / repeat / prompt) — PAUSE the per-question
+        // answer clock. It resumes when the candidate's turn reopens (mic start).
+        // For a brand-new question the pause is harmless — the incoming
+        // question_timer_started resets the clock fresh.
+        pauseQuestionTimer();
+        // Any pending candidate-processing bubble belongs to the PREVIOUS turn.
+        // Once Bina takes over, that turn is resolved (accepted, discarded, or
+        // skipped) and the stale loader must not remain on screen.
+        setIsCandidateTranscriptProcessing(false);
+        setCurrentTranscript("");
+        currentTranscriptRef.current = "";
+        provisionalAnswerQnRef.current = null;
+        // Stop any stale recording or pending start-recording timer — Bina is speaking.
+        stopRecordingSilentRef.current();
+        if (startRecordingTimerRef.current) {
+          clearTimeout(startRecordingTimerRef.current);
+          startRecordingTimerRef.current = null;
+        }
+        // Belt-and-suspenders: hard-disable the mic audio track while Bina
+        // speaks so even if the stream is still held somewhere, nothing can
+        // be captured or streamed upstream. Re-enabled when her audio ends
+        // (handleAllAudioFinished / audio_end path) or the next mic open.
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
+        }
+        // Issue 3 fix (belt-and-suspenders): explicitly reset VAD state here
+        // even if stopRecordingSilent already ran. If the mic had already been
+        // closed before speaking_started arrived, stopRecordingSilent no-ops
+        // (see the isRecording guard) and leaves speechDetectedRef stale —
+        // then the next mic open would start with speechDetectedRef=true and
+        // immediately stream PCM (including Bina's echo) to the backend.
+        speechDetectedRef.current = false;
+        speechFrameCountRef.current = 0;
+        speechStartSentRef.current = false;
+        silenceStartRef.current = null;
+        lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
+        speechPeakLevelRef.current = 0;
+        ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
+        // ALSO hard-stop the browser Web Speech API recognition AND clear any
+        // stale live-transcript text. If we leave it running while Bina
+        // speaks, it eagerly transcribes her TTS leaking back through the
+        // speakers and renders it in the candidate's "speaking…" bubble
+        // (the "what strategies do you use to" bug). Recognition will be
+        // restarted by the recording-start path when the candidate's turn
+        // actually opens.
+        stopWebSpeechRecognition();
+        webSpeechFinalizedRef.current = "";
+        setCurrentTranscript("");
+        isAiSpeakingRef.current = true;
+        setIsAiSpeaking(true);
+        avatarState.onAiStartSpeaking();
+        audioEndReceivedRef.current = false;
+        // Fix (question-skip bug): cancel any STALE playback timers left over
+        // from the previous turn. `audio_end` arms playbackCompleteSignalRef +
+        // audioEndFallbackRef on wall-clock delays; if the prior turn ended via
+        // a path that didn't clear them, a stale timer could fire DURING this
+        // new generation and send a premature `playback_complete`, making the
+        // backend think Bina finished → it advances/skips this question.
+        if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
+        if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+        // Bug C fix: new Bina turn starting — retract the "candidate can
+        // speak" signal immediately so the banner can't linger from Q(n-1).
+        candidatePlaybackEndedRef.current = false;
+        setCandidatePlaybackEnded(false);
+        // CRITICAL: reset ALL playback-tracking state so the new Bina turn
+        // starts from a clean slate. Previously `isPlayingRef` was NOT reset
+        // here; if it was stale `true` from a previous turn (TalkingHead
+        // onAudioEnd never fired correctly), `queueAudio` would skip setting
+        // `firstPcmAtMsRef`, the `finalizePlayback` deferral math would use
+        // the stale anchor, compute `remainingPlaybackMs = 0`, and fire
+        // immediately — surfacing "Your turn" while Bina was still speaking
+        // the "Are you there?" prompt.
+        isPlayingRef.current = false;
+        pendingBuffersRef.current = 0;
+        nextPlayTimeRef.current = 0;
+        // New turn announced — not audible until TalkingHead says so.
+        resetBinaAudible();
+        // Only reset the no-response retry counter for genuine NEW turns
+        // (Bina asking a new question, ack, follow-up). During silence-nudge
+        // flows (isSilencePromptRef = true) the backend is driving the
+        // "Are you there?" → auto-skip pipeline. Resetting the counter here
+        // would let the CLIENT's handleNoResponse fire again with retry=0
+        // after the nudge TTS finishes, producing a duplicate "Are you there?"
+        // that stacks up and loops indefinitely.
+        if (!isSilencePromptRef.current) {
+          noResponseRetryRef.current = 0;
+        }
+        currentTurnAudioMsRef.current = 0; // reset audio duration counter for this turn
+        firstPcmAtMsRef.current = null;    // reset first-chunk anchor for this turn
+        lastPcmAtMsRef.current = null;     // reset last-chunk anchor for this turn
+        firstChunkStartCtxSecRef.current = null; // reset audio-clock anchor for this turn
+        turnAudioStartedRef.current = false;     // caption waits for THIS utterance's audio
+        // Reset the playback tracker's per-turn counters. We deliberately
+        // DO NOT reset `playbackScheduledEndAtRef` — that's the AudioContext
+        // clock position. Each new chunk is scheduled at
+        // `max(ctx.currentTime, playbackScheduledEndAtRef)`, so starting
+        // from 0 on a new turn just means the first chunk plays at
+        // ctx.currentTime. The `pending` and `awaiting` queues DO reset.
+        playbackTrackerPendingRef.current = 0;
+        awaitingAudioEndCallbacksRef.current = [];
+        trackedThisTurnRef.current = false;
+        const _pbCtx = playbackTrackerCtxRef.current;
+        if (_pbCtx && _pbCtx.state === 'running') {
+          playbackScheduledEndAtRef.current = _pbCtx.currentTime;
+        } else {
+          playbackScheduledEndAtRef.current = 0;
+        }
+        // Clear silence banner + countdown when Bina starts speaking
+        setShowSilenceBanner(false);
+        if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+        // Clear the "Your turn — speak now" banner IMMEDIATELY so it never lingers
+        // visibly while Bina speaks (follow-ups, next questions, clarifications).
+        setShowNowSpeakBanner(false);
+        nowSpeakShownForSessionRef.current = false; // allow a fresh banner after she finishes
+        setStatus("Bina is speaking...");
+        startRevealingTokens();
+        // Clear stale expired timer when Bina starts speaking the NEXT question
+        // so "TIME UP" doesn't linger while she's asking Q2.
+        // Guard: skip this during silence-nudge turns (isSilencePromptRef).
+        // If the question timer expired while the candidate was silent and the
+        // backend fires a nudge TTS ("Are you there?"), its speaking_started
+        // would clear the timer to null — but no question_timer_started follows
+        // because we're still on the same question. The timer then disappears
+        // entirely. Only clear when a genuine new turn starts.
+        if (questionTimerExpired && !isSilencePromptRef.current) {
+          setQuestionTimerSeconds(null);
+          setQuestionTimerExpired(false);
+          questionTimerExpiredRef.current = false;
+          if (questionTimerIntervalRef.current) {
+            clearInterval(questionTimerIntervalRef.current);
+            questionTimerIntervalRef.current = null;
+          }
+        }
+        // Feed accumulated text for phoneme lip sync before starting audio.
+        // The role intro now streams like any other turn (tokenBufferRef holds
+        // its text), so this normally uses tokenBufferRef. The roleIntroTextRef
+        // fallback is kept as a belt-and-suspenders in case speaking_started
+        // races ahead of the role_intro message (else TalkingHead would get ""
+        // and Bina's mouth would stay still — the "audio plays, Bina silent" bug).
+        talkingHeadRef.current?.setText(
+          tokenBufferRef.current
+            || (roleIntroActiveRef.current ? roleIntroTextRef.current : "")
+            // Repeat Question re-speak: no text arrives with it (see repeatTextRef).
+            || (repeatInFlightRef.current ? repeatTextRef.current : "")
+        );
+        // A new utterance (new question, Repeat, nudge, or a backend TTS-stall
+        // restart — `data.restart`) owns playback from here. The previous
+        // utterance's "TalkingHead ended early" flag must NOT carry over: left
+        // set, the 2nd PCM chunk of this utterance took the re-arm path below
+        // and restarted the worklet mid-word (Repeat stutter, aiu1 13:02:53).
+        talkingHeadEndedEarlyRef.current = false;
+        if (data.restart) {
+          console.warn(`[WS ${timestamp}] speaking_started(restart, reason=${data.reason}) — backend TTS stalled; replaying this utterance from a fresh stream`);
+        }
+        // Defer streamStart until the first PCM chunk arrives (see pendingStreamStartRef).
+        // Calling streamStart here (empty buffer) can cause TalkingHead to fire onAudioEnd
+        // immediately on Q1 when AudioContext is cold, clearing isAiSpeaking mid-speech.
+        pendingStreamStartRef.current = () => {
+          console.log("[TalkingHead] playback-ended callback — audio_end received?", audioEndReceivedRef.current);
+          // GUARD: TalkingHead's onAudioEnd callback can fire too early —
+          // e.g. on a brief silence between PCM chunks, or when its internal
+          // queue drains before the backend has actually finished streaming
+          // TTS audio. For Q2+ this was surfacing the "Your turn" banner
+          // and starting the per-question timer while Bina was still
+          // audibly speaking. Q1 didn't hit this because the greeting flow
+          // sends a dedicated `greeting` event that pre-arms state
+          // differently; every subsequent question has to rely purely on
+          // TalkingHead's end signal.
+          //
+          // Wait for the authoritative `audio_end` from the backend before
+          // running the end-of-playback work. If TalkingHead fired too
+          // early, ignore this invocation — the `audio_end` handler sets
+          // an `audioEndFallbackRef` timeout for `max(4000, audioMs+2500)`
+          // that will do the same work (open mic, saveAiMessage,
+          // sendPlaybackComplete) at the right wall-clock moment. That
+          // timeout is our safety net; premature TalkingHead signals must
+          // not pre-empt it.
+          if (!audioEndReceivedRef.current) {
+            console.warn("[TalkingHead] onAudioEnd fired BEFORE backend audio_end — ignoring; waiting for audioEndFallback");
+            // Arm the re-start flag so the next PCM chunk wakes the worklet
+            // back up. Without this, mid-sentence buffer drains cause the
+            // remaining audio to stream into a stopped worklet and be lost
+            // (Bina's voice cuts off mid-sentence).
+            talkingHeadEndedEarlyRef.current = true;
+            return;
+          }
+          // Runs once per turn (a later re-armed worklet must not finalize again).
+          playbackEndedCbRef.current = null;
+          // Clear safety-net fallback — normal path fired, no fallback needed
+          if (audioEndFallbackRef.current) {
+            clearTimeout(audioEndFallbackRef.current);
+            audioEndFallbackRef.current = null;
+          }
+          // The AUTHORITATIVE end-of-playback signal: `whenTrackedPlaybackEnds`
+          // queues our callback on the playback-tracker AudioContext's
+          // `onended` handler for the LAST scheduled silent mirror buffer.
+          // That fires at the exact wall-clock moment the real audio has
+          // finished playing through TalkingHead's worklet — no guessing,
+          // no margins, no wall-clock heuristics.
+          const finalizePlayback = () => {
+            isPlayingRef.current = false;
+            isAiSpeakingRef.current = false;
+            setIsAiSpeaking(false);
+            avatarState.onAiStopSpeaking();
+            candidatePlaybackEndedRef.current = true;
+            setCandidatePlaybackEnded(true);
+            // Flush any deferred "Interview Completed" modal that arrived
+            // from the backend before Bina's farewell finished playing.
+            if (pendingCompletionModalRef.current) {
+              pendingCompletionModalRef.current = false;
+              setShowCompletionModal(true);
+            }
+            // Fix 3: arm echo guard — VAD ignores speech input for
+            // PLAYBACK_ECHO_GUARD_MS after Bina's real end-of-playback so TTS
+            // tail / reverb can't register as candidate speech.
+            playbackEchoGuardUntilRef.current = Date.now() + PLAYBACK_ECHO_GUARD_MS;
+            saveAiMessage();
+            // Notify backend: audio finished playing — start silence clock from now.
+            // Sent twice via sendPlaybackComplete to survive a single dropped frame.
+            sendPlaybackComplete();
+            // Disconnect if interview is closing (Q15 done) or server sent interview_ended
+            if (shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
+              setStatus("Interview completed. Thank you!");
+              setTimeout(() => { disconnectRef.current(); }, 1500);
+              return;
+            }
+            // Role-intro warm-up: this message is NOT a question — do NOT open
+            // the mic. The 'tell me about yourself' question follows immediately
+            // (its own speaking_started/greeting arms the mic). Committing the
+            // bubble (saveAiMessage above) + state cleanup already happened; just
+            // skip the mic-open and clear the flag.
+            if (roleIntroActiveRef.current) {
+              roleIntroActiveRef.current = false;
+              setStatus("Bina is speaking...");
+              return;
+            }
+            // Point 4: clarification ends the moment Bina finishes speaking
+            setIsClarification(false);
+            isClarificationRef.current = false;
+            // Run the 5→1 "get ready" countdown ONLY for a real question turn
+            // (armed by question_timer_started). After a silence nudge ("Are you
+            // there?") there's no new timer, so we skip the countdown and reopen
+            // the mic immediately. Consume the arm flag either way.
+            const _runGetReady = getReadyArmedRef.current;
+            getReadyArmedRef.current = false;
+            if (!_runGetReady) console.log('[INTERVIEW-DEBUG] turn opens without pre-turn countdown (not armed)', { questionNumber: questionNumberRef.current });
+            const _openMic = () => {
+              setStatus("Your turn - speak now...");
+              if (wsRef.current?.readyState === WebSocket.OPEN
+                  && !isAiSpeakingRef.current
+                  && !isRecordingRef.current) {
+                startRecordingInternalRef.current();
+              }
+            };
+            setStatus(_runGetReady ? "Get ready…" : "Your turn - speak now...");
+            // 800ms echo-decay delay (lets Bina's TTS tail fade so Whisper doesn't
+            // transcribe it), THEN — for a real turn — the 5→1 "get ready"
+            // countdown (Change 1). ONLY when it reaches 0 do we open the mic +
+            // start the answer timer. Mic + per-question timer stay OFF during it.
+            if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
+            startRecordingTimerRef.current = setTimeout(() => {
+              startRecordingTimerRef.current = null;
+              if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+              if (isAiSpeakingRef.current || isRecordingRef.current) return; // turn changed
+              if (_runGetReady) {
+                runPreTurnCountdownRef.current(_openMic);
+              } else {
+                _openMic();
+              }
+            }, 800);
+          };
+          // Wait for the tracker's audio-clock-end-of-playback BEFORE running
+          // the end-of-turn work. If audio has already drained (tracker
+          // pending=0 and ctx.currentTime >= scheduledEnd), this fires
+          // synchronously. Otherwise it queues on the last chunk's `onended`.
+          // Safety timeout is AUDIO-DURATION-BASED (not the fixed 20s default):
+          // when the AudioContext tracker stalls (observed with some providers /
+          // suspended-ctx environments), the old 20s default left the mic /
+          // "Your turn" stuck ~20-30s after the question. Basing it on the
+          // received audio duration + tail fires finalizePlayback right after
+          // the audio should have ended, so the turn opens on time.
+          const _finalizeSafetyMs = Math.max(4000, currentTurnAudioMsRef.current + 2500);
+          whenTrackedPlaybackEnds(finalizePlayback, _finalizeSafetyMs);
+        };
+        playbackEndedCbRef.current = pendingStreamStartRef.current;
+        break;
+      case "silent_discard":
+        // If the candidate clicked End mid-answer but the answer was discarded
+        // (noise / non-English), there's no bubble to wait for — end now instead
+        // of stalling until the 12s safety net.
+        if (pendingEndAfterTranscriptRef.current) {
+          pendingEndAfterTranscriptRef.current = false;
+          setStatus("Ending interview…");
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+          }
+        }
+        // Backend silently discarded the transcript (noise, non-English,
+        // hallucination). Since the backend's ADVANCE-ON-DISCARD rule
+        // (message_handler, 2026-05-25) a discard ALWAYS moves straight on to
+        // the next question — so do NOT reopen the mic or resume this
+        // question's timer here. Doing so (the pre-rule behaviour) briefly
+        // reopened the PREVIOUS question's recording until Bina's next
+        // question arrived ~2 s later (staging 2026-10-14, Q12 → Q13).
+        // Just clear the processing state; the "getting ready" banner covers
+        // the gap until the next question streams in.
+        setIsProcessing(false);
+        isProcessingRef.current = false;
+        setIsCandidateTranscriptProcessing(false);
+        setCurrentTranscript("");
+        currentTranscriptRef.current = "";
+        provisionalAnswerQnRef.current = null;
+        setStatus("Moving to the next question…");
+        break;
+      case "transcript_discarded":
+        // Background timed-mode transcript was rejected after the backend had
+        // already advanced to the next question. Clear only the candidate-side
+        // validation UI; do not reopen the mic or alter timers here.
+        setIsCandidateTranscriptProcessing(false);
+        setCurrentTranscript("");
+        currentTranscriptRef.current = "";
+        provisionalAnswerQnRef.current = null;
+        frozenResponseTimeRef.current = null;
+        break;
+      case "speaking_ended":
+        // Backend detected stuck speaking state (>30s without audio_end) and reset it.
+        // Force-clear isAiSpeaking so the question timer and mic can resume.
+        console.log(`[WS ${timestamp}] speaking_ended — force-clearing stuck speaking state`);
+        if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+        talkingHeadRef.current?.streamStop();
+        isPlayingRef.current = false;
+        isAiSpeakingRef.current = false;
+        setIsAiSpeaking(false);
+        audioEndReceivedRef.current = true;
+        // Bug C fix: forced unstick — playback is definitively over.
+        candidatePlaybackEndedRef.current = true;
+        setCandidatePlaybackEnded(true);
+        avatarState.onAiStopSpeaking();
+        saveAiMessage();
+        if (!isRecordingRef.current && !isFaceBlockedRef.current && !isMutedRef.current) {
+          // A real question turn still gets its 3-2-1 here, same as finalizePlayback.
+          const _runGetReady = getReadyArmedRef.current;
+          getReadyArmedRef.current = false;
+          setStatus(_runGetReady ? "Get ready…" : "Your turn - speak now...");
+          setTimeout(() => {
+            if (wsRef.current?.readyState !== WebSocket.OPEN || isAiSpeakingRef.current) return;
+            const _openMic = () => {
+              setStatus("Your turn - speak now...");
+              if (wsRef.current?.readyState === WebSocket.OPEN
+                  && !isAiSpeakingRef.current
+                  && !isRecordingRef.current) {
+                startRecordingInternalRef.current();
+              }
+            };
+            if (_runGetReady) runPreTurnCountdownRef.current(_openMic);
+            else startRecordingInternalRef.current();
+          }, 800);
+        }
+        break;
+      case "interrupted":
+        // Backend cancelled current generation (e.g. skip_question during answer).
+        // Stop any playing audio immediately and clear ALL state so the next
+        // pipeline (skip question) starts from a clean slate.
+        cancelPreTurnCountdownRef.current();
+        if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
+        setMidSilenceCountdown_(null);
+        talkingHeadRef.current?.streamStop();
+        isPlayingRef.current = false;
+        isAiSpeakingRef.current = false;
+        setIsAiSpeaking(false);
+        setIsProcessing(false);
+        isProcessingRef.current = false;
+        setIsCandidateTranscriptProcessing(false);
+        setCurrentTranscript("");
+        currentTranscriptRef.current = "";
+        provisionalAnswerQnRef.current = null;
+        avatarState.onAiStopSpeaking();
+        pendingBuffersRef.current = 0;
+        audioEndReceivedRef.current = false;
+        if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+        // Fix #1: cancel the dedicated playback_complete signal — this turn's
+        // generation was interrupted, so its stale wall-clock signal must not
+        // fire during the next turn.
+        if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
+        if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
+        stopRecordingSilentRef.current();
+        // Pause the per-question timer — do NOT null the displayed value.
+        // Backend sends `interrupted` for skip-triggered events (verbal IDK,
+        // silence auto-skip, Next Q). Those are always followed by a fresh
+        // `question_timer_started` that resets the value correctly. Nulling
+        // here made the timer vanish mid-answer when the candidate said
+        // "I don't know" (backend fires interrupted → frontend nulled →
+        // user observed "timer gone" even though nothing was actually wrong).
+        // Freezing the display keeps it visible across the brief gap until
+        // the next question's timer arrives and resets it.
+        if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
+        questionTimerPendingRef.current = null;
+        setQuestionTimerExpired(false);
+        questionTimerExpiredRef.current = false;
+        break;
+      case "audio_end": {
+        console.log(`[WS ${timestamp}] Audio end received, audio_duration_ms=${currentTurnAudioMsRef.current}`);
+        // Backend finished SENDING audio — but TalkingHead may still be PLAYING it.
+        // Do NOT call streamStop() here — that kills playback immediately.
+        // Signal worklet that no more chunks are coming — it will fire playback-ended
+        // after playing the remaining buffer (instead of waiting for 300ms silence timeout).
+        // If no PCM chunks arrived (TTS error), clear the deferred streamStart so it
+        // doesn't leak into the next turn.
+        pendingStreamStartRef.current = null;
+        setIsProcessing(false);
+        audioEndReceivedRef.current = true;
+        // Don't revealAllTokens() here — let text continue revealing gradually
+        // at speaking pace. It will catch up naturally since all tokens are buffered.
+        talkingHeadRef.current?.notifyEnd();
+        // Safety-net: if TalkingHead's onAudioEnd callback doesn't fire, start the
+        // mic manually so the interview doesn't hang.
+        // Timeout = actual audio duration + 2500 ms buffer (minimum 4 s).
+        // Using a fixed 3 s caused the fallback to fire MID-SPEECH for any Bina
+        // response longer than ~2 s, opening the mic while she was still talking.
+        const _fallbackDelayMs = Math.max(4000, currentTurnAudioMsRef.current + 2500);
+
+        // ── Fix #1: avatar-decoupled playback_complete delivery ────────────
+        // Fire ONLY the backend signal on a clean wall-clock timer based on the
+        // known audio duration. No avatar/tracker dependency, no isRecording
+        // guard, no bundled side-effects — so the backend's silence clock
+        // always starts on time even when TalkingHead never loads. Conservative
+        // delay (audioMs + 1200ms) so it never fires BEFORE the audio actually
+        // finishes (which would start the silence clock early and shorten the
+        // candidate's answer window). Idempotent on the backend.
+        // A FROZEN turn (device disconnected mid-question) must not arm either
+        // wall-clock timer below: both are sized to the audio duration and would
+        // fire during the outage, force-ending a turn whose audio has not played
+        // a single sample of its remainder yet. The context-clocked primary path
+        // — whenTrackedPlaybackEnds → finalizePlayback — is unaffected by the
+        // suspension and fires correctly after the thaw, sending playback_complete
+        // and opening the mic the normal way. audio_end itself is still recorded
+        // above, and notifyEnd() correctly tells the suspended worklet that no
+        // more chunks are coming.
+        if (binaFrozenRef.current) {
+          console.log('[Pause] audio_end arrived during a frozen turn — tail timers deferred to the thaw');
+          break;
+        }
+
+        if (playbackCompleteSignalRef.current) clearTimeout(playbackCompleteSignalRef.current);
+        const _signalDelayMs = Math.max(2000, currentTurnAudioMsRef.current + 1200);
+        playbackCompleteSignalRef.current = setTimeout(() => {
+          playbackCompleteSignalRef.current = null;
+          // The opening instruction's playback_complete is what releases the
+          // FIRST question. An estimate-based timer must not send it — if Bina
+          // is still speaking the instruction, the question would start on top
+          // of it. Its real end (finalizePlayback) or the audioEndFallback
+          // safety net commits the instruction and then sends it.
+          if (roleIntroActiveRef.current) return;
+          sendPlaybackComplete();
+        }, _signalDelayMs);
+
+        if (audioEndFallbackRef.current) clearTimeout(audioEndFallbackRef.current);
+        audioEndFallbackRef.current = setTimeout(() => {
+          audioEndFallbackRef.current = null;
+          // Force-reset even if isAiSpeaking is still true — TalkingHead's onAudioEnd
+          // may never fire (AudioContext suspended, GPU crash, etc.). Without this,
+          // "Speaking..." stays stuck and all timers freeze.
+          if (!isRecordingRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
+            isPlayingRef.current = false;
+            isAiSpeakingRef.current = false;
+            setIsAiSpeaking(false);
+            avatarState.onAiStopSpeaking();
+            // Bug C fix: safety-net took over; treat as end-of-playback so
+            // the "Your turn" banner can still surface.
+            candidatePlaybackEndedRef.current = true;
+            setCandidatePlaybackEnded(true);
+            // Fix 3: echo guard on the safety-net path too.
+            playbackEchoGuardUntilRef.current = Date.now() + PLAYBACK_ECHO_GUARD_MS;
+            saveAiMessage();
+            // Safety-net: also send playback_complete so backend isn't blocked
+            // (twice, via sendPlaybackComplete, for drop resilience).
+            sendPlaybackComplete();
+            if (shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
+              setStatus("Interview completed. Thank you!");
+              setTimeout(() => { disconnectRef.current(); }, 1500);
+              return;
+            }
+            console.warn("[Safety-net] TalkingHead onAudioEnd never fired — starting mic manually");
+            // Role-intro warm-up: mirror the primary finalizePlayback path above —
+            // this message is NOT a question, so do NOT open the mic (Q1's own
+            // turn arms that). Without this guard, a heavily-loaded browser (e.g.
+            // two interview tabs open at once, observed FPS dropping to ~1.7fps)
+            // can starve TalkingHead's onAudioEnd long enough for THIS safety net
+            // to fire during the role intro. saveAiMessage() above still commits
+            // the greeting bubble either way, but falling through here opened the
+            // mic a full turn early and left isRecordingRef stuck true, which
+            // then silently blocked Q1's own startRecordingInternal call
+            // ("blocked by state") right after.
+            if (roleIntroActiveRef.current) {
+              roleIntroActiveRef.current = false;
+              setStatus("Bina is speaking...");
+              return;
+            }
+            // Point 4: clarification ends when Bina stops speaking
+            setIsClarification(false);
+            isClarificationRef.current = false;
+            // A real question turn still gets its 3-2-1 (armed by
+            // question_timer_started), same as the primary path.
+            playbackEndedCbRef.current = null;
+            const _runGetReady = getReadyArmedRef.current;
+            getReadyArmedRef.current = false;
+            if (!_runGetReady) console.log('[INTERVIEW-DEBUG] turn opens without pre-turn countdown (not armed)', { questionNumber: questionNumberRef.current });
+            setStatus(_runGetReady ? "Get ready…" : "Your turn - speak now...");
+            if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
+            startRecordingTimerRef.current = setTimeout(() => {
+              startRecordingTimerRef.current = null;
+              const _openMic = () => {
+                setStatus("Your turn - speak now...");
+                if (wsRef.current?.readyState === WebSocket.OPEN
+                    && !isAiSpeakingRef.current
+                    && !isRecordingRef.current) {
+                  startRecordingInternalRef.current();
+                }
+              };
+              if (_runGetReady) runPreTurnCountdownRef.current(_openMic);
+              else startRecordingInternalRef.current();
+            }, 800);
+          }
+        }, _fallbackDelayMs);
+        break;
+      }
+      case "processing":
+        setIsProcessing(true);
+        // Candidate responded — clear silence banner and its auto-skip countdown
+        setShowSilenceBanner(false);
+        if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+        setStatus("Processing your speech...");
+        tokenBufferRef.current = "";
+        revealedCharsRef.current = 0;
+        stopRevealingTokens();
+        break;
+      case "buffer_started":
+        // MOM: 5-minute buffer when allocated time expires
+        setIsInBuffer(true);
+        setRemainingSeconds((data.buffer_minutes ?? 5) * 60);
+        setStatus(`Buffer time: ${data.buffer_minutes ?? 5} minutes remaining`);
+        // Clear question timer when buffer kicks in
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        setQuestionTimerSeconds(null);
+        break;
+      case "force_mic_off":
+        // Hard 35-min stop — disable mic immediately, no further responses accepted
+        isMicForceOffRef.current = true;
+        stopRecordingSilentRef.current();
+        if (startRecordingTimerRef.current) {
+          clearTimeout(startRecordingTimerRef.current);
+          startRecordingTimerRef.current = null;
+        }
+        setIsClosing(true);
+        isClosingRef.current = true;
+        setStatus("Interview time reached — ending now...");
+        break;
+      case "repeat_pending": {
+        // ── VOICE repeat/clarification — PROACTIVE freeze (mirrors the button) ──
+        // The backend detected that the candidate asked (by voice) to repeat/
+        // clarify the question, and sends this BEFORE it re-speaks. We arm the
+        // exact same freeze the Repeat BUTTON arms at click time — proactively,
+        // ahead of the re-speak's question_timer_started — so the answer clock
+        // freezes at the value the candidate had when they asked and RESUMES
+        // there on "Your turn".
+        //
+        // Why not rely on question_timer_started.is_clarification alone: that
+        // flag comes from the ws.py clarification gate, which can fall through
+        // to the follow-up/main path and send is_clarification=false — in which
+        // case a reactive frontend check never fires and the timer resets/ticks
+        // (the bug that persisted). This signal is emitted straight from the
+        // clarification DETECTION, so it does not depend on that flag.
+        //
+        // frozenResponseTimeRef holds the per-question remaining captured in
+        // stopRecording() the moment the candidate finished their repeat-request
+        // turn (questionTimerSecondsRef was nulled by the answer submit).
+        if (!repeatFreezeRef.current) {
+          const _rpResume =
+            (frozenResponseTimeRef.current != null && frozenResponseTimeRef.current > 0)
+              ? frozenResponseTimeRef.current
+              : (questionTimerSecondsRef.current != null && questionTimerSecondsRef.current > 0)
+                ? questionTimerSecondsRef.current
+                : null;
+          if (_rpResume != null) {
+            repeatFreezeRef.current = true;
+            repeatFrozenRemainingRef.current = _rpResume;
+            // One repeat per turn — mirror the button so the resume doesn't
+            // re-arm the repeat window (backend auto-advances on the 2nd ask).
+            repeatUsedThisTurnRef.current = true;
+            // Park the display at the frozen value now (during processing / the
+            // re-speak) so it doesn't show a stale/blank or a fresh 2:00.
+            if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
+            setQuestionTimerSeconds(_rpResume);
+            questionTimerSecondsRef.current = _rpResume;
+            setQuestionTimerExpired(false);
+            questionTimerExpiredRef.current = false;
+            console.log(`[Timer ${timestamp}] repeat_pending — PROACTIVELY froze answer clock at ${_rpResume}s (voice repeat, mirrors Repeat button); resumes on "Your turn"`);
+          } else {
+            console.log(`[Timer ${timestamp}] repeat_pending received but no frozen remaining available — will fall back to is_clarification handling`);
+          }
+        }
+        break;
+      }
+      case "question_timer_started": {
+        // A real question turn is about to open (main / follow-up / clarification
+        // / repeat) — arm the pre-turn "get ready" 5→1 countdown. Consumed by
+        // finalizePlayback when the mic is about to open. Nudges never send this.
+        // The backend re-sends it mid-answer (speech detected → "continuing
+        // timer"); that copy must not arm a countdown for whatever Bina says next.
+        if (!isRecordingRef.current) getReadyArmedRef.current = true;
+        // AII-20: question_timer_started fires for EVERY question (unlike
+        // question_meta, which only fires for a structured HR one) — use it
+        // as the fallback signal to lift a stale yes_no voice block once a
+        // genuinely different question is now current. A matching
+        // question_number means this event belongs to the SAME HR question
+        // question_meta just armed (sent first, per _speak()'s ordering), so
+        // the block must NOT be cleared in that case. Also require a real
+        // MAIN question (not is_follow_up/is_clarification) — a follow-up or
+        // clarification re-send for the SAME in-progress HR turn must never
+        // clear the block either, even on the rare chance it carries a
+        // different question_number than expected (observed: "No" still
+        // double-submitted via a stray post-click voice capture — the block
+        // was being lifted by exactly this kind of re-send before the
+        // candidate's trailing speech had been fully discarded).
+        if (
+          hrVoiceBlockedForQidRef.current &&
+          data.question_number != null &&
+          data.question_number !== hrVoiceBlockedQuestionNumberRef.current &&
+          data.is_follow_up !== true &&
+          data.is_clarification !== true
+        ) {
+          hrVoiceBlockedForQidRef.current = '';
+          hrVoiceBlockedQuestionNumberRef.current = null;
+        }
+        console.log('[INTERVIEW-DEBUG] question_timer_started received', {
+          seconds: data.seconds,
+          total_seconds: data.total_seconds,
+          question_number: data.question_number,
+          is_follow_up: data.is_follow_up,
+          is_clarification: data.is_clarification,
+          isAiSpeaking: isAiSpeakingRef.current,
+          isRecording: isRecordingRef.current,
+          isProcessing: isProcessingRef.current,
+        });
+        console.log(`[WS ${timestamp}] Question timer started:`, data);
+        backendExpiredRef.current = false; // new question — reset backend-expired guard
+        // Clear the Next-Q in-flight guard: the backend has processed the prior
+        // skip (or is starting a fresh question) and re-enables the button.
+        if (nextSkipInFlightRef.current) {
+          nextSkipInFlightRef.current = false;
+          setNextSkipInFlight(false);
+        }
+        // Same for the Repeat-Question guard: the answer window is (re)open, so
+        // the candidate may request another repeat if needed.
+        if (repeatInFlightRef.current) {
+          repeatInFlightRef.current = false;
+          setRepeatInFlight(false);
+        }
+        // Use data.seconds — the actual candidate answer window sent by the backend.
+        // data.total_seconds is the full slot (e.g. 120s) but data.seconds is what
+        // the backend's auto-skip is calibrated to, so they must match.
+        let dur = data.seconds ?? data.total_seconds ?? data.duration_seconds ?? 120;
+        // ── VOICE REPEAT (clarification) → behave like the Repeat button ────
+        // A clarification event is Bina RE-SPEAKING the current question because
+        // the candidate asked her to repeat/clarify BY VOICE. Updated UX (was:
+        // "don't pause on repeat"): the answer clock must NOT reset to a fresh
+        // 2:00 and must NOT tick down while Bina re-speaks — it freezes at the
+        // value the candidate had when they asked and resumes only when the mic
+        // reopens ("Your turn"), exactly like the Repeat Question button.
+        //
+        // We route it through the SAME freeze-resume path the button uses (just
+        // below) by arming repeatFreezeRef here. The resume value is the per-
+        // question remaining captured the moment the candidate finished their
+        // repeat-request turn (frozenResponseTimeRef) — questionTimerSecondsRef
+        // was already nulled by the answer submit, so the frozen ref is the
+        // reliable source. This replaces the old branch that kept the countdown
+        // running through the re-speak.
+        if (data.is_clarification === true && !repeatFreezeRef.current) {
+          const _clarifResume =
+            (frozenResponseTimeRef.current != null && frozenResponseTimeRef.current > 0)
+              ? frozenResponseTimeRef.current
+              : (questionTimerSecondsRef.current != null && questionTimerSecondsRef.current > 0)
+                ? questionTimerSecondsRef.current
+                : null;
+          if (_clarifResume != null) {
+            repeatFreezeRef.current = true;
+            repeatFrozenRemainingRef.current = _clarifResume;
+            // One repeat per turn — mirror the button so the resume doesn't
+            // re-arm the repeat window (backend auto-advances on the 2nd ask).
+            repeatUsedThisTurnRef.current = true;
+            console.log(`[Timer ${timestamp}] Clarification (voice repeat) — FREEZING answer clock at ${_clarifResume}s; resumes on "Your turn" (matches Repeat button, no tick during re-speak)`);
+          }
+        }
+        // ── REPEAT-QUESTION FREEZE RESUME ──────────────────────────────────
+        // This timer event is the re-speak completing (on_speaking_done →
+        // _start_question_timer), and it can arrive while Bina's audio is still
+        // playing on the client. We must NOT start ticking now — the answer
+        // clock resumes ONLY when the candidate's turn actually opens (the mic
+        // goes live → startPendingQuestionTimer("candidate_turn_open")). So we
+        // route the frozen remaining through the PENDING mechanism and bail out
+        // of this handler, leaving the display frozen until then.
+        if (repeatFreezeRef.current) {
+          repeatFreezeRef.current = false;
+          const resumeSec = (repeatFrozenRemainingRef.current != null && repeatFrozenRemainingRef.current > 0)
+            ? repeatFrozenRemainingRef.current
+            : dur;
+          repeatFrozenRemainingRef.current = null;
+          if (data.total_questions != null) setTotalQuestions(data.total_questions);
+          setIsClarification(false); isClarificationRef.current = false;
+          setIsFollowUp(false);
+          setQuestionTimerExpired(false); questionTimerExpiredRef.current = false;
+          // Freeze the display at the resume value; don't run an interval yet.
+          if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
+          setQuestionTimerSeconds(resumeSec);
+          questionTimerSecondsRef.current = resumeSec;
+          // Queue it as pending; it starts on the next candidate_turn_open.
+          questionTimerPendingRef.current = resumeSec;
+          questionTimerTotalRef.current = resumeSec;
+          questionTimerReceivedAtRef.current = Date.now();
+          if (!isAiSpeakingRef.current && isRecordingRef.current) {
+            // Mic already open (rare) — start immediately from the frozen value.
+            startPendingQuestionTimer("repeat_resume_turn_already_open");
+          } else {
+            setQuestionTimerPendingTick(t => t + 1);
+          }
+          console.log(`[Timer ${timestamp}] Repeat re-speak done — answer window will RESUME at ${resumeSec}s when the candidate's turn opens`);
+          break;
+        }
+        console.log(`[WS ${timestamp}] Timer duration: ${dur}s, question_number=${data.question_number}, total_questions=${data.total_questions}, is_follow_up=${data.is_follow_up}, is_clarification=${data.is_clarification}`);
+        // DON'T show the timer yet if Bina is still speaking — it will be shown
+        // once Bina stops (via the pending timer useEffect below).
+        // When Bina IS still speaking the next question, hold the "TIME UP"
+        // state (keep questionTimerExpired=true) until the pending timer
+        // actually starts. Otherwise the display would flicker
+        // "TIME UP" → "00:00" → "02:00" because seconds is still 0 from the
+        // expired prior slot. The pending useEffect clears the flag right
+        // before it starts ticking the new countdown.
+        if (!isAiSpeakingRef.current) {
+          setQuestionTimerExpired(false);
+          questionTimerExpiredRef.current = false;
+        }
+        // Classify this event:
+        //  is_follow_up=true, is_clarification=true  → Bina clarifying; PAUSE per-Q timer
+        //  is_follow_up=true, is_clarification=false → Bina ack/follow-up; keep timer running
+        //  is_follow_up=false                        → new question; start fresh countdown
+        const incomingQNum = data.question_number ?? null;
+        const sameQuestion = incomingQNum !== null && incomingQNum === questionNumberRef.current;
+        if (!sameQuestion) {
+          // A new question means the prior answer path is over. Clear any stale
+          // candidate-side processing state even if no transcript ever arrived.
+          setIsCandidateTranscriptProcessing(false);
+          setCurrentTranscript("");
+          currentTranscriptRef.current = "";
+          provisionalAnswerQnRef.current = null;
+          frozenResponseTimeRef.current = null;
+        }
+        // NEW MAIN QUESTION: clear any leftover live transcript from the prior
+        // answer. On long answers in decoupled mode the candidate's speech can
+        // spill past end_turn into the next question's mic window and fire a
+        // phantom turn — without this clear, the PREVIOUS answer's live text
+        // got rendered/committed under the new question too (observed: Q2's
+        // answer appearing under Q3). Only the transient live "You" bubble is
+        // cleared; the already-committed answer bubble is untouched. Skipped for
+        // follow-ups/clarifications (same question — the live text is still theirs).
+        if (incomingQNum !== null && incomingQNum !== questionNumberRef.current && !data.is_follow_up) {
+          setCurrentTranscript("");
+          currentTranscriptRef.current = "";
+        }
+        if (sameQuestion && (data.is_follow_up === true || data.is_clarification === true)) {
+          // Same-slot continuation — do NOT restart the timer. This covers TWO
+          // SEPARATE concepts that each keep the original 2-min slot running:
+          //   • follow-up      (is_follow_up=true,  is_clarification=false)
+          //   • clarification  (is_clarification=true, is_follow_up=false)
+          // Clarification is NOT a follow-up — they're gated independently below
+          // so the follow-up path/state is never entered for a clarification.
+          // The main question's 2-min slot is shared between Bina's repeat/
+          // follow-up and the candidate's answer — the countdown must continue
+          // from wherever it was, never jump back to the full duration.
+          //
+          // We deliberately do NOT "drift-correct" toward `data.seconds`
+          // here. The frontend timer ticks ONLY while the candidate is on
+          // the clock (paused during Bina's speech / clarification),
+          // whereas the backend's `remaining` is plain wall-clock from main-Q
+          // start and so always includes Bina's TTS time. Snapping the
+          // frontend to that value made the timer visibly drop on every
+          // follow-up (e.g. 1:00 → 0:45). The frontend countdown is what
+          // the candidate is reading and what the auto-skip is calibrated
+          // to — keep it authoritative.
+          if (data.total_questions != null) setTotalQuestions(data.total_questions);
+          const _cur = questionTimerSecondsRef.current;
+          if (dur > 0 && _cur == null) {
+            // Edge case: no running timer (e.g. reconnect). Start one from
+            // the backend value — that's the only signal we have.
+            setQuestionTimerSeconds(dur);
+            questionTimerSecondsRef.current = dur;
+          }
+          if (data.is_clarification === true) {
+            // CLARIFICATION — its OWN concept, NOT a follow-up. Keep the running
+            // countdown and pause it during Bina's repeat. Explicitly mark this
+            // as NOT a follow-up so the two concepts never bleed together.
+            setIsFollowUp(false);
+            // Bug H fix: if the interval was stray-cleared (e.g., remaining
+            // hit 0 just before the clarification arrived), the timer would
+            // never resume after clarification ends because the interval
+            // itself is null. Re-arm it BEFORE pausing so the pause-via-flag
+            // model works correctly when clarification clears.
+            if (!questionTimerIntervalRef.current && (_cur ?? dur) > 0) {
+              ensureQuestionTimerRunning(_cur ?? dur);
+            }
+            // (2026-06-03) Clarification keeps the SAME running countdown — it
+            // does NOT pause and does NOT reset. The timer interval no longer
+            // pauses on isClarification, so the window keeps ticking through
+            // Bina's repeat (per user spec).
+            console.log('[INTERVIEW-DEBUG] clarification — timer keeps running (no pause/reset)', {
+              question_number: data.question_number,
+              currentSeconds: questionTimerSecondsRef.current,
+            });
+            setIsClarification(true);
+            isClarificationRef.current = true;
+            setStatus("Clarifying the question…");
+          } else {
+            // FOLLOW-UP — unchanged behavior: keep the timer running.
+            setIsFollowUp(true);
+            if (!questionTimerIntervalRef.current && dur > 0) {
+              // Only (re)create an interval if none is running. Re-anchor from
+              // the frozen value so the helper's monotonic compute stays valid.
+              ensureQuestionTimerRunning(_cur ?? dur);
+            }
+          }
+          // Keep active skill highlight — same skill, follow-up question
+          // Update is_follow_up flag on the active skill if backend tells us which one
+          if (data.current_cluster_id && data.current_skill) {
+            setSkillCoverage(prev => {
+              if (!prev?.clusters) return prev;
+              return {
+                ...prev,
+                clusters: prev.clusters.map(c => ({
+                  ...c,
+                  skills: c.skills.map(s => ({
+                    ...s,
+                    is_follow_up:
+                      c.cluster_id === data.current_cluster_id && s.skill === data.current_skill
+                        ? true
+                        : s.is_follow_up,
+                  })),
+                })),
+              };
+            });
+          }
+          break;
+        }
+        // New question — clear clarification + follow-up, start fresh countdown.
+        // Also clear any frozen value left behind by the previous question's
+        // question_timer_stopped (we no longer null it there to keep the banner
+        // visible during silent_discard) — otherwise the NEW question would
+        // briefly display the OLD answer's leftover seconds while Bina speaks
+        // her next question.
+        setIsClarification(false);
+        isClarificationRef.current = false;
+        setIsFollowUp(false);
+        setQuestionTimerSeconds(null);
+        questionTimerSecondsRef.current = null;
+        questionTimerPausedAtRef.current = null;
+        questionTimerPausedMsRef.current = 0;
+        // Fresh question (different Q number) → new repeat allowance. A repeat
+        // re-speak arrives with the SAME number, so this stays true then and the
+        // window does NOT re-arm (one repeat per question).
+        if (!sameQuestion) repeatUsedThisTurnRef.current = false;
+
+        // Clamp question number — never exceed totalQuestions (safety net for Q15 follow-up edge cases)
+        // incomingQNum >= 1 is a real numbered question. 0 = the uncounted
+        // "tell me about yourself" warm-up (no HR/TMAY) — leave questionNumber
+        // null so the header hides "Q x/15" until the first counted question.
+        if (incomingQNum != null && incomingQNum >= 1) setQuestionNumber(Math.min(incomingQNum, totalQuestions ?? incomingQNum));
+        if (data.total_questions != null) setTotalQuestions(data.total_questions);
+
+        // Mark which skill is now being asked — backend sends current_cluster_id + current_skill
+        // This fires immediately when the question starts, before skill_coverage_update arrives.
+        if (data.current_cluster_id && data.current_skill) {
+          setSkillCoverage(prev => {
+            if (!prev?.clusters) return prev;
+            return {
+              ...prev,
+              clusters: prev.clusters.map(c => ({
+                ...c,
+                is_active: c.cluster_id === data.current_cluster_id,
+                current_skill: c.cluster_id === data.current_cluster_id ? data.current_skill : undefined,
+                skills: c.skills.map(s => ({
+                  ...s,
+                  is_active: c.cluster_id === data.current_cluster_id && s.skill === data.current_skill,
+                  is_follow_up: false,
+                  question_number:
+                    c.cluster_id === data.current_cluster_id && s.skill === data.current_skill
+                      ? (incomingQNum ?? s.question_number)
+                      : s.question_number,
+                })),
+              })),
+            };
+          });
+        }
+
+        // Point 3: snap global timer to question-number-anchored value
+        if (data.global_remaining_seconds != null && data.global_remaining_seconds > 0) {
+          setRemainingSeconds(data.global_remaining_seconds);
+        }
+
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        if (isAiSpeakingRef.current || !isRecordingRef.current) {
+          // Keep the timer pending until the candidate turn is ACTUALLY open:
+          // Bina has finished, the mic is active, and the listening UI is visible.
+          console.log(`[Timer ${timestamp}] Candidate turn not open yet, storing pending timer: ${dur}s`);
+          questionTimerPendingRef.current = dur;
+          questionTimerTotalRef.current = dur;
+          questionTimerReceivedAtRef.current = Date.now();
+          // Bump the tick so the pending-timer watchdogs treat this as a new
+          // queued timer window.
+          setQuestionTimerPendingTick(t => t + 1);
+        } else {
+          console.log(`[Timer ${timestamp}] Candidate turn already open, starting timer immediately: ${dur}s`);
+          questionTimerPendingRef.current = dur;
+          questionTimerTotalRef.current = dur;
+          questionTimerReceivedAtRef.current = Date.now();
+          startPendingQuestionTimer("timer_event_during_open_turn");
+        }
+        break;
+      }
+      case "question_timer_stopped":
+        console.log('[INTERVIEW-DEBUG] TIMER STOPPED by backend', {
+          currentSeconds: questionTimerSecondsRef.current,
+          isRecording: isRecordingRef.current,
+          isProcessing: isProcessingRef.current,
+        });
+        // Candidate ended their turn — pause the visible per-question timer,
+        // do NOT zero out questionTimerSeconds. Reason: the backend fires
+        // question_timer_stopped on EVERY end_turn, including ones that get
+        // silent_discarded a moment later. If we wipe the value here, the
+        // banner disappears and never comes back when the mic reopens — the
+        // candidate sees the answer-time timer flicker out and then nothing,
+        // which makes the 2-min slot invisible. Freezing the displayed value
+        // (clear the interval only) keeps the banner visible at its last
+        // value; the silent_discard handler resumes the tick if needed, and
+        // the next question_timer_started fully resets the value.
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        // Pause-stamp the monotonic anchor so the resume in silent_discard can
+        // fold the paused interval into questionTimerPausedMsRef.
+        if (questionTimerPausedAtRef.current === null) {
+          questionTimerPausedAtRef.current = performance.now();
+        }
+        // Note: questionTimerSeconds / questionTimerSecondsRef intentionally NOT
+        // cleared. questionTimerPendingRef is also kept — if Bina hadn't yet
+        // finished speaking when end_turn fired (rare), the next audio_end will
+        // still pick it up.
+        break;
+      case "question_timer_expired":
+        console.log('[INTERVIEW-DEBUG] question_timer_expired received', {
+          isRecording: isRecordingRef.current,
+          speechDetected: speechDetectedRef.current,
+          isProcessing: isProcessingRef.current,
+          isAiSpeaking: isAiSpeakingRef.current,
+          questionTimerSeconds: questionTimerSecondsRef.current,
+        });
+        backendExpiredRef.current = true; // backend already handling skip — don't send client skip_question
+        setQuestionTimerExpired(true);
+        questionTimerExpiredRef.current = true;
+        setQuestionTimerSeconds(0);
+        // Also zero the REF, not just the state. stopRecording() (called via
+        // stopRecordingSilentRef below) freezes the response-bubble "X left"
+        // badge from questionTimerSecondsRef.current — if we leave the ref at
+        // its last 200ms-tick value (e.g. 2, since the backend's expiry fires a
+        // beat before the local countdown visibly hits 0) the badge shows
+        // "00:02 left" instead of "00:00" on a genuine time's-up.
+        questionTimerSecondsRef.current = 0;
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        // Clear clarification and silence countdown — question is advancing
+        setIsClarification(false);
+        isClarificationRef.current = false;
+        setShowSilenceBanner(false);
+        if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+        // Clear processing state so startRecordingInternal isn't blocked when next Q arrives.
+        setIsProcessing(false);
+        isProcessingRef.current = false;
+        clearNoResponseTimer();
+        stopRecordingSilentRef.current();
+        setStatus("Time's up — moving to the next question...");
+        break;
+      case "question_window_hard_cap":
+        // Backend hit the 2:00 mark while candidate was still answering. It
+        // has already flushed the captured audio (<=120s) into the natural
+        // end_turn pipeline; Bina will ask the next question in a few
+        // seconds. Stop the mic so nothing said after 2:00 is sent.
+        console.log('[INTERVIEW-DEBUG] question_window_hard_cap received', {
+          question_number: data.question_number,
+          isRecording: isRecordingRef.current,
+        });
+        backendExpiredRef.current = true; // suppress any local skip_question
+        setQuestionTimerExpired(true);
+        questionTimerExpiredRef.current = true;
+        setQuestionTimerSeconds(0);
+        // Zero the REF too (see question_timer_expired above): stopRecording
+        // freezes the "X left" badge from questionTimerSecondsRef.current, so a
+        // stale last-tick value here makes a 2:00 hard-cap show "00:02 left".
+        questionTimerSecondsRef.current = 0;
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        setIsClarification(false);
+        isClarificationRef.current = false;
+        setShowSilenceBanner(false);
+        if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+        setIsProcessing(false);
+        isProcessingRef.current = false;
+        clearNoResponseTimer();
+        stopRecordingSilentRef.current();
+        // Backend now plays a bridge phrase (Bina actually speaks) immediately
+        // after this event. Only fall back to the legacy text overlay when the
+        // bridge has been suppressed (empty `message`) — preserves backwards
+        // compatibility with pre-bridge backends that still ship the text.
+        if (data.message) {
+          setStatus(data.message);
+        }
+        break;
+      case "bridge_phrase_started":
+        // Pre-cached transition clip is about to stream. Show the phrase text
+        // as a distinct "Bina · Transition" chip — NOT in the question card.
+        // Mic stays disabled (gated by the speaking_started that follows).
+        setBridgeCaption(typeof data.text === 'string' ? data.text : null);
+        break;
+      case "bridge_phrase_ended":
+        // Brief fade-out so the chip doesn't pop off mid-syllable when the
+        // next-Q TTS arrives <500ms later.
+        setTimeout(() => setBridgeCaption(null), 400);
+        break;
+      case "skill_coverage_update":
+        setSkillCoverage({
+          round: data.round ?? "",
+          round_name: data.round_name ?? "",
+          covered: data.covered ?? [],
+          medium_covered: data.medium_covered ?? [],
+          low_covered: data.low_covered ?? [],
+          uncovered: data.uncovered ?? [],
+          nice_to_have_skills: data.nice_to_have_skills ?? [],
+          total_questions: data.total_questions ?? 0,
+          questions_asked: data.questions_asked ?? 0,
+          hr_topics: data.hr_topics && Object.keys(data.hr_topics).length > 0 ? data.hr_topics : undefined,
+          clusters: data.clusters ?? [],  // NEW: all clusters for live panel
+        });
+        break;
+      case "silence_detected": {
+        // Backend detected the first silence threshold. Show a banner telling
+        // the candidate Bina is about to prompt them. The BACKEND drives the
+        // actual silence ladder and auto-skip from here. We previously ran our
+        // OWN countdown on the client and sent skip_question — that raced with
+        // Bina's TTS and caused multiple "Are you there?" messages to stack up
+        // because the client skipped before she finished speaking.
+        //
+        // Banner is dismissed by:
+        //   - speaking_started  (candidate responded)
+        //   - speaking_started from backend for Bina's silence nudge (covered
+        //     below in the interstitial_prompt/speaking_started handlers)
+        //   - question_timer_expired (backend auto-skip completed)
+        //   - X button in the banner itself
+        isSilencePromptRef.current = true; // Bina's "Are you there?" — timer must keep running
+        setShowSilenceBanner(true);
+        if (silenceBannerTimerRef.current) clearTimeout(silenceBannerTimerRef.current);
+        if (silenceCountdownRef.current) {
+          clearInterval(silenceCountdownRef.current);
+          silenceCountdownRef.current = null;
+        }
+        // Kill the client-side no-response timer — the BACKEND is now driving
+        // the silence flow. If we leave the 15 s client timer armed it races
+        // with the backend's interstitial_prompt and produces a duplicate
+        // "Are you there?" via handleNoResponse → speakViaTTS.
+        clearNoResponseTimer();
+        break;
+      }
+      case "speech_threshold_not_met":
+        // Backend decided the speech_started we sent was noise-floor audio, not
+        // real speech — it's keeping the silence-nudge watcher armed. Reset our
+        // speechDetected flag so that when Bina's nudge fires speaking_started,
+        // stopRecordingSilent does NOT send end_turn with the hallucinated ASR text.
+        speechDetectedRef.current = false;
+        speechDetectedAtRef.current = null;
+        speechStartSentRef.current = false;
+        speechFrameCountRef.current = 0;
+        break;
+      case "question_timer_nudge":
+        // Candidate has been silent for a long time — gentle prompt; don't override the
+        // silence banner countdown if it's already running.
+        if (!showSilenceBanner) {
+          setStatus("Take your time — share whatever comes to mind, or say 'skip' to move on.");
+        }
+        break;
+      case "interview_completion_message":
+        // Show the official completion message (Req 16) — but ONLY after
+        // Bina's farewell has finished playing. Backend sends this event
+        // immediately after `interview_ended` without waiting for TTS
+        // playback to drain. If we flip the modal on now, it appears while
+        // Bina is still audibly speaking. Defer via pendingCompletionModalRef
+        // which finalizePlayback flushes at the true end-of-audio.
+        setCompletionMessage(data.message || "Thank you for completing the interview. Your responses have been recorded successfully.");
+        if (candidatePlaybackEndedRef.current) {
+          setShowCompletionModal(true);
+        } else {
+          pendingCompletionModalRef.current = true;
+        }
+        break;
+      case "interview_closing":
+        setIsClosing(true); isClosingRef.current = true;
+        setClosingReason(data.reason);
+        setStatus("Interview ending - Bina is saying goodbye...");
+        break;
+      case "interview_ended":
+        setStatus("Bina is saying goodbye...");
+        shouldDisconnectAfterAudioRef.current = true;
+        setIsClosing(true); isClosingRef.current = true;
+        // Interview reached its natural end — tell the portal to DISARM
+        // fullscreen-exit termination so the completion popup can't trigger a
+        // false termination while the background evaluation runs.
+        onInterviewClosing?.();
+        setCompletionMessage(prev =>
+          prev || (
+            data.reason === "candidate_ended"
+              ? "Thank you for your time. The interview has ended successfully."
+              : "Thank you for completing the interview. Your responses have been recorded successfully."
+          )
+        );
+        // Tear down the per-question timer — interview is over, no more answer
+        // window. Without this clear, the frozen-on-stop change above would
+        // leave the answer-time banner visible during Bina's farewell.
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        setQuestionTimerSeconds(null);
+        questionTimerSecondsRef.current = null;
+        questionTimerPendingRef.current = null;
+        // Disconnect ONLY if finalizePlayback has already confirmed the
+        // true end of audio (candidatePlaybackEndedRef === true). The
+        // flags isPlayingRef / isAiSpeakingRef can go false prematurely
+        // during the TalkingHead-fires-early path, but
+        // candidatePlaybackEndedRef only flips true inside
+        // finalizePlayback — which itself runs AT the wall-clock end of
+        // playback (firstPcmAt + audioMs). If it hasn't run yet, leave
+        // the disconnect to finalizePlayback (it reads the flags we just
+        // set) or to the safety-net fallback. This is what prevents the
+        // session from closing mid-farewell.
+        if (candidatePlaybackEndedRef.current) {
+          setTimeout(() => { disconnectRef.current(); }, 500);
+        }
+        break;
+      case "interview_complete":
+        // Server-side forced completion (e.g., post-closing turn limit or
+        // end of Q15). Same guard as interview_ended: only disconnect
+        // immediately if finalizePlayback has already run — otherwise the
+        // closing flags will be picked up by finalizePlayback when the
+        // real end-of-audio fires. This is what keeps Bina's farewell
+        // from being cut off mid-sentence.
+        setIsClosing(true); isClosingRef.current = true;
+        shouldDisconnectAfterAudioRef.current = true;
+        setStatus("Interview completed. Thank you!");
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        setQuestionTimerSeconds(null);
+        questionTimerSecondsRef.current = null;
+        questionTimerPendingRef.current = null;
+        if (candidatePlaybackEndedRef.current) {
+          setTimeout(() => { disconnectRef.current(); }, 500);
+        }
+        break;
+      case "auto_disconnect":
+        // Server signals that results are saved and the session should close.
+        // Same candidatePlaybackEndedRef guard as interview_ended/
+        // interview_complete: only disconnect here if finalizePlayback has
+        // already confirmed the true end of audio. Otherwise the flags set
+        // here will be picked up by finalizePlayback when audio really ends.
+        setIsClosing(true); isClosingRef.current = true;
+        shouldDisconnectAfterAudioRef.current = true;
+        if (candidatePlaybackEndedRef.current) {
+          setStatus("Interview completed. Thank you!");
+          setTimeout(() => { disconnectRef.current(); }, 500);
+        }
+        break;
+      case "language_error":
+        // Stop current recording first (otherwise startRecordingInternal
+        // returns early because isRecordingRef.current is still true)
+        stopRecordingSilentRef.current();
+        setStatus("Let's stay focused");
+        setMessages(prev => [...prev, {
+          id: crypto.randomUUID(),
+          role: "system",
+          content: data.message,
+        }]);
+        setTimeout(() => {
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            setStatus("Ready to continue");
+            startRecordingInternalRef.current();
+          }
+        }, 2000);
+        break;
+      // AIU39: Skip accepted/rejected responses
+      case "skip_accepted":
+        setIsFollowUp(false);
+        // Optimistically clear active highlights on skill panel — same as Next Q handler
+        setSkillCoverage(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            clusters: prev.clusters?.map(c => ({
+              ...c,
+              is_active: false,
+              current_skill: undefined,
+              skills: c.skills.map(s => ({ ...s, is_active: false })),
+            })),
+          };
+        });
+        toast.success('Question skipped');
+        break;
+      case "skip_rejected":
+        toast.error(data.reason || 'Skip not allowed at this time');
+        break;
+
+      // AIU40: Section transition — show full-screen overlay for 3 seconds
+      case "section_transition":
+        setSectionTransition({
+          message: data.message || '',
+          fromCluster: data.from_cluster || '',
+          toCluster: data.to_cluster || data.cluster || '',
+        });
+        break;
+
+      // AIU52: Full coverage map update
+      case "coverage_map_update":
+        break;
+
+      // AIU51: IDK/Unclear detected — brief info toast
+      case "idk_detected":
+        toast.info('Response recorded, moving on');
+        break;
+
+      // AIU72: Unclear speech — brief info toast
+      case "unclear_speech":
+        toast.info('Could not clearly hear your response — please try again');
+        break;
+
+      // AIU72: Repeat request — show overlay asking candidate to repeat
+      case "repeat_request":
+        setShowRepeatRequest(true);
+        // Auto-dismiss after 4 seconds
+        setTimeout(() => setShowRepeatRequest(false), 4000);
+        break;
+
+      case "error":
+        setStatus(`Error: ${data.message}`);
+        break;
+    }
+  }, [
+    avatarState,
+    buildStableLiveTranscriptPreview,
+    clearNoResponseTimer,
+    ensureQuestionTimerRunning,
+    interviewInfo.duration_minutes,
+    interviewInfo.total_questions,
+    isFlexibleMode,
+    isNewFlexibleMode,
+    questionNumber,
+    questionTimerExpired,
+    resetBinaAudible,
+    saveAiMessage,
+    sendPlaybackComplete,
+    showSilenceBanner,
+    startRevealingTokens,
+    stopRevealingTokens,
+    stopWebSpeechRecognition,
+    totalQuestions,
+    whenTrackedPlaybackEnds,
+  ]);
+
+  // Keep callback refs in sync (avoids WebSocket reconnect on re-renders)
+  useEffect(() => { queueAudioRef.current = queueAudio; }, [queueAudio]);
+  useEffect(() => { trackPlaybackChunkRef.current = trackPlaybackChunk; }, [trackPlaybackChunk]);
+  useEffect(() => { handleMessageRef.current = handleMessage; }, [handleMessage]);
+
+  // Checkpoint upload — flushes the recorder's buffer and ships ONE multipart
+  // segment WITHOUT stopping the recorder, but only once enough bytes have
+  // accumulated to form a valid S3 part (>= RECORDING_MIN_SEGMENT_BYTES). Called
+  // on a 30 s timer and on visibilitychange→hidden. Because S3 forbids
+  // sub-5-MiB non-final parts, small buffers are intentionally held back until
+  // the next tick rather than flushed; the trailing remainder ships as the final
+  // (any-size) part from uploadRecording().
+  const uploadCheckpoint = useCallback(async (): Promise<void> => {
+    if (isFinalizingUploadRef.current) return; // final upload owns the recorder
+    if (checkpointInProgressRef.current) return; // skip overlap
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state !== 'recording') return;
+
+    checkpointInProgressRef.current = true;
+    try {
+      // Force ondataavailable to fire so any buffered frames are emitted now.
+      // We swap in a one-shot handler that ALSO defers to the original handler
+      // (so chunks are still pushed into recordedChunksRef). The native handler
+      // is restored once we resolve.
+      const original = recorder.ondataavailable;
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          recorder.ondataavailable = original;
+          resolve();
+        };
+        recorder.ondataavailable = (e: BlobEvent) => {
+          if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+          finish();
+        };
+        try {
+          recorder.requestData();
+        } catch {
+          finish();
+          return;
+        }
+        // Safety net — some browsers don't fire on requestData() while throttled
+        setTimeout(finish, 1500);
+      });
+
+      const buffered = recordedChunksRef.current.reduce((sum, c) => sum + c.size, 0);
+      // Not enough for a valid non-final S3 part yet — keep buffering.
+      if (buffered < RECORDING_MIN_SEGMENT_BYTES) return;
+
+      // Atomically snapshot the buffered clusters and reset the ref so new
+      // clusters accumulate into a fresh array. Single-threaded JS guarantees no
+      // ondataavailable push can race between these two synchronous statements.
+      const chunks = recordedChunksRef.current;
+      recordedChunksRef.current = [];
+      const segmentIndex = recordingSegmentIndexRef.current;
+      const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
+      const blob = new Blob(withRecordingHeader(chunks, segmentIndex), { type: mimeType });
+      try {
+        await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, false);
+        recordingSegmentIndexRef.current = segmentIndex + 1;
+        _saveRecSeg(segmentIndex + 1);  // survive a reload → continue, not restart at 0
+        console.log(`[Recording] Segment ${segmentIndex} uploaded: ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
+      } catch (err: unknown) {
+        // Upload failed — put the clusters back at the FRONT of the buffer so the
+        // next checkpoint retries them under the SAME segment index (preserves
+        // part ordering; the backend overwrites the part idempotently on retry).
+        recordedChunksRef.current = chunks.concat(recordedChunksRef.current);
+        console.warn(`[Recording] Segment ${segmentIndex} upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${getErrorMessage(err)}`);
+      }
+    } finally {
+      checkpointInProgressRef.current = false;
+    }
+  }, [token]);
+
+  // Keep ref in sync so the periodic timer scheduled inside startRecorder
+  // (set up before this callback exists in the closure) always sees the latest.
+  useEffect(() => { uploadCheckpointRef.current = uploadCheckpoint; }, [uploadCheckpoint]);
+  // Mirror the transcript-processing flag into a ref for the re-arm guards.
+  useEffect(() => { isCandidateTranscriptProcessingRef.current = isCandidateTranscriptProcessing; }, [isCandidateTranscriptProcessing]);
+
+  // Tab-visibility checkpoint — flush before the browser may throttle us
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') {
+        uploadCheckpointRef.current().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
+  // Upload recording
+  // Waits for MediaRecorder.onstop (all ondataavailable chunks flushed) before
+  // uploading — prevents the race-condition where the final chunk was still
+  // in the encoder buffer when we read recordedChunksRef.
+  const uploadRecording = useCallback((): Promise<void> => {
+    // SINGLE-FLIGHT: if a final flush is already running (or finished), reuse it.
+    // Without this the ws.onclose path and the unmount path each POST their own
+    // final segment for the same recording — the duplicate-final race that lost
+    // recordings with a 502 InvalidPart.
+    if (finalUploadPromiseRef.current) {
+      console.log('[Recording] Final upload already in flight — joining it instead of starting a second');
+      return finalUploadPromiseRef.current;
+    }
+
+    const recorder = mediaRecorderRef.current;
+    // Take ownership of the recorder away from the checkpoint path.
+    isFinalizingUploadRef.current = true;
+    if (checkpointTimerRef.current) {
+      clearInterval(checkpointTimerRef.current);
+      checkpointTimerRef.current = null;
+    }
+
+    const doUpload = async () => {
+      // Wait out any in-flight checkpoint segment so its part lands BEFORE we
+      // complete the multipart upload — otherwise a late part could arrive after
+      // CompleteMultipartUpload and be discarded. Bounded to ~6s.
+      for (let i = 0; i < 60 && checkpointInProgressRef.current; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      // Final segment: ship whatever clusters remain since the last checkpoint as
+      // the LAST multipart part (any size allowed) with is_final=true, which tells
+      // the backend to complete the multipart upload into one object. Even if the
+      // buffer is empty (everything already flushed as full parts), we still send
+      // the final marker so the backend assembles the object.
+      const chunks = recordedChunksRef.current;
+      recordedChunksRef.current = [];
+      const segmentIndex = recordingSegmentIndexRef.current;
+      const mimeType = (recorder?.mimeType || 'video/webm').split(';')[0];
+      const blob = new Blob(withRecordingHeader(chunks, segmentIndex), { type: mimeType });
+      const sizeMb = (blob.size / 1024 / 1024).toFixed(1);
+      console.log(`[Recording] Final segment ${segmentIndex}: ${chunks.length} chunks, ${sizeMb} MB, recorder=${recorder?.state ?? 'null'}`);
+      // Nothing was ever recorded: no earlier segment and an empty buffer. The
+      // final marker still goes out (it closes the server's multipart upload),
+      // but this is a LOST recording, not a success — say so, loudly.
+      const recordingEmpty = segmentIndex === 0 && blob.size === 0;
+      if (recordingEmpty) {
+        console.error(`[Recording] EMPTY — the webcam recording captured no data (audio mix '${recordingAudioCtxRef.current?.state ?? 'none'}')`);
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'recording_failed',
+          severity: 'high',
+          details: { error: 'empty_recording', audio_mix_state: recordingAudioCtxRef.current?.state ?? 'none' },
+        }).catch(() => { /* best-effort */ });
+      }
+
+      // RETRY the final upload. This request is what turns the already-uploaded
+      // parts into a playable object — if it is the only attempt and it 502s,
+      // the whole recording is lost. The blob is held in this closure across
+      // attempts, so nothing is discarded between tries, and the request is
+      // idempotent server-side (same segment_index → same part number; an
+      // already-assembled object is reported back rather than rebuilt).
+      const FINAL_UPLOAD_ATTEMPTS = 4;
+      for (let attempt = 1; attempt <= FINAL_UPLOAD_ATTEMPTS; attempt++) {
+        try {
+          await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, true);
+          recordingSegmentIndexRef.current = segmentIndex + 1;
+          // Recording finalized — clear the persisted index so a fresh interview
+          // in the same tab starts at segment 0 again.
+          try { if (typeof window !== 'undefined') window.sessionStorage.removeItem(_recSegKey); } catch { /* ignore */ }
+          if (!recordingEmpty) console.log(`[Recording] Final upload + multipart completion succeeded${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+          return;
+        } catch (err: unknown) {
+          const msg = getErrorMessage(err);
+          if (attempt < FINAL_UPLOAD_ATTEMPTS) {
+            // Back off and try again — 502s here are usually the transient
+            // completion race, which the server now resolves on a retry.
+            const waitMs = 800 * attempt;
+            console.warn(`[Recording] Final upload attempt ${attempt}/${FINAL_UPLOAD_ATTEMPTS} failed (${sizeMb} MB): ${msg} — retrying in ${waitMs}ms`);
+            await new Promise((r) => setTimeout(r, waitMs));
+            continue;
+          }
+          // Out of attempts. The parts already in MinIO are NOT lost: the
+          // backend leaves them in place and the interview-close salvage
+          // (finalize_pending) assembles them. Log loudly so this is greppable.
+          console.error(`[Recording] Final upload FAILED after ${FINAL_UPLOAD_ATTEMPTS} attempts — size: ${sizeMb} MB, error: ${msg} — server-side salvage should assemble the uploaded parts`);
+        }
+      }
+    };
+
+    // Recorder already stopped — upload whatever chunks we have now
+    if (!recorder || recorder.state === 'inactive') {
+      const p = doUpload();
+      finalUploadPromiseRef.current = p;
+      return p;
+    }
+
+    // Recorder still running — stop it and wait for onstop before uploading
+    const p = new Promise<void>((resolve) => {
+      recorder.onstop = () => { doUpload().then(resolve).catch(() => resolve()); };
+      recorder.stop();
+    });
+    finalUploadPromiseRef.current = p;
+    return p;
+  }, [token]);
+
+  // Keep a live ref to uploadRecording so the unmount-only cleanup can flush the
+  // candidate webcam recording without adding uploadRecording to its deps.
+  // MUST be declared AFTER uploadRecording — referencing it earlier hits the
+  // const temporal-dead-zone ("Cannot access before initialization") and crashes
+  // the whole interview screen.
+  useEffect(() => { uploadRecordingRef.current = uploadRecording; }, [uploadRecording]);
+
+  // Recording
+  const stopRecording = useCallback(() => {
+    const timestamp = new Date().toISOString();
+    console.log('[INTERVIEW-DEBUG] stopRecording called', {
+      isRecording: isRecordingRef.current,
+      speechDetected: speechDetectedRef.current,
+      questionTimerSeconds: questionTimerSecondsRef.current,
+      questionTimerExpired: questionTimerExpiredRef.current,
+    });
+    console.log(`[Recording ${timestamp}] stopRecording called: isRecording=${isRecordingRef.current}, speechDetected=${speechDetectedRef.current}`);
+    if (!isRecordingRef.current) return;
+
+    // Capture speech detection state BEFORE the ref is reset below.
+    // VAD only calls stopRecording from the speech-detected branch, but this
+    // guard also covers edge cases (disconnect during silence, timer expiry, etc.)
+    // where the function is invoked without confirmed speech.
+    const hadSpeech = speechDetectedRef.current;
+
+    isRecordingRef.current = false;
+    console.log(`[Recording ${timestamp}] Recording stopped, hadSpeech=${hadSpeech}`);
+    setIsRecording(false);
+    // Freeze the question-timer value at this exact moment so the response bubble
+    // can display how much time was left when the candidate finished speaking.
+    frozenResponseTimeRef.current = questionTimerSecondsRef.current;
+    avatarState.onUserStopSpeaking();
+    silenceStartRef.current = null;
+    speechDetectedRef.current = false;
+    speechDetectedAtRef.current = null;
+    lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
+    speechPeakLevelRef.current = 0;
+    inTurnSpeechFrameCountRef.current = 0;
+    candidateAudioStreamingRef.current = false;
+    candidateAudioFrameCountRef.current = 0;
+    stopWebSpeechRecognition();
+    clearNoResponseTimer();
+    clearMaxRecordingTimer();
+    // NOTE: don't clear currentTranscript here — keep the live transcript visible
+    // until the backend's `transcript` event arrives and adds the final message.
+    // This prevents the chat from appearing empty during the processing gap.
+
+    // No real speech this turn — stop silently instead of sending end_turn.
+    // Sending end_turn without speech makes Whisper process silence/noise and
+    // return hallucinated text that would be incorrectly saved as the answer.
+    //
+    // AII-20: same silent-discard path for a yes_no HR question whose voice
+    // answer is blocked (see hrVoiceBlockedForQidRef) — covers both speech
+    // caught before a button click AND speech trailing/overlapping the click
+    // itself, which must never be submitted as a second answer.
+    if (!hadSpeech || !!hrVoiceBlockedForQidRef.current) {
+      setCurrentTranscript(""); // clear immediately — no speech, nothing to keep showing
+      voiceVerifBufferRef.current = [];
+      setTimeout(() => {
+        teardownRecordingMedia();
+      }, 100);
+      return;
+    }
+
+    const remainingFinalized = webSpeechFinalizedRef.current.slice(liveBatchSentCharsRef.current).trim();
+    if (remainingFinalized && (isFlexibleMode || isNewFlexibleMode)) {
+      sendLiveTranscriptBatch(remainingFinalized, "candidate_stop");
+      liveBatchSentCharsRef.current = webSpeechFinalizedRef.current.length;
+    }
+
+    const browserTranscript = backendLiveTranscriptEnabled ? "" : snapshotVisibleLiveTranscript();
+    // Do NOT commit the live transcript as a final answer. The backend owns
+    // English-only validation and sends the accepted transcript; until then the
+    // UI shows only a candidate-side processing indicator.
+    setIsCandidateTranscriptProcessing(true);
+    setCurrentTranscript("");
+    currentTranscriptRef.current = "";
+
+    // Voice verification: compare this turn's audio with enrolled baseline
+    if (voiceVerification?.hasBaseline() && voiceVerifBufferRef.current.length > 0) {
+      const chunks = voiceVerifBufferRef.current;
+      const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+      const combined = new Float32Array(totalLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        combined.set(chunk, offset);
+        offset += chunk.length;
+      }
+      const sampleRate = recordingContextRef.current?.sampleRate || 44100;
+      voiceVerification.verifyVoice(combined, sampleRate);
+    }
+    voiceVerifBufferRef.current = [];
+
+    setTimeout(() => {
+      teardownRecordingMedia();
+      // Don't close recordingContext — reuse it for next recording cycle
+      setStatus("Processing...");
+      isProcessingRef.current = true; // set ref synchronously so global timer pauses immediately
+      setIsProcessing(true);
+      avatarState.onProcessing();
+      // Global timer pauses during processing (isProcessingRef.current = true above),
+      // so no manual deduction needed here — the timer already stopped ticking.
+
+      // Stop the per-question countdown interval — candidate answered.
+      // Keep the state (questionTimerSeconds) showing the frozen last value so the
+      // candidate can still see the timer while the backend processes their answer.
+      // A fresh question_timer_started will reset it when Bina asks the next question.
+      if (questionTimerIntervalRef.current) {
+        clearInterval(questionTimerIntervalRef.current);
+        questionTimerIntervalRef.current = null;
+      }
+      // In timed mode: always consume the full 2-min slot from the global timer,
+      // even if the candidate answered early. Deduct whatever per-question time
+      // is still remaining so the global budget is correct for the next question.
+      // (e.g. answered in 30s → 90s still on the clock → deduct 90s now so
+      //  global goes 29:30 → 28:00 and Q2 starts cleanly at 28:00)
+      // ...but NEVER while the interview is held on a camera/mic disconnect.
+      // A dead mic track reads as pure silence, so VAD can fire a turn-end
+      // behind the pause overlay; charging the candidate the whole remaining
+      // slot for a turn they never got to finish is the opposite of resuming
+      // where they left off. The backend defers the end_turn itself (see the
+      // session_paused guard in its end_turn handler), so the slot is deducted
+      // on the real turn-end after resume instead.
+      if (!isFlexibleMode && !isNewFlexibleMode && !isMediaPausedRef.current
+          && questionTimerSecondsRef.current !== null && questionTimerSecondsRef.current > 0) {
+        setRemainingSeconds(prev => Math.max(0, prev - questionTimerSecondsRef.current!));
+      }
+      // Clear the ref immediately (logic gating) but NOT the state (display) —
+      // keeping state non-null shows the frozen timer while processing.
+      // If the backend sends question_timer_started for Q2 before React re-renders,
+      // the null ref prevents a double deduction.
+      questionTimerSecondsRef.current = null;
+      // Do NOT clear questionTimerExpired here. If the candidate finished
+      // talking right as the timer hit 0:00, the expired flag was set by
+      // startQuestionTimerExpiry and represents the truth — wiping it here
+      // causes the "Question time: 00:00" stuck-label bug (label flips back
+      // to non-expired state while Bina speaks the next question). The
+      // pending-timer useEffect clears expired immediately before starting
+      // the next countdown, so the flag transitions cleanly TIME UP → 02:00.
+      questionTimerPendingRef.current = null;
+      questionTimerReceivedAtRef.current = null;
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: "end_turn",
+          browser_transcript: browserTranscript || undefined,
+        }));
+      }
+    }, 100);
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, voiceVerification, isFlexibleMode, isNewFlexibleMode, sendLiveTranscriptBatch, snapshotVisibleLiveTranscript, backendLiveTranscriptEnabled, teardownRecordingMedia]);
+
+  // Stop recording silently — used for timer expiry, face block, mute.
+  // If candidate was mid-answer (speech detected), sends end_turn so their
+  // partial answer is captured and processed by the backend (never dropped).
+  const stopRecordingSilent = useCallback(() => {
+    if (!isRecordingRef.current) return;
+    // Capture BEFORE resetting — determines whether audio was being recorded
+    const hadSpeech = speechDetectedRef.current;
+    isRecordingRef.current = false;
+    setIsRecording(false);
+    avatarState.onUserStopSpeaking();
+    silenceStartRef.current = null;
+    speechDetectedRef.current = false;
+    speechDetectedAtRef.current = null;
+    lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
+    speechPeakLevelRef.current = 0;
+    inTurnSpeechFrameCountRef.current = 0;
+    candidateAudioStreamingRef.current = false;
+    candidateAudioFrameCountRef.current = 0;
+    stopWebSpeechRecognition();
+    clearNoResponseTimer();
+    clearMaxRecordingTimer();
+
+    // AII-20: same voice-blocked check as stopRecording above.
+    if (hadSpeech && !hrVoiceBlockedForQidRef.current) {
+      const remainingFinalized = webSpeechFinalizedRef.current.slice(liveBatchSentCharsRef.current).trim();
+      if (remainingFinalized && (isFlexibleMode || isNewFlexibleMode)) {
+        sendLiveTranscriptBatch(remainingFinalized, "candidate_stop");
+        liveBatchSentCharsRef.current = webSpeechFinalizedRef.current.length;
+      }
+      const browserTranscript = backendLiveTranscriptEnabled ? "" : snapshotVisibleLiveTranscript();
+      // Candidate was mid-answer: capture timer snapshot, keep transcript visible,
+      // and send end_turn so Whisper processes their audio (never silently discard).
+      frozenResponseTimeRef.current = questionTimerSecondsRef.current;
+      // Do NOT commit the live transcript as a final answer. The backend owns
+      // English-only validation and sends the accepted transcript.
+      setIsCandidateTranscriptProcessing(true);
+      setCurrentTranscript("");
+      currentTranscriptRef.current = "";
+      voiceVerifBufferRef.current = [];
+      setTimeout(() => {
+        teardownRecordingMedia(false);
+        setStatus("Processing...");
+        isProcessingRef.current = true;
+        setIsProcessing(true);
+        avatarState.onProcessing();
+        // Stop per-question countdown (answer complete)
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        // Deduct remaining slot from global timer (same as normal stopRecording)
+        if (!isFlexibleMode && !isNewFlexibleMode && questionTimerSecondsRef.current !== null && questionTimerSecondsRef.current > 0) {
+          setRemainingSeconds(prev => Math.max(0, prev - questionTimerSecondsRef.current!));
+        }
+        questionTimerSecondsRef.current = null;
+        // Same reasoning as stopRecording: don't wipe expired here; the
+        // pending-timer useEffect clears it cleanly when the next countdown
+        // is about to start.
+        questionTimerPendingRef.current = null;
+        questionTimerReceivedAtRef.current = null;
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: "end_turn",
+            browser_transcript: browserTranscript || undefined,
+          }));
+        }
+      }, 100);
+      return;
+    }
+
+    // No speech detected: silent discard — clear transcript and stop cleanly
+    setCurrentTranscript("");
+    teardownRecordingMedia();
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, isFlexibleMode, isNewFlexibleMode, sendLiveTranscriptBatch, snapshotVisibleLiveTranscript, backendLiveTranscriptEnabled, teardownRecordingMedia]);
+
+  // Manual Next/skip must ABORT the current answer entirely. Reusing
+  // stopRecordingSilent() is unsafe here because a false-positive speechDetected
+  // bit can still schedule an end_turn 100 ms later, and that stale end_turn
+  // lands after the backend already advanced to the next question.
+  /**
+   * HOLD the candidate's answer across a device outage — do not abandon it.
+   *
+   * Used by the camera/mic pause arm in place of abortRecordingForSkip. The
+   * mic hardware is released (the device is gone anyway) and every per-turn
+   * watchdog is stopped so nothing fires during the outage, but the ANSWER
+   * ITSELF is left completely intact:
+   *
+   *   • speechDetectedRef / speechDetectedAtRef — the turn still counts as
+   *     answered, so the resume doesn't look like a silent question.
+   *   • currentTranscript — stays on screen, so the candidate can see what
+   *     they had already said while they plug the headset back in.
+   *   • webSpeechFinalizedRef / liveBatchSentCharsRef — live-transcript
+   *     bookkeeping continues from where it stopped instead of re-sending.
+   *   • candidateAudioStreamingRef — the backend is mid-utterance for this
+   *     turn; keeping this true means audio resumes into the SAME utterance
+   *     rather than opening a second one.
+   *   • pinnedAudioDeviceIdRef — kept, so the replugged headset is preferred.
+   *
+   * No end_turn is sent, exactly as before: the answer is not submitted, it is
+   * suspended. startRecordingInternal on resume reopens the mic without
+   * resetting any of the above, so the candidate simply carries on and the
+   * stored answer is the whole thing, start to finish.
+   */
+  const holdRecordingForOutage = useCallback(() => {
+    if (!isRecordingRef.current) return;
+    // Tell the next startRecordingInternal that it is REOPENING this answer,
+    // not starting a new one — see the flag's use there.
+    resumingHeldAnswerRef.current = true;
+    isRecordingRef.current = false;
+    setIsRecording(false);
+    avatarState.onUserStopSpeaking();
+    // Per-turn watchdogs must not fire mid-outage — a silence/no-response timer
+    // firing behind the overlay would end or skip the turn the candidate is
+    // still in the middle of. They re-arm when the mic reopens.
+    stopWebSpeechRecognition();
+    clearNoResponseTimer();
+    clearMaxRecordingTimer();
+    // VAD run-state only — these describe the CURRENT audio window, not the
+    // answer, so they must reset or the resumed window inherits stale streaks.
+    silenceStartRef.current = null;
+    lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
+    setMicInputLevel(0);
+    lastGoodMicAtRef.current = null;
+    micInputLowRef.current = false;
+    setMicInputLow(false);
+    removeAudioDeviceChangeListener();
+    // Release the mic but KEEP the pinned device (false) so the replugged
+    // headset is reused for the rest of the answer.
+    teardownRecordingMedia(false);
+    console.log('[Pause] Candidate answer HELD — mic released, partial answer and transcript preserved for resume');
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, teardownRecordingMedia]);
+
+  useEffect(() => { holdRecordingForOutageRef.current = holdRecordingForOutage; }, [holdRecordingForOutage]);
+
+  // Dead answer mic: the track is live and unmuted, but the device delivers
+  // (near) digital silence — an empty jack, or a USB mic that stopped
+  // streaming. Nothing else notices: the browser reports the track as fine and
+  // the VAD just sees a silent candidate (staging 2026-11-02: Q4-Q5 on an
+  // empty Realtek jack → "Are you there?" → skipped while the candidate spoke).
+  // Called with every chunk's RAW level, before the silent-frame early return.
+  // No frame above DEAD_MIC_LEVEL for 6 s since the mic opened (never any
+  // signal), or for 15 s after it did carry sound: switch back to the System
+  // Check mic when it is connected and not itself dead, otherwise tell the
+  // candidate. The longer mid-answer window is because browser noise
+  // suppression can hold a working mic near zero through a thinking pause
+  // (Oct 26 logs); a never-any-signal mic is the dead-jack signature.
+  const noteMicSignal = useCallback((rawLevel: number) => {
+    const DEAD_MIC_LEVEL = 0.0003; // mean |amplitude|, ≈ -70 dBFS
+    const DEAD_FROM_OPEN_MS = 6000;
+    const DEAD_AFTER_SIGNAL_MS = 15000;
+    const s = micSignalRef.current;
+    const now = Date.now();
+    // Chunks stop while muted / blocked; don't count that gap as silence.
+    if (now - s.lastFrameAt > 1000) s.lastSignalAt = now;
+    s.lastFrameAt = now;
+    if (rawLevel >= DEAD_MIC_LEVEL) {
+      s.lastSignalAt = now;
+      s.hadSignal = true;
+      if (s.deviceId) deadMicIdsRef.current.delete(s.deviceId);
+      if (s.flagged) {
+        s.flagged = false;
+        if (micNoSignalRef.current) {
+          micNoSignalRef.current = false;
+          setMicNoSignal(false);
+          console.log('[INTERVIEW-DEBUG] Answer mic signal is back', { label: s.label });
+        }
+      }
+      return;
+    }
+    if (s.flagged || now - s.lastSignalAt < (s.hadSignal ? DEAD_AFTER_SIGNAL_MS : DEAD_FROM_OPEN_MS)) return;
+    s.flagged = true;
+    const deadId = s.deviceId;
+    if (deadId) deadMicIdsRef.current.add(deadId);
+    const homeId = homeMicDeviceIdRef.current;
+    void (async () => {
+      let homePresent = false;
+      if (homeId && homeId !== deadId && !deadMicIdsRef.current.has(homeId)) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          homePresent = devices.some(d => d.kind === 'audioinput' && d.deviceId === homeId);
+        } catch { /* can't judge → no switch */ }
+      }
+      if (micSignalRef.current !== s || !isRecordingRef.current) return; // turn moved on
+      if (homePresent && homeId) {
+        console.warn('[INTERVIEW-DEBUG] Answer mic gives no signal — switching back to the System Check mic', {
+          deadLabel: s.label, deadId: deadId?.slice(0, 8), homeId: homeId.slice(0, 8), silentMs: now - s.lastSignalAt, hadSignal: s.hadSignal,
+        });
+        // Same hold-and-reopen as an unplug: the answer stays open and
+        // continues on the reopened mic.
+        holdRecordingForOutageRef.current();
+        pinnedAudioDeviceIdRef.current = homeId;
+        setTimeout(() => {
+          if (
+            isRecordingRef.current === false &&
+            wsRef.current?.readyState === WebSocket.OPEN &&
+            !isAiSpeakingRef.current &&
+            !isProcessingRef.current &&
+            !isMutedRef.current &&
+            !isFaceBlockedRef.current &&
+            !isMediaPausedRef.current
+          ) {
+            startRecordingInternalRef.current();
+          }
+        }, 100);
+        return;
+      }
+      console.warn('[INTERVIEW-DEBUG] Answer mic gives no signal — no working alternative, asking the candidate to check it', {
+        deadLabel: s.label, deadId: deadId?.slice(0, 8), homeId: homeId?.slice(0, 8) ?? null, hadSignal: s.hadSignal,
+        homeDead: Boolean(homeId && deadMicIdsRef.current.has(homeId)),
+      });
+      micNoSignalRef.current = true;
+      setMicNoSignal(true);
+    })();
+  }, []);
+
+  const abortRecordingForSkip = useCallback(() => {
+    // A deliberate skip abandons the turn — any held-answer resume is void.
+    resumingHeldAnswerRef.current = false;
+    if (!isRecordingRef.current) return;
+    isRecordingRef.current = false;
+    setIsRecording(false);
+    avatarState.onUserStopSpeaking();
+    silenceStartRef.current = null;
+    speechDetectedRef.current = false;
+    speechDetectedAtRef.current = null;
+    speechStartSentRef.current = false;
+    lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
+    speechPeakLevelRef.current = 0;
+    candidateAudioStreamingRef.current = false;
+    candidateAudioFrameCountRef.current = 0;
+    preSpeechPCMRingRef.current = [];
+    preSpeechPCMSampleCountRef.current = 0;
+    voiceVerifBufferRef.current = [];
+    frozenResponseTimeRef.current = null;
+    stopWebSpeechRecognition();
+    clearNoResponseTimer();
+    clearMaxRecordingTimer();
+    removeAudioDeviceChangeListener();
+    // Keep the pinned answer mic. Skipping a question says nothing about the
+    // device; clearing the pin here made the next turn open an unconstrained
+    // getUserMedia, which Chrome resolved to an empty Realtek jack instead of
+    // the approved USB mic, then re-pinned to it — every later answer was
+    // silent (staging 2026-11-02, ai-cb4890b9). Only the unplug path drops it.
+    setIsCandidateTranscriptProcessing(false);
+    setCurrentTranscript("");
+    currentTranscriptRef.current = "";
+    setMicInputLevel(0);
+    lastGoodMicAtRef.current = null;
+    micInputLowRef.current = false;
+    setMicInputLow(false);
+    teardownRecordingMedia(false);
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, teardownRecordingMedia]);
+
+  // Tester mute toggle removed per UX request. The mute STATE (isMuted /
+  // isMutedRef) is still used internally by proctoring/fullscreen enforcement
+  // paths, but there is no longer a user-facing manual mute button.
+
+  const startRecordingInternal = async () => {
+    const timestamp = new Date().toISOString();
+    console.log(`[Recording ${timestamp}] startRecordingInternal called: isAiSpeaking=${isAiSpeakingRef.current}, isProcessing=${isProcessingRef.current}, isRecording=${isRecordingRef.current}, isFaceBlocked=${isFaceBlockedRef.current}`);
+    // NEVER reopen the mic during a camera/mic outage. The pause arm releases
+    // it deliberately (holdRecordingForOutage), but several timers and
+    // callbacks can call this from a stale closure — a pre-turn countdown, the
+    // playback-ended handler, the post-resume watchdog — and any one of them
+    // firing mid-outage restarts "Your turn" recording behind the blocking
+    // overlay, capturing nothing while the device is unplugged. The resume
+    // branch is the only thing allowed to reopen it.
+    if (isMediaPausedRef.current) {
+      console.log(`[Recording ${timestamp}] startRecordingInternal blocked — interview paused for a device disconnect`);
+      return;
+    }
+    // Interview is ending (End pressed / farewell) — a late countdown or
+    // playback-ended callback must never reopen the mic.
+    if (isClosingRef.current) {
+      console.log(`[Recording ${timestamp}] startRecordingInternal blocked — interview is closing`);
+      return;
+    }
+    // Use refs — NOT state values — because this function is called from stale
+    // closures (useCallback, setTimeout) where isAiSpeaking/isProcessing are stale.
+    if (isAiSpeakingRef.current || isProcessingRef.current || isRecordingRef.current) {
+      console.log(`[Recording ${timestamp}] startRecordingInternal blocked by state`);
+      return;
+    }
+    // Do NOT reopen the mic while a PREVIOUS answer is still being transcribed.
+    // Otherwise a same-slot second utterance races the first answer and can wipe
+    // it (the "spoke the full 2 min → mic reopened → said a few words → 2-min
+    // answer lost" bug). The backend clears this flag (via the transcript /
+    // silent_discard / transcript_discarded messages) as soon as the prior
+    // answer resolves, and the next question's question_timer_started then
+    // re-arms normally — so this never permanently blocks the mic.
+    if (isCandidateTranscriptProcessingRef.current) {
+      console.log(`[Recording ${timestamp}] startRecordingInternal blocked — previous answer still transcribing`);
+      return;
+    }
+    if (isFaceBlockedRef.current) {
+      console.log(`[Recording ${timestamp}] startRecordingInternal blocked by face detection`);
+      return;
+    }
+    if (isMutedRef.current) {
+      // Auto-unmute when a new question's recording is starting, unless the
+      // mic was force-muted by armMediaBlock (camera/mic permission denied)
+      // or by fullscreen-exit grace-expiry. Those legitimate mutes have their
+      // own state flags (mediaBlocked / isFullscreenExited) — if neither is
+      // set, the mute is stale (e.g. left over from a prior user toggle or
+      // an implicit mute) and we should lift it so the candidate can answer
+      // without manually clicking the mic icon every question.
+      if (mediaBlockedRef.current || isFullscreenExitedRef.current) {
+        console.log('[INTERVIEW-DEBUG] startRecording BLOCKED — mic is muted (legitimate force-mute)', {
+          questionTimerSeconds: questionTimerSecondsRef.current,
+          mediaBlocked: mediaBlockedRef.current,
+          isFullscreenExited: isFullscreenExitedRef.current,
+        });
+        console.log(`[Recording ${timestamp}] startRecordingInternal blocked by force-mute`);
+        return;
+      }
+      console.log('[INTERVIEW-DEBUG] Auto-unmuting stale mic state so candidate can answer', {
+        questionTimerSeconds: questionTimerSecondsRef.current,
+      });
+      isMutedRef.current = false;
+      setIsMuted(false);
+      // Proceed past the gate — recording will start normally.
+    }
+    if (isMicForceOffRef.current) {
+      console.log(`[Recording ${timestamp}] startRecordingInternal blocked by force_mic_off`);
+      return;
+    }
+    // Mark recording as active immediately — before any async operations.
+    // Prevents a second concurrent call from passing the guard above and
+    // attempting to re-register 'pcm-processor' on the same AudioContext,
+    // which throws NotSupportedError (processors can only be registered once).
+    isRecordingRef.current = true;
+    // "Your Turn" is now open — resume the per-question answer clock if it was
+    // paused while Bina spoke (repeat / "Are you there?" / prompt). No-op for a
+    // fresh question (its timer starts un-paused via ensureQuestionTimerRunning).
+    resumeQuestionTimer();
+    console.log('[INTERVIEW-DEBUG] Recording STARTED', {
+      questionTimerSeconds: questionTimerSecondsRef.current,
+      questionNumber: questionNumberRef.current,
+      isProcessing: isProcessingRef.current,
+      isAiSpeaking: isAiSpeakingRef.current,
+    });
+    // ── Batch models: NO browser Web Speech API (2026-07) ─────────────────
+    // Batch STT providers (gpt-4o-transcribe / gemini / sarvam / assemblyai) no
+    // longer use the browser Web Speech API for a live caption — it was laggy /
+    // unreliable and depended on Google's servers. Instead the UI shows a live
+    // RECORDING WAVEFORM while the candidate answers (see the render block); the
+    // final transcript arrives from the backend after the turn. Streaming
+    // providers (Deepgram / OpenAI realtime) keep their backend-driven live
+    // transcript. Reset the per-turn gate; the "Your turn" popup shows once the
+    // capture pipeline is ready (markListeningStarted, below).
+    turnPipelineReadyRef.current = false;
+    webSpeechListeningRef.current = false;
+    // Web Speech API is intentionally DISABLED for batch models (a recording
+    // waveform is shown instead — see render). startWebSpeechRecognition() is
+    // kept for reference / easy re-enable; `void` references it so it isn't
+    // flagged as unused. To re-enable, call it here when !backendLiveTranscriptEnabled.
+    void startWebSpeechRecognition;
+    console.log(`[Recording ${timestamp}] Starting recording...`);
+    try {
+      // Prefer a dedicated per-turn answer-capture microphone for VAD + ASR so
+      // headset speech is not coupled to the webcam/proctoring audio path.
+      // Fall back to the shared webcam audio track only if the browser refuses
+      // the separate mic stream.
+      const stream = await getRecordingAudioStream();
+
+      // Capture the device ID of the track we actually got. This is the real
+      // answer-capture device in use for this turn.
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length > 0) {
+        try {
+          const actualDeviceId = audioTracks[0].getSettings?.().deviceId;
+          const actualLabel = audioTracks[0].label || "Selected microphone";
+          setActiveMicLabel(actualLabel);
+          if (actualDeviceId && actualDeviceId !== pinnedAudioDeviceIdRef.current) {
+            console.log(`[Recording ${timestamp}] Device ID captured: ${actualDeviceId}`);
+            pinnedAudioDeviceIdRef.current = actualDeviceId;
+          }
+          if (actualDeviceId && !interviewMicDeviceIdRef.current) interviewMicDeviceIdRef.current = actualDeviceId;
+        } catch {
+          setActiveMicLabel(audioTracks[0].label || "Selected microphone");
+          console.log(`[Recording ${timestamp}] getSettings not supported, skipping device ID capture`);
+        }
+
+        // Listen for device changes while recording. The answer-capture mic now
+        // runs on its own stream, so only that live recording stream matters
+        // here; webcam/proctoring recovery is handled separately above.
+        const handleDeviceChange = async () => {
+          if (!isRecordingRef.current) return;
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioDevices = devices.filter(d => d.kind === 'audioinput');
+            const pinnedStillExists =
+              !pinnedAudioDeviceIdRef.current ||
+              audioDevices.some(d => d.deviceId === pinnedAudioDeviceIdRef.current);
+            const recordingTrackLive = Boolean(
+              mediaStreamRef.current
+                ?.getAudioTracks()
+                .find(track => track.readyState === 'live')
+            );
+            if ((!pinnedStillExists && audioDevices.length > 0) || !recordingTrackLive) {
+              console.warn(`[Recording ${timestamp}] Answer mic changed or disconnected — hot-swapping to an available device`);
+              // HOLD the answer instead of submitting it.
+              //
+              // This used to call stopRecordingSilent(), which sends end_turn:
+              // the partial answer was submitted and the backend moved on to
+              // the next question. With two mics connected, unplugging one
+              // therefore cost the candidate the rest of their answer even
+              // though another mic was sitting right there — the opposite of
+              // the "switch to the available device and carry on" behaviour
+              // this handler exists for.
+              //
+              // holdRecordingForOutage releases only the mic hardware and the
+              // per-turn watchdogs, keeping speechDetectedRef, the live
+              // transcript and the backend's open utterance, so reopening below
+              // continues the SAME turn and the eventual end_turn carries the
+              // whole answer.
+              holdRecordingForOutageRef.current();
+              // Drop the pin so the reopen goes straight to the best available
+              // device instead of spending a failing exact() attempt on the mic
+              // that was just unplugged.
+              pinnedAudioDeviceIdRef.current = undefined;
+              setTimeout(() => {
+                if (
+                  isRecordingRef.current === false &&
+                  wsRef.current?.readyState === WebSocket.OPEN &&
+                  !isAiSpeakingRef.current &&
+                  !isProcessingRef.current &&
+                  !isMutedRef.current &&
+                  !isFaceBlockedRef.current
+                ) {
+                  startRecordingInternalRef.current();
+                }
+              }, 100);
+            }
+          } catch (err) {
+            console.error(`[Recording ${timestamp}] Device enumeration failed:`, err);
+          }
+        };
+
+        removeAudioDeviceChangeListener();
+        navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+        audioDeviceChangeListenerRef.current = handleDeviceChange;
+      }
+
+      // Apply mute state immediately if candidate had muted before recording started
+      if (isMutedRef.current) {
+        stream.getAudioTracks().forEach(t => { t.enabled = false; });
+      }
+      mediaStreamRef.current = stream;
+      {
+        const t = stream.getAudioTracks()[0];
+        const openedAt = Date.now();
+        micSignalRef.current = {
+          deviceId: t?.getSettings?.().deviceId,
+          label: t?.label,
+          lastSignalAt: openedAt,
+          lastFrameAt: openedAt,
+          hadSignal: false,
+          flagged: false,
+        };
+      }
+
+      // Use native sample rate — 16kHz AudioContext causes silent worklets on some browsers.
+      // Downsampling to 16kHz is done manually before sending to backend.
+      if (!recordingContextRef.current || recordingContextRef.current.state === 'closed') {
+        try {
+          recordingContextRef.current = new AudioContext();
+        } catch (err) {
+          console.error('[InterviewUI] Failed to create recording AudioContext:', err);
+          setStatus("Audio device error - please refresh");
+          return;
+        }
+        pcmWorkletRegisteredRef.current = false;
+      }
+      const ctx = recordingContextRef.current;
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+      console.log(`[InterviewUI] AudioContext: rate=${ctx.sampleRate}, state=${ctx.state}`);
+
+      // One capture chain at a time: release any previous answer's nodes
+      // (no-op after a normal teardown), then claim a new generation.
+      if (processorRef.current || micSourceNodeRef.current) {
+        console.warn('[InterviewUI] previous answer capture nodes still attached — releasing');
+      }
+      releaseAudioCaptureNodes();
+      const captureGen = audioCaptureGenRef.current;
+
+      const source = ctx.createMediaStreamSource(stream);
+      micSourceNodeRef.current = source;
+
+      // Tap a passive AnalyserNode off the mic source for the live recording
+      // waveform (MicWaveform). source→analyser only — NOT →destination, so it
+      // never plays back / echoes. Re-created each recording session.
+      try {
+        const _micAnalyser = ctx.createAnalyser();
+        _micAnalyser.fftSize = 256;
+        _micAnalyser.smoothingTimeConstant = 0.6;
+        source.connect(_micAnalyser);
+        micAnalyserRef.current = _micAnalyser;
+      } catch {
+        micAnalyserRef.current = null;
+      }
+
+      // Downsample to 16kHz for the backend (hardware rate is typically 44.1/48kHz)
+      const targetSampleRate = 16000;
+      const downsampleRatio = ctx.sampleRate / targetSampleRate;
+
+      silenceStartRef.current = null;
+      // Reopening a HELD answer (device unplugged mid-answer) must not erase
+      // the fact that the candidate had already spoken. speechDetectedRef is
+      // what makes the turn end with an end_turn: if it is false when the turn
+      // closes, stopRecording takes its "no speech → silent discard" branch and
+      // never asks the backend to transcribe — so everything said before the
+      // outage would be thrown away for a candidate who had finished answering
+      // and simply had nothing left to add after reconnecting.
+      const _resumingHeld = resumingHeldAnswerRef.current;
+      resumingHeldAnswerRef.current = false;
+      if (!_resumingHeld) {
+        speechDetectedRef.current = false;
+        speechDetectedAtRef.current = null;
+      } else {
+        console.log('[Pause] Mic reopened into the HELD answer — prior speech preserved, candidate continues the same turn');
+      }
+      // speechStartSentRef / candidateAudioStreamingRef below reset either way:
+      // re-announcing "speech started" for the resumed window is harmless (the
+      // backend's audio queue for this turn is append-only, so the pre-outage
+      // audio stays queued and is transcribed together with what follows).
+      speechStartSentRef.current = false;
+      speechFrameCountRef.current = 0;
+      lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
+    activeFrameWindowRef.current = [];
+    lastVadFrameAtRef.current = null;
+      speechPeakLevelRef.current = 0;
+      micRecentPeakRef.current = 0;
+      micPrevRawLevelRef.current = 0;
+      inTurnSpeechFrameCountRef.current = 0;
+      ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
+      candidateAudioStreamingRef.current = false;
+      candidateAudioFrameCountRef.current = 0;
+      lastBrowserTranscriptTextRef.current = "";
+      lastBrowserTranscriptUpdateAtRef.current = null;
+      lastLiveTranscriptTextRef.current = "";
+      lastLiveTranscriptUpdateAtRef.current = null;
+      turnHasLiveTranscriptRef.current = false;
+      liveTranscriptDisplayRef.current = "";
+      micLevelLastUpdateRef.current = 0;
+      setMicInputLevel(0);
+      lastGoodMicAtRef.current = null;
+      micInputLowRef.current = false;
+      setMicInputLow(false);
+      // Pre-speech ring buffer: cleared at turn start so the previous turn's
+      // tail can't leak into this turn's flush.
+      preSpeechPCMRingRef.current = [];
+      preSpeechPCMSampleCountRef.current = 0;
+      // Suppress VAD for the first VAD_WARMUP_MS after mic opens.
+      // Gives the echo canceller time to calibrate so Bina's TTS echo doesn't
+      // immediately register as candidate speech.
+      vadWarmupUntilRef.current = Date.now() + VAD_WARMUP_MS;
+
+      // Signal to backend that the candidate's mic will be effectively listening
+      // once VAD warmup ends. Backend's 8 s silence clock waits on this event so
+      // the candidate gets a real 8 s of thinking time, not 8 s minus mic-open
+      // (~800 ms) minus VAD warmup (~600 ms).
+      const micListeningDelayMs = VAD_WARMUP_MS + 50; // +50 ms jitter margin
+      setTimeout(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN && isRecordingRef.current) {
+          wsRef.current.send(JSON.stringify({ type: 'mic_listening' }));
+        }
+      }, micListeningDelayMs);
+
+      // ── Shared audio processing (VAD + PCM encode + WS send) ──────────────
+      // Defined once, called by both AudioWorklet and ScriptProcessor paths.
+      const processAudioChunk = (input: Float32Array) => {
+        // A superseded answer's chunker (see releaseAudioCaptureNodes) must
+        // never send — not even silent frames.
+        if (captureGen !== audioCaptureGenRef.current) return;
+        if (!isRecordingRef.current) return;
+        if (isMutedRef.current) return;
+        // AII-20: a yes_no HR question's buttons are the candidate's only
+        // valid input until "Need to Explain More" is clicked. Earlier fixes
+        // only stopped the CLIENT from treating its own VAD/end_turn as a
+        // submission — but the mic was still streaming raw PCM to the
+        // backend the whole time, and the backend's OWN independent
+        // mechanisms (background/decoupled transcription, server-side
+        // Deepgram EndOfTurn) could turn that streamed audio into a second,
+        // backend-originated answer for the same question, bypassing every
+        // client-side guard entirely (observed: "Yes" still recorded twice
+        // even with the click-time and stale-closure guards fixed). Dropping
+        // the chunk here means no audio for this turn ever reaches the
+        // backend at all while blocked, so none of its paths have anything
+        // left to transcribe.
+        if (hrVoiceBlockedForQidRef.current) return;
+
+        // Collect raw audio at native sample rate for voice verification.
+        // Skip while Bina is speaking or during the post-TTS echo-guard
+        // window — capturing those frames poisons the verification buffer
+        // with the AI's voice (re-entering via speakers→mic) and causes
+        // false voice_identity_changed events on the candidate's own turns.
+        if (
+          voiceVerification?.hasBaseline() &&
+          !isAiSpeakingRef.current &&
+          Date.now() >= playbackEchoGuardUntilRef.current
+        ) {
+          // Bounded, evenly-spread reservoir: the MFCC check samples only 20
+          // frames spread across the answer, so keeping every chunk of a 2-min
+          // answer (~11 MB/min at 48 kHz, plus a full-size concat at turn end)
+          // was pure memory. When full, drop every other chunk and halve the
+          // keep-rate — coverage of the whole answer is preserved.
+          const vb = voiceVerifBufferRef.current;
+          if (vb.length === 0) voiceVerifStrideRef.current = { stride: 1, seen: 0 };
+          const st = voiceVerifStrideRef.current;
+          if (st.seen++ % st.stride === 0) {
+            vb.push(new Float32Array(input));
+            if (vb.length > VOICE_VERIF_MAX_CHUNKS) {
+              voiceVerifBufferRef.current = vb.filter((_, i) => i % 2 === 0);
+              st.stride *= 2;
+            }
+          }
+        }
+
+        // Compute average absolute amplitude (RAW, pre-gain)
+        let sum = 0;
+        for (let i = 0; i < input.length; i++) { sum += Math.abs(input[i]); }
+        const rawLevel = sum / input.length;
+        noteMicSignal(rawLevel);
+
+        // Skip empty frames — AudioWorklet can produce zero-filled frames.
+        // Checked on the RAW level so boosting can't un-skip a silent frame.
+        // While the answer is streaming, still SEND the frame (as silence):
+        // the server's pause clock counts silence in received audio, so
+        // dropping these made 15 s of quiet take 30-55 s of wall time to
+        // arrive (Oct 26 test logs, noise-suppressed built-in mic).
+        if (rawLevel < 0.0001) {
+          if (
+            candidateAudioStreamingRef.current &&
+            !isAiSpeakingRef.current &&
+            wsRef.current?.readyState === WebSocket.OPEN &&
+            wsRef.current.bufferedAmount <= 5_000_000
+          ) {
+            const silentLen = downsampleRatio > 1 ? Math.floor(input.length / downsampleRatio) : input.length;
+            try {
+              wsRef.current.send(new Int16Array(silentLen).buffer);
+              const interviewWindow = window as InterviewWindow;
+              interviewWindow.__audioFramesSent = (interviewWindow.__audioFramesSent || 0) + 1;
+              interviewWindow.__audioSilentFramesSent = (interviewWindow.__audioSilentFramesSent || 0) + 1;
+            } catch { /* same handling as a dropped frame — next frame retries */ }
+          }
+          return;
+        }
+
+        // ── Adaptive gain: boost quiet (headset) mics toward a target level ──
+        // Track a slowly-decaying recent peak; gain brings that peak up to the
+        // target, clamped to [1, MIC_GAIN_MAX]. A built-in mic already at/above
+        // target gets gain≈1. The peak floor caps how high gain can climb while
+        // the candidate is silent, so steady noise isn't amplified into a false
+        // trigger. The SAME micGain is applied to the VAD level (below) and the
+        // PCM bytes sent to ASR (pcmEarly), so detection and transcription see
+        // a consistent, audible signal regardless of device.
+        // (1) Gain — ceiling comes from the active device profile.
+        // Transient-robust: a frame only raises the peak when the previous
+        // frame was loud too (candidate = min of the two), so one cough/knock
+        // can't drop the gain to ~1-2x for the next 10-20 s; sustained loud
+        // speech still lowers it within 2 frames (~170 ms). Same decay/bounds.
+        const sustainedLevel = Math.min(rawLevel, micPrevRawLevelRef.current);
+        micPrevRawLevelRef.current = rawLevel;
+        micRecentPeakRef.current = Math.max(sustainedLevel, micRecentPeakRef.current * 0.995);
+        const micGain = Math.min(
+          micGainMaxRef.current,
+          Math.max(1, micGainTargetRef.current / Math.max(micRecentPeakRef.current, MIC_GAIN_PEAK_FLOOR)),
+        );
+        const avgLevel = rawLevel * micGain;
+        _dbgAvgLevelRef.current = avgLevel; // dev overlay
+        _dbgChunkCountRef.current++;        // dev overlay
+
+        // ── Voice-band spectral ratio: is this frame human-speech-like? ──
+        // Fraction of mic spectral energy inside VOICE_BAND_LOW..HIGH_HZ. Speech
+        // concentrates energy there (~0.6–0.9); broadband noise / hum / music
+        // spread it out (lower). Used only as an ADDITIONAL gate on NEW-speech
+        // detection and on what resets the in-turn silence clock — never on its
+        // own, always combined with the energy checks. Defaults to 1 (voice-like)
+        // when no analyser is present so it can never block on unsupported setups.
+        let voiceBandRatio = 1;
+        const _an = micAnalyserRef.current;
+        if (_an) {
+          const bins = _an.frequencyBinCount;
+          if (!freqBufRef.current || freqBufRef.current.length !== bins) {
+            freqBufRef.current = new Uint8Array(bins);
+          }
+          const fb = freqBufRef.current;
+          _an.getByteFrequencyData(fb);
+          const hzPerBin = ctx.sampleRate / _an.fftSize;
+          const loBin = Math.max(1, Math.floor(VOICE_BAND_LOW_HZ / hzPerBin));
+          const hiBin = Math.min(bins - 1, Math.ceil(VOICE_BAND_HIGH_HZ / hzPerBin));
+          let bandSum = 0;
+          let totalSum = 0;
+          for (let i = 0; i < bins; i++) {
+            const v = fb[i];
+            totalSum += v;
+            if (i >= loBin && i <= hiBin) bandSum += v;
+          }
+          // Only trust the ratio when there's meaningful spectral energy; on
+          // near-silence totalSum≈0, so treat as voice-like (1) — the energy
+          // gates handle silence, this gate only matters for LOUD frames.
+          voiceBandRatio = totalSum > 12 ? bandSum / totalSum : 1;
+        }
+        _dbgVoiceRatioRef.current = voiceBandRatio;
+        const voiceLike = voiceBandRatio >= VOICE_BAND_MIN_RATIO;
+
+        const nowMs = Date.now();
+        if (nowMs - micLevelLastUpdateRef.current > 120) {
+          micLevelLastUpdateRef.current = nowMs;
+          const level = Math.min(1, avgLevel / 0.03);
+          setMicInputLevel(level);
+          // Sustained-low detection for the warning (NOT the moving bar, which
+          // keeps reflecting the instantaneous level). Any real speech peak
+          // (level >= GOOD) resets the clock; the warning only turns on after
+          // LOW_MS of continuously low input — so it never flickers during the
+          // natural pauses between words/sentences.
+          const GOOD_LEVEL = 0.15;
+          const LOW_MS = 5000;
+          if (lastGoodMicAtRef.current === null) lastGoodMicAtRef.current = nowMs;
+          if (level >= GOOD_LEVEL) {
+            lastGoodMicAtRef.current = nowMs;
+            if (micInputLowRef.current) { micInputLowRef.current = false; setMicInputLow(false); }
+          } else if (nowMs - lastGoodMicAtRef.current > LOW_MS) {
+            if (!micInputLowRef.current) { micInputLowRef.current = true; setMicInputLow(true); }
+          }
+        }
+
+        // ── Encode PCM up-front so warmup / pre-detection audio can also be
+        // captured into the ring buffer. The old code returned early on
+        // `vadWarmupUntilRef` which silently dropped ~600ms of audio. Combined
+        // with the 3-frame speech-confirmation delay (~280ms), the candidate's
+        // first ~850ms of speech never reached the backend.
+        let samplesEarly: Float32Array;
+        if (downsampleRatio > 1) {
+          const outputLen = Math.floor(input.length / downsampleRatio);
+          samplesEarly = new Float32Array(outputLen);
+          for (let i = 0; i < outputLen; i++) {
+            const pos = i * downsampleRatio;
+            const idx = Math.floor(pos);
+            const frac = pos - idx;
+            const a = input[idx] ?? 0;
+            const b = input[Math.min(idx + 1, input.length - 1)] ?? 0;
+            samplesEarly[i] = a + frac * (b - a);
+          }
+        } else {
+          samplesEarly = input;
+        }
+        // Apply the same adaptive gain to the PCM sent to ASR so a quiet
+        // headset mic reaches the backend at an audible level (the clamp
+        // handles any overshoot from the boost).
+        const pcmEarly = new Int16Array(samplesEarly.length);
+        for (let i = 0; i < samplesEarly.length; i++) {
+          pcmEarly[i] = Math.max(-32768, Math.min(32767, samplesEarly[i] * micGain * 32768));
+        }
+
+        // While Bina is mid-speech the mic might still be hot — never buffer
+        // those frames (they're TTS echo). Otherwise, if speech hasn't been
+        // confirmed yet, push into the pre-speech ring so the first word is
+        // captured.
+        if (!speechDetectedRef.current && !isAiSpeakingRef.current) {
+          preSpeechPCMRingRef.current.push(pcmEarly);
+          preSpeechPCMSampleCountRef.current += pcmEarly.length;
+          while (
+            preSpeechPCMSampleCountRef.current > PRE_SPEECH_BUFFER_MAX_SAMPLES &&
+            preSpeechPCMRingRef.current.length > 1
+          ) {
+            const dropped = preSpeechPCMRingRef.current.shift();
+            if (dropped) preSpeechPCMSampleCountRef.current -= dropped.length;
+          }
+        }
+
+        // During warmup period, mic frames are being captured into the ring
+        // buffer above. Skip VAD analysis for the warmup window — Bina's TTS
+        // echo may still be present and would otherwise falsely trip speech
+        // detection. The ring buffer will flush to backend the moment VAD
+        // does confirm speech (post-warmup), preserving the warmup-window
+        // audio that used to be discarded.
+        if (nowMs < vadWarmupUntilRef.current) {
+          // …but DO calibrate the ambient noise floor during warmup (when Bina's
+          // echo has settled). This gives the floor a head start so it already
+          // reflects the room noise the instant the candidate's turn opens —
+          // otherwise the first ~300ms of noise could trip the soft gate before
+          // the floor catches up. Loud echo is excluded by AMBIENT_LEARN_CAP.
+          if (
+            !isAiSpeakingRef.current &&
+            nowMs >= playbackEchoGuardUntilRef.current &&
+            avgLevel < AMBIENT_LEARN_CAP
+          ) {
+            const rising = avgLevel > ambientNoiseFloorRef.current;
+            const a = rising ? 0.08 : 0.12;
+            ambientNoiseFloorRef.current =
+              ambientNoiseFloorRef.current * (1 - a) + avgLevel * a;
+          }
+          return;
+        }
+        // Fix 3 (revised): the echo guard and "Bina still speaking" check
+        // must NOT `return` — that drops the PCM send block at the bottom of
+        // this function and silently kills candidate audio. Instead, fold
+        // them into a flag that gates only NEW speech_started detection. Once
+        // speech is in progress, frames keep flowing so the candidate's
+        // answer reaches the backend.
+        // Suppress new speech detection during ANY Bina speech, including
+        // the silence nudge. Per spec: candidate's response must only be
+        // captured AFTER "Are you there?" finishes speaking.
+        const suppressNewSpeechDetection =
+          nowMs < playbackEchoGuardUntilRef.current ||
+          isAiSpeakingRef.current;
+
+        // Track the room's baseline mic energy before the candidate starts.
+        // The in-turn silence clock later uses this to distinguish quiet speech
+        // from constant office / fan noise.
+        // Learn the room's noise floor from every non-speech frame below the
+        // AMBIENT_LEARN_CAP (which excludes true speech). We intentionally do
+        // NOT gate on candidateAudioStreamingRef anymore: background noise can
+        // open the soft "possible speech" stream WITHOUT confirming real speech,
+        // and if we froze learning there the floor could never catch up to the
+        // noise. Asymmetric EMA — rise slowly toward sustained louder noise,
+        // fall faster when it quiets — so a brief noise burst doesn't over-
+        // inflate the floor but persistent noise IS learned.
+        if (
+          !speechDetectedRef.current &&
+          !suppressNewSpeechDetection &&
+          avgLevel < AMBIENT_LEARN_CAP
+        ) {
+          const rising = avgLevel > ambientNoiseFloorRef.current;
+          const a = rising ? 0.05 : 0.10;
+          ambientNoiseFloorRef.current =
+            ambientNoiseFloorRef.current * (1 - a) + avgLevel * a;
+        }
+
+        // OpenAI realtime transcription path: stream the full post-warmup mic
+        // feed continuously and let the backend/OpenAI own transcript assembly.
+        // This removes the old "wait for browser transcript or local gate
+        // first" delay that clipped the candidate's opening words.
+        if (
+          realtimeTranscriptionEnabledRef.current &&
+          !candidateAudioStreamingRef.current &&
+          !suppressNewSpeechDetection
+        ) {
+          candidateAudioStreamingRef.current = true;
+          candidateAudioFrameCountRef.current = MIN_POSSIBLE_SPEECH_FRAMES;
+          flushPreSpeechAudioToBackend();
+          console.log('[INTERVIEW-DEBUG] realtime transcription opened continuous PCM streaming');
+        }
+
+
+        // Soft capture gate: low-gain headset speech can be below the normal
+        // VAD threshold. This gate may START PCM streaming earlier, but it must
+        // NOT on its own mark the turn as "real speech" or send speech_started —
+        // that was causing background office noise to hold the full 2-minute slot
+        // open until hard-cap. Real turn ownership still requires either:
+        //   1) browser live transcript movement, or
+        //   2) the stricter VAD confirmation path below.
+        const possibleSpeechThreshold = Math.max(
+          POSSIBLE_SPEECH_LEVEL,
+          ambientNoiseFloorRef.current * POSSIBLE_SPEECH_NOISE_MULTIPLIER,
+          ambientNoiseFloorRef.current + POSSIBLE_SPEECH_MARGIN
+        );
+        if (
+          avgLevel > possibleSpeechThreshold &&
+          voiceLike &&
+          !candidateAudioStreamingRef.current &&
+          !suppressNewSpeechDetection
+        ) {
+          candidateAudioFrameCountRef.current++;
+          if (candidateAudioFrameCountRef.current >= SOFT_GATE_OPEN_FRAMES) {
+            if (!candidateAudioStreamingRef.current) {
+              candidateAudioStreamingRef.current = true;
+              flushPreSpeechAudioToBackend();
+              console.log('[INTERVIEW-DEBUG] soft audio gate opened PCM streaming', {
+                avgLevel: Number(avgLevel.toFixed(4)),
+                possibleSpeechThreshold: Number(possibleSpeechThreshold.toFixed(4)),
+                voiceBandRatio: Number(voiceBandRatio.toFixed(2)),
+              });
+            }
+          }
+        } else if (!candidateAudioStreamingRef.current && (avgLevel <= possibleSpeechThreshold || !voiceLike)) {
+          candidateAudioFrameCountRef.current = Math.max(0, candidateAudioFrameCountRef.current - 1);
+        }
+
+        const speechConfirmThreshold = Math.max(silenceThresholdRef.current, possibleSpeechThreshold);
+        if (suppressNewSpeechDetection && !speechDetectedRef.current) {
+          // Bina's echo must not pre-charge the 3s onset window.
+          speechFrameCountRef.current = 0;
+        }
+        if (!speechDetectedRef.current && avgLevel > speechConfirmThreshold && voiceLike) {
+          // Onset window: SPEECH_ONSET_CONFIRM_MS of voice, measured in time,
+          // tolerating inter-word dips up to STREAK_DIP_GRACE_MS — the same
+          // rule the in-turn silence-clock reset uses (SUSTAINED_ACTIVE_MS).
+          // speechFrameCountRef === 0 marks a fresh window, so every existing
+          // reset site (turn start, Bina speaking, etc.) also resets this one.
+          const _onsetGap = onsetLastVoiceAtRef.current == null
+            ? Infinity
+            : (nowMs - onsetLastVoiceAtRef.current);
+          if (speechFrameCountRef.current === 0 || onsetStreakStartRef.current == null || _onsetGap > STREAK_DIP_GRACE_MS) {
+            onsetStreakStartRef.current = nowMs;
+            speechFrameCountRef.current = 0;
+          }
+          onsetLastVoiceAtRef.current = nowMs;
+          speechFrameCountRef.current++;
+          silenceStartRef.current = null;
+          // 3s of continuous voice (gaps up to STREAK_DIP_GRACE_MS allowed).
+          const _onsetMs = nowMs - onsetStreakStartRef.current;
+          if (_onsetMs >= SPEECH_ONSET_CONFIRM_MS && !suppressNewSpeechDetection) {
+            console.log('[INTERVIEW-DEBUG] Speech DETECTED (VAD)', {
+              questionTimerSeconds: questionTimerSecondsRef.current,
+              questionNumber: questionNumberRef.current,
+              preBufferedSamples: preSpeechPCMSampleCountRef.current,
+            });
+            candidateAudioStreamingRef.current = true;
+            speechDetectedRef.current = true;
+            speechDetectedAtRef.current = nowMs;
+            lastMeaningfulAudioAtRef.current = nowMs;
+            speechPeakLevelRef.current = avgLevel;
+            // Flush the pre-speech ring buffer to backend so Whisper gets
+            // the candidate's FIRST WORDS (the ones spoken during VAD
+            // warmup + the 3-frame confirmation delay). Without this flush,
+            // Whisper transcribes from mid-sentence and the start of the
+            // answer is lost.
+            flushPreSpeechAudioToBackend();
+            questionTimerAwaitingSpeechRef.current = false;
+            if (!speechStartSentRef.current) {
+              speechStartSentRef.current = true;
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: "speech_started" }));
+                console.log('[INTERVIEW-DEBUG] sent speech_started to backend');
+              }
+            }
+            clearNoResponseTimer();
+            noResponseRetryRef.current = 0;
+          }
+        } else {
+          if (!speechDetectedRef.current) {
+            // Short inter-word dip keeps the onset streak alive; a real gap
+            // (> STREAK_DIP_GRACE_MS since the last voice frame) restarts it.
+            if (
+              onsetLastVoiceAtRef.current == null ||
+              (nowMs - onsetLastVoiceAtRef.current) > STREAK_DIP_GRACE_MS
+            ) {
+              speechFrameCountRef.current = 0;
+            }
+          } else {
+            speechPeakLevelRef.current = Math.max(avgLevel, speechPeakLevelRef.current * 0.99);
+            // Peak-RELATIVE activity thresholds. The candidate's own close-mic
+            // speech is much louder than background people talking in the room
+            // (measured: candidate ~0.043 vs far background ~0.012). The old
+            // caps (0.0048 / 0.008) held the thresholds BELOW background chatter,
+            // so that chatter kept resetting the silence clock and the turn ran
+            // to the 2-min cap. Raising the caps lets the threshold scale up with
+            // the candidate's own volume (≈0.4–0.55 × their speech peak), so
+            // background voices fall BELOW "activity" and the turn ends ~8s after
+            // the candidate stops. A genuinely quiet speaker has a low peak, so
+            // their threshold stays low too — they are not cut off.
+            const inTurnActivityThreshold = Math.max(
+              QUIET_SPEECH_ACTIVITY_LEVEL,
+              ambientNoiseFloorRef.current * IN_TURN_NOISE_MULTIPLIER,
+              ambientNoiseFloorRef.current + IN_TURN_ACTIVITY_MARGIN,
+              Math.min(0.016, speechPeakLevelRef.current * 0.42)
+            );
+            const strongInTurnActivityThreshold = Math.max(
+              MIN_STRONG_IN_TURN_LEVEL,
+              ambientNoiseFloorRef.current * STRONG_IN_TURN_NOISE_MULTIPLIER,
+              ambientNoiseFloorRef.current + STRONG_IN_TURN_ACTIVITY_MARGIN,
+              Math.min(0.024, speechPeakLevelRef.current * 0.55)
+            );
+            // A frame keeps the turn "active" (resets the silence clock) ONLY if
+            // it is voice-like — loud background noise / music / hum no longer
+            // holds the turn open, which is what let the interview idle to the
+            // 2-min hard cap.
+            // Is this frame voice (loud enough + voice-like)? "Strong" = clearly
+            // the candidate's own close-mic voice, not quiet room sound.
+            const _frameIsActive = (avgLevel > inTurnActivityThreshold) && voiceLike;
+            const _frameIsStrong = (avgLevel > strongInTurnActivityThreshold) && voiceLike;
+            const _prevVadFrameAt = lastVadFrameAtRef.current;
+            lastVadFrameAtRef.current = nowMs;
+            // dt clamped like the popup accumulator so a stalled tab can't credit a gap.
+            const _frameMs = _prevVadFrameAt == null ? 0 : Math.min(nowMs - _prevVadFrameAt, 250);
+
+            // AII14 popup dismissal — counts SPEECH_RESUME_CONFIRM_MS of VAD
+            // speech frames (cumulative, pauses allowed) straight from this
+            // frame's decision, in the same window as the streak above rather
+            // than after it. dt is clamped so a stalled tab can't credit a gap.
+            // Skipped while the server detector owns the popup (Plan B).
+            if (midSilenceConfirmRef.current && (!serverVadActiveRef.current || popupByClientFallbackRef.current)) {
+              const _prev = popupVadFrameAtRef.current;
+              popupVadFrameAtRef.current = nowMs;
+              if (_frameIsActive && _prev != null) {
+                speechAccumMsRef.current += Math.min(nowMs - _prev, 250);
+                if (speechAccumMsRef.current >= SPEECH_RESUME_CONFIRM_MS) {
+                  // Real speech confirmed: close the popup AND restart the
+                  // silence clock from now. Without the clock reset the poll
+                  // would see the old (>15s) silence start and re-raise at once.
+                  speechAccumMsRef.current = 0;
+                  popupVadFrameAtRef.current = null;
+                  silenceHoldLoggedRef.current = false;
+                  lastMeaningfulAudioAtRef.current = nowMs;
+                  lastStrongVoiceAtRef.current = nowMs;
+                  silenceStartRef.current = null;
+                  silenceClockRef.current.voiceAt = nowMs;
+                  silenceClockRef.current.source = 'popup_dismiss';
+                  setMidSilenceConfirm_(false);
+                  console.log('[INTERVIEW-DEBUG] AII14: popup closed after VAD speech', {
+                    confirmMs: SPEECH_RESUME_CONFIRM_MS,
+                  });
+                }
+              }
+            } else {
+              popupVadFrameAtRef.current = null;
+            }
+
+            // ── AII14 silence clock (Option A, 2026-10-14) ───────────────────
+            // ONE anchor: the last frame of REAL voice. "Are you done?" fires
+            // exactly DONE_CONFIRM_SILENCE_MS after it (see the driver effect).
+            //
+            // Replaces four overlapping reset rules (3 s continuous streak,
+            // 1.5 s-in-3 s window, soft-voice guard, live-transcript update).
+            // Each moved the anchor by a different amount, so the popup landed
+            // anywhere from ~11 s to ~30 s after the candidate stopped:
+            //   - soft-voice guard: fan/breath/mic hiss above ambient kept
+            //     resetting for up to 15 s after the last strong frame → late;
+            //   - transcript updates arrive 1-3 s after the words (and Chrome
+            //     re-finalises later) → late;
+            //   - a short closing phrase never met the 1.5 s/3 s rules, so the
+            //     anchor stayed on the speech before it → early.
+            //
+            // Speech is grouped into SEGMENTS (voice frames with gaps ≤
+            // STREAK_DIP_GRACE_MS). A segment counts once it holds
+            // SILENCE_RESET_MIN_VOICE_MS of voice incl. SILENCE_RESET_MIN_STRONG_MS
+            // of strong voice — a cough/click is shorter and is ignored. From
+            // then on every voice frame of that segment moves the anchor, so
+            // the anchor is the END of the speech, not when it qualified.
+            //
+            // Transcript fallback: only while the VAD has not counted ANY
+            // segment this turn (very quiet mic the energy VAD can't hear) —
+            // otherwise such a candidate would get the popup every 15 s while
+            // visibly answering.
+            let sc = silenceClockRef.current;
+            if (sc.turnKey !== speechDetectedAtRef.current) {
+              sc = silenceClockRef.current = newSilenceClock(speechDetectedAtRef.current ?? nowMs, speechDetectedAtRef.current);
+            }
+            if (_frameIsActive) {
+              sc.lastAnyVoiceAt = nowMs;
+              if (sc.segLastAt == null) {
+                sc.segVoicedMs = 0;
+                sc.segStrongMs = 0;
+                sc.segCounted = false;
+              }
+              sc.segLastAt = nowMs;
+              sc.segVoicedMs += _frameMs;
+              if (_frameIsStrong) sc.segStrongMs += _frameMs;
+              if (
+                !sc.segCounted &&
+                sc.segVoicedMs >= SILENCE_RESET_MIN_VOICE_MS &&
+                sc.segStrongMs >= SILENCE_RESET_MIN_STRONG_MS
+              ) {
+                sc.segCounted = true;
+                sc.vadHeard = true;
+                const pauseMs = nowMs - sc.voiceAt;
+                // Only pauses worth seeing — every phrase would flood the log.
+                if (pauseMs >= SILENCE_CLOCK_LOG_PAUSE_MS) {
+                  console.log('[INTERVIEW-DEBUG] AII14-clock: speech counted → silence clock reset', {
+                    pauseBeforeMs: pauseMs,
+                    prevSource: sc.source,
+                    voicedMs: Math.round(sc.segVoicedMs),
+                    strongMs: Math.round(sc.segStrongMs),
+                    ignoredSoundsInPause: sc.ignoredSinceAnchor,
+                  });
+                }
+                sc.ignoredSinceAnchor = 0;
+              }
+              if (sc.segCounted) {
+                sc.voiceAt = nowMs;
+                sc.source = 'voice';
+                silenceHoldLoggedRef.current = false;
+              }
+            } else if (sc.segLastAt != null && (nowMs - sc.segLastAt) > STREAK_DIP_GRACE_MS) {
+              // Segment ended. Too-short sounds never touched the clock.
+              if (!sc.segCounted && sc.segVoicedMs > 0) {
+                sc.ignoredSinceAnchor++;
+                if (sc.segVoicedMs >= SILENCE_CLOCK_LOG_IGNORED_MS) {
+                  console.log('[INTERVIEW-DEBUG] AII14-clock: short sound ignored (clock NOT reset)', {
+                    voicedMs: Math.round(sc.segVoicedMs),
+                    strongMs: Math.round(sc.segStrongMs),
+                    silenceSoFarMs: nowMs - sc.voiceAt,
+                  });
+                }
+              }
+              sc.segLastAt = null;
+            }
+            const _transcriptAt = lastLiveTranscriptUpdateAtRef.current;
+            if (!sc.vadHeard && _transcriptAt != null && _transcriptAt > sc.voiceAt) {
+              if (sc.source !== 'transcript_fallback') {
+                console.log('[INTERVIEW-DEBUG] AII14-clock: VAD has not heard this candidate yet — using transcript updates', {
+                  sinceSpeechOnsetMs: speechDetectedAtRef.current == null ? null : nowMs - speechDetectedAtRef.current,
+                });
+              }
+              sc.voiceAt = _transcriptAt;
+              sc.source = 'transcript_fallback';
+            }
+            // Read by the "Are you done?" driver. Speech never ends the turn
+            // here — AII14 AC3; the parked auto-advance is preserved in
+            // ./parked/silence-auto-advance.parked.md. This handler must NOT
+            // `return` before the PCM send below (it once did, and resumed
+            // speech after the popup never reached the transcript).
+            silenceStartRef.current = sc.voiceAt;
+          }
+        }
+
+        // PCM was already encoded at the top of this function into `pcmEarly`.
+        // Once possible speech is detected, forward the full candidate-turn
+        // audio continuously. VAD now controls turn timing only; OpenAI gets
+        // the quiet headset audio instead of the browser filtering it out.
+        const lindaHoldingTurn = isAiSpeakingRef.current;
+        if (
+          candidateAudioStreamingRef.current &&
+          !lindaHoldingTurn &&
+          wsRef.current?.readyState === WebSocket.OPEN
+        ) {
+          // Bug D fix: detect WS back-pressure and surface silent drops.
+          // If bufferedAmount grows unbounded, frames stall in the browser
+          // and the server gets nothing — same symptom as a dropped send.
+          const _bufAmt = wsRef.current.bufferedAmount;
+          if (_bufAmt > 5_000_000) {
+            // 5 MB buffered = network slower than our send rate. Warn loud
+            // and skip this frame so we don't grow the buffer forever.
+            const interviewWindow = window as InterviewWindow;
+            interviewWindow.__audioFramesDropped = (interviewWindow.__audioFramesDropped || 0) + 1;
+            if (interviewWindow.__audioFramesDropped % 25 === 1) {
+              console.warn(`[AUDIO-SEND-BACKPRESSURE] bufferedAmount=${_bufAmt} — dropping frame (${interviewWindow.__audioFramesDropped} dropped total)`);
+            }
+          } else {
+            try {
+              wsRef.current.send(pcmEarly.buffer);
+              const interviewWindow = window as InterviewWindow;
+              interviewWindow.__audioFramesSent = (interviewWindow.__audioFramesSent || 0) + 1;
+              interviewWindow.__audioBytesSent = (interviewWindow.__audioBytesSent || 0) + pcmEarly.byteLength;
+            } catch (sendErr) {
+              const interviewWindow = window as InterviewWindow;
+              interviewWindow.__audioFramesFailed = (interviewWindow.__audioFramesFailed || 0) + 1;
+              console.error(`[AUDIO-SEND-FAILED] send() threw (${interviewWindow.__audioFramesFailed} failures total):`, sendErr);
+            }
+          }
+        }
+      };
+
+      // ── AudioWorklet (primary) → ScriptProcessor (fallback) ───────────────
+      // AudioWorklet runs off the main thread — no UI jank during recording.
+      // ScriptProcessor is deprecated but kept as fallback for older browsers.
+      let audioNodeConnected = false;
+
+      // RNNoise was REMOVED (per user request). We keep an off-main-thread
+      // PCM chunker worklet: it just forwards mic audio in 4096-sample chunks,
+      // NO noise suppression, NO WASM. Off-thread avoids UI jank during
+      // recording (the ScriptProcessor fallback below runs on the main thread).
+      // Noise handling comes from the browser's built-in noiseSuppression +
+      // the mic GAIN boost above — not from a worklet.
+
+      if (ctx.audioWorklet) {
+        try {
+          // Register the chunker once per AudioContext (addModule again on the
+          // same context throws NotSupportedError).
+          if (!pcmWorkletRegisteredRef.current) {
+            await ctx.audioWorklet.addModule('/workers/pcm-chunker-processor.js');
+            pcmWorkletRegisteredRef.current = true;
+          }
+
+          const workletNode = new AudioWorkletNode(ctx, 'pcm-chunker', {
+            channelCount: 1,
+            channelCountMode: 'explicit',
+            channelInterpretation: 'discrete',
+          });
+          workletNode.port.onmessage = (e: MessageEvent) => {
+            if (e.data instanceof Float32Array) {
+              processAudioChunk(e.data);
+            }
+          };
+          source.connect(workletNode);
+          workletNode.connect(ctx.destination);
+          processorRef.current = workletNode;
+          audioNodeConnected = true;
+          console.log('[InterviewUI] AudioWorklet active (pcm-chunker)');
+        } catch (err) {
+          console.warn('[InterviewUI] AudioWorklet unavailable, falling back to ScriptProcessor:', err);
+        }
+      }
+
+      if (!audioNodeConnected) {
+        // Fallback: ScriptProcessor (deprecated but universally supported)
+        const processor = ctx.createScriptProcessor(4096, 1, 1);
+        processor.onaudioprocess = (e) => {
+          processAudioChunk(e.inputBuffer.getChannelData(0));
+        };
+        source.connect(processor);
+        processor.connect(ctx.destination);
+        processorRef.current = processor;
+        console.log('[InterviewUI] ScriptProcessor active (AudioWorklet not available)');
+      }
+      // The mic setup above awaits (getUserMedia, worklet). If the turn was
+      // ended meanwhile — End pressed (abortRecordingForSkip / stopRecording
+      // cleared isRecordingRef), the interview is closing, or Bina started
+      // speaking (the farewell) — do NOT open the turn. Committing here anyway
+      // left a stale "recording…" bubble under Bina's thank-you message.
+      if (!isRecordingRef.current || isClosingRef.current || isAiSpeakingRef.current) {
+        console.log(`[Recording ${timestamp}] turn ended during mic setup — not opening it`);
+        isRecordingRef.current = false;
+        teardownRecordingMedia(false);
+        return;
+      }
+      setIsRecording(true);
+      startPendingQuestionTimer("candidate_turn_open");
+      // Capture pipeline (mic + worklet) is now live — show the "Your turn"
+      // popup + listening state. Same signal for every provider now (no Web
+      // Speech onaudiostart dependency).
+      turnPipelineReadyRef.current = true;
+      markListeningStarted();
+      avatarState.onUserStartSpeaking();
+      setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
+
+      // No client-side "Are you there?" any more — the BACKEND's silence
+      // ladder is the only nudge. The old 45s client fallback (armed here)
+      // still collided with it whenever the mic opened early (e.g. after a TTS
+      // stall reset the speaking state): staging 2026-10-13 20:07:27 got the
+      // client and backend nudge in the same second → two "Are you there?"
+      // bubbles. handleNoResponse is left in place but is no longer triggered.
+      clearNoResponseTimer();
+
+      // Hard cap on a single recording segment. Previously this was 30 s in
+      // timed mode — which silently cut off candidates who tried to give a
+      // continuous 60-120 s answer within their 2-min per-question slot.
+      // Symptoms the candidate sees:
+      //   * answer-time timer appears to freeze / disappear mid-speech (mic
+      //     actually stopped, banner still shows the frozen value)
+      //   * ASR returns a partial transcript — only the first 30 s of speech
+      //   * "continuously speak for 2 min → UI transcript not full"
+      // Raised to 130 s in BOTH modes so the cap always exceeds the 120-s
+      // per-question window. The backend's own auto-skip fires at the true
+      // window boundary, so this client cap is just a safety net against an
+      // infinite stuck recording — it should never be the thing that ends
+      // a normal answer.
+      const maxRecordingMs = 130000;
+      clearMaxRecordingTimer();
+      maxRecordingTimerRef.current = setTimeout(() => {
+        if (isRecordingRef.current) {
+          console.log(`[VAD] Max recording duration (${maxRecordingMs}ms) reached — stopping`);
+          stopRecording();
+        }
+      }, maxRecordingMs);
+    } catch (err: unknown) {
+      // Reset recording flag — we set it early to prevent races; undo on failure.
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      // The Web Speech recognizer is now pre-warmed before this try block, so a
+      // mic-acquisition failure here could leave it running with no recording
+      // session behind it (its onend/onerror auto-restart guards check
+      // isRecordingRef, now false, so it won't loop — but stop it explicitly to
+      // release the engine cleanly).
+      stopWebSpeechRecognition();
+      const errName = getErrorName(err);
+      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+        if (isBraveBrowser) {
+          setStatus("Microphone blocked by Brave Shields — click the Brave icon in the address bar, disable Shields for this site, then refresh");
+        } else {
+          setStatus("Microphone access denied — please allow microphone in browser settings and refresh");
+        }
+      } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+        setStatus("No microphone detected — please connect a microphone and refresh");
+      } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+        setStatus("Microphone is in use by another app — please close it and refresh");
+      } else if (errName === 'OverconstrainedError' || errName === 'ConstraintNotSatisfiedError') {
+        // Some Firefox/Safari builds reject channelCount:1 on certain devices
+        setStatus("Microphone constraint not supported — please try a different audio device");
+      } else {
+        setStatus("Microphone error — please check your audio device and refresh");
+      }
+      console.error('[InterviewUI] Recording microphone capture failed:', err);
+    }
+  };
+
+  useEffect(() => {
+    startRecordingInternalRef.current = () => {
+      void startRecordingInternal();
+    };
+    // ── Pre-turn "get ready" countdown drivers (Change 1) ──────────────────
+    cancelPreTurnCountdownRef.current = () => {
+      if (preTurnCountdownTimerRef.current) {
+        clearInterval(preTurnCountdownTimerRef.current);
+        preTurnCountdownTimerRef.current = null;
+      }
+      if (preTurnCountdownRef.current !== null) {
+        preTurnCountdownRef.current = null;
+        setPreTurnCountdown(null);
+      }
+    };
+    runPreTurnCountdownRef.current = (onComplete: () => void) => {
+      cancelPreTurnCountdownRef.current();
+      console.log('[INTERVIEW-DEBUG] pre-turn countdown shown', { questionNumber: questionNumberRef.current });
+      let n = PRE_TURN_COUNTDOWN_FROM;              // 3 (AII14 AC1)
+      preTurnCountdownRef.current = n;
+      setPreTurnCountdown(n);
+      setStatus("Get ready…");
+      preTurnCountdownTimerRef.current = setInterval(() => {
+        n -= 1;
+        if (n >= 1) {
+          // Show 2, 1 — one per PRE_TURN_TICK_MS (3 was shown immediately above).
+          preTurnCountdownRef.current = n;
+          setPreTurnCountdown(n);
+        } else {
+          // Countdown finished → open the mic / start the answer timer now.
+          if (preTurnCountdownTimerRef.current) {
+            clearInterval(preTurnCountdownTimerRef.current);
+            preTurnCountdownTimerRef.current = null;
+          }
+          preTurnCountdownRef.current = null;
+          setPreTurnCountdown(null);
+          try { onComplete(); } catch { /* no-op */ }
+        }
+      }, PRE_TURN_TICK_MS);
+    };
+  });
+
+  // ── AII14: silence → "Are you done?" confirmation driver ───────────────────
+  // Polls the VAD's silenceStartRef while the candidate's turn is open. Once
+  // silence has run CONTINUOUSLY for 15s, raise the confirmation popup. When
+  // the candidate speaks again the popup closes and the 15s window starts over
+  // (AC3).
+  //
+  // Measured against DONE_CONFIRM_SILENCE_MS directly, NOT against the VAD's own
+  // silence window: the story fixes this at 15s, while the VAD window is a
+  // tuning value that varies per device/deployment (and no longer ends the turn
+  // anyway now that the auto-advance is parked).
+  //
+  // This effect only RAISES the popup. Dismissal (SPEECH_RESUME_CONFIRM_MS of
+  // cumulative VAD speech) is counted per analyser frame in the VAD loop — see
+  // popupVadFrameAtRef — so it shares the VAD's window instead of trailing it.
+  //
+  // AII14-PARKED: the previous version of this effect drove the 10→1 countdown
+  // and is preserved verbatim in ./parked/silence-auto-advance.parked.md
+  useEffect(() => {
+    if (!isRecording) {
+      setMidSilenceConfirm_(false);
+      setMidSilenceCountdown_(null);
+      speechAccumMsRef.current = 0;
+      return;
+    }
+    const id = setInterval(() => {
+      if (!isRecordingRef.current || isAiSpeakingRef.current || isProcessingRef.current) {
+        setMidSilenceConfirm_(false);
+        speechAccumMsRef.current = 0;
+        return;
+      }
+      const nowTs = Date.now();
+      const start = silenceStartRef.current;
+      if (start == null) {
+        // Silence clock is clear — nothing to raise. Dismissal is NOT counted
+        // here any more: the analyser loop counts VAD speech frames directly
+        // (see popupVadFrameAtRef) so it runs in the same window as the VAD's
+        // own sustained-speech check instead of after it.
+        return;
+      }
+      // Silence again. Deliberately does NOT reset speechAccumMsRef — that is
+      // what makes the gate cumulative rather than continuous.
+      // RAISE ONLY — never lower the popup from this branch.
+      //
+      // This looked like it wanted to be a plain assignment, and that is a trap:
+      // a 200ms cough makes the VAD clear silenceStartRef and then RE-ARM it to
+      // the moment silence resumed, so `Date.now() - start` drops back to ~0. A
+      // plain assignment therefore evaluates false and dismisses the popup —
+      // straight past the SPEECH_RESUME_CONFIRM_MS gate above, which is exactly
+      // the flicker this gate exists to prevent.
+      //
+      // So the popup is monotonic once shown: it goes down ONLY via the
+      // confirmed-speech path above, Submit/Next, or the turn ending (the
+      // isAiSpeaking/isProcessing guard and the effect cleanup).
+      if ((nowTs - start) >= DONE_CONFIRM_SILENCE_MS) {
+        // Plan B: the server's Silero detector owns the popup. Log once per
+        // pause what the browser clock would have done (comparison only).
+        if (serverVadActiveRef.current) {
+          if (!silenceHoldLoggedRef.current) {
+            silenceHoldLoggedRef.current = true;
+            console.log('[INTERVIEW-DEBUG] AII14-clock: browser clock reached 15s (server decides)', {
+              question: questionNumberRef.current,
+              silenceMs: nowTs - start,
+              popupUp: midSilenceConfirmRef.current,
+            });
+          }
+          if (!midSilenceConfirmRef.current && (nowTs - start) >= DONE_CONFIRM_SILENCE_MS + SERVER_POPUP_GRACE_MS) {
+            console.warn('[INTERVIEW-DEBUG] AII14-clock: server silent past grace — browser raising "Are you done?"', {
+              question: questionNumberRef.current,
+              silenceMs: nowTs - start,
+              graceMs: SERVER_POPUP_GRACE_MS,
+            });
+            speechAccumMsRef.current = 0;
+            popupVadFrameAtRef.current = null;
+            setMidSilenceConfirm_(true);
+            popupByClientFallbackRef.current = true;
+          }
+          return;
+        }
+        if (!midSilenceConfirmRef.current) {
+          // Fresh cycle — start the cumulative count from zero so leftover
+          // credit from a previous popup cannot dismiss this one instantly.
+          speechAccumMsRef.current = 0;
+          const sc = silenceClockRef.current;
+          const lastTranscriptAt = lastLiveTranscriptUpdateAtRef.current;
+          console.log('[INTERVIEW-DEBUG] AII14-clock: "Are you done?" raised', {
+            question: questionNumberRef.current,
+            silenceMs: nowTs - start,
+            anchorSource: sc.source,
+            // Should be ≈ silenceMs (≥ it when only ignored sounds followed).
+            sinceAnyVoiceFrameMs: sc.lastAnyVoiceAt == null ? null : nowTs - sc.lastAnyVoiceAt,
+            sinceTranscriptUpdateMs: lastTranscriptAt == null ? null : nowTs - lastTranscriptAt,
+            ignoredSoundsInPause: sc.ignoredSinceAnchor,
+            vadHeard: sc.vadHeard,
+          });
+        }
+        setMidSilenceConfirm_(true);
+      }
+    }, 100);
+    return () => {
+      clearInterval(id);
+      silenceHoldLoggedRef.current = false;
+      speechAccumMsRef.current = 0;
+      setMidSilenceConfirm_(false);
+    };
+  }, [isRecording, setMidSilenceConfirm_, setMidSilenceCountdown_, DONE_CONFIRM_SILENCE_MS, SERVER_POPUP_GRACE_MS]);
+
+  // AII14 AC4 — "Submit": finalize the CURRENT response and move on.
+  // stopRecording() is the normal end-of-turn path (the same one the parked
+  // auto-advance used), so the answer is transcribed, stored against this
+  // question, and the next question follows. Deliberately NOT handleNextQuestion,
+  // which is the SKIP path and would discard the answer.
+  const handleSubmitResponse = useCallback(() => {
+    setMidSilenceConfirm_(false);
+    stopRecording();
+  }, [setMidSilenceConfirm_, stopRecording]);
+
+  // AII14 — "Continue": the candidate keeps answering the SAME question.
+  // Same effect as resumed speech closing the popup (see the VAD popup-dismiss
+  // block): hide the popup and restart the silence clock from now. Recording
+  // is never touched — the mic stayed open the whole time.
+  const handleContinueResponse = useCallback(() => {
+    const nowMs = Date.now();
+    speechAccumMsRef.current = 0;
+    popupVadFrameAtRef.current = null;
+    silenceHoldLoggedRef.current = false;
+    lastMeaningfulAudioAtRef.current = nowMs;
+    lastStrongVoiceAtRef.current = nowMs;
+    silenceStartRef.current = null;
+    silenceClockRef.current.voiceAt = nowMs;
+    silenceClockRef.current.source = 'popup_dismiss';
+    setMidSilenceConfirm_(false);
+    // Server-detected popup: reset the server's silence clock too, otherwise it
+    // still thinks the popup is up and never raises it again until speech.
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'done_prompt_continue' }));
+    }
+  }, [setMidSilenceConfirm_]);
+
+  const disconnect = useCallback(() => {
+    const wasCompleted = isClosingRef.current || shouldDisconnectAfterAudioRef.current;
+
+    stopVisemeLoop();
+    stopRecording();
+    clearNoResponseTimer();
+    cancelPreTurnCountdownRef.current();
+    setMidSilenceCountdown_(null);
+    if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
+    if (micPopupTimerRef.current) {
+      clearTimeout(micPopupTimerRef.current);
+      micPopupTimerRef.current = null;
+    }
+    setShowMicPopup(false);
+    noResponseRetryRef.current = 0;
+    wsRef.current?.close(1000, "Interview completed");
+    setIsConnected(false);
+    setIsRecording(false);
+    setIsProcessing(false);
+    setIsAiSpeaking(false);
+    // thStreamActive no longer used
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+    pendingBuffersRef.current = 0;
+    nextPlayTimeRef.current = 0;
+    audioEndReceivedRef.current = false;
+    currentAiTextRef.current = "";
+
+    if (wasCompleted) {
+      // Exit fullscreen if active (uses cross-browser utility)
+      try { exitFullscreen(); } catch {}
+      // Notify parent to redirect to completion screen
+      onInterviewComplete?.();
+    }
+  }, [stopRecording, clearNoResponseTimer, stopVisemeLoop, onInterviewComplete]);
+  useEffect(() => {
+    disconnectRef.current = disconnect;
+  });
+
+  /**
+   * Send text to backend for TTS synthesis via WebSocket (uses Nova voice).
+   * Falls back to a silent timeout if the WebSocket is not connected.
+   */
+  const speakViaTTS = useCallback((text: string, onDone: () => void) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      speakTextCallbackRef.current = onDone;
+      // Sync ref synchronously — ref-based guards (startRecordingInternal, question-timer)
+      // must see speaking=true immediately so they don't race before React commits state.
+      isAiSpeakingRef.current = true;
+      setIsAiSpeaking(true);
+      avatarState.onAiStartSpeaking();
+      wsRef.current.send(JSON.stringify({ type: "speak_text", text }));
+    } else {
+      // WebSocket not available — fall back to timeout
+      setTimeout(onDone, 3000);
+    }
+  }, [avatarState]);
+
+  // No-response handlers
+  const handleMicPopupNo = useCallback(() => {
+    setShowMicPopup(false);
+    if (micPopupTimerRef.current) {
+      clearTimeout(micPopupTimerRef.current);
+      micPopupTimerRef.current = null;
+    }
+    // End interview with closing message — uses Nova TTS via WebSocket
+    const closingMsg = "It seems we're having technical difficulties. Thank you for your time. The interview will now end.";
+    setMessages(prev => [...prev, {
+      id: crypto.randomUUID(),
+      role: "assistant" as const,
+      content: closingMsg,
+    }]);
+    setStatus("Interview ending...");
+    setIsClosing(true); isClosingRef.current = true;
+
+    speakViaTTS(closingMsg, () => {
+      disconnect();
+      // onInterviewComplete is called by ws.onclose after recording upload completes
+    });
+  }, [disconnect, speakViaTTS]);
+
+  const handleMicPopupYes = useCallback(async () => {
+    setShowMicPopup(false);
+    if (micPopupTimerRef.current) {
+      clearTimeout(micPopupTimerRef.current);
+      micPopupTimerRef.current = null;
+    }
+    noResponseRetryRef.current = 0;
+    setStatus("Resuming interview...");
+
+    // Re-check microphone
+    try {
+      const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      testStream.getTracks().forEach(t => t.stop());
+      setTimeout(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          startRecordingInternalRef.current();
+        }
+      }, 500);
+    } catch {
+      setStatus("Microphone not available - please check your device");
+    }
+  }, []);
+
+  const handleNoResponse = useCallback(() => {
+    // If the backend is already driving the silence-nudge flow (silence_detected
+    // was received and interstitial_prompt is playing), skip the client-side
+    // "Are you there?" to avoid stacking duplicate prompts.
+    if (isSilencePromptRef.current) return;
+
+    if (noResponseRetryRef.current === 0) {
+      // First timeout: Bina asks "Are you there?"
+      stopRecordingSilent();
+      noResponseRetryRef.current = 1;
+
+      const areYouThereMsg = "Are you there? Take your time — share whatever comes to mind.";
+      setMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
+        role: "assistant" as const,
+        content: areYouThereMsg,
+      }]);
+
+      setStatus("Bina is speaking...");
+
+      // Mark this as a silence prompt so the question timer keeps ticking
+      // while Bina asks "Are you there?" (her speaking time counts against
+      // the candidate's answer window). Auto-reset at line 569 when speaking ends.
+      isSilencePromptRef.current = true;
+
+      speakViaTTS(areYouThereMsg, () => {
+        setIsClarification(false);
+      setStatus("Your turn - speak now...");
+        setTimeout(() => {
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            startRecordingInternalRef.current();
+          }
+        }, 400);
+      });
+    } else {
+      // Second timeout: Show mic popup
+      stopRecordingSilent();
+      setShowMicPopup(true);
+      setStatus("Checking microphone...");
+
+      micPopupTimerRef.current = setTimeout(() => {
+        handleMicPopupNo();
+      }, 15000);
+    }
+  }, [handleMicPopupNo, speakViaTTS, stopRecordingSilent]);
+
+  // Keep refs in sync with latest callbacks
+  useEffect(() => {
+    handleNoResponseRef.current = handleNoResponse;
+  }, [handleNoResponse]);
+  useEffect(() => {
+    stopRecordingSilentRef.current = stopRecordingSilent;
+  }, [stopRecordingSilent]);
+  useEffect(() => {
+    abortRecordingForSkipRef.current = abortRecordingForSkip;
+  }, [abortRecordingForSkip]);
+
+  // WebSocket connection
+  const connect = useCallback(() => {
+    // Audio playback is handled by TalkingHead (gain:1) — no AudioContext needed here.
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '').replace(/\/api\/v1$/, '') || 'localhost:8000';
+    // Send the browser's stable client id so the interview INHERITS the same
+    // single-active-session lease the pre-interview flow held (otherwise the
+    // candidate would block themselves at the interview). A different browser
+    // has a different cid → blocked.
+    const _cid = encodeURIComponent(getAiClientSessionId(token));
+    const wsUrl = `${protocol}//${apiUrl}/api/v1/ws/ai-interview/${token}?cid=${_cid}`;
+
+    console.log('[IV-DIAG] connect() called', {
+      wsUrl,
+      nodeEnv: process.env.NODE_ENV,
+      avatarReady,
+      avatarFailed,
+      hasConnectedBefore: hasConnectedRef.current,
+      ts: new Date().toISOString(),
+    });
+
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = "arraybuffer";
+    console.log('[IV-DIAG] WebSocket object created, readyState=', ws.readyState);
+
+    ws.onopen = () => {
+      const timestamp = new Date().toISOString();
+      console.log(`[IV-DIAG] WS OPEN (handshake completed) ts=${timestamp}`);
+      console.log(`[WS ${timestamp}] WebSocket connected successfully`);
+      setIsConnected(true);
+      everConnectedRef.current = true;
+      // Immediate feedback so the candidate sees SOMETHING while the backend's
+      // LLM greeting + TTS warms up (can take 2-4s). Without this the chat
+      // sits blank and the candidate thinks the page is frozen — which is
+      // exactly the "first message appears late" complaint.
+      setStatus("Bina is joining your interview...");
+      isAiSpeakingRef.current = true;
+      setIsAiSpeaking(true);
+      // Holding the mic for Bina's first line — but she is NOT audible yet, so
+      // the UI shows "getting ready", not "Bina is speaking".
+      binaAudibleRef.current = false;
+      setBinaAudible(false);
+      reconnectAttemptsRef.current = 0;
+      preStartRetryRef.current = 0; // connected → reset the pre-start race counter
+      // A dropped/reconnected WS is exactly when an environment-verification
+      // push (opened/recording_started/submitted) could have been missed —
+      // reconcile against the backend's authoritative status immediately
+      // rather than waiting for the next 2s poll tick. No-ops if no
+      // verification is currently active.
+      void reconcileEnvVerificationRef.current();
+      // Keepalive ping every 5 s — prevents proxy/nginx from closing idle connections
+      if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = setInterval(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 5000);
+    };
+    ws.onclose = (event) => {
+      const timestamp = new Date().toISOString();
+      // Server pause detection can't reach us any more — browser clock takes over.
+      serverVadActiveRef.current = false;
+      console.log(`[IV-DIAG] WS CLOSE code=${event.code} reason="${event.reason}" wasClean=${event.wasClean} ts=${timestamp}`);
+      console.log(`[WS ${timestamp}] WebSocket closed: code=${event.code}, reason=${event.reason}`);
+      // Explicit, forwarded diagnostic line (the [INTERVIEW-DEBUG] prefix is on
+      // the client-log allowlist) so a WebSocket drop is unmistakable in the
+      // journald-forwarded logs — code 1006=abnormal/network, 1012=service
+      // restart, 1001=tab closed, 1000=normal. Flush it immediately (beacon)
+      // since the socket is already gone and the page may be tearing down.
+      // Level matters for triage: an intentional end-of-interview close (1000 +
+      // wasClean) is the happy path and logging it as a warning trains everyone
+      // to ignore warnings here. Anything else keeps warn.
+      const cleanFinish = event.code === 1000 && event.wasClean;
+      const logClose = cleanFinish ? console.log : console.warn;
+      logClose(`[INTERVIEW-DEBUG] WebSocket closed code=${event.code} reason="${event.reason || ''}" wasClean=${event.wasClean} qNum=${questionNumberRef.current ?? '?'} isClosing=${isClosingRef.current} recording=${isRecordingRef.current}`);
+      flushClientLogBeacon();
+      setIsConnected(false);
+      if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
+      if (event.code === 1000 || shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
+        setStatus("Interview completed. Thank you!");
+        // The "Finishing up… Saving your interview" popup covers the save,
+        // as the assessment's does before its final page and feedback popup.
+        // It still waits for Bina's goodbye to finish if she is mid-sentence
+        // (the same deferral the completion message uses).
+        if (candidatePlaybackEndedRef.current) setShowCompletionModal(true);
+        else pendingCompletionModalRef.current = true;
+        // Hold the final page (and its feedback popup) until the popup has
+        // been visible for 1.5s, so it reads as a step rather than a flash.
+        // Never hold it more than 8s past the save, whatever happens.
+        const waitForCompletionPopup = () => new Promise<void>((resolve) => {
+          const waitStarted = Date.now();
+          const tick = () => {
+            const shownAt = completionShownAtRef.current;
+            if (shownAt !== null && Date.now() - shownAt >= 1500) return resolve();
+            if (Date.now() - waitStarted > 8000) return resolve();
+            setTimeout(tick, 150);
+          };
+          tick();
+        });
+        // Flush proctoring events + upload recording before navigating away.
+        // Both run concurrently — proctoring flush MUST complete before onInterviewComplete
+        // otherwise camera_disabled, mic_disabled etc. events are lost.
+        const flushProctoring = flushProctoringEventsRef.current?.() ?? Promise.resolve();
+        Promise.all([flushProctoring, uploadRecording()])
+          .catch(() => {})
+          .finally(() => { void waitForCompletionPopup().then(() => onInterviewComplete?.()); });
+      } else if (event.code === 4003 && /not in progress|not yet|system_check|status:/i.test(event.reason || "")) {
+        // RACE: the WS connected BEFORE the candidate's /start call flipped the
+        // interview to in_progress (backend reject: "Interview not in progress
+        // (status: system_check)"). This is transient — /start completes within
+        // ~1-3s — so retry quickly instead of treating it as terminal. Without
+        // this the candidate had to manually REFRESH for Bina to start. We keep
+        // a dedicated fast counter (short backoff) separate from the network
+        // reconnect budget.
+        if (preStartRetryRef.current < PRE_START_MAX_RETRIES && !isUnmountedRef.current && !isClosingRef.current) {
+          preStartRetryRef.current++;
+          const delay = Math.min(1500, 400 + preStartRetryRef.current * 150); // 550ms → 1.5s
+          console.log(`[IV-DIAG] WS rejected (not in progress yet) — fast retry ${preStartRetryRef.current}/${PRE_START_MAX_RETRIES} in ${delay}ms`);
+          setStatus("Starting your interview...");
+          setTimeout(() => {
+            if (!isUnmountedRef.current && !isClosingRef.current) connectRef.current();
+          }, delay);
+        } else {
+          setStatus("Could not start the interview. Please refresh the page.");
+        }
+      } else if (event.code === 4003) {
+        // Genuine terminal reject — interview already finalized (recruiter ended
+        // it, or grace-period reaper fired). Retrying hits the same wall.
+        setStatus("Interview has ended. " + (event.reason || ""));
+        uploadRecording().catch(() => {});
+      } else if (
+        event.code === 4409 && !concurrentBlockedRef.current && interviewStartedRef.current
+        && concurrentRetryRef.current < CONCURRENT_RECONNECT_DELAYS.length
+        && !isUnmountedRef.current && !isClosingRef.current
+      ) {
+        // Blocked on an auto-reconnect: the server may still see our own dropped
+        // socket as live. The backend now lets the same browser take over, so
+        // this is only a safety net — a few quick retries, then the overlay.
+        const delay = CONCURRENT_RECONNECT_DELAYS[concurrentRetryRef.current];
+        concurrentRetryRef.current++;
+        console.warn(`[INTERVIEW-DEBUG] 4409 on reconnect — retry ${concurrentRetryRef.current}/${CONCURRENT_RECONNECT_DELAYS.length} in ${delay}ms`);
+        setStatus(`Connection lost — reconnecting in ${Math.round(delay / 1000)}s...`);
+        setTimeout(() => {
+          if (!isUnmountedRef.current && !isClosingRef.current) connectRef.current();
+        }, delay);
+      } else if (event.code === 4409 || concurrentBlockedRef.current) {
+        // Single-active-session guard: this link is already open/active in
+        // another window/device. TERMINAL — never auto-reconnect (it would just
+        // be blocked again). The overlay (concurrentBlocked) shows the message.
+        concurrentBlockedRef.current = true;
+        setConcurrentBlocked(true);
+        setStatus(event.reason || "This interview is already open in another window or device.");
+      } else if (event.code !== 3001 && !isUnmountedRef.current && !isClosingRef.current) {
+        // Unexpected disconnection (tab switch, network glitch) — auto-reconnect
+        flushProctoringEventsRef.current?.().catch(() => {});
+        stopRecordingSilentRef.current();
+        if (reconnectAttemptsRef.current < 10) {
+          reconnectAttemptsRef.current++;
+          // Exponential backoff: 2s, 3s, 5s, 8s, 13s, 20s, 30s, 30s, 30s, 30s
+          // Total budget ~3 min — matches the 5-min server grace window so the
+          // candidate has multiple recovery chances before the reaper fires.
+          const delays = [2000, 3000, 5000, 8000, 13000, 20000, 30000, 30000, 30000, 30000];
+          const delay = delays[Math.min(reconnectAttemptsRef.current - 1, delays.length - 1)];
+          setStatus(`Connection lost — reconnecting in ${Math.round(delay / 1000)}s... (attempt ${reconnectAttemptsRef.current}/10)`);
+          setTimeout(() => {
+            if (!isUnmountedRef.current && !isClosingRef.current) {
+              connectRef.current();
+            }
+          }, delay);
+        } else {
+          setStatus("Connection lost. Please refresh the page to continue.");
+          uploadRecording().catch(() => {});
+        }
+      }
+      stopRecording();
+    };
+    ws.onerror = (error) => {
+      const timestamp = new Date().toISOString();
+      console.error(`[IV-DIAG] WS ERROR ts=${timestamp} readyState=${ws.readyState}`, error);
+      console.error(`[WS ${timestamp}] WebSocket error:`, error);
+      setStatus("Connection error - please refresh");
+    };
+    // Use refs so handlers always call the latest version without reconnecting
+    ws.onmessage = (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        // Interview is paused (camera/mic disconnected).
+        //
+        // FROZEN turn → let the chunk THROUGH. The AudioContext is suspended,
+        // so the worklet cannot play it; it simply accumulates. This is how the
+        // tail of a question that was still being synthesised at unplug time
+        // still reaches the candidate: the backend keeps streaming, we keep
+        // buffering, and the thaw plays the complete turn from where it froze.
+        //
+        // Torn-down turn → drop it. There is no suspended context holding
+        // playback back, so handing chunks to TalkingHead would have Bina
+        // talking out loud behind the blocking overlay.
+        if (isMediaPausedRef.current && !binaFrozenRef.current) return;
+        // Tail of the question End cut off (see the End button).
+        if (dropPcmUntilNextTurnRef.current) return;
+        // CRITICAL: call our bookkeeping (queueAudio + trackPlaybackChunk)
+        // BEFORE streamAudio. TalkingHead's streamAudio transfers/detaches the
+        // ArrayBuffer internally (postMessage to an AudioWorklet), so any
+        // consumer that runs AFTER it sees byteLength=0 and counts zero
+        // duration. That's what made currentTurnAudioMs stall at ~500ms and
+        // made the reveal loop paint to 85% cap instantly.
+        // Take a copy first so streamAudio still gets a valid buffer.
+        const pcmCopy = event.data.slice(0);
+        queueAudioRef.current(pcmCopy);
+        trackPlaybackChunkRef.current(pcmCopy);
+        // On the first chunk of each turn: call streamStart now that the buffer is non-empty.
+        // Deferred from speaking_started to avoid TalkingHead firing onAudioEnd immediately
+        // on Q1 (cold AudioContext / empty buffer race condition).
+        if (pendingStreamStartRef.current) {
+          const cb = pendingStreamStartRef.current;
+          pendingStreamStartRef.current = null;
+          // Fresh stream for this utterance — a stale early-end flag from the
+          // previous one would re-arm (restart) the worklet on the next chunk.
+          talkingHeadEndedEarlyRef.current = false;
+          // New utterance → fresh speech clock + pause analysis (the re-arm
+          // branch below is the SAME utterance and must keep its clock).
+          talkingHeadRef.current?.beginSpeech();
+          turnAudioStartedRef.current = true;
+          talkingHeadRef.current?.streamStart(24000, cb);
+        } else if (talkingHeadEndedEarlyRef.current) {
+          // Recovery path: TalkingHead's worklet ended early (buffer drained
+          // during a streaming hiccup) but new chunks are still arriving.
+          // Restart the worklet so this chunk plays instead of being lost.
+          // Without this, Bina's voice cuts off mid-sentence and the rest
+          // of the audio is silent.
+          console.log("[TalkingHead] re-arming streamStart after early end — chunk arrived");
+          talkingHeadEndedEarlyRef.current = false;
+          talkingHeadRef.current?.streamStart(24000, () => {
+            console.log("[TalkingHead] re-armed playback-ended callback fired");
+            // Same end-of-turn work as the first streamStart (audio_end gate,
+            // countdown, mic). Without it a mid-sentence TTS stall left the turn
+            // to the safety net, which opened the mic with no 3-2-1.
+            playbackEndedCbRef.current?.();
+          });
+        }
+        // TalkingHead handles audio playback (gain:1) AND lip sync natively.
+        // Now safe to pass the original — we've already copied the data.
+        talkingHeadRef.current?.streamAudio(event.data);
+      } else {
+        const data = JSON.parse(event.data);
+        handleMessageRef.current(data);
+      }
+    };
+    wsRef.current = ws;
+  }, [token, onInterviewComplete, stopRecording, uploadRecording]);
+
+  // Keep connectRef pointing at the latest connect function so auto-reconnect works
+  useEffect(() => { connectRef.current = connect; }, [connect]);
+
+  // Mic permission already granted during system check — no need to re-acquire here.
+  // Re-requesting getUserMedia in fullscreen causes a browser popup overlay.
+
+  // Connect WebSocket once avatar is ready (or after timeout fallback)
+  const hasConnectedRef = useRef(false);
+
+  // Fallback: if avatar hasn't signalled ready within 35 s, unblock the WebSocket anyway.
+  // The showAvatar timeout in TalkingHeadAvatar is 20 s; we give extra buffer for slower
+  // connections loading avatar assets before falling back to headless mode.
+  useEffect(() => {
+    const fallback = setTimeout(() => {
+      if (!avatarReady) {
+        console.warn('[InterviewUI] Avatar load timeout — connecting WebSocket without avatar');
+        setAvatarReady(true);
+      }
+    }, 35000);
+    return () => clearTimeout(fallback);
+  }, [avatarReady]);
+
+  // Fix #2: visual fallback. If the 3D avatar hasn't signalled ready within 12s
+  // (it normally loads in 2-5s), assume it's failed/hung on this device and show
+  // the static Bina image so the candidate isn't staring at a blank canvas.
+  // The TalkingHead onFallback callback also sets this immediately on a hard
+  // error; this timer covers the silent-hang case where no error is thrown.
+  useEffect(() => {
+    if (avatarReady || avatarFailed) return;
+    const t = setTimeout(() => {
+      if (!avatarReady) {
+        console.warn('[InterviewUI] 3D avatar slow/failed to load — showing static Bina fallback');
+        setAvatarFailed(true);
+      }
+    }, 12000);
+    return () => clearTimeout(t);
+  }, [avatarReady, avatarFailed]);
+
+  // [IV-DIAG] log avatar readiness transitions — tells us whether the avatar
+  // (the heaviest client component) is what's blocking the connect trigger.
+  useEffect(() => {
+    console.log(`[IV-DIAG] avatarReady=${avatarReady} avatarFailed=${avatarFailed} ts=${new Date().toISOString()}`);
+  }, [avatarReady, avatarFailed]);
+
+  // ── AudioContext unlock safety-net ────────────────────────────────────────
+  // Chrome's autoplay policy can leave the shared 24kHz AudioContext SUSPENDED
+  // (especially on the resume entry-path, where it's created outside a gesture).
+  // A suspended context = Bina's TTS never plays → "she only speaks after a
+  // refresh". This installs a one-time listener that resumes the context on the
+  // candidate's FIRST interaction (pointer/key/touch) with the interview screen,
+  // guaranteeing it's 'running' before/at Bina's first audio. Self-removes once
+  // resumed. Polls briefly too, in case the context is created slightly later.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let done = false;
+    const tryResume = () => {
+      const ctx = (window as InterviewWindow).__interviewAudioContext as AudioContext | undefined;
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().then(
+          () => console.log('[IV-DIAG] AudioContext resumed via gesture, state:', ctx.state),
+          () => { /* ignore — will retry on next gesture */ },
+        );
+      }
+      if (ctx && ctx.state === 'running') {
+        done = true;
+        window.removeEventListener('pointerdown', tryResume);
+        window.removeEventListener('keydown', tryResume);
+        window.removeEventListener('touchstart', tryResume);
+      }
+    };
+    window.addEventListener('pointerdown', tryResume);
+    window.addEventListener('keydown', tryResume);
+    window.addEventListener('touchstart', tryResume);
+    // Also attempt immediately + a few times early (covers the case where the
+    // context was already unlocked by the start-button gesture).
+    tryResume();
+    const iv = setInterval(() => { if (done) { clearInterval(iv); return; } tryResume(); }, 500);
+    const stop = setTimeout(() => clearInterval(iv), 10000);
+    return () => {
+      clearInterval(iv);
+      clearTimeout(stop);
+      window.removeEventListener('pointerdown', tryResume);
+      window.removeEventListener('keydown', tryResume);
+      window.removeEventListener('touchstart', tryResume);
+    };
+  }, []);
+
+  // Low-tier device → skip waiting on the heavy 3D avatar: show the static
+  // Bina image immediately and let the interview connect right away (audio
+  // still routes through the mounted TalkingHead). On capable devices the 3D
+  // avatar loads normally.
+  useEffect(() => {
+    if (effectiveDeviceCapability && effectiveDeviceCapability.use3DAvatar === false) {
+      setAvatarFailed(true);
+      setAvatar3DCantRun(true);
+    }
+  }, [effectiveDeviceCapability]);
+
+  // Connect once the avatar is ready OR has fallen back to the static image.
+  // Previously this fired only on avatarReady — so on a low-end machine where
+  // the 3D avatar hangs past the 12s timeout (→ avatarFailed), the WebSocket
+  // never connected and the interview silently never started. Gating on
+  // avatarFailed too means a slow/failed avatar still launches the interview
+  // (audio + static visual), which is exactly the old-system case.
+  useEffect(() => {
+    if ((!avatarReady && !avatarFailed) || hasConnectedRef.current) return;
+    // Wait for the "Preparing your interview…" warm-up (capped at
+    // PREPARE_MAX_WAIT_MS) so the detection models' heavy start-up doesn't
+    // stutter Bina's introduction.
+    if (!preparingDone) return;
+    console.log('[IV-DIAG] connect-trigger effect firing', {
+      avatarReady, avatarFailed,
+      deviceTier: effectiveDeviceCapability?.tier ?? 'none',
+      cores: effectiveDeviceCapability?.cores ?? 'n/a',
+      benchmarkMs: effectiveDeviceCapability?.benchmarkMs ?? 'n/a',
+      use3DAvatar: effectiveDeviceCapability?.use3DAvatar ?? 'n/a',
+      nodeEnv: process.env.NODE_ENV,
+      ts: new Date().toISOString(),
+    });
+    isUnmountedRef.current = false;
+    // Use connectRef (always points at the latest connect) and DO NOT depend on
+    // `connect` here. BUG (stuck "Connecting"): when `connect`'s identity changed
+    // within the 300ms window, this effect re-ran → its cleanup cleared the timer
+    // → on re-entry hasConnectedRef was already true → early return → connect()
+    // NEVER fired. Removing `connect` from deps means only avatarReady/avatarFailed
+    // can re-run this, so the timer can't be cancelled by a connect-identity change.
+    //
+    // hasConnectedRef is marked INSIDE the timer, not before it. BUG (prod
+    // c9d6627a, 2026-10-06): avatarReady flipped true → timer scheduled →
+    // within 300ms the FPS watchdog fired onFallback → avatarFailed flipped →
+    // this effect re-ran, its cleanup cancelled the timer, and the re-entry
+    // returned early because the flag was already set. connect() never ran and
+    // Bina never spoke (both avatar fallback timers skip once avatarReady is
+    // true). Setting the flag only when connect actually fires lets the re-run
+    // reschedule it.
+    const timer = setTimeout(() => {
+      if (hasConnectedRef.current) return;
+      hasConnectedRef.current = true;
+      connectRef.current?.();
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [avatarReady, avatarFailed, preparingDone]);
+
+  // Cleanup on unmount only
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
+      if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
+      if (repeatWindowTimerRef.current) { clearTimeout(repeatWindowTimerRef.current); repeatWindowTimerRef.current = null; }
+      if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+      if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
+      if (checkpointTimerRef.current) { clearInterval(checkpointTimerRef.current); checkpointTimerRef.current = null; }
+      // Flush the candidate webcam recording BEFORE tearing down media. When the
+      // interview is terminated (proctoring), the portal unmounts this component
+      // and the WS closes with code 3001 — a path the onclose handler skips, so
+      // without this the candidate-camera recording was never uploaded (only the
+      // screen recording was). Guarded by isFinalizingUploadRef so a normal
+      // completion (which already uploaded via the WS-close 1000 path) does not
+      // upload a second time. Fire-and-forget: the SPA stays mounted on the
+      // terminated/completed screen, so the in-flight fetch completes.
+      if (!isFinalizingUploadRef.current) {
+        try { void uploadRecordingRef.current?.(); } catch { /* best effort */ }
+      }
+      wsRef.current?.close(3001, 'Component unmounted');
+      try { audioContextRef.current?.close(); } catch {}
+      audioContextRef.current = null;
+      try { recordingContextRef.current?.close(); } catch {}
+      recordingContextRef.current = null;
+      teardownRecordingMedia();
+      // Stop the canvas video relay LAST — uploadRecording above already called
+      // recorder.stop() synchronously, so everything the recorder captured is
+      // safely on its way out before the relay's track goes away.
+      if (recordRelayTimerRef.current) { clearInterval(recordRelayTimerRef.current); recordRelayTimerRef.current = null; }
+      try { recordVideoRelayTrackRef.current?.stop(); } catch { /* ignore */ }
+      recordVideoRelayTrackRef.current = null;
+    };
+  }, [teardownRecordingMedia]);
+
+  // Auto-scroll — keep the view pinned to the true bottom so the newest
+  // question / response / recording bubble is visible. scrollTop =
+  // scrollHeight directly (instant: no stacked smooth-scroll animations, and
+  // scrollHeight includes the pb-52 banner clearance so the newest content
+  // lands ABOVE the floating banner).
+  //
+  // Driven by a ResizeObserver on the chat content + scroll box, NOT a list
+  // of state dependencies. The old dependency list missed layout changes
+  // (the "Are you done?" popup's padding, the HR Yes/No buttons, banner
+  // variants, photos finishing loading…), each leaving the view a little
+  // above the bottom — invisible early on, but once the chat is long enough
+  // to scroll (~Q5) the candidate had to scroll manually. Observing the real
+  // size catches every cause.
+  //
+  // Following pauses only when the CANDIDATE scrolls away from the bottom
+  // (to re-read something) and resumes when they scroll back down, press
+  // "Latest", or a new question starts.
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    const content = chatContentRef.current;
+    if (!el || !content) return;
+    let raf = 0;
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => { raf = 0; pinChatToBottom(); });
+    };
+    const ro = new ResizeObserver(schedule);
+    ro.observe(el);        // its content box shrinks when the banner padding grows
+    ro.observe(content);   // every bubble / reveal / image / button change
+    schedule();
+    return () => { ro.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }, [isConnected, pinChatToBottom]);
+
+  // A new question always brings the view back to the live conversation.
+  useEffect(() => {
+    pinChatToBottom(true);
+  }, [questionNumber, pinChatToBottom]);
+
+  // Flush proctoring events when the page is about to close (tab close, refresh, etc.)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Fire-and-forget: sendBeacon is best effort but survives page close
+      // candidateAIInterviewService uses unauthenticated token-based URLs, so no auth header needed
+      flushProctoringEventsRef.current?.().catch(() => {});
+      // Beacon the buffered browser diagnostic lines too, so the last moments
+      // (incl. a WebSocket drop) reach journald even as the page tears down.
+      flushClientLogBeacon();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
+    };
+  }, []);
+
+  // Client-log forwarder: ship the browser's interview diagnostic console lines
+  // (VAD / silence / stopRecording / mic / WebSocket-close) to the backend so
+  // they land in journald tagged `[ai-<token8>]` — readable alongside the
+  // backend logs via `grep`. Started once the token is known; flushed + stopped
+  // on unmount. See clientLogForwarder.ts (allowlisted, PII-guarded, batched).
+  useEffect(() => {
+    if (!token) return;
+    startClientLogForwarder(token);
+    return () => { stopClientLogForwarder(); };
+  }, [token]);
+
+  // Fullscreen exit — track UI state + ENFORCE fullscreen by force-muting the
+  // mic while the overlay is shown. The proctoring monitor logs the
+  // `fullscreen_exit` violation separately; this effect's job is to make sure
+  // the candidate cannot keep answering questions behind the overlay (e.g. by
+  // consulting an external reference) while fullscreen is off.
+  //
+  // Design:
+  //   - Exit fullscreen → snapshot the previous mute state, force mute = true.
+  //   - Re-enter fullscreen → restore the previous mute state.
+  //
+  // The overlay UI already blocks "end interview" / skip controls; the mic
+  // mute closes the remaining audio-submission loophole.
+  // Probe live mic/camera permission state. Returns a `mediaBlocked` descriptor
+  // ONLY when the browser's Permissions API reports the permission as
+  // "denied" — this is the authoritative OS-level revocation signal.
+  //
+  // We deliberately DO NOT inspect `mediaStreamRef` tracks here:
+  //   - `mediaStreamRef` is the per-turn answer-capture stream (audio only,
+  //     dedicated when possible, shared-webcam fallback otherwise). Checking
+  //     getVideoTracks()
+  //     against that stream always reports `length === 0` → false positive
+  //     "camera revoked" after every Bina turn ended.
+  //   - Between turns, the audio stream is torn down, so getAudioTracks()
+  //     returns `ended` tracks → false positive "microphone revoked".
+  //
+  // Track-based revocation detection is still done — but by the dedicated
+  // `track.onended` / `track.onmute` callbacks inside
+  // useInterviewProctoringMonitor, which only run against the LIVE
+  // tracks while they're expected to be live. Those paths already emit
+  // `camera_disabled` / `microphone_disabled` events and flow to this
+  // component's block overlay via the same `armMediaBlock` reducer if we
+  // ever want to wire them together — for now, the probe stays
+  // Permissions-API-only and avoids the stream-inspection false positives.
+  const probeMediaPermissions = useCallback(async (): Promise<typeof mediaBlocked> => {
+    let camDenied = false;
+    let micDenied = false;
+    try {
+      const perms = navigator.permissions;
+      if (perms?.query) {
+        try {
+          const camStatus = await perms.query({ name: 'camera' as PermissionName });
+          if (camStatus?.state === 'denied') camDenied = true;
+        } catch { /* unsupported */ }
+        try {
+          const micStatus = await perms.query({ name: 'microphone' as PermissionName });
+          if (micStatus?.state === 'denied') micDenied = true;
+        } catch { /* unsupported */ }
+      }
+    } catch { /* ignore */ }
+    if (camDenied && micDenied) return { kind: 'both', reason: 'camera_and_microphone_revoked' };
+    if (camDenied) return { kind: 'camera', reason: 'camera_revoked' };
+    if (micDenied) return { kind: 'microphone', reason: 'microphone_revoked' };
+    return null;
+  }, []);
+
+  // Arm the terminal media-permission block. Fires a severe proctor event
+  // so the recruiter sees it under Proctoring Violations, then freezes the
+  // UI behind a blocking overlay.
+  const armMediaBlock = useCallback((result: NonNullable<typeof mediaBlocked>, extraDetails?: ProctorEventDetails) => {
+    if (mediaBlockedRef.current) return; // already armed — idempotent
+    console.log('[INTERVIEW-DEBUG] MIC FORCE-MUTED by armMediaBlock', { kind: result.kind, details: extraDetails });
+    mediaBlockedRef.current = result;
+    setMediaBlocked(result);
+    setStatus("Camera / microphone access is required to continue.");
+    // User spec: NEVER auto-mute the mic, regardless of media-block state.
+    // (Previously the code force-muted on permission denial — but the user
+    // wants the mic to stay open in all scenarios so they don't have to
+    // manually re-unmute after each pause/permission event.)
+    stopRecordingSilentRef.current();
+    // Report as a severe proctoring violation (backend persists to
+    // proctoring_events and surfaces it in the recruiter's results view).
+    try {
+      const eventType =
+        result.kind === 'camera' ? 'camera_disabled' :
+        result.kind === 'microphone' ? 'microphone_disabled' :
+        'camera_disabled'; // "both" → log camera_disabled; microphone_disabled follows below
+      candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: eventType,
+        severity: 'severe',
+        details: { reason: result.reason, phase: 'in_interview', ...(extraDetails || {}) },
+      }).catch(() => { /* best-effort */ });
+      if (result.kind === 'both') {
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'microphone_disabled',
+          severity: 'severe',
+          details: { reason: result.reason, phase: 'in_interview', ...(extraDetails || {}) },
+        }).catch(() => { /* best-effort */ });
+      }
+    } catch { /* ignore */ }
+  }, [token]);
+
+  // Watchdog: poll the Permissions API + track health every 2 s during the
+  // interview. If permission is revoked (candidate opened site-settings and
+  // blocked camera/mic while the tab was in the background), arm the block
+  // immediately — don't wait for the next mic-open attempt.
+  useEffect(() => {
+    if (!isConnected || mediaBlocked) return;
+    let cancelled = false;
+    // Every 10 s is plenty — permission revocation is a rare, user-initiated
+    // action. Polling at 2 s was excessive and added main-thread work every
+    // tick for an event that might never happen. The existing track.onended /
+    // track.onmute listeners in useInterviewProctoringMonitor handle
+    // synchronous revocation; this poll is just a safety net for browsers
+    // that don't fire those events reliably.
+    const iv = setInterval(async () => {
+      if (cancelled || mediaBlockedRef.current) return;
+      const result = await probeMediaPermissions();
+      if (result) armMediaBlock(result, { source: 'watchdog' });
+    }, 10000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [isConnected, mediaBlocked, probeMediaPermissions, armMediaBlock]);
+
+  // Also run the probe once on connect so any permission that was revoked
+  // BEFORE the interview UI mounted is caught before Bina even speaks.
+  useEffect(() => {
+    if (!isConnected) return;
+    (async () => {
+      const result = await probeMediaPermissions();
+      if (result) armMediaBlock(result, { source: 'interview_entry' });
+    })();
+  }, [isConnected, probeMediaPermissions, armMediaBlock]);
+
+  useEffect(() => {
+    if (!isConnected) return;
+
+    // Mute state held by the candidate at the moment fullscreen was lost,
+    // so we can restore it when they return. null means "not currently in
+    // an enforced-mute window".
+    let preExitMuteState: boolean | null = null;
+    // Wall-clock timestamp of when the pause started, so the paired
+    // session_resumed proctor event can include the total pause duration.
+    let pausedAtMs: number | null = null;
+    // Grace period: if candidate returns to fullscreen within 10s, DON'T
+    // fully pause the session — just log a minor violation and continue.
+    // This prevents accidental Esc presses from killing ongoing interviews.
+    // Professional interview platforms (HackerRank, HireVue) use this pattern.
+    const GRACE_PERIOD_MS = 10000;
+    let graceTimerId: ReturnType<typeof setTimeout> | null = null;
+    let graceCountdownId: ReturnType<typeof setInterval> | null = null;
+    let graceExitAtMs: number | null = null;
+
+    const clearGrace = () => {
+      if (graceTimerId !== null) { clearTimeout(graceTimerId); graceTimerId = null; }
+      if (graceCountdownId !== null) { clearInterval(graceCountdownId); graceCountdownId = null; }
+      setGracePeriodRemaining(null);
+    };
+
+    const executeHardPause = () => {
+      // KEEP-RUNNING POLICY (2026-05-26): fullscreen exit must NOT pause or
+      // freeze the interview — it now behaves like a tab switch (see
+      // handleVisibilityChange below): the timer keeps ticking and Bina keeps
+      // going; time spent outside fullscreen is the candidate's penalty.
+      //
+      // The OLD code froze the timers + stopped TTS + sent session_pause here,
+      // but the BACKEND ignores session_pause(reason=fullscreen_exit) ("non-stop"
+      // rule, ai_interview_ws.py). That desynced the two sides: the backend kept
+      // ticking, expired the window, advanced, and emitted a fresh full-window
+      // question_timer_started that reset the visible timer to the start ("timer
+      // starts from 1st"). Removing the freeze keeps the frontend in lockstep
+      // with the backend's wall-clock truth. After the grace window we only
+      // ESCALATE the proctoring record — no freeze, no TTS stop, no session_pause.
+      candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: 'fullscreen_exit',
+        severity: 'minor',
+        details: { reason: 'grace_expired', escalated_at: new Date().toISOString() },
+      }).catch(() => { /* best-effort */ });
+      console.log('[INTERVIEW-DEBUG] Fullscreen-exit grace expired — interview continues (keep-running policy, no freeze)');
+    };
+
+    const handleFullscreenChange = async () => {
+      if (!document.fullscreenElement) {
+        // FULLSCREEN EXIT detected. Show overlay immediately (existing
+        // behavior) but DO NOT hard-pause yet — give the candidate a 10s
+        // grace window to return. Log the exit itself as a minor event now
+        // (recruiter sees every exit regardless of recovery).
+        setIsFullscreenExited(true);
+        isFullscreenExitedRef.current = true;
+        graceExitAtMs = Date.now();
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'fullscreen_exit',
+          severity: 'low',
+          details: { phase: 'in_interview', grace_period_ms: GRACE_PERIOD_MS },
+        }).catch(() => { /* best-effort */ });
+        // Arm the grace timer — if the candidate doesn't return in time,
+        // escalate to the full pause.
+        clearGrace();
+        setGracePeriodRemaining(Math.ceil(GRACE_PERIOD_MS / 1000));
+        graceCountdownId = setInterval(() => {
+          if (graceExitAtMs === null) return;
+          const left = Math.max(0, Math.ceil((GRACE_PERIOD_MS - (Date.now() - graceExitAtMs)) / 1000));
+          setGracePeriodRemaining(left);
+        }, 200);
+        graceTimerId = setTimeout(() => {
+          if (graceCountdownId !== null) { clearInterval(graceCountdownId); graceCountdownId = null; }
+          setGracePeriodRemaining(null);
+          graceTimerId = null;
+          if (!document.fullscreenElement) executeHardPause();
+        }, GRACE_PERIOD_MS);
+      } else {
+        // RETURNING TO FULLSCREEN.
+        //
+        // FAST PATH: if the grace timer is still armed, the candidate came
+        // back within 10s — tear down the overlay WITHOUT hard-pausing.
+        // Log a minor "recovered" violation for the recruiter timeline but
+        // don't send session_pause / session_resume (they never paused).
+        if (graceTimerId !== null) {
+          clearGrace();
+          const recoveredMs = graceExitAtMs !== null ? Date.now() - graceExitAtMs : null;
+          graceExitAtMs = null;
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'fullscreen_exit_recovered',
+            severity: 'low',
+            details: {
+              recovered_within_ms: recoveredMs,
+              grace_period_ms: GRACE_PERIOD_MS,
+            },
+          }).catch(() => { /* best-effort */ });
+          setIsFullscreenExited(false);
+          isFullscreenExitedRef.current = false;
+          return;
+        }
+        graceExitAtMs = null;
+        // Before doing anything else, re-check mic/camera permission — if the
+        // candidate blocked it while the browser UI was visible, arm the
+        // media block NOW and log an additional proctor violation that the
+        // block was attempted on resume (i.e. they clicked the button after
+        // tampering with permissions).
+        const probe = await probeMediaPermissions();
+        if (probe) {
+          armMediaBlock(probe, {
+            source: 'fullscreen_resume',
+            note: 'candidate revoked permission during fullscreen exit and attempted to resume',
+          });
+          // Leave the fullscreen-exit overlay torn down — the block overlay
+          // takes over from here.
+          setIsFullscreenExited(false);
+          isFullscreenExitedRef.current = false;
+          preExitMuteState = null;
+          pausedAtMs = null;
+          return;
+        }
+        // Compute how long the session was paused. Missing pausedAtMs (e.g.
+        // because this handler is firing without a matching exit — shouldn't
+        // happen but be defensive) falls back to null so the recruiter sees
+        // "duration: null" and knows it's a partial record.
+        const pauseDurationMs = pausedAtMs !== null ? Math.max(0, Date.now() - pausedAtMs) : null;
+        const pauseDurationSec = pauseDurationMs !== null ? Math.round(pauseDurationMs / 1000) : null;
+        // Record the session_resumed event with the paired duration so the
+        // recruiter's violation timeline has a clean "paused → resumed" entry.
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'session_resumed',
+          severity: 'low',
+          details: {
+            reason: 'fullscreen_returned',
+            pause_duration_ms: pauseDurationMs,
+            pause_duration_seconds: pauseDurationSec,
+            resumed_at: new Date().toISOString(),
+          },
+        }).catch(() => { /* best-effort */ });
+        pausedAtMs = null;
+        setIsFullscreenExited(false);
+        isFullscreenExitedRef.current = false;
+        // Restore the timers from their frozen pre-exit values. The server
+        // may have sent fresh `global_remaining_seconds` while we were
+        // paused (from reconnect or a queued question_timer_started);
+        // those would otherwise clobber the frozen value. Writing back
+        // explicitly here keeps the UX promise: "timer maintains the time
+        // across fullscreen exit".
+        if (frozenGlobalSecondsRef.current !== null) {
+          setRemainingSeconds(frozenGlobalSecondsRef.current);
+        }
+        if (frozenQuestionSecondsRef.current !== null) {
+          setQuestionTimerSeconds(frozenQuestionSecondsRef.current);
+          questionTimerSecondsRef.current = frozenQuestionSecondsRef.current;
+        }
+        frozenGlobalSecondsRef.current = null;
+        frozenQuestionSecondsRef.current = null;
+        // Only resume the backend if we actually hard-paused it. Under the
+        // keep-running policy fullscreen exit never pauses (pauseDurationMs
+        // stays null), so there is nothing to resume — sending session_resume
+        // would make the backend needlessly rebuild the question-timer task and
+        // could double-arm the auto-skip.
+        if (pauseDurationMs !== null && wsRef.current?.readyState === WebSocket.OPEN) {
+          try { wsRef.current.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+        }
+        // Restore whatever the candidate had before they exited fullscreen.
+        if (preExitMuteState !== null) {
+          isMutedRef.current = preExitMuteState;
+          setIsMuted(preExitMuteState);
+          preExitMuteState = null;
+        }
+      }
+    };
+
+    // Visibility-change handler: when the candidate switches tabs / minimizes
+    // the window, we LOG the violation but do NOT pause the timer or trigger
+    // the grace-period / hard-pause path. Rationale: timer must keep ticking
+    // through tab switches (cheating attempts cost the candidate their
+    // remaining question time as a penalty). Fullscreen exit (Esc/F11) is
+    // handled separately by `handleFullscreenChange` and still pauses.
+    const handleVisibilityChange = async () => {
+      if (!isConnected) return;
+      if (document.hidden) {
+        // Fire-and-forget violation log; do not gate UI on the result.
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'window_blur',
+          severity: 'low',
+          details: {
+            phase: 'in_interview',
+            reason: 'window_hidden',
+            timer_paused: false,
+          },
+        }).catch(() => { /* best-effort */ });
+      }
+    };
+
+    document.addEventListener(getFullscreenChangeEvent(), handleFullscreenChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener(getFullscreenChangeEvent(), handleFullscreenChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // If the component unmounts mid-enforcement, make sure we don't leave
+      // the mic stuck muted in some other downstream consumer that holds a
+      // ref. setIsMuted is a no-op here (component gone) so just null out
+      // the local pointer.
+      preExitMuteState = null;
+      clearGrace();
+    };
+  }, [isConnected, probeMediaPermissions, armMediaBlock, token]);
+
+  // Copy-paste blocking is handled by useInterviewProctoringMonitor (copyPasteBlocking prop).
+  // No duplicate listener needed here.
+
+  // DevTools / keyboard blocking during active interview
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // F12 (DevTools)
+      if (e.key === "F12") { e.preventDefault(); return; }
+      // Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C (DevTools)
+      if (e.ctrlKey && e.shiftKey && ["I","i","J","j","C","c"].includes(e.key)) { e.preventDefault(); return; }
+      // Ctrl+U (View Source)
+      if (e.ctrlKey && (e.key === "u" || e.key === "U")) { e.preventDefault(); return; }
+      // Ctrl+S (Save Page)
+      if (e.ctrlKey && (e.key === "s" || e.key === "S")) { e.preventDefault(); return; }
+      // Ctrl+P (Print)
+      if (e.ctrlKey && (e.key === "p" || e.key === "P")) { e.preventDefault(); return; }
+    };
+    const handleContextMenu = (e: MouseEvent) => { e.preventDefault(); };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("contextmenu", handleContextMenu, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("contextmenu", handleContextMenu, true);
+    };
+  }, [isConnected]);
+
+  const candidateLiveTranscriptEnabled =
+    backendLiveTranscriptEnabled || browserSpeechRecognitionSupported;
+
+  // ── Candidate turn state + action buttons ──────────────────────────────
+  // It's the candidate's turn to answer when Bina has fully finished speaking
+  // AND the answer timer is open. Drives the RED↔GREEN turn banner and gates the
+  // Repeat/Next action buttons (they must NOT show while Bina is speaking).
+  const isCandidateTurn =
+    isConnected && !isClosing &&
+    !isAiSpeaking && !isProcessing &&
+    questionTimerSeconds !== null && !questionTimerExpired;
+
+  // Debug-only: trace the exact AII-20 button render gate
+  // (structuredHrPrompt.questionNumber === questionNumber && answerType ===
+  // 'yes_no' && isCandidateTurn && !hrExplainMore) every time one of its
+  // inputs changes, so a report of "yes_no question showed no buttons" can
+  // be diagnosed from client-log without reproducing live.
+  useEffect(() => {
+    if (!structuredHrPrompt) return;
+    console.log('[INTERVIEW-DEBUG] AII-20 button gate state', {
+      structuredHrPrompt,
+      liveQuestionNumber: questionNumber,
+      numbersMatch: structuredHrPrompt.questionNumber === questionNumber,
+      isCandidateTurn,
+      hrExplainMore,
+      wouldRenderButtons:
+        structuredHrPrompt.questionNumber === questionNumber &&
+        structuredHrPrompt.answerType === 'yes_no' &&
+        isCandidateTurn &&
+        !hrExplainMore,
+    });
+  }, [structuredHrPrompt, questionNumber, isCandidateTurn, hrExplainMore]);
+
+  // AII-20: submit a Yes/No click or a Text-based typed answer. Reuses the
+  // EXISTING `text_input` WS message the backend already handles end-to-end
+  // (run_text_pipeline) — no new message type, no new backend workflow.
+  // "Need to Explain More" does NOT call this — it just hides the buttons
+  // and falls through to the voice answer already recording underneath.
+  //
+  // hrSubmitInFlightRef guards against a double-send: setStructuredHrPrompt
+  // below is async, so a second click/Enter landing before that re-render
+  // clears the buttons would otherwise fire this twice (observed: "Yes"
+  // recorded as two separate answer bubbles). Reset on the NEXT question's
+  // question_meta, not here, so it stays true for the rest of this turn.
+  const submitStructuredHrAnswer = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || hrSubmitInFlightRef.current) return;
+    hrSubmitInFlightRef.current = true;
+    // Stop the mic SILENTLY right now (no end_turn) — exactly like the Next
+    // and Repeat-Question buttons do. The mic/recording session is already
+    // open underneath the Yes/No buttons (audio is blocked from being SENT
+    // via hrVoiceBlockedForQidRef, but the recording UI itself was never
+    // torn down), so without this the "recording" indicator stayed visible
+    // for several seconds after the click until the backend's next-question
+    // response arrived and force-interrupted it (reported: "if i selected
+    // the first 2 option also opens the recorder then only after some
+    // seconds moved to next question").
+    abortRecordingForSkipRef.current();
+    try {
+      wsRef.current?.send(JSON.stringify({ type: 'text_input', text: trimmed }));
+    } catch { /* best-effort, mirrors other wsRef.current?.send call sites */ }
+    setStructuredHrPrompt(null);
+    setHrExplainMore(false);
+  };
+
+  // Post a candidate-initiated action into the chat as a distinct chip. Tagged
+  // isActionRequest so the answer-transcript logic never overwrites it. Returns
+  // the new message id so callers can later remove it (e.g. drop the "moved on"
+  // chip if the candidate actually spoke and a real transcript lands).
+  const postCandidateActionMessage = (content: string): string => {
+    const id = crypto.randomUUID();
+    setMessages(prev => [...prev, {
+      id,
+      role: "user" as const,
+      content,
+      timestamp: nowIST(),
+      isActionRequest: true,
+    }]);
+    return id;
+  };
+
+  // "Next" — record any partial answer, then ask the backend for the next
+  // question. Ported verbatim from the old bottom-bar Next-Q button; the only
+  // addition is the candidate action chip posted to the chat.
+  const handleNextQuestion = () => {
+    if (questionTimerExpired) return;
+    // Disable on last question — candidate must answer the final Q, not skip it.
+    if (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) return;
+    if (nextSkipInFlightRef.current) return;
+    if (isAiSpeakingRef.current && questionTimerSeconds === null) return;
+
+    nextSkipInFlightRef.current = true;
+    setNextSkipInFlight(true);
+    setTimeout(() => {
+      if (nextSkipInFlightRef.current) {
+        nextSkipInFlightRef.current = false;
+        setNextSkipInFlight(false);
+      }
+    }, 15000);
+
+    const skipBrowserTranscript = backendLiveTranscriptEnabled ? "" : snapshotVisibleLiveTranscript();
+    const hadSpeechForSkip = speechDetectedRef.current;
+
+    // Chat: ALWAYS post the "move on" chip so the Next click is visible (the
+    // earlier version suppressed it whenever speechDetectedRef was true, which
+    // background people/noise set even when the candidate never really spoke —
+    // so a genuine skip showed NOTHING). We keep the id: if the candidate DID
+    // speak and a real transcript lands for this question, the transcript-final
+    // handler removes this chip so it's not shown on top of their answer.
+    skipChipIdRef.current = postCandidateActionMessage("Let's move on to the next question.");
+
+    // 0. If Bina is speaking, stop her immediately.
+    if (isAiSpeakingRef.current) {
+      talkingHeadRef.current?.streamStop();
+      isPlayingRef.current = false;
+      isAiSpeakingRef.current = false;
+      setIsAiSpeaking(false);
+      setIsProcessing(false);
+      isProcessingRef.current = false;
+      avatarState.onAiStopSpeaking();
+      pendingBuffersRef.current = 0;
+      audioEndReceivedRef.current = false;
+      if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+    }
+
+    // 1. Stop mic silently — no end_turn, no processing state.
+    abortRecordingForSkipRef.current();
+
+    // 1b. If the candidate spoke, show the loading bubble right away.
+    if (hadSpeechForSkip) {
+      setCurrentTranscript("");
+      currentTranscriptRef.current = "";
+      setIsCandidateTranscriptProcessing(true);
+    }
+
+    clearNoResponseTimer();
+    setIsProcessing(false);
+    isProcessingRef.current = false;
+    audioEndReceivedRef.current = false;
+    if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+    if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
+
+    setStatus("Bina is preparing the next question...");
+    setIsFollowUp(false);
+
+    // Optimistically clear active-skill highlight so the coverage panel doesn't freeze.
+    setSkillCoverage(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        clusters: prev.clusters?.map(c => ({
+          ...c,
+          is_active: false,
+          current_skill: undefined,
+          skills: c.skills.map(s => ({ ...s, is_active: false })),
+        })),
+      };
+    });
+
+    if (showSilenceBanner) {
+      setShowSilenceBanner(false);
+      if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+    }
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'skip_question',
+        source: 'candidate',
+        browser_transcript: skipBrowserTranscript || undefined,
+      }));
+    }
+
+    if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
+    questionTimerPendingRef.current = null;
+    questionTimerReceivedAtRef.current = null;
+    questionTimerSecondsRef.current = null;
+    setQuestionTimerSeconds(null);
+    setQuestionTimerExpired(false);
+    questionTimerExpiredRef.current = false;
+  };
+
+  // "Repeat Question" — ask Bina to re-read the CURRENT question. The backend
+  // re-speaks WITHOUT advancing the slot or incrementing the question count.
+  const handleRepeatQuestion = () => {
+    if (repeatInFlightRef.current) return;
+    // Only allowed within the early VAD window of the turn (see canRepeat).
+    if (!canRepeat) return;
+    if (isAiSpeakingRef.current || isProcessingRef.current) return;
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+
+    // Most recent question Bina asked (last non-action assistant bubble) —
+    // skipping her fixed silence lines. After an "Are you there?" nudge the
+    // last bubble IS that nudge; sending it made the server refuse it as a
+    // duplicate nudge and the interview hung ~20 s (staging 2026-10-14).
+    const isSilenceLine = (t: string) =>
+      t.startsWith("Are you there?") || t.startsWith("I didn't get any response from you");
+    let lastQuestion = "";
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && !m.isActionRequest && m.content.trim() && !isSilenceLine(m.content.trim())) {
+        lastQuestion = m.content.trim();
+        break;
+      }
+    }
+    if (!lastQuestion) return;
+
+    repeatInFlightRef.current = true;
+    repeatTextRef.current = lastQuestion;
+    setRepeatInFlight(true);
+    setTimeout(() => {
+      if (repeatInFlightRef.current) {
+        repeatInFlightRef.current = false;
+        setRepeatInFlight(false);
+      }
+    }, 20000);
+
+    // ── FREEZE the answer timer during the re-speak ──
+    // Snapshot the current remaining seconds and stop the ticking interval now.
+    // The re-speak's question_timer_started (fired by on_speaking_done on the
+    // backend) is intercepted in that handler to RESUME from this frozen value
+    // instead of resetting to a full window — so hearing the question again
+    // never costs the candidate any of their answer time.
+    repeatFrozenRemainingRef.current = questionTimerSecondsRef.current;
+    repeatFreezeRef.current = true;
+    if (questionTimerIntervalRef.current) {
+      clearInterval(questionTimerIntervalRef.current);
+      questionTimerIntervalRef.current = null;
+    }
+    // The candidate has used their one repeat window for this turn — close it
+    // and mark it used so the re-speak's timer resume doesn't re-arm it.
+    repeatUsedThisTurnRef.current = true;
+    setCanRepeat(false);
+    if (repeatWindowTimerRef.current) { clearTimeout(repeatWindowTimerRef.current); repeatWindowTimerRef.current = null; }
+    repeatWindowDeadlineAtRef.current = null;
+    repeatWindowPausedSinceRef.current = null;
+
+    // CRITICAL: stop the mic SILENTLY right now (no end_turn), exactly like the
+    // Next button does. The mic is still live at this moment, and if we leave it
+    // running the VAD silence clock can fire stopRecording() → end_turn while
+    // Bina is re-speaking. That queued end_turn is then processed the instant
+    // the re-speak finishes → the backend records an (empty) answer and ADVANCES
+    // to the next question WITHOUT waiting for the candidate — the reported bug.
+    // The mic re-opens for the real answer after the re-speak's audio_end
+    // (handleAllAudioFinished → startRecording), so nothing is lost.
+    abortRecordingForSkipRef.current();
+
+    // Chat: the candidate's repeat request.
+    postCandidateActionMessage("Could you please repeat the question?");
+    setStatus("Bina will repeat the question...");
+
+    // The incoming speaking_started (from the backend re-speak) flips the banner
+    // to RED; audio_end then re-opens the mic for the candidate's answer.
+    wsRef.current.send(JSON.stringify({ type: 'repeat_question', text: lastQuestion }));
+  };
+
+  // ── Turn banner (modern, chat-panel-centred) ───────────────────────────
+  // ONE banner that morphs between states. Rendered INSIDE the chat scroll
+  // wrapper (see {turnBanner} below) as an absolute, chat-centred element — so
+  // it sits in the middle of the chat window and never overlaps the candidate
+  // video. Gradient + frosted-glass styling; exactly one state shows.
+  // What the candidate SEES as "Bina is speaking": her turn AND her voice is
+  // actually playing (see binaAudible). Mic/timer logic keeps using isAiSpeaking.
+  const binaSpeakingVisible = isAiSpeaking && binaAudible;
+  const turnBanner = (() => {
+    // The big pre-turn "get ready" countdown owns the screen — suppress the small
+    // banner while it runs so we don't show two "getting ready" messages at once.
+    if (preTurnCountdown != null) return null;
+    // AII-20: while the Yes/No/Need-to-Explain-More buttons are showing,
+    // hide the voice banner — the candidate picks an option first; voice
+    // only becomes relevant once they click Need to Explain More. A
+    // Text-based question has no buttons at all — it must show the normal
+    // banner exactly like any other free-form question.
+    if (structuredHrPrompt && structuredHrPrompt.questionNumber === questionNumber && structuredHrPrompt.answerType === 'yes_no' && !hrExplainMore) return null;
+    let variant: 'starting' | 'silence' | 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
+    // Pre-interview warm-up AND the wait for Bina's first word: one loading
+    // card from "Preparing" until her voice is actually audible (it used to
+    // end at connect, leaving a confusing gap before she spoke).
+    if (!binaHasSpoken && !isClosing && !isRecording) variant = 'starting';
+    else if (showSilenceBanner) variant = 'silence';
+    else if (questionTimerExpired) variant = 'timesup';
+    else if (isAiSpeaking) variant = binaAudible ? 'hold' : 'prepare'; // 'hold' ONLY while her voice is audible
+    else if (showNowSpeakBanner && candidatePlaybackEnded) variant = 'turn';
+    else if (isProcessing || isCandidateTranscriptProcessing || (isConnected && !isClosing && questionNumber !== null)) variant = 'prepare';
+    if (!variant) return null;
+
+    const micIcon = (
+      <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" />
+        <line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" />
+      </svg>
+    );
+    const pauseIcon = (
+      <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+        <rect x="6" y="5" width="4" height="14" rx="1" />
+        <rect x="14" y="5" width="4" height="14" rx="1" />
+      </svg>
+    );
+    const spinnerIcon = (
+      <svg className="w-5 h-5 text-white animate-spin" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.3" />
+        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      </svg>
+    );
+    const cfg = {
+      turn:    { grad: 'from-emerald-400 to-teal-500', ring: 'ring-emerald-200/60 dark:ring-emerald-500/30', glow: 'shadow-emerald-500/30', title: 'Your turn — speak now',        subtitle: 'Microphone is active · Bina is listening',          icon: micIcon,      dismissible: false },
+      hold:    { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: 'Hold on — Bina is speaking',  subtitle: 'Please wait until she finishes the question',        icon: pauseIcon,    dismissible: false },
+      starting: { grad: 'from-sky-500 to-blue-600',  ring: 'ring-sky-200/60 dark:ring-sky-500/30',    glow: 'shadow-blue-600/30',    title: 'Preparing your interview…',   subtitle: 'Loading everything so the interview runs smoothly — just a few seconds.', icon: spinnerIcon, dismissible: false },
+      prepare: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: 'Hold on — getting ready',      subtitle: 'Please wait a moment…',                              icon: spinnerIcon,  dismissible: false },
+      timesup: { grad: 'from-rose-500 to-red-600',     ring: 'ring-rose-200/50 dark:ring-rose-500/30',    glow: 'shadow-red-600/30',     title: "Time's up!",                   subtitle: 'Moving to the next question…',                       icon: <Clock className="w-5 h-5 text-white" />, dismissible: false },
+      silence: { grad: 'from-amber-700 to-amber-700', ring: 'ring-amber-300/50 dark:ring-amber-500/30',   glow: 'shadow-amber-700/30',   title: 'Are you still there?',         subtitle: 'Take your time — Bina will move on if there’s no response.', icon: micIcon, dismissible: true },
+    }[variant];
+
+    // Preparing → Bina's first word: a centred loading card (not the small
+    // bottom banner), with an indeterminate bar so it clearly reads as loading.
+    if (variant === 'starting') {
+      return (
+        <div className="absolute inset-0 z-30 flex items-center justify-center px-4 pointer-events-none animate-in fade-in duration-300">
+          <style>{`@keyframes tfPrepBar {0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}`}</style>
+          <div className={`relative w-full max-w-sm flex flex-col items-center text-center gap-3 px-6 pt-6 pb-5 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} overflow-hidden`}>
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+            <div className="relative w-14 h-14">
+              <div className="absolute inset-0 rounded-full border-4 border-white/25" />
+              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-white animate-spin" />
+            </div>
+            <div className="relative">
+              <p className="text-white font-bold tracking-tight drop-shadow-sm" style={{ fontSize: 17 }}>Preparing your interview…</p>
+              <p className="mt-1 text-white/85 text-xs leading-snug">
+                {isConnected
+                  ? 'Bina is joining — she will start speaking in a moment.'
+                  : 'Loading everything so the interview runs smoothly — just a few seconds.'}
+              </p>
+            </div>
+            <div className="relative w-full h-1.5 rounded-full bg-white/25 overflow-hidden">
+              <div className="absolute inset-y-0 left-0 w-2/5 rounded-full bg-white/90" style={{ animation: 'tfPrepBar 1.4s ease-in-out infinite' }} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="absolute inset-x-0 bottom-4 z-30 flex justify-center px-4 pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-300">
+        <div className={`pointer-events-auto relative flex items-center gap-3 pl-3 pr-4 py-3 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-0 sm:min-w-[260px] max-w-[94%] overflow-hidden`}>
+          {/* top sheen for a glassy, modern finish */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+          {/* icon in a frosted circle with a soft pulse ring */}
+          <div className="relative shrink-0">
+            <div className="w-10 h-10 rounded-full bg-white/25 dark:bg-slate-900/25 ring-1 ring-white/40 backdrop-blur flex items-center justify-center shadow-inner">
+              {cfg.icon}
+            </div>
+            <span className="absolute inset-0 rounded-full ring-2 ring-white/50 animate-ping opacity-40" />
+          </div>
+          {/* text */}
+          <div className="relative min-w-0 flex-1">
+            <span className="text-white font-bold block leading-tight tracking-tight drop-shadow-sm" style={{ fontSize: 15 }}>{cfg.title}</span>
+            <span className="text-white/85 text-2xs leading-snug block">{cfg.subtitle}</span>
+          </div>
+          {cfg.dismissible && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowSilenceBanner(false);
+                if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+              }}
+              className="relative shrink-0 -mr-1 w-6 h-6 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 dark:hover:bg-slate-900/15 text-lg leading-none transition-colors"
+              aria-label="Dismiss"
+            >×</button>
+          )}
+        </div>
+      </div>
+    );
+  })();
+
+  // Whether the turn banner is on screen right now — the chat's bottom padding
+  // is tied to THIS (not a separate condition) so content is ALWAYS cleared
+  // above the banner, including during the "Ending…" closing state where the
+  // goodbye message + loading bubble were previously rendering behind it.
+  // Keep the reserved bottom padding stable while a big countdown overlay is up,
+  // even though turnBanner is suppressed then — otherwise the padding collapses
+  // (pb-52→pb-4), scrollHeight drops ~192px and the chat un-pins from the bottom
+  // (reported: "auto scroll at bottom not working" during the countdown).
+  const bannerVisible = turnBanner !== null || preTurnCountdown != null || midSilenceCountdown != null || midSilenceConfirm;
+
+  return (
+    <>
+      {/* ── Concurrent-session blocked overlay (single-active-session guard) ── */}
+      {concurrentBlocked && (
+        <div className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl">
+            <div className="text-amber-400 text-5xl mb-4">🔒</div>
+            <h2 className="text-xl font-bold text-white mb-2">Interview already open elsewhere</h2>
+            <p className="text-gray-300 mb-6 text-sm leading-relaxed">
+              {status && !status.startsWith('Connection')
+                ? status
+                : 'This interview link is already open in another window or device. Please continue there. If you just closed it, wait a few seconds and reopen this link.'}
+            </p>
+            <Button
+              tone="onColor"
+              variant="secondary"
+              onClick={() => window.location.reload()}
+              className="rounded-xl"
+            >
+              Reload &amp; try again
+            </Button>
+          </div>
+        </div>
+      )}
+      {/* ── Connection lost overlay ── */}
+      {!isConnected && !isClosing && status.startsWith('Connection lost') && (
+        <div className="fixed inset-0 z-[200] bg-slate-950/70 flex items-center justify-center backdrop-blur-sm p-4">
+          {/* Same reconnect logic as before — this only changes what is shown:
+              while the automatic retries are running ("...reconnecting in Ns...")
+              the message is calm and Refresh is optional; once they are used
+              up it asks for a refresh, as it always did. */}
+          {status.includes('reconnecting') ? (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-7 w-full max-w-[95vw] sm:max-w-md text-center shadow-2xl ring-1 ring-sky-100 dark:ring-slate-700">
+              <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-sky-50 dark:bg-sky-500/15 flex items-center justify-center">
+                <Loader2 className="w-7 h-7 text-brand-blue dark:text-sky-300 animate-spin" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Reconnecting…</h2>
+              <p className="text-slate-600 dark:text-slate-300 mb-1 text-sm leading-relaxed">
+                Your connection dropped for a moment. We&apos;re reconnecting automatically — please stay on this page.
+              </p>
+              <p className="text-slate-400 text-xs mb-6">{status.replace(/^Connection lost — /, '')}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full px-6 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-500/15 text-brand-blue dark:text-sky-300 text-sm font-semibold ring-1 ring-sky-100 dark:ring-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/25 transition-colors"
+              >
+                Refresh now
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-7 w-full max-w-[95vw] sm:max-w-md text-center shadow-2xl ring-1 ring-red-100 dark:ring-red-500/30">
+              <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-red-50 dark:bg-red-500/15 flex items-center justify-center">
+                <WifiOff className="w-7 h-7 text-red-600 dark:text-red-400" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Connection Lost</h2>
+              <p className="text-slate-600 dark:text-slate-300 mb-6 text-sm leading-relaxed">
+                Your connection to the interview server was interrupted.<br />
+                Please refresh the page to reconnect and continue from where you left off.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="tf-btn tf-btn-destructive w-full px-6 py-3 bg-red-600 hover:bg-red-700 font-semibold rounded-xl transition-colors whitespace-normal shadow-none gap-0"
+              >
+                Refresh &amp; Reconnect
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Proctoring: Face not in frame overlay ── */}
+      {isConnected && isFaceBlocked && (
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl">
+            <div className="text-amber-500 text-5xl mb-4">👤</div>
+            <h2 className="text-xl font-bold text-white mb-2">Face Not Detected</h2>
+            <p className="text-gray-400 mb-4">
+              Your face is not visible in the camera. Please position yourself in front of the camera to continue the interview.
+            </p>
+            <div className="text-sm text-amber-400 font-medium animate-pulse mb-5">Interview paused — please return to frame</div>
+            <button
+              onClick={() => {
+                // Manually re-check: if face detection thinks the face is there, unblock
+                if (faceDetection.isFaceDetectedRef.current) {
+                  handleFaceRestored();
+                } else {
+                  // Give it one more chance — dismiss and let detection re-trigger if still missing
+                  isFaceBlockedRef.current = false;
+                  setIsFaceBlocked(false);
+                  // If face is truly gone, detection loop will re-trigger face_missing in ~3s
+                  if (!isAiSpeakingRef.current && !isProcessingRef.current && !isRecordingRef.current) {
+                    setTimeout(() => {
+                      if (wsRef.current?.readyState === WebSocket.OPEN && !isFaceBlockedRef.current) {
+                        startRecordingInternal();
+                      }
+                    }, 500);
+                  }
+                }
+              }}
+              className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold rounded-lg transition-colors text-sm"
+            >
+              Retry Detection
+            </button>
+            <p className="tf-meta mt-2">
+              This will auto-dismiss when your face is detected
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen overlay removed — no longer blocking the interview */}
+
+      {/* ── Microphone issue popup ── */}
+      {showMicPopup && (
+        <div className="fixed inset-0 z-[101] bg-black/80 flex items-center justify-center backdrop-blur-sm">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="text-amber-500 text-5xl mb-4">🎤</div>
+            <h2 className="text-xl font-bold text-white mb-2">Microphone Issue?</h2>
+            <p className="text-gray-400 mb-3">We couldn&apos;t detect any audio. Is your microphone working?</p>
+            {isBraveBrowser && (
+              <p className="text-amber-400 text-xs mb-4">
+                Brave detected — if Fingerprinting is set to &quot;Aggressive&quot; in Shields, it can block microphone audio.
+                Try setting it to &quot;Standard&quot; in brave://settings/shields, then refresh.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-3 justify-center">
+              <button onClick={handleMicPopupYes} className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-xl font-bold text-white transition-colors">Yes, Resume</button>
+              <button onClick={handleMicPopupNo} className="tf-btn tf-btn-destructive px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold transition-colors whitespace-normal shadow-none gap-0">No, End Interview</button>
+            </div>
+            <p className="tf-meta mt-3">Auto-closing in 15 seconds...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Turn/silence banner moved INTO the chat panel (rendered as `turnBanner`
+          inside the chat scroll wrapper) so it centers within the chat window
+          and never overlaps the candidate video. See the {turnBanner} render
+          below the chat messages. */}
+
+      {/* ── Interview completion modal (Req 16) ── */}
+      {/* Interview over — saving step. Shown from the server's "interview
+          ended" until the recording upload + proctoring flush finish and the
+          portal swaps in its final "Thank you" page (onInterviewComplete).
+          No Done button: closing the tab now could cut the upload short, so
+          it doesn't claim anything is finished yet. Frontend-only — the old
+          Done just hid this overlay. */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300" role="status" aria-live="polite">
+          <div className="bg-white dark:bg-slate-900 ring-1 ring-sky-100 dark:ring-slate-700 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+            <div className="w-14 h-14 rounded-full bg-sky-50 dark:bg-sky-500/15 flex items-center justify-center mx-auto mb-4">
+              <Loader2 className="w-7 h-7 text-brand-blue dark:text-sky-300 animate-spin" />
+            </div>
+            <h2 className="text-gray-900 dark:text-white font-bold mb-2" style={{ fontSize: 20 }}>
+              {closingReason === "candidate_ended" ? "Interview ended — finishing up…" : "Finishing up…"}
+            </h2>
+            <p className="text-slate-600 dark:text-slate-300" style={{ fontSize: 15, lineHeight: 1.6 }}>
+              Saving your interview. Please don&apos;t close this window.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* AIU40: Section transition overlay */}
+      {sectionTransition && (
+        <SectionTransitionOverlay
+          message={sectionTransition.message}
+          fromCluster={sectionTransition.fromCluster}
+          toCluster={sectionTransition.toCluster}
+          pauseSeconds={3}
+          onComplete={() => setSectionTransition(null)}
+        />
+      )}
+
+      {/* AIU72: Repeat-request overlay */}
+      {showRepeatRequest && (
+        <div className="fixed inset-0 z-[106] flex items-center justify-center pointer-events-none">
+          <div className="flex items-center gap-3 px-5 py-3.5 rounded-2xl border border-blue-400/50 bg-[var(--raw-0a1020)]/95 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+              <Mic className="w-4 h-4 text-blue-400" />
+            </div>
+            <div>
+              <span className="text-blue-300 font-semibold block" style={{ fontSize: 14 }}>Could you repeat that?</span>
+              <span className="text-[var(--raw-94a3b8)] text-2xs">We had trouble hearing you clearly</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DEV DEBUG OVERLAY — draggable, opt-in only (?debug=1 or dev build) ── */}
+      {devMonitorEnabled && (
+      <div
+        className="fixed z-[999] font-mono text-2xs select-none"
+        style={{ left: debugPos.x, top: debugPos.y, minWidth: 230, maxWidth: 260 }}
+      >
+        <div className="rounded-xl overflow-hidden shadow-2xl" style={{ background: 'rgba(8,8,20,0.93)', border: '1px solid rgba(99,102,241,0.55)', backdropFilter: 'blur(8px)' }}>
+          {/* Drag handle + collapse */}
+          <div
+            className="flex items-center justify-between px-3 py-1.5 cursor-grab active:cursor-grabbing"
+            style={{ background: 'rgba(99,102,241,0.22)', borderBottom: debugOpen ? '1px solid rgba(99,102,241,0.3)' : 'none', touchAction: 'none' }}
+            onPointerDown={_dbgOnPointerDown}
+            onPointerMove={_dbgOnPointerMove}
+            onPointerUp={_dbgOnPointerUp}
+          >
+            <span className="text-indigo-300 font-bold tracking-wider text-2xs">⠿ DEV MONITOR</span>
+            <button
+              className="text-indigo-400 hover:text-white px-1 text-2xs"
+              onPointerDown={e => e.stopPropagation()}
+              onClick={() => setDebugOpen(o => !o)}
+            >{debugOpen ? '▲' : '▼'}</button>
+          </div>
+
+          {debugOpen && (() => {
+            const silenceSec = debugStats.silenceSince != null
+              ? ((Date.now() - debugStats.silenceSince) / 1000).toFixed(1) : null;
+            const silenceLimit = (debugStats.silenceDurationMs / 1000).toFixed(1);
+            const wsColor = debugStats.wsState === 'OPEN' ? 'var(--raw-34d399)' : debugStats.wsState === 'CONNECTING' ? 'var(--raw-fbbf24)' : 'var(--raw-f87171)';
+            const levelPct = Math.min(100, (debugStats.avgLevel / Math.max(debugStats.silenceThresh * 3, 0.001)) * 100);
+            const sysRamPct = debugStats.sysRamTotal > 0 ? (debugStats.sysRamUsed / debugStats.sysRamTotal) * 100 : 0;
+            const jsHeapPct = debugStats.heapTotal > 0 ? (debugStats.heapUsed / debugStats.heapTotal) * 100 : 0;
+
+            return (
+              <div className="px-3 py-2 space-y-1">
+
+                {/* ── SYSTEM (server) ── */}
+                <Section label="SERVER" />
+                {debugStats.sysCpu >= 0 ? (
+                  <>
+                    <Row label="CPU" value={`${debugStats.sysCpu}%`} color={debugStats.sysCpu > 80 ? 'var(--raw-f87171)' : 'var(--raw-e2e8f0)'} />
+                    <Bar pct={debugStats.sysCpu} color={debugStats.sysCpu > 80 ? 'var(--raw-f87171)' : 'var(--raw-34d399)'} />
+                    <Row label="System RAM" value={`${debugStats.sysRamUsed} / ${debugStats.sysRamTotal} MB  (${debugStats.sysRamPct}%)`} color={sysRamPct > 85 ? 'var(--raw-f87171)' : 'var(--raw-e2e8f0)'} />
+                    <Bar pct={sysRamPct} color={sysRamPct > 85 ? 'var(--raw-f87171)' : 'var(--raw-818cf8)'} />
+                    <Row label="Process RSS" value={`${debugStats.procRss} MB`} />
+                  </>
+                ) : <Row label="Server" value="polling…" color="var(--raw-64748b)" />}
+
+                {/* ── BROWSER memory ── */}
+                <Section label="BROWSER" />
+                {debugStats.heapUsed >= 0 ? (
+                  <>
+                    <Row label="JS Heap" value={`${debugStats.heapUsed} / ${debugStats.heapTotal} MB`} color={jsHeapPct > 80 ? 'var(--raw-f87171)' : 'var(--raw-e2e8f0)'} />
+                    <Bar pct={jsHeapPct} color={jsHeapPct > 80 ? 'var(--raw-f87171)' : 'var(--raw-818cf8)'} />
+                    <Row label="Heap Limit" value={`${debugStats.heapLimit} MB`} color="var(--raw-64748b)" />
+                  </>
+                ) : <Row label="JS Heap" value="N/A (Chrome only)" color="var(--raw-64748b)" />}
+
+                {/* ── WEBSOCKET ── */}
+                <Section label="WEBSOCKET" />
+                <Row label="State" value={debugStats.wsState} color={wsColor} />
+                <Row label="AudioCtx" value={debugStats.audioCtxState} />
+                <Row label="PCM chunks/s" value={`${debugStats.chunksPerSec}`} />
+
+                {/* ── VAD ── */}
+                <Section label="VAD" />
+                <Row label="Speech" value={debugStats.speechDetected ? 'YES ●' : 'no'} color={debugStats.speechDetected ? 'var(--raw-34d399)' : 'var(--raw-94a3b8)'} />
+                <Row label="InTurn frames" value={`${debugStats.inTurnFrames}`} />
+                <Row label="Level" value={debugStats.avgLevel.toFixed(4)} />
+                <Row label="Threshold" value={debugStats.silenceThresh.toFixed(4)} />
+                <Row label="Ambient" value={debugStats.ambient.toFixed(4)} />
+                <Row label="VoiceRatio" value={`${debugStats.voiceRatio.toFixed(2)} ${debugStats.voiceRatio >= 0.35 ? '✓voice' : '✗noise'}`} />
+                <Bar pct={levelPct} color={debugStats.speechDetected ? 'var(--raw-34d399)' : 'var(--raw-fbbf24)'} />
+                <Row
+                  label="Silence timer"
+                  value={silenceSec != null ? `${silenceSec}s / ${silenceLimit}s` : `– / ${silenceLimit}s`}
+                  color={silenceSec != null && parseFloat(silenceSec) > debugStats.silenceDurationMs * 0.7 / 1000 ? 'var(--raw-f87171)' : 'var(--raw-94a3b8)'}
+                />
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+      )}
+      {/* ── END DEV DEBUG OVERLAY ── */}
+
+      {/* ── Main interview UI ── */}
+      <div className="flex h-[100dvh] overflow-hidden bg-[var(--raw-0f1117)]">
+
+        {/* ════ LEFT PANEL: Video feeds (dark) — 40% ════ */}
+        <div className="w-[40%] flex-shrink-0 flex flex-col bg-[var(--raw-0f1117)] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+
+          {/* ── Top half: BINA AI Avatar ── */}
+          {/* Inset card with rounded corners, matching the webcam frame below
+              (mx-1.5 + rounded-xl). */}
+          <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden mx-1.5 mt-1.5 rounded-xl">
+            {/* Label */}
+            <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse shrink-0" />
+              <span className="text-gray-400 text-2xs font-medium tracking-wide uppercase">Bina · AI Interviewer</span>
+            </div>
+
+            {/* TalkingHead fills this half. Hidden (not unmounted — Bina's
+                voice plays through it) once the static 2D fallback is showing,
+                so the two never draw on top of each other. A 3D that only
+                loaded slowly (past the 12s timer) takes over again once ready;
+                one that can't run here (error / FPS watchdog / low-tier device)
+                stays on the static image. */}
+            <div className={`absolute inset-0 overflow-hidden ${showStaticBina ? 'invisible' : ''}`} aria-hidden={showStaticBina || undefined}>
+              <TalkingHeadAvatar
+                ref={talkingHeadRef}
+                avatarUrl="/models/rpm-recruiter.glb"
+                onReady={() => { setAvatarReady(true); setAvatar3DLoaded(true); }}
+                onFallback={() => { setAvatarFailed(true); setAvatar3DCantRun(true); }}
+                onAudible={markBinaAudible}
+                className="w-full h-full rounded-none"
+                // Low-tier devices: skip the 3D avatar entirely (no GLB/Three.js/
+                // render loop) — voice still plays via TalkingHead's Web Audio
+                // fallback, and the static Bina image shows. Silent switch.
+                audioOnly={effectiveDeviceCapability?.use3DAvatar === false}
+              />
+            </div>
+
+            {/* Fix #2: static avatar fallback. Shown when the 3D avatar fails or
+                is too slow to load. Audio still plays (Web Audio fallback) and
+                the interview runs at full speed; only the visual is downgraded
+                to a static Bina image with a speaking/listening indicator so
+                the candidate sees a proper face instead of a blank canvas. */}
+            {showStaticBina && (
+              <div className="absolute inset-0 overflow-hidden flex items-center justify-center bg-[radial-gradient(ellipse_at_50%_40%,#1e2a4a_0%,#111a33_45%,#0a1020_100%)]">
+                <div className="relative flex flex-col items-center">
+                  <div
+                    className={`relative w-44 h-44 rounded-full overflow-hidden border-4 transition-colors duration-300 ${
+                      binaSpeakingVisible ? 'border-purple-400/70' : 'border-white/20'
+                    }`}
+                    style={binaSpeakingVisible ? { boxShadow: '0 0 40px 6px rgba(147,51,234,0.35)' } : undefined}
+                  >
+                    <Image
+                      src={lindaAvatarSrc}
+                      alt="Bina - AI Interviewer"
+                      fill
+                      sizes="176px"
+                      className="object-cover"
+                      onError={() => {
+                        setLindaAvatarSrc((current) => (
+                          current === "/linda-avatar.webp" ? "/linda-3.png" : current
+                        ));
+                      }}
+                    />
+                  </div>
+                  <div className="mt-4 text-white/90 text-lg font-semibold">Bina</div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-white/60">
+                    {binaSpeakingVisible ? (
+                      <>
+                        <span className="flex gap-0.5 items-end h-3">
+                          <span className="w-1 bg-purple-400 animate-pulse" style={{ height: '40%' }} />
+                          <span className="w-1 bg-purple-400 animate-pulse" style={{ height: '90%', animationDelay: '0.15s' }} />
+                          <span className="w-1 bg-purple-400 animate-pulse" style={{ height: '60%', animationDelay: '0.3s' }} />
+                        </span>
+                        <span>Speaking…</span>
+                      </>
+                    ) : (
+                      <span>{isRecording ? 'Listening…' : 'AI Interviewer'}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Speaking glow */}
+            {binaSpeakingVisible && (
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{ background: 'radial-gradient(ellipse at center, rgba(147,51,234,0.10) 0%, transparent 70%)' }}
+              />
+            )}
+
+            {/* Bridge-phrase caption — pre-cached transition clip Bina speaks
+                when the 2-min hard-cap fires. Distinct "Bina · Transition"
+                chip so it's never mistaken for an interview question. Sits
+                above the status pill at the bottom of the avatar pane. */}
+            {bridgeCaption && (
+              <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 max-w-[80%] px-4 py-2 rounded-xl bg-purple-950/60 backdrop-blur-md border border-purple-400/40 shadow-lg animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="tf-badge bg-purple-500/30 border border-purple-400/40 text-2xs uppercase tracking-wider text-purple-100">
+                    Bina · Transition
+                  </span>
+                </div>
+                <p className="text-xs italic text-purple-50 leading-snug">
+                  {bridgeCaption}
+                </p>
+              </div>
+            )}
+
+            {/* Status pill — bottom centre */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10">
+              {/* Solid, darker fills + white text so the label stays readable
+                  over Bina's white shirt and the navy background alike. */}
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-md transition-colors duration-300 ${
+                binaSpeakingVisible ? 'bg-purple-600/90 border-purple-400/50' :
+                isRecording  ? (isMuted ? 'bg-red-600/90 border-red-400/50' : 'bg-emerald-600/90 border-emerald-400/50') :
+                               'bg-amber-700/90 border-amber-400/50'
+              }`}>
+                <div className="w-1.5 h-1.5 rounded-full animate-pulse bg-white" />
+                <span className="text-2xs font-semibold text-white">
+                  {isAiSpeaking ? (!binaAudible ? 'Getting ready...' : isClarification ? 'Clarifying...' : 'Speaking...') : isRecording ? (isMuted ? 'Muted' : 'Your turn') : isProcessing ? 'Processing...' : isConnected ? 'Ready' : 'Connecting...'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Bottom half: Candidate webcam ── */}
+          <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+            {/* Label row — just the "You" label. The REC badge now lives INSIDE
+                the webcam frame (top-right corner) so it reads as an overlay on
+                the candidate's own video, not floating in the dark strip above. */}
+            <div className="absolute top-0 left-0 right-0 z-10 px-1.5 pt-1 pb-1 flex items-center">
+              {/* "You · <name>" — mirrors Bina's label; just "You" when no name. */}
+              <span className="min-w-0 truncate text-gray-400 text-2xs font-medium uppercase tracking-wide" title={interviewInfo?.candidate_name?.trim() || undefined}>
+                You{interviewInfo?.candidate_name?.trim() ? ` · ${interviewInfo.candidate_name.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}` : ''}
+              </span>
+            </div>
+
+            {/* Webcam feed fills this half */}
+            <div className="absolute inset-0 mt-6 mx-1.5 mb-1.5 rounded-xl overflow-hidden bg-[var(--raw-1a1f2e)]">
+              <Webcam
+                ref={webcamRef}
+                className="w-full h-full object-cover"
+                onVideoReady={handleVideoReady}
+                onStream={handleStream}
+                onTracksReplaced={handleTracksReplaced}
+                showHandIndicator={false}
+                isHandRaised={handDetection.isHandRaised}
+                initialCameraDeviceId={interviewCameraDeviceIdRef.current}
+                audioDeviceId={approvedMicDeviceId ?? undefined}
+              />
+
+              {/* REC badge — overlaid inside the camera frame (top-right). REC is
+                  persistent while the interview is live; solid red + pulse while
+                  the mic is actively capturing; dark with a red dot between turns.
+                  White text in both so it reads on a bright camera image. */}
+              {isConnected && !isClosing && (
+                <div className={`absolute top-2 right-2 z-20 flex items-center gap-1 px-2 py-1 rounded-full border backdrop-blur-sm transition-colors duration-300 ${
+                  isRecording && !isMuted
+                    ? 'bg-red-600 border-red-400/60 shadow-md'
+                    : 'bg-gray-900/80 border-white/15 shadow-md'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isRecording && !isMuted ? 'bg-white animate-pulse' : 'bg-red-500'}`} />
+                  <span className="text-white text-2xs font-bold tracking-wide">REC</span>
+                </div>
+              )}
+
+
+              {/* Candidate mic health (left) — which input the browser
+                  selected and whether the level is usable — and network strength
+                  (right), side by side. Collapsed to icon + level bar so they
+                  cover as little of the candidate's video as possible; hovering
+                  either (or tabbing to them) opens BOTH to show the mic name and
+                  the network status. The low-mic warning never hides. */}
+              <div
+                tabIndex={0}
+                aria-label={`Microphone: ${activeMicLabel || 'Microphone'}${isMuted ? ' (muted)' : ''}. Network status.`}
+                className="group/health absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-end justify-center gap-2 pointer-events-none focus:outline-none"
+              >
+                <div className="pointer-events-auto max-w-full rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-2.5 py-2 group-focus-visible/health:ring-2 group-focus-visible/health:ring-white/60">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center min-w-0">
+                      {isMuted ? (
+                        <MicOff className="w-3.5 h-3.5 text-red-300 shrink-0" />
+                      ) : (
+                        <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                      )}
+                      <span className="text-white/80 text-2xs truncate max-w-0 opacity-0 transition-all duration-300 ease-out group-hover/health:max-w-[11rem] group-hover/health:ml-2 group-hover/health:opacity-100 group-focus-visible/health:max-w-[11rem] group-focus-visible/health:ml-2 group-focus-visible/health:opacity-100">
+                        {activeMicLabel || "Microphone"}
+                      </span>
+                    </div>
+                    <div className="w-12 sm:w-16 h-1.5 rounded-full bg-white/15 dark:bg-slate-900/15 overflow-hidden shrink-0">
+                      <div
+                        className={`h-full rounded-full transition-all duration-150 ${
+                          micInputLow && isRecording && !isMuted ? 'bg-amber-300' : 'bg-emerald-300'
+                        }`}
+                        style={{ width: `${Math.max(4, Math.round(micInputLevel * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                  {isRecording && !isMuted && micNoSignal ? (
+                    <div role="alert" className="mt-1 max-w-[14rem] text-2xs leading-tight text-red-200">
+                      We can&apos;t hear your microphone. Check it is plugged in and not muted, then keep speaking.
+                    </div>
+                  ) : isRecording && !isMuted && micInputLow && (
+                    <div className="mt-1 max-w-[14rem] text-2xs leading-tight text-amber-200">
+                      Microphone input is low. Check headset mic or system input.
+                    </div>
+                  )}
+                </div>
+                {(() => {
+                  // Approximate strength from the ping round trip:
+                  // ≤100ms → 100%, falling to 10% at ≥1s.
+                  // "Offline" only when the browser has no network, or the
+                  // interview connection DROPPED after being up — not while it
+                  // is still starting (it showed "Offline" during loading).
+                  const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+                  const dropped = !isConnected && everConnectedRef.current;
+                  const rtt = browserOffline || dropped ? null : networkRttMs;
+                  const pct = rtt === null ? null : Math.round(Math.min(100, Math.max(10, 100 - ((rtt - 100) / 900) * 90)));
+                  const level = browserOffline || dropped ? 'offline' : rtt === null ? 'checking' : rtt < 250 ? 'good' : rtt < 600 ? 'moderate' : 'poor';
+                  const tone = {
+                    good: { icon: 'text-emerald-300', bar: 'bg-emerald-300', label: 'Good' },
+                    moderate: { icon: 'text-amber-300', bar: 'bg-amber-300', label: 'Moderate' },
+                    poor: { icon: 'text-red-300', bar: 'bg-red-400', label: 'Poor' },
+                    checking: { icon: 'text-white/60', bar: 'bg-white/40', label: 'Checking…' },
+                    offline: { icon: 'text-red-300', bar: 'bg-red-400', label: 'Offline' },
+                  }[level];
+                  return (
+                    <div className="pointer-events-auto max-w-full rounded-lg border border-black/20 bg-black/55 backdrop-blur-md px-2.5 py-2 group-focus-visible/health:ring-2 group-focus-visible/health:ring-white/60" title={rtt !== null ? `Approx. ${Math.round(rtt)} ms round trip to the interview server` : undefined}>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center min-w-0">
+                          {level === 'offline'
+                            ? <WifiOff className={`w-3.5 h-3.5 shrink-0 ${tone.icon}`} />
+                            : <Wifi className={`w-3.5 h-3.5 shrink-0 ${tone.icon}`} />}
+                          <span className="text-white/80 text-2xs whitespace-nowrap overflow-hidden max-w-0 opacity-0 transition-all duration-300 ease-out group-hover/health:max-w-[11rem] group-hover/health:ml-2 group-hover/health:opacity-100 group-focus-visible/health:max-w-[11rem] group-focus-visible/health:ml-2 group-focus-visible/health:opacity-100">
+                            Network · <span className="font-semibold text-white">{tone.label}</span>{pct !== null ? ` ${pct}%` : ''}
+                          </span>
+                        </div>
+                        <div className="w-12 sm:w-16 h-1.5 rounded-full bg-white/15 overflow-hidden shrink-0">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${tone.bar}`}
+                            style={{ width: `${level === 'offline' ? 4 : pct ?? 30}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+
+
+        </div>
+
+        {/* ════ RIGHT PANEL: Chat (fills remaining width) ════ */}
+        {/* Inset card with rounded corners, matching the webcam frame. Same
+            6px top/bottom inset as the left column (Bina card mt-1.5, webcam
+            mb-1.5), so both sides run the same height. */}
+        <div className="flex-1 flex flex-col min-w-0 bg-white my-1.5 mr-1.5 ml-0 rounded-xl overflow-hidden">
+
+          {/* Header — white status bar: title on the left; LIVE, ID Verified,
+              question progress and End on the right, separated by thin
+              dividers. Visual only — same badges, conditions and handlers.
+              Sized by the chat panel's own width (@container), not the
+              window's: on narrower panels the title text, subtitle, progress
+              bar and ID Verified drop out in turn so End is never clipped. */}
+          <div id="iv-chat-header" className="@container flex-shrink-0 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-brand-blue/10 dark:bg-sky-500/15 flex items-center justify-center shrink-0">
+                <Headset className="w-5 h-5 text-brand-blue dark:text-sky-300" />
+              </div>
+              <div className="min-w-0 hidden @3xl:block">
+                <h2 className="text-gray-900 dark:text-white font-bold leading-tight truncate" style={{ fontSize: 16 }}>Interview with Bina</h2>
+                <p className="hidden @4xl:block text-slate-500 dark:text-slate-400 text-xs leading-tight truncate">Your AI interviewer is listening</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 @2xl:gap-3 shrink-0">
+              {/* LIVE badge — FIRST in the header. Green while connected;
+                  amber "Connecting" while the connection is down (display only). */}
+              {isConnected ? (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/15 rounded-full">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-emerald-600 dark:text-emerald-300 text-xs font-bold">LIVE</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-500/15 rounded-full" title="Connecting to the interview server">
+                  <Loader2 className="w-3 h-3 text-amber-600 dark:text-amber-300 animate-spin" />
+                  <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">Connecting</span>
+                </div>
+              )}
+              {/* Identity verified */}
+              {(faceVerification || voiceVerification) && (
+                <div className="hidden @xl:flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/15">
+                  <span className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                    <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                  </span>
+                  <span className="text-emerald-600 dark:text-emerald-300 text-xs font-semibold">ID Verified</span>
+                </div>
+              )}
+              {/* Q counter + progress bar — animates on each change */}
+              {questionNumber !== null && totalQuestions !== null && (
+                <>
+                  <div className="hidden @2xl:block w-px h-7 bg-gray-200 dark:bg-slate-700" />
+                  <div
+                    key={questionNumber}
+                    className="flex flex-col gap-1.5 min-w-0"
+                    style={{ animation: 'qNumPop 0.35s cubic-bezier(0.34,1.56,0.64,1) both' }}
+                  >
+                    <span className="text-gray-900 dark:text-white text-xs font-semibold tabular-nums whitespace-nowrap">
+                      <span className="hidden @lg:inline">Question </span>{questionNumber}<span className="hidden @lg:inline"> of </span><span className="@lg:hidden"> / </span>{totalQuestions}
+                    </span>
+                    <div className="hidden @3xl:block w-28 @4xl:w-32 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-brand-blue dark:bg-sky-400 transition-all duration-500"
+                        style={{ width: `${totalQuestions > 0 ? Math.min(100, Math.max(0, (questionNumber / totalQuestions) * 100)) : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+              {/* Clarification badge removed per design — no banner indicator
+                  when Bina is re-asking the same question. */}
+              <style>{`@keyframes qNumPop{0%{opacity:0;transform:scale(0.7) translateY(-4px)}60%{transform:scale(1.12) translateY(0)}100%{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+              {/* Per-question timer removed from header — shown as banner above chat */}
+              {/* Global timer removed from the top header per UX request — the
+                  interview time still runs in the backend; it's just not shown here. */}
+              {/* REC badge moved to the candidate video's top-right corner; LIVE
+                  moved to the front of the header (green) — see above / below.
+                  (Their three separator lines were left behind with nothing
+                  between them and showed as stray "|||" before End — removed.) */}
+              {/* Closing indicator */}
+              {isClosing && (
+                <div className="px-3 py-1.5 bg-orange-100 dark:bg-orange-500/15 border border-orange-300 dark:border-orange-500/40 text-orange-700 rounded-lg text-xs font-medium animate-pulse">Ending...</div>
+              )}
+              {/* End Interview button — hidden once closing has started so it
+                  can't be clicked again (the "Ending..." badge shows instead). */}
+              {!isClosing && (
+                <button
+                  onClick={() => setShowEndConfirm(true)}
+                  disabled={!isConnected}
+                  className="tf-btn tf-btn-destructive shrink-0 flex gap-1.5 px-3 @md:px-4 py-2 bg-red-600 hover:bg-red-700 shadow-sm duration-200 font-semibold text-sm whitespace-normal justify-start"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="hidden @md:inline">End</span>
+                </button>
+              )}
+            </div>
+          </div>
+          </div>
+
+
+          {/* ── Per-question timer banner — shown above chat when timer is active ── */}
+          {questionTimerSeconds !== null && (
+            <div id="iv-answer-timer" className={`flex-shrink-0 px-4 py-2.5 border-b transition-colors duration-500 ${
+              questionTimerExpired       ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30' :
+              questionTimerSeconds <= 30 ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30' :
+              questionTimerSeconds <= 60 ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30' :
+                                           'bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30'
+            }`}>
+              <div className="flex items-center gap-3">
+                {/* Icon */}
+                <Clock className={`w-4 h-4 shrink-0 ${
+                  questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-500' :
+                  questionTimerSeconds <= 60 ? 'text-amber-500' : 'text-violet-500'
+                } ${questionTimerExpired ? 'animate-pulse' : ''}`} />
+
+                {/* Label + time */}
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className={`text-xs font-semibold shrink-0 ${
+                    questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600 dark:text-red-400' :
+                    questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-600 dark:text-violet-400'
+                  }`}>
+                    {(questionTimerExpired || questionTimerSeconds <= 0) ? "Time's up!" : isAiSpeaking ? 'Question time:' : isProcessing ? 'Answered:' : 'Answer time:'}
+                  </span>
+
+                  {/* Progress bar */}
+                  <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-gray-200">
+                    {(() => {
+                      // Use the initial duration from the timer start (matches backend candidate_window)
+                      const total = questionTimerTotalRef.current || 120;
+                      const pct = questionTimerExpired ? 0 : Math.min(100, (questionTimerSeconds / total) * 100);
+                      return (
+                        <div
+                          className={`h-full rounded-full transition-[width] duration-1000 ${
+                            questionTimerExpired || questionTimerSeconds <= 30 ? 'bg-red-500' :
+                            questionTimerSeconds <= 60 ? 'bg-amber-500' : 'bg-violet-500'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      );
+                    })()}
+                  </div>
+
+                  {/* Countdown value */}
+                  <span className={`text-sm font-bold tabular-nums shrink-0 ${
+                    questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-600 dark:text-red-400' :
+                    questionTimerSeconds <= 60 ? 'text-amber-600' : 'text-violet-700 dark:text-violet-300'
+                  } ${questionTimerExpired ? 'animate-pulse' : ''}`}>
+                    {(questionTimerExpired || questionTimerSeconds <= 0) ? '00:00' : formatTime(questionTimerSeconds)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Buffer mode active banner ── */}
+          {isInBuffer && !isClosing && (
+            <div className="flex-shrink-0 px-4 py-2.5 flex items-center gap-3 bg-amber-50 dark:bg-amber-500/10 border-b border-amber-200 dark:border-amber-500/30">
+              <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="text-xs font-semibold text-amber-700">Buffer Time Active</span>
+                <span className="text-xs text-amber-600 ml-2">— {formatTime(remainingSeconds)} remaining. Wrapping up the interview.</span>
+              </div>
+            </div>
+          )}
+
+          {/* AII16 — the separate "Interview Tips" card was REMOVED per UX
+              review: it duplicated, word for word, the tips Bina is already
+              speaking and streaming into her opening bubble, so the candidate
+              read the same list twice on one screen. The tips remain both
+              SPOKEN and DISPLAYED — they are part of the role_intro text in the
+              chat bubble below. */}
+
+          {/* Chat messages — wrapped in a relative container so a bottom
+              gradient mask can fade any content into the chat background before
+              it reaches the floating turn banner. This keeps the area behind /
+              around the banner clean (no half-visible next bubble peeking
+              through), and the dynamic bottom padding still reserves clearance
+              so the last real message sits fully above the banner. */}
+          <div className="relative flex-1 flex flex-col min-h-0">
+          <div
+            ref={chatScrollRef}
+            onScroll={handleChatScroll}
+            onWheel={noteChatUserInput}
+            onTouchMove={noteChatUserInput}
+            onPointerDown={noteChatUserInput}
+            onKeyDown={noteChatUserInput}
+            className={`flex-1 overflow-y-auto px-3 pt-3 bg-gray-50 ${
+              // Reserve bottom clearance EXACTLY when the turn banner is on
+              // screen (bannerVisible = turnBanner !== null). Tying the padding
+              // to the same value that renders the banner guarantees they never
+              // desync — including the "Ending…" closing state, where the old
+              // `!isClosing` guard dropped the padding and let the goodbye
+              // message + loading bubble render BEHIND the banner.
+              bannerVisible ? 'pb-52' : 'pb-4'
+            } ${
+              // The app scrollbar, held at its darker hover look while the
+              // candidate is scrolling (globals.css `.tf-scrollbar-active`).
+              chatScrolling ? 'tf-scrollbar-active' : ''
+            }`}
+          >
+            {/* Hidden while the centred "Preparing your interview…" card is up
+                (turnBanner 'starting') — it peeked out above the card. */}
+            {messages.length === 0 && !hasAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing
+              && (binaHasSpoken || isClosing || isRecording) && (
+              <div className="flex items-center justify-center h-full">
+                <p className="tf-body-muted text-center">Conversation will appear here...</p>
+              </div>
+            )}
+
+            {/* Each row extracted to <MessageRowMemo> so parent renders
+                (token reveal, timer ticks, WS handlers) don't reconcile
+                prior bubbles. React.memo + stable msg refs skip them. */}
+            <div ref={chatContentRef} className="space-y-2">
+            {messages.map(msg => (
+              <MessageRowMemo key={msg.id} msg={msg} candidatePhotoUrl={candidatePhotoUrl} />
+            ))}
+
+            {/* AII-20: HR Tagged Question Types — Yes/No/Need-to-Explain-More
+                buttons, or a Text-based input box. Gated on an EXACT
+                questionNumber match so this can never show for a different
+                (ordinary free-form) question — including one that sends no
+                question_meta at all. "Need to Explain More" renders nothing
+                further here: it just hides these buttons (setHrExplainMore)
+                and the existing voice-answer bubble below takes over exactly
+                as it already does for every other question — no new voice
+                workflow, no new timer. */}
+            {structuredHrPrompt &&
+              structuredHrPrompt.questionNumber === questionNumber &&
+              structuredHrPrompt.answerType === 'yes_no' &&
+              isCandidateTurn &&
+              !hrExplainMore && (
+              <div className="flex gap-2 flex-row-reverse">
+                <YouAvatar photoUrl={candidatePhotoUrl} />
+                <div className="max-w-[260px] w-full">
+                  <div className="tf-card-soft w-full p-2.5">
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => submitStructuredHrAnswer('Yes')}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 text-sm font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-500/15 hover:border-emerald-300 dark:hover:border-emerald-500/40 transition-colors text-left"
+                      >
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-2xs font-bold shrink-0">A</span>
+                        Yes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => submitStructuredHrAnswer('No')}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-300 text-sm font-semibold hover:bg-rose-100 dark:hover:bg-rose-500/15 hover:border-rose-300 dark:hover:border-rose-500/40 transition-colors text-left"
+                      >
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-2xs font-bold shrink-0">B</span>
+                        No
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Voice is now the intended answer path for this
+                          // question — lift the block so the candidate's
+                          // spoken answer actually gets submitted.
+                          hrVoiceBlockedForQidRef.current = '';
+                          hrVoiceBlockedQuestionNumberRef.current = null;
+                          setHrExplainMore(true);
+                          // Tell the backend too — otherwise its _auto_skip
+                          // holding loop (armed for every yes_no HR question)
+                          // keeps suppressing the normal 20s "Are you there?"
+                          // silence ladder for this ENTIRE voice turn (it only
+                          // releases once the answer is fully transcribed or
+                          // real speech is confirmed), so a candidate who
+                          // pauses before speaking gets no nudge until this
+                          // component's own 45s last-resort fallback fires
+                          // instead of the usual ~20s. This message flips
+                          // current_hr_voice_mode server-side so the ladder
+                          // runs on the same schedule as every other question.
+                          try {
+                            wsRef.current?.send(JSON.stringify({ type: 'hr_voice_mode' }));
+                          } catch { /* best-effort, mirrors other wsRef.current?.send call sites */ }
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 text-blue-900 dark:text-blue-300 text-sm font-semibold hover:bg-blue-100 dark:hover:bg-blue-500/15 hover:border-blue-300 dark:hover:border-blue-500/40 transition-colors text-left"
+                      >
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-2xs font-bold shrink-0">C</span>
+                        Need to Explain More
+                      </button>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-gray-200 text-center tf-caption">
+                      Select only one option
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Candidate live/processing bubble — ONE persistent bubble across
+                the whole recording → processing phase so its inner content
+                MORPHS (waveform/live text → loading dots) instead of two
+                separate bubbles mounting/unmounting (which flickered and jumped
+                the layout at end-of-answer). The avatar + "Your Response" header
+                + emerald container stay mounted; only the inner content swaps. It
+                unmounts once the final transcript lands in `messages` (identical
+                emerald "Your Response" styling → visually seamless handoff). */}
+            {(isRecording || currentTranscript || (isCandidateTranscriptProcessing && !currentTranscript)) &&
+              // AII-20: hide the recording bubble while the Yes/No/Need-to-
+              // Explain-More buttons are showing — it reappears once "Need
+              // to Explain More" is clicked (or immediately for Text-based
+              // questions, which don't show buttons at all).
+              !(structuredHrPrompt && structuredHrPrompt.questionNumber === questionNumber && structuredHrPrompt.answerType === 'yes_no' && !hrExplainMore) && (
+              <div className="flex gap-2 flex-row-reverse">
+                <YouAvatar photoUrl={candidatePhotoUrl} />
+                <div className="max-w-[80%] min-w-0">
+                  <span className="text-2xs font-semibold text-emerald-600 dark:text-emerald-400 mb-0.5 block text-right">Your Response</span>
+                  <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
+                    {(isRecording || currentTranscript) ? (
+                      <>
+                        <div className="flex items-center gap-1 mb-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="text-emerald-600 dark:text-emerald-400 text-2xs font-medium">
+                            {currentTranscript ? 'speaking…' : candidateLiveTranscriptEnabled ? 'listening…' : 'recording…'}
+                          </span>
+                        </div>
+                        {currentTranscript ? (
+                          <p className="text-sm leading-relaxed italic">{currentTranscript}</p>
+                        ) : candidateLiveTranscriptEnabled ? (
+                          <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300">
+                            {realtimeTranscriptionEnabled ? 'Start speaking...' : 'Listening for live transcript...'}
+                          </p>
+                        ) : (
+                          // Batch STT models (gpt-4o-transcribe / gemini / sarvam /
+                          // assemblyai): no Web Speech / live transcript. Show a live
+                          // recording waveform of the candidate's mic while they answer
+                          // — the transcript is revealed after the turn is processed.
+                          <div className="flex flex-col gap-1.5">
+                            <MicWaveform analyserRef={micAnalyserRef} active={isRecording} color="#059669" quietColor="#6ee7b7" />
+                            <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300">
+                              Recording… Your transcript will appear after you finish speaking.
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      // Processing: candidate finished, transcript in flight.
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    )}
+
+                    {/* Quick actions — INSIDE the response bubble, directly under
+                        the waveform/live area (not a separate bottom bar). Shown
+                        only during the candidate's turn (recording, not the
+                        processing state). Repeat = Bina re-reads the current
+                        question (no count change); Next = move on. */}
+                    {isCandidateTurn && (isRecording || currentTranscript) && (
+                      <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-emerald-200/70 dark:border-emerald-500/30">
+                        <button
+                          type="button"
+                          onClick={handleRepeatQuestion}
+                          disabled={repeatInFlight || !canRepeat}
+                          title={!canRepeat ? 'Repeat is only available in the first few seconds of your turn' : undefined}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-300 dark:border-emerald-500/40 bg-white text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          {repeatInFlight ? 'Repeating…' : 'Repeat Question'}
+                        </button>
+                        {(() => {
+                          const isLastQuestion = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
+                          // Last question: there is no "next", so the slot becomes a
+                          // red End that opens the same End confirmation as the
+                          // header End button (which keeps the answer being spoken).
+                          if (isLastQuestion) {
+                            return (
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') e.preventDefault();
+                                }}
+                                onClick={(e) => {
+                                  e.currentTarget.blur();
+                                  setShowEndConfirm(true);
+                                }}
+                                disabled={!isConnected || isClosing}
+                                className="tf-btn tf-btn-destructive flex gap-1.5 px-3 py-1.5 text-xs font-semibold border bg-red-600 hover:bg-red-700 border-red-600 transition-colors whitespace-normal shadow-none justify-start"
+                              >
+                                <LogOut className="w-3.5 h-3.5" />
+                                End
+                              </button>
+                            );
+                          }
+                          const nextDisabled = nextSkipInFlight;
+                          return (
+                            <button
+                              type="button"
+                              // Skipping a question is IRREVERSIBLE, so Next must
+                              // fire ONLY on a deliberate pointer click — never via
+                              // the keyboard, and it must never keep focus. Root
+                              // cause (confirmed by the tester + sarath.log): during
+                              // testing the tester Alt+Tabs to ChatGPT, copies the
+                              // question, pastes, reads the answer, Alt+Tabs back —
+                              // pressing keys (Space to scroll, Enter after paste)
+                              // throughout. If the Next button holds keyboard focus,
+                              // Space/Enter ACTIVATES it, and each time it re-enables
+                              // after the next question it fires again — chaining
+                              // Q3→Q4→Q5→Q6 (3 back-to-back skip_question(candidate),
+                              // qsize 0 = nothing actually spoken).
+                              onMouseDown={(e) => {
+                                // Don't let the click move focus TO the button, so a
+                                // later stray Space/Enter can't land on it.
+                                e.preventDefault();
+                              }}
+                              onKeyDown={(e) => {
+                                // Never activate via keyboard. Blocks the default
+                                // Space/Enter → click on a focused button (and its
+                                // OS auto-repeat), which is what accidental skips.
+                                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                                  e.preventDefault();
+                                }
+                              }}
+                              onClick={(e) => {
+                                // Reached only by a real pointer click/tap — keyboard
+                                // activation is blocked in onKeyDown, and onMouseDown
+                                // keeps focus off the button so stray Space/Enter
+                                // while reading never lands here. Blur anyway as a
+                                // final guard against the button retaining focus.
+                                e.currentTarget.blur();
+                                handleNextQuestion();
+                              }}
+                              disabled={nextDisabled}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                                nextDisabled
+                                  ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400'
+                                  : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white'
+                              }`}
+                            >
+                              {nextSkipInFlight ? 'Moving on…' : 'Submit'}
+                              <SkipForward className="w-3.5 h-3.5" />
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Live AI text (streaming) — violet (matches AI bubble).
+                Extracted into <LiveAIBubbleMemo> so the 80 ms token-reveal
+                ticks only reconcile this bubble, not the full chat tree. */}
+            {hasAiText && <LiveAIBubbleMemo store={captionStore} />}
+
+            {/* Thinking dots — violet (matches AI bubble) */}
+            {isProcessing && !isCandidateTranscriptProcessing && !hasAiText && (
+              <div className="flex gap-2">
+                <img
+                  src="/linda-avatar.webp"
+                  onError={(e) => { const t = e.currentTarget; if (!t.src.endsWith('/linda-3.png')) t.src = '/linda-3.png'; }}
+                  alt="Bina"
+                  className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
+                />
+                <div className="px-3 py-2 bg-violet-50 dark:bg-violet-500/10 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+            </div>
+          </div>
+            {/* Shown only while the candidate has scrolled up to re-read —
+                one tap returns to the live conversation and resumes following. */}
+            {chatUnpinned && (
+              <button
+                type="button"
+                onClick={() => pinChatToBottom(true)}
+                className={`absolute right-4 z-[31] inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-800/90 text-white text-xs font-semibold shadow-lg ring-1 ring-white/10 hover:bg-slate-900 transition-colors ${
+                  bannerVisible ? 'bottom-[13.5rem]' : 'bottom-4'
+                }`}
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+                Latest
+              </button>
+            )}
+            {/* Bottom fade mask — dissolves any chat content into the chat
+                background (--surface: gray-50 in light, the dark surface in dark
+                mode — so no light band shows) before it reaches the floating turn banner,
+                so nothing shows sharply behind/around the banner. Non-
+                interactive so it never blocks scrolling or clicks. Sits under
+                the fixed banner (which is z-105) but above the scrolling text.
+                Gated on bannerVisible: with no banner on screen there is
+                nothing to blend into, and the scroll container only reserves
+                pb-4 of clearance — the old unconditional h-32 fade washed out
+                the newest/currently-streaming BINA bubble (which the auto-scroll
+                pins right under it) whenever the banner wasn't showing. */}
+            <div className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent via-[color-mix(in_srgb,var(--surface)_70%,transparent)] to-[var(--surface)] transition-[height] duration-150 ${
+              bannerVisible ? 'h-32' : 'h-0'
+            }`} />
+            {/* ── Big countdown overlays (under the question, high visibility) ──
+                Change 1: pre-turn "get ready" 5→1 before the mic opens.
+                Change 2: mid-speech silence 7→1 (final 7s of the 15s window).
+                pointer-events-none so the Repeat/Next action buttons underneath
+                stay fully clickable — the candidate can press Next to skip the
+                silence countdown without waiting for it to finish. */}
+            {(preTurnCountdown != null || midSilenceCountdown != null) && (() => {
+              const isPre = preTurnCountdown != null;
+              const num = isPre ? preTurnCountdown : midSilenceCountdown;
+              const isLastQ = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
+              const _sec = `${num} second${num === 1 ? '' : 's'}`;
+              const title = isPre ? 'Get ready to answer' : 'Are you done with your response?';
+              const subtitle = isPre
+                ? ''   // pre-turn: no bottom chip, title only (was 'You may speak now.')
+                : isLastQ
+                  ? `Ending the interview in ${_sec}. If you’re not done with your response, kindly speak up.`
+                  : `Moving on to the next question in ${_sec}. If you’re not done with your response, kindly speak up.`;
+              const accent = isPre ? 'text-sky-300' : 'text-amber-300';
+              const ring = 'ring-amber-400/40'; // only the silence countdown keeps its circle
+              return (
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 z-[104] flex flex-col items-center justify-center px-4">
+                  {/* cdShine (pre-turn, "H2"): sky-blue digit, no circle, slow fade-in
+                      with a light band sweeping across it. Spread over the full
+                      number (PRE_TURN_TICK_MS) so it reads slow and calm. */}
+                  <style>{`@keyframes cdPulse {0%{opacity:0;transform:scale(0.5)}22%{opacity:1;transform:scale(1.08)}68%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.85)}}
+@keyframes cdShine {0%{opacity:0;transform:scale(0.97);background-position:100% 0,0 0}10%{background-position:100% 0,0 0}40%{opacity:1;transform:scale(1)}92%{opacity:1;background-position:0% 0,0 0}100%{opacity:0.15;background-position:0% 0,0 0}}`}</style>
+                  <div className="flex flex-col items-center text-center">
+                    {/* Title in a dark chip so it reads on the light chat background */}
+                    <div className={`mb-3 px-4 py-1.5 rounded-full bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-sm sm:text-base font-bold ${accent} shadow-lg`}>{title}</div>
+                    {isPre ? (
+                      <div
+                        key={`p-${num}`}
+                        className="flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48"
+                      >
+                        <span
+                          className="font-extrabold tabular-nums"
+                          style={{
+                            fontSize: '5rem',
+                            lineHeight: 1,
+                            color: 'transparent',
+                            background:
+                              'linear-gradient(110deg, transparent 40%, #d6f1ff 50%, transparent 60%) 100% 0 / 300% 100% no-repeat, ' +
+                              'linear-gradient(135deg, #0284c7 20%, #0369a1 80%)',
+                            WebkitBackgroundClip: 'text',
+                            backgroundClip: 'text',
+                            filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.95)) drop-shadow(0 2px 8px rgba(2,132,199,0.25))',
+                            animation: `cdShine ${PRE_TURN_TICK_MS}ms ease-in-out both`,
+                          }}
+                        >{num}</span>
+                      </div>
+                    ) : (
+                      <div
+                        key={`s-${num}`}
+                        className={`flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-black/70 backdrop-blur-md ring-4 ${ring} shadow-2xl`}
+                        style={{ animation: 'cdPulse 1s ease-in-out' }}
+                      >
+                        <span className={`font-bold tabular-nums ${accent}`} style={{ fontSize: '5rem', lineHeight: 1 }}>{num}</span>
+                      </div>
+                    )}
+                    {!isPre && !isLastQ && (
+                      <button
+                        type="button"
+                        onClick={() => handleNextQuestion()}
+                        className="pointer-events-auto mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-gray-900 text-sm font-semibold shadow-lg ring-1 ring-black/10 hover:bg-gray-100 transition-colors"
+                      >
+                        Next question →
+                      </button>
+                    )}
+                    {/* Subtitle in a dark chip — plain white text was invisible on
+                        the light chat background (reported). */}
+                    {/* Pre-turn shows only the top "Get ready to answer" chip. */}
+                    {!isPre && (
+                      <div className="mt-3 max-w-sm px-3.5 py-2 rounded-xl bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-white text-sm leading-snug shadow-lg">{subtitle}</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+            {/* ── AII14: "Are you done with your response?" confirmation ──────
+                Raised after 15s of continuous silence. It does NOT end the turn:
+                the mic stays open and recording continues underneath, so the
+                candidate can simply keep talking and the popup disappears (AC3).
+                Ending the turn is always an explicit choice — Submit (finalize
+                this answer, AC4). */}
+            {midSilenceConfirm && (() => {
+              const isLastQ = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
+              return (
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-[104] flex flex-col items-center justify-center px-4">
+                <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-sky-100 dark:ring-slate-700 shadow-2xl px-5 pt-5 pb-4 text-center">
+                  <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-sky-50 dark:bg-sky-500/15 flex items-center justify-center">
+                    <Mic className="w-5 h-5 text-brand-blue dark:text-sky-300" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white mb-2">Are you done with your response?</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 leading-snug mb-4">
+                    If you are not done, please speak up to continue your response.
+                    {isLastQ
+                      ? ' This is the last question — if you have completed your answer, click End to finish the interview.'
+                      : ' If you have completed your answer, click Submit to move to the next question.'}
+                  </p>
+                  <div className="flex items-center justify-center gap-3">
+                    {isLastQ ? (
+                      // Last question: same End confirmation as the header End
+                      // button (it keeps the answer being spoken).
+                      <button
+                        type="button"
+                        onClick={() => setShowEndConfirm(true)}
+                        disabled={!isConnected || isClosing}
+                        className="tf-btn tf-btn-destructive flex-1 gap-1.5 px-5 py-2.5 rounded-xl bg-red-600 text-sm font-semibold shadow-sm hover:bg-red-700 transition-colors whitespace-normal"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        End
+                      </button>
+                    ) : (
+                    <button
+                      type="button"
+                      onClick={handleSubmitResponse}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 transition-colors"
+                    >
+                      Submit
+                    </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleContinueResponse}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-500/15 text-brand-blue dark:text-sky-300 text-sm font-semibold ring-1 ring-sky-100 dark:ring-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/25 transition-colors"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                  <p className="mt-3 text-2xs text-slate-500 dark:text-slate-400">Still recording — just keep speaking to continue.</p>
+                </div>
+              </div>
+              );
+            })()}
+            {/* Turn banner — centred within the CHAT panel (never overlaps the
+                video), sitting above the fade mask. All chat content stays above
+                it via the reserved bottom padding. */}
+            {turnBanner}
+          </div>
+
+          {/* Candidate action buttons (Repeat Question / Next) now live INSIDE
+              the "Your Response" bubble, directly under the waveform — see the
+              candidate live bubble above. The separate bottom action bar was
+              removed per UX request. */}
+
+          {/* Legacy input area removed (REC moved to header, Next-Q → action bar). */}
+          {false && (
+          <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 pt-3 pb-3">
+            <div className="flex items-center justify-end gap-3">
+
+              {/* Right: Recording indicator + Skip + Next Question */}
+              <div className="flex items-center gap-2">
+                {/* Recording badge */}
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                  <span className="text-red-500 text-2xs font-semibold">REC</span>
+                </div>
+
+                {/* Next Question button.
+                    Disabled when:
+                      - questionTimerExpired (existing)
+                      - Last question (existing — candidate must actually answer Q N/N)
+                      - Bina is still speaking the question (answer window hasn't opened yet)
+                      - No answer timer is running (questionTimerSeconds === null — nothing
+                        to skip; prevents clicks during the gap between turns)
+                      - A previous Next-Q click is still in flight (single-click guarantee —
+                        cleared by the next question_timer_started event)
+                    These guards together ensure: enabled ONLY when the 2-min timer is
+                    ticking, and a candidate cannot fire multiple skip_question messages
+                    by clicking rapidly. */}
+                {isConnected && !isClosing && (
+                  <button
+                    disabled={
+                      questionTimerExpired
+                      || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions)
+                      || isAiSpeaking
+                      || questionTimerSeconds === null
+                      || nextSkipInFlight
+                      || isMediaPaused
+                    }
+                    onClick={() => {
+                      if (questionTimerExpired) return;
+                      // Disable on last question — candidate must answer Q15/15, not skip it
+                      if (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) return;
+                      // Camera/mic disconnected (headset pulled, etc.) — the interview
+                      // is paused and nothing can advance it until the device is back.
+                      if (isMediaPausedRef.current) return;
+                      // Re-entry guard: if another skip is still in flight (no new
+                      // question_timer_started has arrived yet), ignore the click
+                      // completely. This mirrors the disabled prop but covers the
+                      // race where React hasn't repainted yet.
+                      if (nextSkipInFlightRef.current) return;
+                      // Guard: don't allow skip until the answer timer has started.
+                      // If Bina hasn't finished speaking, there's no open answer
+                      // window — skipping now would queue behind her TTS and look
+                      // like a ghost skip.
+                      if (isAiSpeakingRef.current && questionTimerSeconds === null) return;
+                      // Mark in-flight immediately so rapid re-clicks are no-ops.
+                      nextSkipInFlightRef.current = true;
+                      setNextSkipInFlight(true);
+                      // Safety-net: auto-release the in-flight guard after 15 s in
+                      // case the backend never sends question_timer_started (WS
+                      // hiccup, processing stall, etc.). Without this, one stuck
+                      // skip would disable the button for the rest of the interview.
+                      setTimeout(() => {
+                        if (nextSkipInFlightRef.current) {
+                          nextSkipInFlightRef.current = false;
+                          setNextSkipInFlight(false);
+                        }
+                      }, 15000);
+
+                      // Snapshot any browser-side live transcript BEFORE tearing the
+                      // mic down, so a partial answer the candidate spoke isn't lost.
+                      // It's sent with the skip as a fallback — the audio streamed to
+                      // the backend is the primary source, but this covers the case
+                      // where the backend ASR returns nothing. The backend records
+                      // this partial answer against the current question instead of
+                      // wiping it.
+                      const skipBrowserTranscript = backendLiveTranscriptEnabled ? "" : snapshotVisibleLiveTranscript();
+
+                      // Did the candidate actually speak before clicking Next? Capture
+                      // it BEFORE abortRecordingForSkip resets speechDetectedRef. When
+                      // true, the backend records their partial answer, so we show the
+                      // "Your Response" loading bubble immediately (dots) and let the
+                      // incoming transcript fill it in — instead of a blank gap that
+                      // suddenly pops the transcript.
+                      const hadSpeechForSkip = speechDetectedRef.current;
+
+                      // 0. If Bina is speaking, stop her immediately
+                      if (isAiSpeakingRef.current) {
+                        talkingHeadRef.current?.streamStop();
+                        isPlayingRef.current = false;
+                        isAiSpeakingRef.current = false;
+                        setIsAiSpeaking(false);
+                        setIsProcessing(false);
+                        isProcessingRef.current = false;
+                        avatarState.onAiStopSpeaking();
+                        pendingBuffersRef.current = 0;
+                        audioEndReceivedRef.current = false;
+                        if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+                      }
+
+                      // 1. Stop mic silently — no end_turn, no processing state
+                      abortRecordingForSkipRef.current();
+
+                      // 1b. If the candidate spoke, show the "Your Response" loading
+                      //     bubble right away. abortRecordingForSkip cleared this flag
+                      //     and currentTranscript above; re-set it here (same event
+                      //     handler → React batches, this wins) so the bubble with the
+                      //     bouncing dots appears at once and the backend's transcript
+                      //     replaces it when it lands — no blank-then-sudden jump.
+                      if (hadSpeechForSkip) {
+                        setCurrentTranscript("");
+                        currentTranscriptRef.current = "";
+                        setIsCandidateTranscriptProcessing(true);
+                      }
+
+                      // 2. Clear no-response timer explicitly (stopRecordingSilent skips this
+                      //    when isRecording=false, e.g. candidate never spoke)
+                      clearNoResponseTimer();
+
+                      // 3. Clear processing state in case it was set by a previous answer
+                      setIsProcessing(false);
+                      isProcessingRef.current = false;
+
+                      // 4. Reset audioEndReceivedRef so the stale Q1 audio_end can't
+                      //    trigger handleAllAudioFinished → startRecording before Q2 is asked.
+                      audioEndReceivedRef.current = false;
+
+                      // 5. Cancel any audio-end safety-net fallback from Q1
+                      if (audioEndFallbackRef.current) {
+                        clearTimeout(audioEndFallbackRef.current);
+                        audioEndFallbackRef.current = null;
+                      }
+
+                      // 5b. Cancel any pending "start recording" timer so a stale
+                      //     startRecordingInternal() call can't fire after the skip.
+                      if (startRecordingTimerRef.current) {
+                        clearTimeout(startRecordingTimerRef.current);
+                        startRecordingTimerRef.current = null;
+                      }
+
+                      // 5c. Visual feedback while waiting for Bina to speak the next question
+                      setStatus("Bina is preparing the next question...");
+
+                      // 5d. Clear follow-up flag immediately — next question is always fresh
+                      setIsFollowUp(false);
+
+                      // 5e. Optimistically clear is_active on all clusters/skills so the
+                      //     coverage panel doesn't stay frozen showing the old "Active"
+                      //     highlight during the gap before the backend sends skill_coverage_update.
+                      setSkillCoverage(prev => {
+                        if (!prev) return prev;
+                        return {
+                          ...prev,
+                          clusters: prev.clusters?.map(c => ({
+                            ...c,
+                            is_active: false,
+                            current_skill: undefined,
+                            skills: c.skills.map(s => ({ ...s, is_active: false })),
+                          })),
+                        };
+                      });
+
+                      // 6. Dismiss silence banner if active
+                      if (showSilenceBanner) {
+                        setShowSilenceBanner(false);
+                        if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+                      }
+
+                      // 7. Send skip — backend records any partial answer (buffered
+                      //    audio + this browser-transcript fallback), then generates
+                      //    the next Q. If nothing was spoken it's a plain skip.
+                      if (wsRef.current?.readyState === WebSocket.OPEN) {
+                        wsRef.current.send(JSON.stringify({
+                          type: 'skip_question',
+                          source: 'candidate',
+                          browser_transcript: skipBrowserTranscript || undefined,
+                        }));
+                      }
+
+                      // 9. Clear question timer state
+                      if (questionTimerIntervalRef.current) {
+                        clearInterval(questionTimerIntervalRef.current);
+                        questionTimerIntervalRef.current = null;
+                      }
+                      questionTimerPendingRef.current = null;
+                      questionTimerReceivedAtRef.current = null;
+                      questionTimerSecondsRef.current = null;
+                      setQuestionTimerSeconds(null);
+                      setQuestionTimerExpired(false);
+                      questionTimerExpiredRef.current = false;
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 ${
+                      questionTimerExpired || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) || isMediaPaused
+                        ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400'
+                        : 'bg-white hover:bg-violet-50 dark:hover:bg-violet-500/10 border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 hover:border-violet-400'
+                    }`}
+                  >
+                    <SkipForward className="w-3.5 h-3.5" />
+                    {questionTimerExpired ? 'Skipping…' : (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) ? 'Last Q' : 'Next Q'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+          )}
+        </div>
+
+
+      </div>
+
+      {/* End Interview Confirmation Modal */}
+      {showEndConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowEndConfirm(false)}
+          />
+          {/* Modal */}
+          <div className="relative w-full max-w-[95vw] sm:max-w-md bg-white dark:bg-slate-900 ring-1 ring-red-100 dark:ring-slate-700 rounded-2xl shadow-2xl p-6 flex flex-col gap-5">
+            {/* Icon */}
+            <div className="flex items-center justify-center w-12 h-12 mx-auto rounded-full bg-red-50 dark:bg-red-500/15">
+              <LogOut className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            {/* Text — where the candidate is, and what ending does. */}
+            <div className="text-center">
+              <h3 className="text-gray-900 dark:text-white font-bold mb-1.5" style={{ fontSize: 17 }}>End the interview?</h3>
+              {questionNumber !== null && totalQuestions !== null && (
+                <p className="tf-badge mb-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 tabular-nums">
+                  You&apos;re on question {questionNumber} of {totalQuestions}
+                </p>
+              )}
+              <p className="text-slate-600 dark:text-slate-300" style={{ fontSize: 13, lineHeight: 1.6 }}>
+                Ending now finishes your interview with the answers you&apos;ve given so far. This action cannot be undone.
+              </p>
+            </div>
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowEndConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-500/15 text-brand-blue dark:text-sky-300 ring-1 ring-sky-100 dark:ring-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/25 transition-all duration-200"
+                style={{ fontSize: 13, fontWeight: 500 }}
+              >
+                Continue Interview
+              </button>
+              <button
+                onClick={() => {
+                  setShowEndConfirm(false);
+                  // End means END: go straight to Bina's Thank-you close with NO
+                  // further question. Enter closing on the client immediately
+                  // (hides the End button, stops reacting to further turns), stop
+                  // the mic SILENTLY — abortRecordingForSkip does NOT send end_turn,
+                  // so the backend never runs the answer→next-question pipeline that
+                  // used to make Bina ask a clarification after End — then tell the
+                  // backend to close. The backend cancels any in-flight generation
+                  // and plays ONLY the farewell.
+                  //
+                  // EXCEPT when the candidate has already spoken an answer to the
+                  // current question (still recording, or submitted and awaiting
+                  // its transcript). Aborting then threw the answer away and the
+                  // question showed as Skipped in Question Analysis. Submit it
+                  // (end_turn) and hold end_interview until its transcript commits
+                  // (see pendingEndAfterTranscriptRef in the transcript /
+                  // silent_discard handlers); the backend files that transcript
+                  // as the question's answer when it closes.
+                  setIsClosing(true);
+                  isClosingRef.current = true;
+                  setStatus("Ending interview…");
+                  // Cut off the question Bina is still speaking. Its audio is
+                  // already buffered in TalkingHead's worklet, which the backend's
+                  // cancel can't reach — it kept playing UNDER the farewell, two
+                  // Binas at once (staging 2026-10-29, End pressed mid-Q4).
+                  if (isAiSpeakingRef.current || isPlayingRef.current || binaFrozenRef.current) {
+                    hardStopBinaRef.current({ noFreeze: true });
+                    dropPcmUntilNextTurnRef.current = true;
+                  }
+                  const _speakingAnswer = isRecordingRef.current && speechDetectedRef.current
+                    && !hrVoiceBlockedForQidRef.current;
+                  const _awaitingTranscript = isCandidateTranscriptProcessingRef.current;
+                  if (_speakingAnswer || _awaitingTranscript) {
+                    pendingEndAfterTranscriptRef.current = true;
+                    if (_speakingAnswer) stopRecording();
+                    // Safety net: never leave the interview open if the
+                    // transcript never arrives.
+                    setTimeout(() => {
+                      if (!pendingEndAfterTranscriptRef.current) return;
+                      pendingEndAfterTranscriptRef.current = false;
+                      if (wsRef.current?.readyState === WebSocket.OPEN) {
+                        wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+                      }
+                    }, 12000);
+                    return;
+                  }
+                  try { abortRecordingForSkipRef.current?.(); } catch { /* mic already stopped */ }
+                  if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
+                  }
+                }}
+                className="tf-btn tf-btn-destructive flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 duration-200 shadow-sm whitespace-normal gap-0 font-normal"
+                style={{ fontSize: 13, fontWeight: 600 }}
+              >
+                End Interview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Fullscreen exit overlay — shows when candidate leaves fullscreen mid-interview ── */}
+      {isFullscreenExited && isConnected && !isClosing && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[var(--raw-0f1929)] border border-white/10 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5">
+            {/* Warning icon */}
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/15 border border-amber-400/30">
+              <Maximize className="w-6 h-6 text-amber-400" />
+            </div>
+            {/* Heading */}
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-base mb-1">Fullscreen Required</h3>
+              <p className="text-[var(--raw-94a3b8)] text-sm leading-relaxed">
+                Your interview is still running. Please return to fullscreen to continue.
+              </p>
+            </div>
+            {/* Grace-period countdown. Visible only while we're still within
+                the 10s return window. Once it expires, this collapses and the
+                UI falls through to the full "Interview paused" state. */}
+            {gracePeriodRemaining !== null && (
+              <div className="w-full rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-center">
+                <span className="block text-2xs font-semibold text-amber-200 uppercase tracking-wider mb-1">
+                  Auto-pause in
+                </span>
+                <span className={`font-mono font-bold text-3xl tabular-nums ${
+                  gracePeriodRemaining <= 3 ? 'text-red-300' : 'text-amber-200'
+                }`}>
+                  {gracePeriodRemaining}s
+                </span>
+                <span className="block text-2xs text-amber-300/80 mt-1">
+                  Return now to continue without interruption
+                </span>
+              </div>
+            )}
+            {/* Timer display */}
+            <div className="w-full grid grid-cols-2 gap-3">
+              {/* Global timer */}
+              <div className="flex flex-col items-center gap-1 rounded-xl bg-white/5 dark:bg-slate-900/5 border border-white/10 px-4 py-3">
+                <span className="text-2xs font-semibold text-[var(--raw-64748b)] uppercase tracking-widest">Interview Time</span>
+                <span className={`font-mono font-bold text-xl tabular-nums ${remainingSeconds <= 60 ? 'text-red-400' : 'text-white'}`}>
+                  {formatTime(remainingSeconds)}
+                </span>
+                <span className="text-2xs text-[var(--raw-475569)] font-medium">remaining</span>
+              </div>
+              {/* Question timer */}
+              <div className="flex flex-col items-center gap-1 rounded-xl bg-white/5 dark:bg-slate-900/5 border border-white/10 px-4 py-3">
+                <span className="text-2xs font-semibold text-[var(--raw-64748b)] uppercase tracking-widest">Question Time</span>
+                {questionTimerSeconds !== null ? (
+                  <>
+                    <span className={`font-mono font-bold text-xl tabular-nums ${
+                      questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-400' :
+                      questionTimerSeconds <= 60 ? 'text-amber-400' : 'text-violet-400'
+                    }`}>
+                      {(questionTimerExpired || questionTimerSeconds <= 0) ? '00:00' : formatTime(questionTimerSeconds)}
+                    </span>
+                    {questionNumber !== null && totalQuestions !== null && (
+                      <span className="text-2xs text-[var(--raw-475569)] font-medium">Q {questionNumber} / {totalQuestions}</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="font-mono font-bold text-xl tabular-nums text-[var(--raw-475569)]">--:--</span>
+                )}
+              </div>
+            </div>
+            {/* Return button. Clickable even if permission was revoked so the
+                candidate can attempt the gesture — the fullscreen-change handler
+                then re-probes permissions and arms the terminal block if they
+                blocked camera/mic in the meantime. */}
+            <button
+              onClick={() => requestFullscreen(document.documentElement)}
+              className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25"
+            >
+              <Maximize className="w-4 h-4" />
+              Return to Fullscreen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Camera/mic disconnected overlay — 3-minute pause+grace ──
+          Covers camera, mic (headset included), or both — wording/icon are
+          computed straight from proctoringState so they always reflect
+          what's CURRENTLY down, independent of what originally armed the
+          pause. Auto-resumes the moment every affected device is back (no
+          button to click — InterviewProctoringMonitor's health-check clears
+          isCameraActive/isMicrophoneActive on its own the instant the device
+          is live again). If the countdown reaches zero while still
+          disconnected, the parent portal terminates the interview.
+          When the MICROPHONE (headset) is down, the candidate cannot answer
+          anyway, so this hard-blocks the page — a real backdrop plus
+          pointer-events-auto on the wrapper — so Next/Skip and everything
+          else behind it is unreachable until the headset is reconnected.
+          When only the camera is down and the mic is still fine, the overlay
+          stays the original non-blocking heads-up (transparent,
+          pointer-events-none on the wrapper) so the candidate can keep
+          answering by voice while the camera recovers. */}
+      {isMediaPaused && isConnected && !isClosing && (() => {
+        // Mic is "down" for the overlay when either the track dropped OR the
+        // pinned device was unplugged (track survived via a built-in fallback).
+        const _micDown = !proctoringState.isMicrophoneActive || audioDeviceLost;
+        // Camera is "down" for the overlay when either the hardware track
+        // dropped OR it's live but on an unapproved device (switched, or a
+        // virtual/mobile-relay camera) — cameraDeviceLost.
+        const _camDown = !proctoringState.isCameraActive || cameraDeviceLost;
+        // A CAMERA drop blocks exactly like a mic drop. The scrim used to be
+        // gated on _micDown alone, so a camera-only disconnect rendered a
+        // transparent, click-through overlay — the interview looked like it was
+        // still running underneath (live preview visible, page clickable) while
+        // it was actually paused and counting down to termination.
+        const _blocking = _micDown || _camDown;
+        // An unapproved-but-still-live camera (cameraDeviceLost while the
+        // hardware itself reads active) gets its own copy pointing the
+        // candidate back at the exact camera they approved, distinct from a
+        // genuine hardware disconnect.
+        const _camUnapproved = cameraDeviceLost && proctoringState.isCameraActive;
+        return (
+        <div className={`fixed inset-0 z-[200] flex items-center justify-center ${
+          !_blocking
+            ? 'pointer-events-none'
+            : 'pointer-events-auto bg-black/70 backdrop-blur-sm'
+        }`}>
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[var(--raw-0f1929)] border border-red-500/30 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5 pointer-events-auto">
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/15 border border-red-400/30">
+              {_camDown
+                ? <Camera className="w-6 h-6 text-red-400" />
+                : <MicOff className="w-6 h-6 text-red-400" />}
+            </div>
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-base mb-1">
+                {_camDown && _micDown
+                  ? "Camera & Microphone Disconnected"
+                  : _camUnapproved
+                  ? "Unapproved Camera Detected"
+                  : _camDown
+                  ? "Camera Disconnected"
+                  : "Microphone Disconnected"}
+              </h3>
+              <p className="text-[var(--raw-94a3b8)] text-sm leading-relaxed">
+                {_camDown && _micDown
+                  ? "Your interview is paused. Please reconnect your camera and microphone — it will resume automatically."
+                  : _camUnapproved
+                  ? INVALID_CAMERA_SELECTION_MESSAGE
+                  : _camDown
+                  ? "Your interview is paused. Please reconnect your camera — it will resume automatically."
+                  : "Your interview is paused. Please reconnect your microphone — it will resume automatically."}
+              </p>
+            </div>
+            {mediaPauseSecondsRemaining !== null && (
+              <div className="w-full rounded-xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-center">
+                <span className="block text-2xs font-semibold text-red-200 uppercase tracking-wider mb-1">
+                  Interview will end in
+                </span>
+                <span className={`font-mono font-bold text-3xl tabular-nums ${
+                  mediaPauseSecondsRemaining <= 30 ? 'text-red-300' : 'text-red-200'
+                }`}>
+                  {formatTime(mediaPauseSecondsRemaining)}
+                </span>
+                <span className="block text-2xs text-red-300/80 mt-1">
+                  Reconnect it now to continue without interruption
+                </span>
+              </div>
+            )}
+            <div className="text-xs text-[var(--raw-64748b)]">This event has been recorded</div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* ── Media-permission terminal block ──
+          Shown the moment camera / mic permission is revoked or denied.
+          Supersedes every other overlay (z-[300] > fullscreen overlay's z-[200]).
+          The interview cannot resume from this state — the candidate must
+          restore permissions AND restart the session from scratch, which
+          matches the product rule "do not allow to start the interview again". */}
+      {/* ── Picture-in-Picture overlay — hard-blocks the interview while a video
+          is detached into a floating always-on-top window. Unlike the
+          fullscreen-exit overlay, there's no grace countdown: entering PiP is
+          a deliberate action, not an accidental blur, so the block is
+          immediate. It auto-clears the moment leavepictureinpicture fires
+          (proctoringState.isPiPActive flips back to false in the monitor
+          hook) — no separate "resume" flow needed. ── */}
+      {proctoringState.isPiPActive && isConnected && !isClosing && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 backdrop-blur-md">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[var(--raw-0f1929)] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/20 border border-red-400/40">
+              <PictureInPicture2 className="w-6 h-6 text-red-400" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-base mb-1">Picture-in-Picture Detected</h3>
+              <p className="text-[var(--raw-cbd5e1)] text-sm leading-relaxed">
+                A video was detached into a floating window. This has been logged
+                as a proctoring violation.
+              </p>
+              <p className="text-[var(--raw-94a3b8)] text-sm leading-relaxed mt-2">
+                Please exit Picture-in-Picture mode to continue the interview.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mediaBlocked && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[var(--raw-0f1929)] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/20 border border-red-400/40">
+              <MicOff className="w-7 h-7 text-red-400" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-lg mb-1.5">
+                {mediaBlocked.kind === 'camera' && 'Camera access blocked'}
+                {mediaBlocked.kind === 'microphone' && 'Microphone access blocked'}
+                {mediaBlocked.kind === 'both' && 'Camera & microphone access blocked'}
+              </h3>
+              <p className="text-[var(--raw-cbd5e1)] text-sm leading-relaxed">
+                Your interview has been suspended because the required
+                {' '}
+                {mediaBlocked.kind === 'both'
+                  ? 'camera and microphone permissions were'
+                  : `${mediaBlocked.kind} permission was`}
+                {' '}revoked.
+              </p>
+              <p className="text-[var(--raw-94a3b8)] text-xs leading-relaxed mt-3">
+                This action has been logged as a proctoring violation.
+                You cannot resume this session. Please close this tab and
+                contact your recruiter if this was accidental.
+              </p>
+            </div>
+            <div className="w-full text-center text-2xs text-red-300/80 border border-red-500/20 rounded-lg bg-red-500/5 px-3 py-2">
+              Interview session ended
+            </div>
+          </div>
+        </div>
+      )}
+
+      <InterviewProctoringWarnings anchorIds={['iv-answer-timer', 'iv-chat-header']} />
+
+      {/* The screen-recording popup is mounted by CandidateAIInterviewPortal,
+          not here: it has to cover the pre-interview steps too, and mounting it
+          in both places would show the candidate two identical dialogs. */}
+
+      <EnvironmentVerificationOverlay
+        active={Boolean(envVerification)}
+        qrCodeDataUri={envVerification?.qrCodeDataUri ?? null}
+        verificationUrl={envVerification?.verificationUrl ?? null}
+        expiresAt={envVerification?.expiresAt ?? null}
+        challengeColor={envVerification?.challengeColor ?? null}
+        challengeId={envVerification?.challengeId ?? null}
+        challengeRevealed={envVerification?.challengeRevealed ?? false}
+        challengeColors={envVerification?.challengeColors ?? null}
+        recordingStartedAt={envVerification?.recordingStartedAt ?? null}
+        onExpired={() => {
+          // Candidate never completed verification in time — never hard-stall
+          // the interview on it. Resume ourselves; the backend independently
+          // records an environment_verification_timed_out event. Routed
+          // through the same guard as the WS "submitted" case and the status-
+          // poll fallback so a near-simultaneous submission/expiry can't
+          // double-send session_resume.
+          resumeEnvVerification();
+        }}
+      />
+
+      {/* Tester mute dot removed per UX request. */}
+    </>
+  );
+}

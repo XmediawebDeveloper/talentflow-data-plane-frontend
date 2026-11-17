@@ -1,0 +1,20 @@
+- generic [active] [ref=f2e1]:
+  - banner [ref=f2e4]:
+    - generic [ref=f2e5]:
+      - link "TalentFlow home" [ref=f2e6] [cursor=pointer]:
+        - /url: /dashboard
+        - img "TalentFlow" [ref=f2e7]
+      - searchbox "Search folders, resumes, jobs, assessments, interviews or IDs..." [ref=f2e13]
+      - generic [ref=f2e14]:
+        - button "Loading..." [ref=f2e16] [cursor=pointer]:
+          - generic "Loading..." [ref=f2e21]
+        - button "Notifications" [ref=f2e26] [cursor=pointer]
+        - button "Toggle dark mode" [ref=f2e31] [cursor=pointer]
+        - button "A arunrajs Owner" [ref=f2e36] [cursor=pointer]:
+          - generic [ref=f2e37]: A
+          - generic [ref=f2e39]:
+            - generic [ref=f2e40]: arunrajs
+            - generic [ref=f2e41]: Owner
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=f2e122] [cursor=pointer]
+  - alert [ref=f2e126]

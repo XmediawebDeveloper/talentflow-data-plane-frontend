@@ -1,0 +1,353 @@
+'use client';
+
+import { useMemo } from 'react';
+import {
+  Briefcase,
+  Users,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
+  TrendingDown,
+  ArrowUpRight,
+  Award,
+  Eye,
+  BarChart3,
+} from 'lucide-react';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip as ReTooltip,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts';
+import { useRouter } from 'next/navigation';
+import { User, Tenant } from '@/lib/types/tenant';
+import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
+
+interface ViewerDashboardProps {
+  user?: User;
+  tenant?: Tenant;
+}
+
+export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) {
+  const router = useRouter();
+
+  const trendData = useMemo(
+    () => [
+      { month: 'Nov', applications: 220, hires: 12 },
+      { month: 'Dec', applications: 280, hires: 16 },
+      { month: 'Jan', applications: 340, hires: 22 },
+      { month: 'Feb', applications: 310, hires: 18 },
+      { month: 'Mar', applications: 380, hires: 26 },
+      { month: 'Apr', applications: 420, hires: 32 },
+    ],
+    []
+  );
+
+  const sourceData = [
+    { name: 'Job Boards', value: 42, color: 'var(--raw-0f3c99)' },
+    { name: 'Referrals', value: 24, color: 'var(--raw-079cc4)' },
+    { name: 'LinkedIn', value: 18, color: 'var(--raw-099ab6)' },
+    { name: 'Career Site', value: 11, color: 'var(--raw-ed881c)' },
+    { name: 'Other', value: 5, color: 'var(--raw-9ca3af)' },
+  ];
+
+  const topJDs = [
+    { title: 'Senior Backend Engineer', dept: 'Engineering', applicants: 142, score: 88 },
+    { title: 'Product Designer', dept: 'Design', applicants: 96, score: 84 },
+    { title: 'Sales Lead - APAC', dept: 'Sales', applicants: 78, score: 79 },
+    { title: 'DevOps Engineer', dept: 'Engineering', applicants: 64, score: 82 },
+    { title: 'Marketing Manager', dept: 'Marketing', applicants: 51, score: 76 },
+  ];
+
+  const pipeline = [
+    { label: 'Applied', count: 420, pct: 100, color: 'bg-brand-blue' },
+    { label: 'Screened', count: 248, pct: 59, color: 'bg-brand-cyan' },
+    { label: 'Assessment', count: 132, pct: 31, color: 'bg-brand-teal' },
+    { label: 'Interview', count: 64, pct: 15, color: 'bg-brand-orange' },
+    { label: 'Offer', count: 32, pct: 8, color: 'bg-brand-orange-deep' },
+  ];
+
+  const recentAssessments = [
+    { candidate: 'A. Kumar', jd: 'Backend Engineer', score: 92, date: '2026-05-06' },
+    { candidate: 'M. Rao', jd: 'Product Designer', score: 88, date: '2026-05-06' },
+    { candidate: 'S. Iyer', jd: 'DevOps Engineer', score: 81, date: '2026-05-05' },
+    { candidate: 'R. Khan', jd: 'Sales Lead - APAC', score: 76, date: '2026-05-05' },
+    { candidate: 'P. Joshi', jd: 'Marketing Manager', score: 74, date: '2026-05-04' },
+  ];
+
+  return (
+    <main className="tf-page">
+      <div className="tf-page-pad w-full max-w-[1400px] mx-auto">
+        <div className="mb-8">
+          <WelcomeBanner user={user} tenant={tenant} />
+        </div>
+
+        {/* Read-only context strip */}
+        <div className="mb-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-slate-800 tf-meta">
+          <Eye className="w-3.5 h-3.5" />
+          Read-only view · Hiring insights
+        </div>
+
+        {/* KPI tiles */}
+        <div className="tf-grid-4 mb-6">
+          <KpiTile
+            label="Active JDs"
+            value="42"
+            sub="across 6 departments"
+            icon={<Briefcase className="w-6 h-6 text-brand-blue" />}
+            accent="bg-brand-blue/10 ring-brand-blue/15"
+            trend={{ dir: 'up', value: '+8%' }}
+          />
+          <KpiTile
+            label="Candidates in Pipeline"
+            value="892"
+            sub="248 newly screened"
+            icon={<Users className="w-6 h-6 text-brand-cyan" />}
+            accent="bg-brand-cyan/10 ring-brand-cyan/15"
+            trend={{ dir: 'up', value: '+12%' }}
+          />
+          <KpiTile
+            label="Hires this month"
+            value="32"
+            sub="vs 26 last month"
+            icon={<CheckCircle2 className="w-6 h-6 text-brand-teal" />}
+            accent="bg-brand-teal/10 ring-brand-teal/15"
+            trend={{ dir: 'up', value: '+23%' }}
+          />
+          <KpiTile
+            label="Avg time-to-hire"
+            value="18d"
+            sub="3 days faster"
+            icon={<Clock className="w-6 h-6 text-brand-orange" />}
+            accent="bg-brand-orange/10 ring-brand-orange/15"
+            trend={{ dir: 'down', value: '-3d', positive: true }}
+          />
+        </div>
+
+        {/* Pipeline + Hiring trends */}
+        <div className="tf-grid-3 mb-6">
+          <div className="tf-card-soft lg:col-span-2 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="tf-section-title">Hiring trends</h2>
+                <p className="tf-meta mt-0.5">Last 6 months</p>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-400">
+                  <span className="w-2 h-2 rounded-full bg-brand-blue" />
+                  Applications
+                </span>
+                <span className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-400">
+                  <span className="w-2 h-2 rounded-full bg-brand-orange" />
+                  Hires
+                </span>
+              </div>
+            </div>
+            <div className="h-72 -ml-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--raw-e5e7eb)" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: 'var(--raw-6b7280)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: 'var(--raw-6b7280)' }} axisLine={false} tickLine={false} />
+                  <ReTooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--raw-e5e7eb)', fontSize: 12 }} />
+                  <Line type="monotone" dataKey="applications" stroke="var(--raw-0f3c99)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="hires" stroke="var(--raw-ed881c)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="tf-card-soft p-6">
+            <h2 className="tf-section-title mb-1">Pipeline funnel</h2>
+            <p className="tf-meta mb-5">Aggregated across all JDs</p>
+            <div className="space-y-4">
+              {pipeline.map((stage) => (
+                <div key={stage.label}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="tf-caption">{stage.label}</span>
+                    <span className="tf-meta tabular-nums">
+                      {stage.count} <span className="text-gray-400 dark:text-slate-500">· {stage.pct}%</span>
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className={`h-full ${stage.color} transition-all`} style={{ width: `${stage.pct}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* JD leaderboard + Source of hire */}
+        <div className="tf-grid-3 mb-6">
+          <div className="tf-card-soft lg:col-span-2">
+            <div className="p-6 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
+              <div>
+                <h2 className="tf-section-title">Top performing JDs</h2>
+                <p className="tf-meta mt-0.5">By applicant volume + AI match score</p>
+              </div>
+              <button
+                onClick={() => router.push('/recruitment/job-openings')}
+                className="text-sm text-brand-blue hover:text-brand-blue-2 font-medium inline-flex items-center gap-1"
+              >
+                View all <ArrowUpRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="overflow-x-auto tf-table-shell">
+              <table className="w-full">
+                <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
+                  <tr>
+                    <th className="tf-th-cell text-left tf-th">#</th>
+                    <th className="tf-th-cell text-left tf-th">Job description</th>
+                    <th className="tf-th-cell text-left tf-th">Department</th>
+                    <th className="tf-th-cell text-right tf-th">Applicants</th>
+                    <th className="tf-th-cell text-right tf-th">Avg score</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                  {topJDs.map((j, i) => (
+                    <tr key={i} className="hover:bg-gray-50/60 dark:hover:bg-slate-800 transition-colors">
+                      <td className="tf-td tf-body-muted tabular-nums">{i + 1}</td>
+                      <td className="tf-td tf-row-name">{j.title}</td>
+                      <td className="tf-td tf-body-secondary">{j.dept}</td>
+                      <td className="tf-td tf-body text-right tabular-nums">{j.applicants}</td>
+                      <td className="tf-td text-right">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            j.score >= 85
+                              ? 'bg-success-subtle text-success ring-1 ring-success-line'
+                              : j.score >= 75
+                              ? 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/15'
+                              : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200'
+                          }`}
+                        >
+                          <Award className="w-3 h-3" />
+                          {j.score}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="tf-card-soft p-6">
+            <h2 className="tf-section-title mb-1">Source of hire</h2>
+            <p className="tf-meta mb-3">% of total hires</p>
+            <div className="h-44">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={sourceData} dataKey="value" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2}>
+                    {sourceData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} stroke="white" strokeWidth={2} />
+                    ))}
+                  </Pie>
+                  <ReTooltip
+                    contentStyle={{ borderRadius: 8, border: '1px solid var(--raw-e5e7eb)', fontSize: 12 }}
+                    formatter={(v: any) => [`${v}%`, '']}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-2 mt-3">
+              {sourceData.map((s) => (
+                <div key={s.name} className="flex items-center justify-between text-xs">
+                  <span className="inline-flex items-center gap-2 text-gray-700 dark:text-slate-300">
+                    <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: s.color }} />
+                    {s.name}
+                  </span>
+                  <span className="tabular-nums text-gray-500 dark:text-slate-500">{s.value}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Recent assessments (read-only) */}
+        <div className="tf-card-soft mb-6">
+          <div className="p-6 border-b border-gray-100 dark:border-slate-700/60">
+            <h2 className="tf-section-title">Recent assessments</h2>
+            <p className="tf-meta mt-0.5">Latest scored candidates</p>
+          </div>
+          <div className="overflow-x-auto tf-table-shell">
+            <table className="w-full">
+              <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
+                <tr>
+                  <th className="tf-th-cell text-left tf-th">Candidate</th>
+                  <th className="tf-th-cell text-left tf-th">JD</th>
+                  <th className="tf-th-cell text-right tf-th">Score</th>
+                  <th className="tf-th-cell text-left tf-th">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                {recentAssessments.map((a, i) => (
+                  <tr key={i} className="hover:bg-gray-50/60 dark:hover:bg-slate-800 transition-colors">
+                    <td className="tf-td tf-row-name">{a.candidate}</td>
+                    <td className="tf-td tf-body-secondary">{a.jd}</td>
+                    <td className="tf-td text-sm text-right tabular-nums">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          a.score >= 85
+                            ? 'bg-success-subtle text-success ring-1 ring-success-line'
+                            : a.score >= 75
+                            ? 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/15'
+                            : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200'
+                        }`}
+                      >
+                        {a.score}
+                      </span>
+                    </td>
+                    <td className="tf-td tf-body-secondary">{a.date}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function KpiTile({
+  label,
+  value,
+  sub,
+  icon,
+  accent,
+  trend,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: React.ReactNode;
+  accent: string;
+  trend?: { dir: 'up' | 'down'; value: string; positive?: boolean };
+}) {
+  const trendUp = trend?.dir === 'up';
+  const positive = trend?.positive ?? trendUp;
+  return (
+    <div className="tf-card-soft relative overflow-hidden p-6 hover:shadow-md transition-all">
+      <div className="flex items-start justify-between mb-3">
+        <div className={`w-12 h-12 rounded-xl ${accent} ring-1 flex items-center justify-center`}>{icon}</div>
+        {trend && (
+          <span className={`inline-flex items-center gap-1 text-xs font-medium ${positive ? 'text-success' : 'text-destructive'}`}>
+            {trendUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {trend.value}
+          </span>
+        )}
+      </div>
+      <div className="text-3xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">{value}</div>
+      <div className="tf-body-secondary mt-0.5">{label}</div>
+      {sub && <div className="tf-micro-hint mt-1">{sub}</div>}
+    </div>
+  );
+}

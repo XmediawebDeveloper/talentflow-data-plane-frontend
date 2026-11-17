@@ -1,0 +1,54 @@
+[     632ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:3000/signup?from=%2Frecruitment%2Fjob-openings:0
+[     632ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:3000/signup?from=%2Frecruitment%2Fjob-openings:0
+[     866ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/signup?from=%2Frecruitment%2Fjob-openings:6
+[    1054ms] [LOG] [HMR] connected @ http://localhost:3000/signup?from=%2Frecruitment%2Fjob-openings:6
+[    1427ms] [WARNING] Image with src "/logos/talent_flow_logo.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio. @ http://localhost:3000/signup?from=%2Frecruitment%2Fjob-openings:6
+[    1486ms] [WARNING] Image with src "/_next/static/media/auth-ai-hero.43i2bdmqqn3-j.png" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading @ http://localhost:3000/signup?from=%2Frecruitment%2Fjob-openings:6
+[  346067ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/signup?from=%2Frecruitment%2Fjob-openings:6
+[  346361ms] [LOG] [Fast Refresh] done in 396ms @ http://localhost:3000/signup?from=%2Frecruitment%2Fjob-openings:6
+[  351538ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/signup?from=%2Frecruitment%2Fjob-openings:6
+[  351622ms] [LOG] [Fast Refresh] done in 195ms @ http://localhost:3000/signup?from=%2Frecruitment%2Fjob-openings:6
+[  351899ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  351981ms] [LOG] [HMR] connected @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  352192ms] [WARNING] Image with src "/_next/static/media/auth-ai-hero.43i2bdmqqn3-j.png" was detected as the Largest Contentful Paint (LCP). Please add the `loading="eager"` property if this image is above the fold.
+Read more: https://nextjs.org/docs/app/api-reference/components/image#loading @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  352210ms] [WARNING] Image with src "/logos/talent_flow_logo.png" has either width or height modified, but not the other. If you use CSS to change the size of your image, also include the styles 'width: "auto"' or 'height: "auto"' to maintain the aspect ratio. @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  352211ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  352241ms] [LOG] [Fast Refresh] done in 150ms @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  366447ms] [LOG] [AUTH] Attempting login for: arunrajs@xmediasolutions.in @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  366912ms] [LOG] [AUTH] Login response status: 200 @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  366913ms] [LOG] [AUTH] Login response data: {user: Object, tenant_name: xmedia, tokens: Object, pending_payment: false, pending_payment_redirect: null} @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  366915ms] [LOG] [AUTH] Stored permission version: 1 @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  366918ms] [LOG] [AUTH] Cookies set successfully {browser: chrome, isIOS: false} @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  366920ms] [LOG] [AUTH] Login called for: arunrajs@xmediasolutions.in tenant: xmedia @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  366920ms] [LOG] [AUTH] Stored subdomain for logout redirect: xmedia @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  366921ms] [LOG] [AUTH] Permission version cache cleared on login @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367251ms] [LOG] [DASHBOARD] Layout render - isLoading: false isAuthenticated: true user: arunrajs@xmediasolutions.in @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367251ms] [LOG] [DASHBOARD] Authenticated, rendering dashboard @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367265ms] [LOG] [Header] wsToken initialised from localStorage: ✅ present (eyJhbGciOiJIUzI1NiIs...) @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367395ms] [LOG] [WebSocket] Effect triggered — token: ✅ present | enabled: true @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367401ms] [LOG] [WebSocket] Attempting connection to: wss://talentflowdata.stgapi.mo.vc/api/v1/ws/notifications?token=***TOKEN*** @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367404ms] [LOG] [WebSocket] WS_BASE_URL: wss://talentflowdata.stgapi.mo.vc @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367413ms] [LOG] [WebSocket] WebSocket object created — initial readyState: 0 (0=CONNECTING) @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367429ms] [LOG] [Header] WebSocket status — connected: false @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367432ms] [LOG] [Header] Initial notification count fetch @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367435ms] [LOG] [Header] WebSocket not connected - using fallback polling @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367441ms] [LOG] [SessionTimeout] Skipping settings load - subscription expired @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367448ms] [LOG] [QuotaContext] Fetching quota-status... @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367453ms] [LOG] [DASHBOARD] Tenant subscription status: active isExpired: false isSuspended: false @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367455ms] [LOG] [DASHBOARD] Unlocking menus - subscription active @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367571ms] [LOG] [DASHBOARD] Layout render - isLoading: false isAuthenticated: true user: arunrajs@xmediasolutions.in @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367572ms] [LOG] [DASHBOARD] Authenticated, rendering dashboard @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367587ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367601ms] [LOG] [Fast Refresh] done in 300ms @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367606ms] [LOG] [WebSocket] ✅ Connected successfully — readyState: 1 (1=OPEN) @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367617ms] [LOG] [Header] WebSocket status — connected: true @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367620ms] [LOG] [Header] WebSocket connected - polling disabled @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367638ms] [LOG] [WebSocket] Received: connected @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367638ms] [LOG] [WebSocket] Connection confirmed: WebSocket connected for real-time notifications @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367768ms] [LOG] [QuotaContext] Already fetching, skipping duplicate call @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367831ms] [LOG] [QuotaContext] Quota data fetched successfully @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  367835ms] [LOG] [PlanFeatures] Enabled features from /quota-status: [ai_talent_match, resume_upload, api_access, sso, resume_scoring, assessment, priority_support, ai_interview, teams] @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  387619ms] [LOG] [WebSocket] Received: pong @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6
+[  407616ms] [LOG] [WebSocket] Received: pong @ http://localhost:3000/login?org=xmedia&from=%2Fdashboard:6

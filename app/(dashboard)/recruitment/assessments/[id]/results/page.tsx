@@ -1,0 +1,226 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import AssessmentResults from '@/components/AssessmentResults';
+import AssessmentResultsSkeleton from '@/components/AssessmentResultsSkeleton';
+import { assessmentService } from '@/lib/services';
+import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import { isResultRestoreArrival } from '@/lib/utils/resultReturnContext';
+import FeatureGate from '@/components/shared/FeatureGate';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import { checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
+import { Button } from '@/components/ui/button';
+import { UserPlus } from 'lucide-react';
+
+export default function AssessmentResultsPage() {
+  const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user, isTenantAdmin, hasPermissionCode } = useAuth();
+  const assessmentId = params.id as string;
+  // Source-aware back nav: when the page is opened from a JD's Track
+  // Invites popup ( ?from=jd&jd_id=… ) the Back button must return to
+  // that JD detail view instead of dropping the user on the global
+  // Assessments list.
+  const fromSource = searchParams.get('from');
+  const fromJdId = searchParams.get('jd_id');
+  /* Which job version the results open on, named by the link that sent the
+     recruiter here.
+     A JD row id opens the page on that one job version — every job version is
+     its own JD row, so the id names one version exactly. The literal `all` asks
+     for the whole job, every version combined. Absent (a deep link, or the
+     assessment details view's own Results button) leaves the page on what it
+     restores or on its All Versions default, unchanged.
+     It is a scope, not a filter the page invents: the version it resolves to
+     has to be one the JD's own lineage returns, or the page falls back to All
+     Versions. */
+  const jobVersionScopeParam = searchParams.get('job_version_id');
+  /* And which assessment version, the companion to it: the Assessment Versions
+     table's Results icon names the row's own revision beside the row's job
+     version, so the page opens on that exact pair; the Job List row's Result
+     names `all` for both, which is the job read whole. The page renders the
+     same view for either — these choose where its two selectors start. */
+  const assessmentVersionScopeParam = searchParams.get('assessment_version');
+  const canDownloadPDF = isTenantAdmin || hasPermissionCode('assessments:download_report');
+  const canBatchDownload = isTenantAdmin || hasPermissionCode('assessments:batch_download');
+
+  const [assessmentTitle, setAssessmentTitle] = useState<string>('');
+  const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);
+  const [jdTitle, setJdTitle] = useState<string>('');
+  // The JD this assessment belongs to. The results view reads all three: the
+  // id to walk the JD's version lineage, the short id and title to name the
+  // job in its header, and the version this assessment was authored against as
+  // the fallback scope when the lineage cannot be loaded.
+  const [jdId, setJdId] = useState<string>('');
+  const [jdShortId, setJdShortId] = useState<string>('');
+  const [jdVersion, setJdVersion] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [allAssessmentIds, setAllAssessmentIds] = useState<string[]>([]);
+  // Whether the job version this assessment belongs to is Archived/Disabled,
+  // and why — greys the Invite button the same way Job Details' own Results
+  // tab does, instead of leaving it clickable until the server's 409.
+  const [jobLockMessage, setJobLockMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchAssessmentInfo = async () => {
+      try {
+        const response = await assessmentService.get(assessmentId);
+        if (response) {
+          // Strip any "Version N" suffix baked into the stored title — the
+          // live version is rendered separately as a badge so recruiters
+          // see the actual current version (v19) rather than the stale
+          // suffix that was frozen at creation time (v1).
+          setAssessmentTitle(stripVersionFromTitle(response.title));
+          setAssessmentVersion(response.version ?? null);
+          setJdTitle(response.jd_title || '');
+          setJdId(response.jd_id || '');
+          setJdShortId(response.jd_short_id || '');
+          setJdVersion(response.jd_version ?? null);
+          setJobLockMessage(await checkAssessmentJobLock(response.jd_id));
+        } else {
+          setError('Assessment not found');
+        }
+      } catch (err: any) {
+        console.error('[TalentFlow] Failed to fetch assessment:', err);
+        setError(err.message || 'Failed to load assessment');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (assessmentId) {
+      fetchAssessmentInfo();
+    }
+  }, [assessmentId]);
+
+  // Fetch sibling assessment IDs for Previous/Next navigation. When the
+  // user opened the page from a JD's Track Invites flow we scope to that
+  // JD's assessments; otherwise we walk the global assessment list.
+  useEffect(() => {
+    const fetchSiblingIds = async () => {
+      try {
+        const ids: string[] = [];
+        let page = 1;
+        while (true) {
+          const params: { page: number; page_size: number; jd_id?: string } = {
+            page,
+            page_size: 100,
+          };
+          if (fromSource === 'jd' && fromJdId) {
+            params.jd_id = fromJdId;
+          }
+          const res = await assessmentService.list(params);
+          const items = res.items ?? [];
+          ids.push(...items.map((a) => a.id));
+          if (ids.length >= (res.total ?? 0) || items.length < 100) break;
+          page++;
+        }
+        setAllAssessmentIds(ids);
+      } catch (err) {
+        console.warn('Failed to fetch sibling assessment IDs:', err);
+      }
+    };
+    fetchSiblingIds();
+  }, [fromSource, fromJdId]);
+
+  const currentIndex = allAssessmentIds.indexOf(assessmentId);
+  const prevId = currentIndex > 0 ? allAssessmentIds[currentIndex - 1] : null;
+  const nextId =
+    currentIndex >= 0 && currentIndex < allAssessmentIds.length - 1
+      ? allAssessmentIds[currentIndex + 1]
+      : null;
+
+  /* Invite — THE invite popup on this job (its Assessment step lists the
+     job's versions), as Job Details' Assessment Result tab offers. Gated on
+     the permission the server checks for sending; greyed with the reason. */
+  const { open: openInvite } = useInviteDialog();
+  const canInvite = isTenantAdmin || hasPermissionCode('assessments:invite');
+  const inviteBlocked = !canInvite ? 'You do not have permission to invite candidates'
+    : !jdId ? 'This assessment is not linked to a job'
+    : jobLockMessage ? jobLockMessage : null;
+  const inviteAction = (
+    <Button
+      variant="primary"
+      size="sm"
+      onClick={() => {
+        if (inviteBlocked) return;
+        openInvite({
+          kind: 'assessment',
+          job: { jdId, jdTitle: jdTitle || assessmentTitle, jdCode: jdShortId || undefined, versionNumber: jdVersion ?? undefined },
+          preselect: false,
+        });
+      }}
+      aria-disabled={!!inviteBlocked || undefined}
+      title={inviteBlocked ?? "Invite candidates to this job's assessment"}
+      className={`whitespace-nowrap !h-9 !text-sm ${inviteBlocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+      icon={<UserPlus className="w-4 h-4" />}
+    >
+      Invite
+    </Button>
+  );
+
+  const handleBack = () => {
+    if (fromSource === 'jd' && fromJdId) {
+      router.push(`/recruitment/job-details?id=${fromJdId}`);
+      return;
+    }
+    router.push('/recruitment/assessments');
+  };
+
+  if (isLoading) {
+    return <AssessmentResultsSkeleton />;
+  }
+
+  if (error) {
+    return (
+      <main className="tf-page">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="tf-page-sheet">
+            <div className="flex flex-col items-center justify-center h-64 space-y-3">
+              <div className="text-red-500 dark:text-red-400 text-base">{error}</div>
+              <button
+                onClick={handleBack}
+                className="tf-btn tf-btn-primary px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0 font-normal"
+              >
+                {fromSource === 'jd' ? 'Back to Job Details' : 'Back to Assessments'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <FeatureGate feature="assessment">
+      <AssessmentResults
+        onBack={handleBack}
+        assessmentId={assessmentId}
+        assessmentTitle={assessmentTitle}
+        assessmentVersion={assessmentVersion}
+        jdTitle={jdTitle}
+        jdId={jdId}
+        jdShortId={jdShortId}
+        jdVersion={jdVersion}
+        /* Back from a candidate's result, the saved scope wins over the
+           link's — see resultReturnContext. */
+        /* `?view=total` (the Total Jobs "Result" button) opens on Total
+           Candidates — except back from a candidate's result, where the
+           saved view is what the reader left. */
+        openOnTotalCandidates={searchParams.get('view') === 'total' && !isResultRestoreArrival(searchParams)}
+        jobVersionScope={isResultRestoreArrival(searchParams) ? null : jobVersionScopeParam}
+        assessmentVersionScope={isResultRestoreArrival(searchParams) ? null : assessmentVersionScopeParam}
+        canDownloadPDF={canDownloadPDF}
+        canBatchDownload={canBatchDownload}
+        prevId={prevId}
+        nextId={nextId}
+        currentIndex={currentIndex}
+        totalCount={allAssessmentIds.length}
+        toolbarActions={inviteAction}
+      />
+    </FeatureGate>
+  );
+}

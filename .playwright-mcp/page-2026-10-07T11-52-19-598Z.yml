@@ -1,0 +1,459 @@
+- generic [ref=f3e1]:
+  - generic [ref=f3e3]:
+    - banner [ref=f3e4]:
+      - generic [ref=f3e5]:
+        - link "TalentFlow home" [ref=f3e6] [cursor=pointer]:
+          - /url: /dashboard
+          - img "TalentFlow" [ref=f3e7]
+        - searchbox "Search folders, resumes, jobs, assessments, interviews or IDs..." [ref=f3e13]
+        - generic [ref=f3e14]:
+          - button "Agency Professional 70,387 units left" [ref=f3e106] [cursor=pointer]:
+            - generic [ref=f3e20]:
+              - generic "Agency Professional" [ref=f3e107]
+              - generic [ref=f3e108]:
+                - generic [ref=f3e109]: 70,387
+                - generic [ref=f3e110]: units left
+          - button "Notifications" [ref=f3e26] [cursor=pointer]
+          - button "Toggle dark mode" [ref=f3e31] [cursor=pointer]
+          - button "A arunrajs Owner" [ref=f3e36] [cursor=pointer]:
+            - generic [ref=f3e37]: A
+            - generic [ref=f3e39]:
+              - generic [ref=f3e40]: arunrajs
+              - generic [ref=f3e41]: Owner
+    - main [ref=f3e114]:
+      - generic [ref=f3e116]:
+        - navigation "breadcrumb" [ref=f3e117]:
+          - list [ref=f3e118]:
+            - listitem [ref=f3e119]:
+              - link "Dashboard" [ref=f3e120] [cursor=pointer]:
+                - /url: /dashboard
+            - listitem [aria-hidden] [ref=f3e121]
+            - listitem [ref=f3e124]:
+              - link "Job Descriptions" [disabled] [ref=f3e125]
+        - generic [ref=f3e126]:
+          - generic [ref=f3e127]:
+            - generic [ref=f3e133]:
+              - heading "Job Openings" [level=1] [ref=f3e134]
+              - paragraph [ref=f3e135]: Create and manage your job postings
+            - generic [ref=f3e137]:
+              - link "Config" [ref=f3e138] [cursor=pointer]:
+                - /url: /recruitment/job-openings/config
+              - button "Create New Job" [ref=f3e142] [cursor=pointer]
+          - generic [ref=f3e144]:
+            - button "Total Jobs 230 289 versions" [active] [ref=f3e145] [cursor=pointer]:
+              - generic [ref=f3e153]:
+                - paragraph [ref=f3e154]: Total Jobs
+                - generic [ref=f3e155]: "230"
+                - generic [ref=f3e156]: 289 versions
+            - button "Published 229 282 versions" [ref=f3e161] [cursor=pointer]:
+              - generic [ref=f3e169]:
+                - paragraph [ref=f3e170]: Published
+                - generic [ref=f3e171]: "229"
+                - generic [ref=f3e172]: 282 versions
+            - button "Drafts 2 2 versions" [ref=f3e177] [cursor=pointer]:
+              - generic [ref=f3e185]:
+                - paragraph [ref=f3e186]: Drafts
+                - generic [ref=f3e187]: "2"
+                - generic [ref=f3e188]: 2 versions
+            - button "Archived 0 0 versions" [ref=f3e193] [cursor=pointer]:
+              - generic [ref=f3e201]:
+                - paragraph [ref=f3e202]: Archived
+                - generic [ref=f3e203]: "0"
+                - generic [ref=f3e204]: 0 versions
+        - generic [ref=f3e209]:
+          - generic [ref=f3e210]:
+            - textbox "Search jobs..." [ref=f3e215]
+            - generic [ref=f3e216]:
+              - button "Filter by location" [ref=f3e218] [cursor=pointer]:
+                - generic [ref=f3e219]: All Locations
+              - button "Filter by industry" [ref=f3e223] [cursor=pointer]:
+                - generic [ref=f3e224]: All Industries
+              - button "More Filters" [ref=f3e227] [cursor=pointer]
+          - generic [ref=f3e230]:
+            - button "Select All" [ref=f3e233] [cursor=pointer]
+            - button "All Jobs" [ref=f3e239] [cursor=pointer]
+            - button "Published" [ref=f3e240] [cursor=pointer]
+            - button "Draft" [ref=f3e241] [cursor=pointer]
+            - button "Disabled" [ref=f3e242] [cursor=pointer]
+            - button "Archived" [ref=f3e243] [cursor=pointer]
+            - generic [ref=f3e245]:
+              - button "All" [ref=f3e246] [cursor=pointer]
+              - button "AI Generated" [ref=f3e247] [cursor=pointer]
+              - button "Manual" [ref=f3e252] [cursor=pointer]
+            - generic [ref=f3e256]:
+              - generic [ref=f3e257]: Sort by
+              - generic [ref=f3e258]:
+                - combobox [ref=f3e260] [cursor=pointer]:
+                  - option "Date Posted" [selected]
+                  - option "Applicants"
+                  - option "Assessed"
+                  - option "Interviewed"
+                  - option "Job Title"
+                  - option "Status"
+                  - option "Industry Type"
+                - button "Sort Ascending" [ref=f3e261] [cursor=pointer]
+        - generic [ref=f3e265]:
+          - generic [ref=f3e267] [cursor=pointer]:
+            - button "Select" [ref=f3e269]
+            - generic [ref=f3e272]:
+              - generic [ref=f3e273]:
+                - generic [ref=f3e274]: JD-278
+                - heading "PYTHON DEVELOPER" [level=3] [ref=f3e275]
+                - generic [ref=f3e276]: v2
+                - generic [ref=f3e278]: Manual
+                - generic [ref=f3e280]: Published
+              - generic [ref=f3e282]:
+                - generic [ref=f3e283]: 1-2 years
+                - generic [ref=f3e287]: Information Technology
+                - generic [ref=f3e292]: Full Time
+                - generic [ref=f3e296]: onsite
+              - generic [ref=f3e304]:
+                - generic [ref=f3e305]:
+                  - generic [ref=f3e306]: "By:"
+                  - generic [ref=f3e307]: arunrajs
+                - generic [ref=f3e308]:
+                  - generic [ref=f3e309]: "Posted:"
+                  - generic [ref=f3e310]: 7 Oct 2026
+                - generic [ref=f3e311]:
+                  - generic [ref=f3e312]: "Last Updated:"
+                  - generic [ref=f3e313]: 1 hour ago
+            - generic [ref=f3e314]:
+              - generic [ref=f3e315]:
+                - generic [ref=f3e316]:
+                  - generic [ref=f3e317]: 1 Applicant
+                  - generic [ref=f3e323]: 0 Assessed
+                  - generic [ref=f3e328]: 1 Interviewed
+                - generic [ref=f3e332]:
+                  - button "Edit" [ref=f3e333]
+                  - button "View" [ref=f3e337]
+                  - button "More actions" [ref=f3e342]
+              - button "View Versions" [ref=f3e347]
+          - generic [ref=f3e351] [cursor=pointer]:
+            - button "Select" [ref=f3e353]
+            - generic [ref=f3e356]:
+              - generic [ref=f3e357]:
+                - generic [ref=f3e358]: JD-277
+                - heading "Python Developer" [level=3] [ref=f3e359]
+                - generic [ref=f3e360]: v1
+                - generic [ref=f3e362]: Manual
+                - generic [ref=f3e364]: Draft
+              - generic [ref=f3e366]:
+                - generic [ref=f3e367]: fresher
+                - generic [ref=f3e371]: Information Technology
+                - generic [ref=f3e376]: Full Time
+                - generic [ref=f3e380]: onsite
+              - generic [ref=f3e388]:
+                - generic [ref=f3e389]:
+                  - generic [ref=f3e390]: "By:"
+                  - generic [ref=f3e391]: arunrajs
+                - generic [ref=f3e392]:
+                  - generic [ref=f3e393]: "Posted:"
+                  - generic [ref=f3e394]: 7 Oct 2026
+                - generic [ref=f3e395]:
+                  - generic [ref=f3e396]: "Last Updated:"
+                  - generic [ref=f3e397]: 2 hours ago
+            - generic [ref=f3e399]:
+              - generic [ref=f3e400]:
+                - generic [ref=f3e401]: 0 Applicants
+                - generic [ref=f3e407]: 0 Assessed
+                - generic [ref=f3e412]: 0 Interviewed
+              - generic [ref=f3e416]:
+                - button "Edit" [ref=f3e417]
+                - button "View" [ref=f3e421]
+                - button "More actions" [ref=f3e426]
+          - generic [ref=f3e432] [cursor=pointer]:
+            - button "Select" [ref=f3e434]
+            - generic [ref=f3e437]:
+              - generic [ref=f3e438]:
+                - generic [ref=f3e439]: JD-276
+                - heading "Python Developer" [level=3] [ref=f3e440]
+                - generic [ref=f3e441]: v2
+                - generic [ref=f3e443]: Manual
+                - generic [ref=f3e445]: Published
+              - generic [ref=f3e447]:
+                - generic [ref=f3e448]: fresher
+                - generic [ref=f3e452]: Information Technology
+                - generic [ref=f3e457]: Full Time
+                - generic [ref=f3e461]: onsite
+              - generic [ref=f3e469]:
+                - generic [ref=f3e470]:
+                  - generic [ref=f3e471]: "By:"
+                  - generic [ref=f3e472]: arunrajs
+                - generic [ref=f3e473]:
+                  - generic [ref=f3e474]: "Posted:"
+                  - generic [ref=f3e475]: 7 Oct 2026
+                - generic [ref=f3e476]:
+                  - generic [ref=f3e477]: "Last Updated:"
+                  - generic [ref=f3e478]: 4 hours ago
+            - generic [ref=f3e479]:
+              - generic [ref=f3e480]:
+                - generic [ref=f3e481]:
+                  - generic [ref=f3e482]: 0 Applicants
+                  - generic [ref=f3e488]: 0 Assessed
+                  - generic [ref=f3e493]: 1 Interviewed
+                - generic [ref=f3e497]:
+                  - button "Edit" [ref=f3e498]
+                  - button "View" [ref=f3e502]
+                  - button "More actions" [ref=f3e507]
+              - button "View Versions" [ref=f3e512]
+          - generic [ref=f3e516] [cursor=pointer]:
+            - button "Select" [ref=f3e518]
+            - generic [ref=f3e521]:
+              - generic [ref=f3e522]:
+                - generic [ref=f3e523]: JD-274
+                - heading "AI Developer" [level=3] [ref=f3e524]
+                - generic [ref=f3e525]: v2
+                - generic [ref=f3e527]: AI
+                - generic [ref=f3e529]: Published
+              - generic [ref=f3e531]:
+                - generic [ref=f3e532]: 0-1 years
+                - generic [ref=f3e536]: Information Technology
+                - generic [ref=f3e541]: Full Time
+                - generic [ref=f3e545]: onsite
+              - generic [ref=f3e553]:
+                - generic [ref=f3e554]:
+                  - generic [ref=f3e555]: "By:"
+                  - generic [ref=f3e556]: arunrajs
+                - generic [ref=f3e557]:
+                  - generic [ref=f3e558]: "Posted:"
+                  - generic [ref=f3e559]: 6 Oct 2026
+                - generic [ref=f3e560]:
+                  - generic [ref=f3e561]: "Last Updated:"
+                  - generic [ref=f3e562]: 6 Oct 2026
+            - generic [ref=f3e563]:
+              - generic [ref=f3e564]:
+                - generic [ref=f3e565]:
+                  - generic [ref=f3e566]: 0 Applicants
+                  - generic [ref=f3e572]: 0 Assessed
+                  - generic [ref=f3e577]: 0 Interviewed
+                - generic [ref=f3e581]:
+                  - button "Edit" [ref=f3e582]
+                  - button "View" [ref=f3e586]
+                  - button "More actions" [ref=f3e591]
+              - button "View Versions" [ref=f3e596]
+          - generic [ref=f3e600] [cursor=pointer]:
+            - button "Select" [ref=f3e602]
+            - generic [ref=f3e605]:
+              - generic [ref=f3e606]:
+                - generic [ref=f3e607]: JD-248
+                - heading "# Python Developer" [level=3] [ref=f3e608]
+                - generic [ref=f3e609]: v2
+                - generic [ref=f3e611]: Manual
+                - generic [ref=f3e613]: Draft
+              - generic [ref=f3e615]:
+                - generic [ref=f3e616]: fresher
+                - generic [ref=f3e620]: Information Technology
+                - generic [ref=f3e625]: Chennai
+                - generic [ref=f3e629]: Full Time
+                - generic [ref=f3e633]: onsite
+              - generic [ref=f3e641]:
+                - generic [ref=f3e642]:
+                  - generic [ref=f3e643]: "By:"
+                  - generic [ref=f3e644]: arunrajs
+                - generic [ref=f3e645]:
+                  - generic [ref=f3e646]: "Posted:"
+                  - generic [ref=f3e647]: 6 Oct 2026
+                - generic [ref=f3e648]:
+                  - generic [ref=f3e649]: "Last Updated:"
+                  - generic [ref=f3e650]: 5 hours ago
+            - generic [ref=f3e651]:
+              - generic [ref=f3e652]:
+                - generic [ref=f3e653]:
+                  - generic [ref=f3e654]: 0 Applicants
+                  - generic [ref=f3e660]: 0 Assessed
+                  - generic [ref=f3e665]: 0 Interviewed
+                - generic [ref=f3e669]:
+                  - button "Edit" [ref=f3e670]
+                  - button "View" [ref=f3e674]
+                  - button "More actions" [ref=f3e679]
+              - button "View Versions" [ref=f3e684]
+          - generic [ref=f3e688] [cursor=pointer]:
+            - button "Select" [ref=f3e690]
+            - generic [ref=f3e693]:
+              - generic [ref=f3e694]:
+                - generic [ref=f3e695]: JD-275
+                - heading "AI/ML Developer" [level=3] [ref=f3e696]
+                - generic [ref=f3e697]: v1
+                - generic [ref=f3e699]: AI
+                - generic [ref=f3e701]: Published
+              - generic [ref=f3e703]:
+                - generic [ref=f3e704]: 0.5+ years
+                - generic [ref=f3e708]: Information Technology
+                - generic [ref=f3e713]: Chennai, Tamil Nadu
+                - generic [ref=f3e717]: Full Time
+                - generic [ref=f3e721]: hybrid
+              - generic [ref=f3e729]:
+                - generic [ref=f3e730]:
+                  - generic [ref=f3e731]: "By:"
+                  - generic [ref=f3e732]: arunrajs
+                - generic [ref=f3e733]:
+                  - generic [ref=f3e734]: "Posted:"
+                  - generic [ref=f3e735]: 5 Oct 2026
+                - generic [ref=f3e736]:
+                  - generic [ref=f3e737]: "Last Updated:"
+                  - generic [ref=f3e738]: 5 Oct 2026
+            - generic [ref=f3e740]:
+              - generic [ref=f3e741]:
+                - generic [ref=f3e742]: 1 Applicant
+                - generic [ref=f3e748]: 0 Assessed
+                - generic [ref=f3e753]: 3 Interviewed
+              - generic [ref=f3e757]:
+                - button "Edit" [ref=f3e758]
+                - button "View" [ref=f3e762]
+                - button "More actions" [ref=f3e767]
+          - generic [ref=f3e773] [cursor=pointer]:
+            - button "Select" [ref=f3e775]
+            - generic [ref=f3e778]:
+              - generic [ref=f3e779]:
+                - generic [ref=f3e780]: JD-273
+                - heading "Nurse" [level=3] [ref=f3e781]
+                - generic [ref=f3e782]: v1
+                - generic [ref=f3e784]: AI
+                - generic [ref=f3e786]: Published
+              - generic [ref=f3e788]:
+                - generic [ref=f3e789]: 12+ years
+                - generic [ref=f3e793]: Healthcare And Medical
+                - generic [ref=f3e798]: Full Time
+                - generic [ref=f3e802]: onsite
+              - generic [ref=f3e810]:
+                - generic [ref=f3e811]:
+                  - generic [ref=f3e812]: "By:"
+                  - generic [ref=f3e813]: arunrajs
+                - generic [ref=f3e814]:
+                  - generic [ref=f3e815]: "Posted:"
+                  - generic [ref=f3e816]: 5 Oct 2026
+                - generic [ref=f3e817]:
+                  - generic [ref=f3e818]: "Last Updated:"
+                  - generic [ref=f3e819]: 5 Oct 2026
+            - generic [ref=f3e821]:
+              - generic [ref=f3e822]:
+                - generic [ref=f3e823]: 1 Applicant
+                - generic [ref=f3e829]: 0 Assessed
+                - generic [ref=f3e834]: 2 Interviewed
+              - generic [ref=f3e838]:
+                - button "Edit" [ref=f3e839]
+                - button "View" [ref=f3e843]
+                - button "More actions" [ref=f3e848]
+          - generic [ref=f3e854] [cursor=pointer]:
+            - button "Select" [ref=f3e856]
+            - generic [ref=f3e859]:
+              - generic [ref=f3e860]:
+                - generic [ref=f3e861]: JD-272
+                - heading "Junior Python Developer" [level=3] [ref=f3e862]
+                - generic [ref=f3e863]: v1
+                - generic [ref=f3e865]: AI
+                - generic [ref=f3e867]: Published
+              - generic [ref=f3e869]:
+                - generic [ref=f3e870]: 0-2 years
+                - generic [ref=f3e874]: Information Technology
+                - generic [ref=f3e879]: Chennai, Tamil Nadu
+                - generic [ref=f3e883]: Full Time
+                - generic [ref=f3e887]: onsite
+              - generic [ref=f3e895]:
+                - generic [ref=f3e896]:
+                  - generic [ref=f3e897]: "By:"
+                  - generic [ref=f3e898]: arunrajs
+                - generic [ref=f3e899]:
+                  - generic [ref=f3e900]: "Posted:"
+                  - generic [ref=f3e901]: 5 Oct 2026
+                - generic [ref=f3e902]:
+                  - generic [ref=f3e903]: "Last Updated:"
+                  - generic [ref=f3e904]: 5 Oct 2026
+            - generic [ref=f3e906]:
+              - generic [ref=f3e907]:
+                - generic [ref=f3e908]: 0 Applicants
+                - generic [ref=f3e914]: 3 Assessed
+                - generic [ref=f3e919]: 1 Interviewed
+              - generic [ref=f3e923]:
+                - button "Edit" [ref=f3e924]
+                - button "View" [ref=f3e928]
+                - button "More actions" [ref=f3e933]
+          - generic [ref=f3e939] [cursor=pointer]:
+            - button "Select" [ref=f3e941]
+            - generic [ref=f3e944]:
+              - generic [ref=f3e945]:
+                - generic [ref=f3e946]: JD-271
+                - heading "Senior QA Automation Engineer" [level=3] [ref=f3e947]
+                - generic [ref=f3e948]: v1
+                - generic [ref=f3e950]: Manual
+                - generic [ref=f3e952]: Published
+              - generic [ref=f3e954]:
+                - generic [ref=f3e955]: 7+ years
+                - generic [ref=f3e959]: Information Technology
+                - generic [ref=f3e964]: Full Time
+                - generic [ref=f3e968]: onsite
+              - generic [ref=f3e976]:
+                - generic [ref=f3e977]:
+                  - generic [ref=f3e978]: "By:"
+                  - generic [ref=f3e979]: arunrajs
+                - generic [ref=f3e980]:
+                  - generic [ref=f3e981]: "Posted:"
+                  - generic [ref=f3e982]: 5 Oct 2026
+                - generic [ref=f3e983]:
+                  - generic [ref=f3e984]: "Last Updated:"
+                  - generic [ref=f3e985]: 6 Oct 2026
+            - generic [ref=f3e987]:
+              - generic [ref=f3e988]:
+                - generic [ref=f3e989]: 0 Applicants
+                - generic [ref=f3e995]: 0 Assessed
+                - generic [ref=f3e1000]: 0 Interviewed
+              - generic [ref=f3e1004]:
+                - button "Edit" [ref=f3e1005]
+                - button "View" [ref=f3e1009]
+                - button "More actions" [ref=f3e1014]
+          - generic [ref=f3e1020] [cursor=pointer]:
+            - button "Select" [ref=f3e1022]
+            - generic [ref=f3e1025]:
+              - generic [ref=f3e1026]:
+                - generic [ref=f3e1027]: JD-270
+                - heading "Pipeline Controller" [level=3] [ref=f3e1028]
+                - generic [ref=f3e1029]: v1
+                - generic [ref=f3e1031]: Manual
+                - generic [ref=f3e1033]: Republished
+              - generic [ref=f3e1035]:
+                - generic [ref=f3e1036]: 3-5 years
+                - generic [ref=f3e1040]: Oil Gas
+                - generic [ref=f3e1045]: Salary $86,000 - $128,000 / year
+                - generic [ref=f3e1046]: Full Time
+                - generic [ref=f3e1050]: onsite
+              - generic [ref=f3e1058]:
+                - generic [ref=f3e1059]:
+                  - generic [ref=f3e1060]: "By:"
+                  - generic [ref=f3e1061]: arunrajs
+                - generic [ref=f3e1062]:
+                  - generic [ref=f3e1063]: "Posted:"
+                  - generic [ref=f3e1064]: 5 Oct 2026
+                - generic [ref=f3e1065]:
+                  - generic [ref=f3e1066]: "Last Updated:"
+                  - generic [ref=f3e1067]: 6 Oct 2026
+            - generic [ref=f3e1069]:
+              - generic [ref=f3e1070]:
+                - generic [ref=f3e1071]: 0 Applicants
+                - generic [ref=f3e1077]: 0 Assessed
+                - generic [ref=f3e1082]: 0 Interviewed
+              - generic [ref=f3e1086]:
+                - button "Edit" [ref=f3e1087]
+                - button "View" [ref=f3e1091]
+                - button "More actions" [ref=f3e1096]
+        - generic [ref=f3e1102]:
+          - generic [ref=f3e1103]:
+            - generic [ref=f3e1104]:
+              - generic [ref=f3e1105]: "Show:"
+              - combobox [ref=f3e1106] [cursor=pointer]:
+                - option "5"
+                - option "10" [selected]
+                - option "20"
+                - option "40"
+                - option "100"
+              - generic [ref=f3e1107]: per page
+            - generic [ref=f3e1109]: Showing 1 to 10 of 230 jobs
+          - generic [ref=f3e1110]:
+            - generic [ref=f3e1111]:
+              - generic [ref=f3e1112]: Go to
+              - spinbutton "Go to page" [ref=f3e1113]: "1"
+            - button "Previous page" [disabled] [ref=f3e1114]
+            - generic [ref=f3e1117]: 1 / 23
+            - button "Next page" [ref=f3e1118] [cursor=pointer]
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=f3e101] [cursor=pointer]
+  - alert [ref=f3e105]

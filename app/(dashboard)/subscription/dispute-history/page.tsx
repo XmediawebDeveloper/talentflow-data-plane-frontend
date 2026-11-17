@@ -1,0 +1,830 @@
+'use client';
+
+import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { AlertTriangle, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, MessageSquare, RefreshCw, Shield, Filter, X } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { handleUnauthorized } from '@/lib/services/api';
+import { billToFromAuth, generateDisputeRecordPDF } from '@/lib/utils/pdfInvoice';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { formatISTDate } from '@/lib/utils/dateUtils';
+import { toast } from 'sonner';
+import ListPagination from '@/components/ListPagination';
+import { RowActions } from '@/components/subscription/RowActionsMenu';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { DateField } from '@/components/ui/date-field';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
+import FilterSelect from '@/components/ui/filter-select';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+
+// Use backend proxy instead of direct Admin API calls
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+
+interface LineItem {
+  description: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+}
+
+interface DisputeMetadata {
+  reason?: string;
+  deadline?: string;
+  bank_reference?: string;
+  customer_claim?: string;
+  dispute_status?: string;
+  dispute_evidence?: string | null;
+  razorpay_dispute_id?: string;
+  original_invoice_id?: number | null;
+  original_invoice_number?: string;
+  [key: string]: unknown;
+}
+
+interface DisputeInvoice {
+  id: number;
+  invoice_number: string;
+  invoice_type: string;
+  tenant_id: string;
+  amount_inr: number;
+  tax_amount_inr: number;
+  discount_amount_inr: number;
+  total_amount_inr: number;
+  status: string;
+  issue_date: string;
+  due_date: string;
+  line_items: LineItem[];
+  metadata: DisputeMetadata;
+  created_at: string;
+  reason?: string;
+  dispute_status?: string;
+  customer_claim?: string;
+  deadline?: string;
+  payment_method?: string;
+  payment_status?: string;
+  razorpay_payment_id?: string;
+  razorpay_order_id?: string;
+  payment_amount?: number;
+  payment_currency?: string;
+  paid_at?: string;
+}
+
+interface DisputeStats {
+  total_disputes: number;
+  total_amount: number;
+  open_count: number;
+  resolved_count: number;
+}
+
+const STATUS_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'open', label: 'Open' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'under_review', label: 'Under Review' },
+  { value: 'won', label: 'Won' },
+  { value: 'lost', label: 'Lost' },
+  { value: 'resolved', label: 'Resolved' },
+];
+
+/* One status rule for the filter dropdown and the Open / Resolved cards that
+   open it, so a card's count always equals the rows its list shows. "Open"
+   and "Resolved" each gather their in-flight / settled statuses; any other
+   option matches its own status. VOID used to count on the Resolved card but
+   was never matched by the Resolved filter (nor offered in the dropdown), so
+   it is left out of both. */
+const DISPUTE_STATUS_GROUPS: Record<string, string[]> = {
+  open: ['open', 'pending', 'under_review'],
+  resolved: ['won', 'lost', 'resolved', 'rejected'],
+};
+const getDisputeStatus = (d: DisputeInvoice) => (d.metadata?.dispute_status || d.dispute_status || d.status || '').toLowerCase();
+const matchesDisputeStatus = (d: DisputeInvoice, filter: string) => {
+  const s = getDisputeStatus(d);
+  return s === filter.toLowerCase() || !!DISPUTE_STATUS_GROUPS[filter]?.includes(s);
+};
+
+const EXPORT_HEADERS = ['Dispute #', 'Date', 'Deadline', 'Original Invoice', 'Reason', 'Customer Claim', 'Amount', 'Status', 'Bank Reference'];
+
+export default function DisputeHistoryPage() {
+  const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
+  // Downloading a record is an export (2026-11-10): Billing Access (usage:export).
+  const canExportBilling = isTenantAdmin || hasPermissionCode('usage:export');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [disputes, setDisputes] = useState<DisputeInvoice[]>([]);
+  const [stats, setStats] = useState<DisputeStats | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedDispute, setSelectedDispute] = useState<DisputeInvoice | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
+  // New filter states
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Two-step view: 'cards' shows only the stat tiles; 'list' shows filters + table.
+  // Initial render is 'cards' so the user explicitly drills in by clicking a stat card.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+
+  const openListView = (filter: string) => {
+    setStatusFilter(filter);
+    setPageView('list');
+  };
+
+  // Persist/restore list view state + scroll position across navigation.
+  // Re-detect the scroll container when the two-step view flips.
+  const rootRef = useScrollRestoration<HTMLElement>('sub-dispute-history', !loading, [pageView]);
+  useListStatePersistence(
+    'sub-dispute-history',
+    { pageView, statusFilter, searchQuery, startDate, endDate, currentPage, itemsPerPage },
+    (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter);
+      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.startDate === 'string') setStartDate(s.startDate);
+      if (typeof s.endDate === 'string') setEndDate(s.endDate);
+      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+      if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
+    },
+  );
+
+  useEffect(() => {
+    fetchDisputeData();
+  }, []);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, startDate, endDate]);
+
+  const fetchDisputeData = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setError('Not authenticated. Please login again.');
+        setLoading(false);
+        return;
+      }
+
+      // Fetch dispute invoices from backend proxy (which calls Admin API)
+      const disputeResponse = await fetch(`${API_URL}/billing/invoices/disputes`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (disputeResponse.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      if (!disputeResponse.ok) {
+        throw new Error('Failed to fetch dispute history');
+      }
+
+      const disputeResult = await disputeResponse.json();
+      const disputeData = disputeResult.data?.invoices || [];
+      setDisputes(disputeData);
+
+      // Calculate stats from disputes
+      const openDisputes = disputeData.filter((d: DisputeInvoice) => matchesDisputeStatus(d, 'open'));
+      const resolvedDisputes = disputeData.filter((d: DisputeInvoice) => matchesDisputeStatus(d, 'resolved'));
+      const totalAmount = disputeData.reduce((sum: number, d: DisputeInvoice) => sum + (d.total_amount_inr || 0), 0);
+
+      setStats({
+        total_disputes: disputeData.length,
+        total_amount: totalAmount,
+        open_count: openDisputes.length,
+        resolved_count: resolvedDisputes.length,
+      });
+    } catch (err) {
+      console.error('[DisputeHistory] Error:', err);
+      setError('Failed to load dispute history. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter disputes based on search, status, and date range
+  const filteredDisputes = useMemo(() => {
+    return disputes.filter(inv => {
+      // Search filter
+      const matchesSearch = searchQuery === '' ||
+        inv.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (inv.metadata?.original_invoice_number && inv.metadata.original_invoice_number.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (inv.line_items?.[0]?.description && inv.line_items[0].description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      // Status filter
+      const matchesStatus = statusFilter === 'all' || matchesDisputeStatus(inv, statusFilter);
+
+      // Date filter
+      let matchesDate = true;
+      if (inv.issue_date) {
+        const itemDate = new Date(inv.issue_date);
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          if (itemDate < start) matchesDate = false;
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          if (itemDate > end) matchesDate = false;
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+  }, [disputes, searchQuery, statusFilter, startDate, endDate]);
+
+  const paginatedDisputes = useMemo(
+    () => filteredDisputes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage),
+    [filteredDisputes, currentPage, itemsPerPage]
+  );
+
+  const formatAmount = (amount: number) => {
+    return `₹${Math.abs(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'won':
+      case 'resolved':
+        return <CheckCircle2 className="h-3.5 w-3.5" />;
+      case 'open':
+      case 'pending':
+      case 'under_review':
+        return <Clock className="h-3.5 w-3.5" />;
+      case 'lost':
+      case 'rejected':
+        return <XCircle className="h-3.5 w-3.5" />;
+      default:
+        return <AlertTriangle className="h-3.5 w-3.5" />;
+    }
+  };
+
+  // Canonical status → shared Badge variant (same status looks the same everywhere).
+  const getStatusVariant = (status: string): 'success' | 'warning' | 'destructive' => {
+    switch (status.toLowerCase()) {
+      case 'won':
+      case 'resolved':
+        return 'success';
+      case 'lost':
+      case 'rejected':
+        return 'destructive';
+      default:
+        return 'warning';
+    }
+  };
+
+  const handleDownloadDispute = async (inv: DisputeInvoice) => {
+    setDownloadingId(inv.id);
+    try {
+      await generateDisputeRecordPDF(inv, billToFromAuth(user, tenant));
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      toast.error('Failed to generate PDF. Please try again.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  // Export filtered data — runs from the CSV / Excel format picker
+  const handleExport = async (format: ExportFileFormat) => {
+    const csvRows = filteredDisputes.map(d => [
+      d.invoice_number || '',
+      formatISTDate(d.issue_date),
+      formatISTDate(d.metadata?.deadline || d.deadline || null),
+      d.metadata?.original_invoice_number || '',
+      d.metadata?.reason || d.reason || d.line_items?.[0]?.description || '',
+      d.metadata?.customer_claim || d.customer_claim || '',
+      (d.total_amount_inr || 0).toFixed(2),
+      d.metadata?.dispute_status || d.dispute_status || d.status || '',
+      d.metadata?.bank_reference || '',
+    ]);
+
+    await exportRows(format, EXPORT_HEADERS, csvRows, `dispute-history-${new Date().toISOString().split('T')[0]}`, {
+      sheetName: 'Dispute History',
+    });
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setStartDate('');
+    setEndDate('');
+  };
+
+  const hasActiveFilters = searchQuery || statusFilter !== 'all' || startDate || endDate;
+
+  return (
+    <main ref={rootRef} className="tf-page">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="tf-page-sheet">
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Dispute History' }]} />
+
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="tf-page-title">Dispute History</h1>
+            <p className="mt-1 tf-body-muted">
+              Track chargebacks and payment disputes raised against your account, monitor deadlines, and download dispute records.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setShowExportModal(true)}
+              disabled={loading || filteredDisputes.length === 0}
+              className="tf-btn tf-btn-secondary border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm text-gray-700 dark:text-slate-300 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-60 whitespace-normal"
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </button>
+            <ExportFormatModal
+              open={showExportModal}
+              onClose={() => setShowExportModal(false)}
+              title="Export Dispute History"
+              recordCount={filteredDisputes.length}
+              columns={EXPORT_HEADERS}
+              onExport={handleExport}
+            />
+            <button
+              onClick={fetchDisputeData}
+              disabled={loading}
+              className="tf-btn tf-btn-secondary border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm text-gray-700 dark:text-slate-300 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-70 whitespace-normal"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* Stats Cards — clicking a card drills into the dispute list with the matching filter applied */}
+        {stats && (
+          <div className="tf-grid-3 mb-5">
+            <button
+              type="button"
+              onClick={() => openListView('all')}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="tf-eyebrow tracking-wider">Total Disputed</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{formatAmount(stats.total_amount)}</p>
+                  <p className="mt-1 tf-meta">{stats.total_disputes} dispute{stats.total_disputes !== 1 ? 's' : ''}</p>
+                </div>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
+                  <AlertTriangle className="h-5 w-5 text-brand-orange-deep" />
+                </span>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => openListView('open')}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'open' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="tf-eyebrow tracking-wider">Open Disputes</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{stats.open_count}</p>
+                  <p className="mt-1 tf-meta">Under review</p>
+                </div>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 shadow-sm shadow-brand-orange/10">
+                  <Clock className="h-5 w-5 text-brand-orange-deep" />
+                </span>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => openListView('resolved')}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'resolved' ? 'border-brand-teal/40 ring-brand-teal/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-teal/25'}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="tf-eyebrow tracking-wider">Resolved</p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-teal">{stats.resolved_count}</p>
+                  <p className="mt-1 tf-meta">Completed disputes</p>
+                </div>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
+                  <CheckCircle2 className="h-5 w-5 text-brand-teal" />
+                </span>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {pageView === 'list' && (
+          <>
+        {/* Filters Section */}
+        <div className="mb-5 tf-card-soft p-4 sm:p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+              <Filter className="h-3.5 w-3.5 text-brand-blue" />
+            </span>
+            <span className="tf-row-title">Filters</span>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="ml-auto inline-flex items-center gap-1 rounded-full bg-brand-blue/[0.06] px-3 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10 transition-colors hover:bg-brand-blue/[0.12]"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+          <div className="tf-grid-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search disputes"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="tf-input pl-9 pr-3"
+              />
+            </div>
+
+            {/* Status Filter */}
+            <FilterSelect
+              value={statusFilter}
+              onChange={(v) => setStatusFilter(v)}
+              ariaLabel="Filter by status"
+              options={STATUS_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+              className="w-full sm:w-full pl-3 sm:pl-3 pr-3 sm:pr-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+            />
+
+            {/* Start Date */}
+            <DateField
+              aria-label="From date"
+              placeholder="From date"
+              value={startDate}
+              onChange={setStartDate}
+            />
+
+            {/* End Date */}
+            <DateField
+              aria-label="To date"
+              placeholder="To date"
+              value={endDate}
+              onChange={setEndDate}
+            />
+          </div>
+        </div>
+
+        {/* Error State */}
+        {error && (
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
+              <AlertCircle className="h-5 w-5" />
+            </span>
+            <p className="text-sm font-medium text-destructive">{error}</p>
+          </div>
+        )}
+
+        {/* Loading State — mirrors the disputes table columns (Dispute #, Date, Original Invoice, Reason, Amount, Status, Actions) */}
+        {loading && (
+          <div className="overflow-hidden tf-card-soft">
+            <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3.5 sm:px-6">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="mt-1.5 h-3 w-32" />
+            </div>
+            <div className="overflow-x-auto">
+              <div className="min-w-[800px]">
+                {/* Header */}
+                <div className="grid grid-cols-[160px_110px_150px_180px_110px_120px_140px] gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50/80 dark:bg-slate-800/50 px-4 py-3.5">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-12" />
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="ml-auto h-3 w-16" />
+                  <Skeleton className="mx-auto h-3 w-14" />
+                  <Skeleton className="ml-auto h-3 w-16" />
+                </div>
+                {/* Rows */}
+                <div className="divide-y divide-gray-100">
+                  {Array.from({ length: 6 }).map((_, r) => (
+                    <div key={r} className="grid grid-cols-[160px_110px_150px_180px_110px_120px_140px] items-center gap-4 px-4 py-4">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+                        <Skeleton className="h-4 w-24" />
+                      </div>
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="ml-auto h-4 w-16" />
+                      <Skeleton className="mx-auto h-6 w-20 rounded-full" />
+                      <div className="ml-auto flex items-center gap-1.5">
+                        <Skeleton className="h-7 w-14 rounded-md" />
+                        <Skeleton className="h-7 w-7 rounded-md" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && filteredDisputes.length === 0 && (
+          <div className="tf-card-soft p-12 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
+              <Shield className="h-7 w-7 text-brand-teal" />
+            </div>
+            <h3 className="tf-section-title sm:text-lg">No Disputes</h3>
+            <p className="mx-auto mt-1 max-w-md tf-body-muted">
+              {hasActiveFilters
+                ? 'No disputes match your filter criteria. Try adjusting your filters.'
+                : 'Great news! You have no payment disputes. Disputes will appear here if any payment issues are raised.'}
+            </p>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-4 py-2 text-sm font-medium text-brand-blue transition-all hover:bg-brand-blue/[0.08]"
+              >
+                Clear all filters
+              </button>
+            )}
+            {!hasActiveFilters && (
+              <div className="mx-auto mt-6 flex max-w-md items-start gap-3 rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.05] px-4 py-3 text-left">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-cyan/15 text-brand-cyan">
+                  <MessageSquare className="h-4 w-4" />
+                </span>
+                <p className="tf-body">
+                  <span className="font-semibold text-gray-900 dark:text-slate-50">Need help?</span> If you have concerns about a payment, please contact our support team.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Disputes Table */}
+        {!loading && !error && filteredDisputes.length > 0 && (
+          <div className="overflow-hidden tf-card-soft">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3.5 sm:px-6">
+              <div>
+                <h2 className="tf-row-title">Disputes</h2>
+                <p className="tf-meta">
+                  Showing {filteredDisputes.length} dispute{filteredDisputes.length !== 1 ? 's' : ''}
+                  {hasActiveFilters && ` (filtered from ${disputes.length})`}
+                </p>
+              </div>
+            </div>
+            <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
+              <table className="w-full min-w-[800px] tf-premium-table">
+                <thead className="bg-white dark:bg-slate-900">
+                  <tr className="text-left">
+                    <th className="tf-th-cell tf-th w-[160px]">Dispute #</th>
+                    <th className="tf-th-cell tf-th w-[110px]">Date</th>
+                    <th className="tf-th-cell tf-th w-[150px]">Original Invoice</th>
+                    <th className="tf-th-cell tf-th w-[180px]">Reason</th>
+                    <th className="tf-th-cell text-right tf-th w-[110px]">Amount</th>
+                    <th className="tf-th-cell text-center tf-th w-[120px]">Status</th>
+                    <th className="tf-th-cell text-right tf-th w-[140px] tf-sticky-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedDisputes.map((dispute) => (
+                    <tr key={dispute.id}>
+                      <td className="tf-td">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15">
+                            <AlertTriangle className="h-4 w-4 text-brand-orange-deep" />
+                          </span>
+                          <span className="min-w-0 truncate tf-row-title" title={dispute.invoice_number || ''}>
+                            {dispute.invoice_number || '-'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="tf-td whitespace-nowrap tf-body">
+                        {formatISTDate(dispute.issue_date)}
+                      </td>
+                      <td className="tf-td">
+                        <div className="truncate font-mono tf-body" title={dispute.metadata?.original_invoice_number || ''}>
+                          {dispute.metadata?.original_invoice_number || '-'}
+                        </div>
+                      </td>
+                      <td className="tf-td">
+                        <div className="truncate tf-body-secondary" title={dispute.metadata?.reason || dispute.reason || dispute.line_items?.[0]?.description || ''}>
+                          {dispute.metadata?.reason || dispute.reason || dispute.line_items?.[0]?.description || '-'}
+                        </div>
+                      </td>
+                      <td className="tf-td text-right">
+                        <span className="text-sm font-semibold text-brand-orange-deep">
+                          {formatAmount(dispute.total_amount_inr || 0)}
+                        </span>
+                      </td>
+                      <td className="tf-td text-center">
+                        <Badge variant={getStatusVariant(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')} className="capitalize">
+                          {getStatusIcon(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')}
+                          {dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || '-'}
+                        </Badge>
+                      </td>
+                      <td className="tf-td text-right tf-sticky-col">
+                        <RowActions
+                          menuLabel="Dispute actions"
+                          actions={[
+                            { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => setSelectedDispute(dispute) },
+                            { key: 'download', label: 'Download Record', icon: Download, loading: downloadingId === dispute.id, onClick: () => handleDownloadDispute(dispute) },
+                          ]}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <MobileRecordList>
+              {paginatedDisputes.map((dispute) => (
+                <MobileRecordCard
+                  key={dispute.id}
+                  badges={
+                    <Badge variant={getStatusVariant(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')} className="capitalize">
+                      {getStatusIcon(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')}
+                      {dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || '-'}
+                    </Badge>
+                  }
+                  title={dispute.invoice_number || '-'}
+                  actions={
+                    <RowActions
+                      menuLabel="Dispute actions"
+                      actions={[
+                        { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => setSelectedDispute(dispute) },
+                        { key: 'download', label: 'Download Record', icon: Download, loading: downloadingId === dispute.id, onClick: () => handleDownloadDispute(dispute) },
+                      ]}
+                    />
+                  }
+                  meta={[{ icon: <MessageSquare className="h-3.5 w-3.5" />, label: dispute.metadata?.reason || dispute.reason || dispute.line_items?.[0]?.description || '-' }]}
+                  fields={[
+                    { label: 'Date', value: formatISTDate(dispute.issue_date) },
+                    { label: 'Original Invoice', value: <span className="font-mono">{dispute.metadata?.original_invoice_number || '-'}</span> },
+                    { label: 'Amount', value: <span className="font-semibold text-brand-orange-deep">{formatAmount(dispute.total_amount_inr || 0)}</span> },
+                  ]}
+                />
+              ))}
+            </MobileRecordList>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && !error && filteredDisputes.length > 0 && (
+          <ListPagination
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={filteredDisputes.length}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemLabel="disputes"
+          />
+        )}
+          </>
+        )}
+
+        {/* Dispute Detail Modal */}
+        {selectedDispute && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-2xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
+              <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
+                <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
+                <div className="relative flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
+                      <AlertTriangle className="h-5 w-5 text-white" />
+                    </span>
+                    <div className="min-w-0">
+                      <h2 className="text-lg font-semibold">Dispute Details</h2>
+                      <p className="mt-0.5 break-all font-mono text-sm text-white/75">{selectedDispute.invoice_number}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedDispute(null)}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
+                <div className="tf-grid-2">
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="tf-micro-hint uppercase tracking-wider">Issue Date</p>
+                    <p className="mt-1 tf-row-title">{formatISTDate(selectedDispute.issue_date)}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="tf-micro-hint uppercase tracking-wider">Deadline</p>
+                    <p className="mt-1 tf-row-title">{formatISTDate(selectedDispute.metadata?.deadline || selectedDispute.deadline || null)}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="tf-micro-hint uppercase tracking-wider">Dispute Status</p>
+                    <Badge variant={getStatusVariant(selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status)} className="mt-1 capitalize">
+                      {getStatusIcon(selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status)}
+                      {selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status}
+                    </Badge>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                    <p className="tf-micro-hint uppercase tracking-wider">Original Invoice</p>
+                    <p className="mt-1 break-all font-mono tf-row-title">{selectedDispute.metadata?.original_invoice_number || '-'}</p>
+                  </div>
+                  {selectedDispute.payment_method && (
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                      <p className="tf-micro-hint uppercase tracking-wider">Payment Method</p>
+                      <p className="mt-1 tf-row-title capitalize">{selectedDispute.payment_method}</p>
+                    </div>
+                  )}
+                  {selectedDispute.paid_at && (
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
+                      <p className="tf-micro-hint uppercase tracking-wider">Paid At</p>
+                      <p className="mt-1 tf-row-title">{formatISTDate(selectedDispute.paid_at)}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                  <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Dispute Details</p>
+                  </div>
+                  <div className="space-y-3 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <span className="tf-body-secondary">Description</span>
+                      <span className="text-right tf-row-name">{selectedDispute.line_items?.[0]?.description || '-'}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <span className="tf-body-secondary">Reason</span>
+                      <span className="text-right tf-row-name">{selectedDispute.metadata?.reason || selectedDispute.reason || '-'}</span>
+                    </div>
+                    {(selectedDispute.metadata?.customer_claim || selectedDispute.customer_claim) && (
+                      <div className="flex items-start justify-between gap-4">
+                        <span className="tf-body-secondary">Customer Claim</span>
+                        <span className="max-w-xs text-right tf-row-name">{selectedDispute.metadata?.customer_claim || selectedDispute.customer_claim}</span>
+                      </div>
+                    )}
+                    {selectedDispute.metadata?.bank_reference && (
+                      <div className="flex items-start justify-between gap-4">
+                        <span className="tf-body-secondary">Bank Reference</span>
+                        <span className="break-all text-right font-mono tf-row-name">{selectedDispute.metadata.bank_reference}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="relative overflow-hidden rounded-xl bg-brand-orange p-4 text-white shadow-md shadow-brand-orange/20 ring-1 ring-white/10">
+                  <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/15 blur-3xl" />
+                  <div className="relative flex items-center justify-between">
+                    <span className="text-base font-semibold">Disputed Amount</span>
+                    <span className="text-2xl font-bold">
+                      {formatAmount(selectedDispute.total_amount_inr || 0)}
+                    </span>
+                  </div>
+                </div>
+
+                {selectedDispute.metadata?.razorpay_dispute_id && (
+                  <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.05] p-4">
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-brand-cyan">Razorpay Dispute ID</p>
+                    <p className="mt-1 break-all font-mono tf-body">{selectedDispute.metadata.razorpay_dispute_id}</p>
+                  </div>
+                )}
+
+                <div className="flex items-start gap-3 rounded-xl border border-brand-orange/20 bg-brand-orange/5 p-4 ring-1 ring-brand-orange/10">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
+                    <MessageSquare className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-brand-orange-deep">Need Assistance?</p>
+                    <p className="mt-0.5 tf-body">
+                      If you have questions about this dispute, please contact our support team for assistance.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:gap-3">
+                  <button
+                    onClick={() => handleDownloadDispute(selectedDispute)}
+                    disabled={downloadingId === selectedDispute.id || !canExportBilling}
+                    title={canExportBilling ? undefined : "Your role can't download billing records"}
+                    className="tf-btn tf-btn-primary flex flex-1 rounded-xl bg-brand-blue px-4 py-2.5 text-sm shadow-md shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70 whitespace-normal hover:bg-brand-blue"
+                  >
+                    {downloadingId === selectedDispute.id ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Generating PDF...</>
+                    ) : (
+                      <><Download className="h-4 w-4" /> Download Record</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      </div>
+    </main>
+  );
+}

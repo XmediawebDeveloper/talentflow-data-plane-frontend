@@ -1,0 +1,176 @@
+'use client';
+
+import { AlertTriangle, RotateCcw, Save, Trash2, Undo2 } from 'lucide-react';
+import AppModal from '@/components/ui/app-modal';
+
+export interface LeaveJDDialogProps {
+  open: boolean;
+  /** Human-readable code (JD-076) once the job has a record; null before.
+   *  Accepted but not shown — the prompt carries only the four actions. */
+  jobCode?: string | null;
+  /** Accepted but not shown, like `jobCode`. */
+  jobTitle?: string;
+  /** Lineage version (1, 2, ...). A v2+ draft is its own row: Delete removes that
+   *  version only, and the job's earlier versions stay. */
+  versionNumber?: number;
+  /**
+   * What "Discard current changes" goes back to, phrased to finish the
+   * sentence "Goes back to …" — e.g. "the version you opened" or "the version
+   * saved when you finished Step 1". Null when there is nothing saved to go
+   * back to (a brand-new job before its first step save): the option is then
+   * not shown at all, because discarding would leave nothing and Delete is the
+   * honest choice.
+   */
+  discardTarget: string | null;
+  /** True when no record exists yet — discarding simply leaves the page. */
+  nothingSavedYet: boolean;
+  /** Why Delete is unavailable (published JD, no record yet); null = allowed. */
+  deleteBlockedReason: string | null;
+  /** Leave Delete out: Discard already removes the record (a draft version made
+   *  for this visit), so a second button doing the same would only confuse. */
+  hideDelete?: boolean;
+  /** Editing a published JD: Save writes the changes to it and it stays Published. */
+  isPublishedJD?: boolean;
+  /** Short name of the step the recruiter is on, e.g. "Step 2 (Extract)". */
+  currentStepLabel: string;
+  busy: 'save' | 'discard' | 'delete' | null;
+  onCancel: () => void;
+  onSave: () => void;
+  onDiscard: () => void;
+  onDelete: () => void;
+}
+
+/**
+ * The prompt shown when the recruiter leaves JD creation/editing (a breadcrumb,
+ * the Dashboard, any menu link, browser Back) with work on screen.
+ *
+ * A JD gets its record — and its JD ID — while Step 1 is still being typed, so
+ * "leave without saving" is not a thing: something IS saved, and the recruiter
+ * has to say what happens to it. The old two-button prompt (Discard / Save
+ * Draft) hid that, and its Discard quietly left the draft in Job Descriptions.
+ * Each option here states exactly what it does to the record.
+ */
+export default function LeaveJDDialog({
+  open,
+  versionNumber = 1,
+  discardTarget,
+  nothingSavedYet,
+  deleteBlockedReason,
+  hideDelete = false,
+  isPublishedJD = false,
+  currentStepLabel,
+  busy,
+  onCancel,
+  onSave,
+  onDiscard,
+  onDelete,
+}: LeaveJDDialogProps) {
+  const isLaterVersion = versionNumber > 1;
+  const deleteLabel = isLaterVersion ? `Delete version V${versionNumber}` : 'Delete this entire JD';
+  // Discard is offered only when it can do something: before any record exists
+  // (it just leaves), or when there is a saved version to go back to. Otherwise
+  // it is left out entirely rather than shown greyed out.
+  const canDiscard = nothingSavedYet || discardTarget !== null;
+  const deleteDisabled = busy !== null || deleteBlockedReason !== null;
+
+  const discardHint = nothingSavedYet
+    ? 'Nothing has been saved yet. You leave the page and what you typed is cleared.'
+    : `Undo what you changed and go back to ${discardTarget}. The JD stays in Job Descriptions.`;
+
+  return (
+    <AppModal
+      open={open}
+      onCancel={onCancel}
+      cancelDisabled={busy !== null}
+      size="md"
+      tone="warning"
+      compactFooter
+      zIndexClass="z-[10000]"
+      icon={<AlertTriangle />}
+      title="Leave this job description?"
+      subtitle="Choose what happens to this JD before you go"
+      // Save as Draft is the primary action, so it is last: rightmost on desktop and
+      // on top when the buttons stack on a phone.
+      actions={[
+        ...(canDiscard
+          ? [{
+              label: 'Discard current changes',
+              variant: 'secondary' as const,
+              onClick: onDiscard,
+              disabled: busy !== null,
+              loading: busy === 'discard',
+            }]
+          : []),
+        ...(hideDelete
+          ? []
+          : [{
+              label: deleteLabel,
+              variant: 'destructive' as const,
+              onClick: onDelete,
+              disabled: deleteDisabled,
+              loading: busy === 'delete',
+              title: deleteBlockedReason ?? undefined,
+            }]),
+        {
+          label: 'Save as Draft',
+          variant: 'primary',
+          icon: <Save className="h-4 w-4" />,
+          onClick: onSave,
+          disabled: busy !== null,
+          loading: busy === 'save',
+        },
+      ]}
+    >
+      <ul className="space-y-3 text-sm">
+        <li className="flex gap-3">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/15 dark:bg-orange-500/15 dark:text-orange-300">
+            <Save className="h-4 w-4" />
+          </span>
+          <p className="pt-1 text-gray-700 dark:text-slate-300">
+            <span className="font-semibold text-gray-900 dark:text-slate-100">Save as Draft</span> —{' '}
+            {isPublishedJD
+              ? 'save everything you changed to this JD (it stays Published) and leave.'
+              : <>keep everything as it is now and leave. Continue later from Job Descriptions → Draft; it reopens on {currentStepLabel}.</>}
+          </p>
+        </li>
+        <li className="flex gap-3">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-gray-100 text-gray-600 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+            <Undo2 className="h-4 w-4" />
+          </span>
+          <p className="pt-1 text-gray-700 dark:text-slate-300">
+            <span className="font-semibold text-gray-900 dark:text-slate-100">Cancel</span> — stay on this page and keep working.
+          </p>
+        </li>
+        {canDiscard && (
+          <li className="flex gap-3">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-brand-teal/10 text-brand-teal ring-brand-teal/15 dark:bg-brand-teal/15">
+              <RotateCcw className="h-4 w-4" />
+            </span>
+            <p className="pt-1 text-gray-700 dark:text-slate-300">
+              <span className="font-semibold text-gray-900 dark:text-slate-100">Discard current changes</span> — {discardHint}
+            </p>
+          </li>
+        )}
+        {!hideDelete && <li className={`flex gap-3 ${deleteBlockedReason ? 'opacity-60' : ''}`}>
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-red-50 text-red-600 ring-red-100 dark:bg-red-500/15 dark:text-red-400 dark:ring-red-500/20">
+            <Trash2 className="h-4 w-4" />
+          </span>
+          <p className="pt-1 text-gray-700 dark:text-slate-300">
+            <span className="font-semibold text-gray-900 dark:text-slate-100">{deleteLabel}</span> —{' '}
+            {deleteBlockedReason ?? (isLaterVersion ? (
+              <>
+                permanently remove only V{versionNumber}. The earlier versions of this job and everything
+                they were used in are kept. This cannot be undone.
+              </>
+            ) : (
+              <>
+                permanently remove this JD and all its steps. It will not appear under
+                Draft in Job Descriptions. This cannot be undone.
+              </>
+            ))}
+          </p>
+        </li>}
+      </ul>
+    </AppModal>
+  );
+}

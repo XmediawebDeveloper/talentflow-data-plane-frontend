@@ -1,0 +1,950 @@
+'use client';
+
+import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
+import { useState, useEffect, useRef } from 'react';
+import { Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import JobDetailView from '@/components/JobDetailView';
+import JDEditBlockedModal, { type JobDetailsTab } from '@/components/JDEditBlockedModal';
+import ArchiveJobModal from '@/components/ArchiveJobModal';
+import DisableJobModal from '@/components/DisableJobModal';
+import { Job } from '@/lib/types/types';
+import { jdService, JDResponse, JDUsageStatus, JDLocation } from '@/lib/services/jdService';
+import { formatJobExperienceText } from '@/lib/utils/jobExperience';
+import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
+import { formatJobVersionLabel, formatJobActionMessage, formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
+import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { usePermissions } from '@/lib/hooks/usePermissions';
+import { useAuth } from '@/lib/hooks/useAuth';
+
+/* Only the LATEST version of a JD lineage may be edited.
+
+   An earlier version is a historical snapshot: whatever has been done with it —
+   a resume scored, an assessment or AI interview sent, an AI match run — was
+   produced from the text it holds, so editing it in place would rewrite
+   history. It is frozen regardless of whether anything has been done with it
+   yet, so the answer cannot flip under the user as downstream work accumulates.
+
+   Scoped to THIS page's Edit button, which is the only Edit a specific version
+   is reachable through — both ways in land here: Job Openings → View Versions →
+   a version row, and this page's own version-badge switcher. The JD list, the
+   Job Description module and every other table are untouched; a JD's latest
+   version also behaves exactly as before, Edit included, and a refusal there
+   still comes from JDEditBlockedModal, which can fork the JD into a new
+   version. */
+const VERSION_EDIT_LOCK_REASON =
+  'This JD version is in use and can’t be edited. Only the latest version can be edited.';
+
+// Extended Job type with additional fields for JD view
+interface ExtendedJob extends Job {
+  niceToHaveSkills?: string[];
+  salaryMin?: number;
+  salaryMax?: number;
+  salaryCurrency?: string;
+  compensationType?: string;
+  creationStage?: string;
+  hasScoredResumes?: boolean;
+  hasAiMatchResults?: boolean;
+  rawDescription?: string;
+  mustHaveComments?: string[];
+  niceToHaveComments?: string[];
+  education?: string;
+  // Scoring configuration. These decide how a resume is graded against this JD -
+  // which criteria are Essential (the 60% block) rather than Preferred, whether an
+  // over-qualified candidate is penalised, and whether Job Hopping is scored at
+  // all - so the JD view has to show them. They were captured at JD creation and
+  // then invisible everywhere afterwards.
+  experienceMandatory?: boolean;
+  educationMandatory?: boolean;
+  industryMandatory?: boolean;
+  locationMandatory?: boolean;
+  allowOverqualified?: boolean | null;
+  jobHoppingEnabled?: boolean | null;
+  // JD13: Usage status for edit/republish logic
+  usageStatus?: JDUsageStatus;
+  // Full per-location detail (city/state/country/radius_km), for views that need
+  // to show every location rather than the single joined `location` string - see
+  // ExtractedDataSummary's `locations` prop.
+  locations?: JDLocation[];
+}
+
+// Loading skeleton for Job Details — mirrors JobDetailView's real layout: white
+// card shell, breadcrumb + Prev/Next pager, the brand-blue header card (JD-ID
+// badge + title + status + meta pills + action icons), the tab strip, and the
+// two-column content (left detail cards, right Quick Actions / Assessment / AI
+// Interview panels). Kept inline (no separate file) so it can't drift.
+function JobDetailsSkeleton() {
+  return (
+    <main className="tf-page">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="tf-page-sheet">
+          {/* Breadcrumb + pager */}
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="h-4 w-72 max-w-[60%] rounded bg-gray-200 animate-pulse" />
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-20 rounded-lg bg-gray-100 animate-pulse" />
+              <div className="h-8 w-16 rounded-lg bg-gray-100 animate-pulse" />
+            </div>
+          </div>
+
+          {/* Header card */}
+          <div className="mb-5">
+            <div className="rounded-xl border border-brand-blue/30 ring-1 ring-brand-blue/10 shadow-sm p-4 sm:p-5">
+              <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+                <div className="flex-1 min-w-0 space-y-3">
+                  {/* Row 1: badge + title + status */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="h-5 w-14 rounded-md bg-gray-200 animate-pulse" />
+                    <div className="h-6 w-52 max-w-full rounded bg-gray-200 animate-pulse" />
+                    <div className="h-5 w-20 rounded-full bg-gray-100 animate-pulse" />
+                  </div>
+                  {/* Row 2: meta pills */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="h-4 w-20 rounded bg-gray-100 animate-pulse" />
+                    ))}
+                  </div>
+                </div>
+                {/* Action icons */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-9 w-9 rounded-lg bg-gray-100 animate-pulse" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tab strip */}
+          <div className="mb-5 flex flex-wrap gap-4 sm:gap-6 border-b border-gray-200 pb-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-5 w-28 rounded bg-gray-200 animate-pulse" />
+            ))}
+          </div>
+
+          {/* Content — two columns */}
+          <div className="tf-grid-3">
+            {/* Left (2/3): description + two half-cards + summary bar */}
+            <div className="lg:col-span-2 space-y-4 sm:space-y-5">
+              <div className="rounded-xl border border-gray-200 p-4 sm:p-5 space-y-3">
+                <div className="h-5 w-40 rounded bg-gray-200 animate-pulse" />
+                <div className="h-4 w-full rounded bg-gray-100 animate-pulse" />
+                <div className="h-4 w-5/6 rounded bg-gray-100 animate-pulse" />
+                <div className="h-4 w-2/3 rounded bg-gray-100 animate-pulse" />
+              </div>
+              <div className="tf-grid-2">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border border-gray-200 p-4 sm:p-5 space-y-2">
+                    <div className="h-4 w-32 rounded bg-gray-200 animate-pulse" />
+                    <div className="h-3.5 w-full rounded bg-gray-100 animate-pulse" />
+                    <div className="h-3.5 w-4/5 rounded bg-gray-100 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl border border-gray-200 p-4 sm:p-5">
+                <div className="h-5 w-48 rounded bg-gray-200 animate-pulse" />
+              </div>
+            </div>
+            {/* Right (1/3): Quick Actions / Assessment / AI Interview panels */}
+            <div className="space-y-4 sm:space-y-5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-gray-200 p-4 sm:p-5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-gray-200 animate-pulse" />
+                    <div className="h-4 w-28 rounded bg-gray-200 animate-pulse" />
+                  </div>
+                  <div className="h-9 w-full rounded-lg bg-gray-100 animate-pulse" />
+                  <div className="h-9 w-full rounded-lg bg-gray-100 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function JobDetailsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const jobId = searchParams.get('id');
+  const fromAiInterview = searchParams.get('from') === 'ai-interview';
+  /* Opened from the assessment creation flow's View JD dialog ("Open full JD
+     page"), which anchors the breadcrumb to that flow instead of resetting to
+     the Job Descriptions trail. Same mechanism as `from=ai-interview`. */
+  const fromAssessment = searchParams.get('from') === 'assessment';
+  /* Opened from a candidate's assessment result (the View JD tab's JD header).
+     The trail continues that page's own: Assessments › <assessment> ›
+     <candidate> › this job. `return_to` is only honoured as a path inside the
+     Assessments module, so the link cannot be pointed anywhere else. */
+  const fromAssessmentResult = searchParams.get('from') === 'assessment-result';
+  /* The Assessments list tab that result was opened from (Candidate Results /
+     Invitation Status): that trail has no assessment crumb, and its
+     "AI Assessments" crumb returns to the tab. */
+  const assessmentResultOriginTab = (() => {
+    const origin = searchParams.get('result_origin');
+    return origin === 'candidate-results' ? 'completed-candidates'
+      : origin === 'invitation-status' ? 'invitation-status'
+        : '';
+  })();
+  /* Opened from an assessment's own details page (its Go to JD link): the
+     trail is Assessments › <assessment> › this job. */
+  const fromAssessmentDetails = searchParams.get('from') === 'assessment-details';
+  /* That assessment page's own query (list / tab / origin), so the trail's
+     assessment crumb returns to the same view. Only those keys are kept. */
+  const assessmentQuery = (() => {
+    const raw = new URLSearchParams(searchParams.get('assessment_query') || '');
+    const kept = new URLSearchParams();
+    for (const key of ['list', 'tab', 'from']) {
+      const value = raw.get(key);
+      if (value) kept.set(key, value);
+    }
+    const s = kept.toString();
+    return s ? `?${s}` : '';
+  })();
+  /* Opened from an AI interview's own details page (its Go to JD link): the
+     trail is AI Interviews › <interview> › this job. */
+  const fromAiInterviewDetails = searchParams.get('from') === 'ai-interview-details';
+  /* Opened from a candidate's AI interview result (its header job link):
+     the trail continues that page's own — AI Interviews › <interview> ›
+     <candidate> › this job. `return_to` is only honoured as a path inside the
+     AI Interviews module, as `assessment-result` does for Assessments. */
+  const fromAiInterviewResult = searchParams.get('from') === 'ai-interview-result';
+  /* The AI Interviews tab the result was opened from (Candidate Results /
+     Invitation Status) — that trail has no interview crumb, and its
+     "AI Interviews" crumb returns to the tab. */
+  const aiResultOriginTab = (() => {
+    const origin = searchParams.get('result_origin');
+    return origin === 'candidate-results' || origin === 'invitation-status' ? origin : '';
+  })();
+  const aiResultReturnTo = (() => {
+    const to = searchParams.get('return_to') || '';
+    return to.startsWith('/recruitment/ai-interviews/') && !to.startsWith('//') && !to.includes('://') ? to : '';
+  })();
+  const interviewId = searchParams.get('interview_id') || '';
+  const interviewTitle = searchParams.get('interview_title') || '';
+  /* The interview page's own query (its list / tab / origin), so the trail's
+     interview crumb returns to the same view. Only those keys are kept. */
+  const interviewQuery = (() => {
+    const raw = new URLSearchParams(searchParams.get('interview_query') || '');
+    const kept = new URLSearchParams();
+    for (const key of ['list', 'from', 'detailTab']) {
+      const value = raw.get(key);
+      if (value) kept.set(key, value);
+    }
+    const s = kept.toString();
+    return s ? `?${s}` : '';
+  })();
+  const resultAssessmentId = searchParams.get('assessment_id') || '';
+  const resultAssessmentTitle = searchParams.get('assessment_title') || '';
+  const resultCandidateName = searchParams.get('candidate_name') || '';
+  const resultReturnTo = (() => {
+    const to = searchParams.get('return_to') || '';
+    return to.startsWith('/recruitment/assessments/') ? to : '';
+  })();
+  const tabParam = searchParams.get('tab') as 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results' | null;
+  const actionParam = searchParams.get('action') as 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | 'create-ai-interview' | 'invite-ai-interview' | 'ai-interview-status' | null;
+
+  // JD15: Get user role for disable/enable button visibility
+  const { isTenantAdmin } = usePermissions();
+
+  // ✅ PERMISSIONS: Get user and tenant for Quick Actions permission checking
+  const { user, tenant, hasPermission } = useAuth();
+
+  const [job, setJob] = useState<ExtendedJob | null>(null);
+  const [loading, setLoading] = useState(true);
+  /* Bumped by every fetchJobDetails run and on jobId change / unmount, so a
+     response for an older run (e.g. the previous id after Back/Forward) is
+     dropped instead of rendering — or redirecting — the wrong JD. */
+  const fetchSeqRef = useRef(0);
+  const [rawJdData, setRawJdData] = useState<JDResponse | null>(null);
+  // One entry per Job (lineage), not per version — Prev/Next below steps
+  // through this list, so it must never contain a job's older versions as
+  // separate entries. `id` is the representative version to open (the
+  // highest version_number in the lineage), matching JobsListing's own
+  // groupByLineage representative-selection logic.
+  const [jobNavList, setJobNavList] = useState<{ key: string; id: string }[]>([]);
+  const [showDisableModal, setShowDisableModal] = useState(false);
+  const [jobToDisable, setJobToDisable] = useState<Job | null>(null);
+  /* Set when Edit is refused: the modules holding the JD, plus whatever reason
+     the backend gave if it blocked for something other than module usage. */
+  const [editBlock, setEditBlock] = useState<{ modules: JDUsageModule[]; reason?: string } | null>(null);
+  /** A tab the edit-blocked dialog asked to open on this page. */
+  const [tabOverride, setTabOverride] = useState<{ tab: JobDetailsTab; n: number } | null>(null);
+  const [checkingEditUsage, setCheckingEditUsage] = useState(false);
+  const [creatingVersion, setCreatingVersion] = useState(false);
+  /* Whether the JD on screen is an EARLIER version of its lineage.
+
+     Stored WITH the id it was resolved for, so the answer can never outlive the
+     version it describes: switching versions re-reads it, and until the new
+     read lands the check below simply does not match, which leaves Edit alone.
+     Nothing is written unless the lineage answers, so an unreachable lineage —
+     or a version it does not list — also leaves Edit alone rather than locking
+     it on a guess: a failed lookup must not strand a recruiter who legitimately
+     needs to edit the latest version. */
+  const [historicalVersionCheck, setHistoricalVersionCheck] =
+    useState<{ id: string; isHistorical: boolean } | null>(null);
+
+  useEffect(() => {
+    if (jobId) {
+      fetchJobDetails();
+    } else {
+      // No `?id=` in the URL — nothing to fetch. Without this, `loading` stays
+      // true forever and the page hangs on the skeleton instead of falling
+      // through to the "Job not found" state below.
+      setLoading(false);
+    }
+    // Invalidate this run's in-flight requests on id change / unmount.
+    return () => { fetchSeqRef.current += 1; };
+  }, [jobId]);
+
+  useEffect(() => {
+    if (!jobId) return;
+    let cancelled = false;
+    /* The lineage endpoint is authoritative about which version is latest — the
+       JD record itself carries no is_latest_version flag, and inferring it from
+       version_number would need the whole lineage anyway. Same endpoint the
+       version-badge switcher already reads, which accepts ANY version's id.
+
+       One extra GET per Job Details view, which is why it is its own effect
+       rather than part of fetchJobDetails: it must not delay the JD itself
+       rendering, and its failure must not fail the page. */
+    jdService
+      .getLineageVersions(jobId)
+      .then((lineage) => {
+        if (cancelled) return;
+        const self = (lineage || []).find((version) => version.id === jobId);
+        setHistoricalVersionCheck({
+          id: jobId,
+          isHistorical: !!self && self.is_latest_version === false,
+        });
+      })
+      .catch(() => {
+        /* Leave it unresolved — Edit keeps its normal behaviour rather than
+           being locked because a lookup failed. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId]);
+
+  useEffect(() => {
+    const fetchAllPublished = async () => {
+      const items: JDResponse[] = [];
+      // Page 1, then the rest in parallel (a few at a time) — was one by one.
+      const first = await jdService.list({ status: 'published', page_size: 100, page: 1 });
+      const rest = await fetchRemainingPages(Math.max(1, Math.ceil((first.total ?? 0) / 100)), (page) =>
+        jdService.list({ status: 'published', page_size: 100, page }),
+      );
+      for (const r of [first, ...rest]) items.push(...r.items ?? []);
+
+      // Collapse every version down to one entry per Job lineage — keyed on
+      // the human-readable job_id, same key JobsListing groups on, falling
+      // back to the version's own id for the rare row without one. Within a
+      // group, the representative is the highest version_number, so Next/Prev
+      // always lands on a job's latest version rather than any earlier one.
+      const groups = new Map<string, JDResponse[]>();
+      for (const item of items) {
+        const key = item.job_id || item.id;
+        const bucket = groups.get(key);
+        if (bucket) bucket.push(item);
+        else groups.set(key, [item]);
+      }
+      groups.forEach((bucket) =>
+        bucket.sort((a, b) => ((b as any).version_number ?? 1) - ((a as any).version_number ?? 1))
+      );
+
+      setJobNavList(
+        Array.from(groups.entries(), ([key, bucket]) => ({ key, id: bucket[0].id }))
+      );
+    };
+    fetchAllPublished().catch(() => {});
+  }, []);
+
+  const fetchJobDetails = async () => {
+    if (!jobId) return;
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
+    /* Skeleton only when this id isn't on screen yet. A refresh after
+       disable / enable / archive / unarchive / republish keeps JobDetailView
+       mounted, so its tab badges and open tab don't reset to their initial
+       values; the refreshed `job` prop simply flows in. */
+    if (!job || job.id !== jobId) setLoading(true);
+    try {
+      const data = await jdService.getById(jobId);
+      if (isStale()) return;
+      setRawJdData(data);
+
+      // For Draft JDs, redirect to JD creation with the current stage
+      if (data.status === 'draft' || (data.status as string) === 'Draft') {
+        // A Draft only opens in the editor; without Edit permission (e.g. a
+        // direct link) go back to the list instead of the JD editor.
+        if (!(isTenantAdmin || hasPermission('canUpdateJD'))) {
+          router.replace('/recruitment/job-openings');
+          return;
+        }
+        const stage = data.creation_stage || 'create';
+        router.replace(`/recruitment/jd-creation?id=${jobId}&stage=${stage}${fromAiInterview ? '&from=ai-interview' : ''}`);
+        return;
+      }
+
+      // Convert JDResponse to Job type
+      const convertedJob: ExtendedJob = {
+        id: data.id,
+        job_id: data.job_id,  // Human-readable ID like JD-076
+        title: data.title || 'Untitled',
+        status: mapStatus(data.status),
+        // Prefer the full locations array (ALL saved cities) over the legacy
+        // `location` column, which is only ever the FIRST city - see JDCreation.tsx's
+        // save payload. Falling back to `data.location` only when there is no
+        // locations array at all keeps old/legacy JDs working.
+        location: (data.locations && data.locations.length > 0)
+          ? data.locations.map(l => l.city).filter(Boolean).join(', ')
+          : (data.location || ''),
+        locations: data.locations || [],
+        daysActive: calculateDaysActive(data.created_at),
+        requiredMatch: 70,
+        department: data.department,
+        industry_type: data.industry_type,
+        experience: formatJobExperienceText({
+          jobLevel: data.job_level || data.experience_level,
+          experienceMin: data.experience_min,
+          experienceMax: data.experience_max,
+        }),
+        applicants: data.applicants_count || 0,
+        description: data.description,
+        skills: data.must_have_skills || [],
+        niceToHaveSkills: data.nice_to_have_skills || [],
+        postedDate: data.published_at || data.created_at,
+        created_at: data.created_at, // "Created" in the header — never moved by publishing
+        postedBy: data.created_by_name || 'System',
+        employmentType: data.employment_type,
+        workMode: data.remote_type,
+        education: data.education_requirements?.degree,
+        experience_level: data.experience_level || data.job_level,
+        currentVersion: data.current_version ?? 1, // republish counter → "Republished" label
+        versionNumber: (data as any).version_number ?? 1, // lineage version → v1/v2 badge (same JD-ID)
+        internalRecruiterComments: data.internal_comments ? [data.internal_comments] : [],
+        mustHaveComments: data.must_have_comments || [],
+        niceToHaveComments: data.nice_to_have_comments || [],
+        assessmentGuidance: data.assessment_guidance,
+        additionalDetails: data.additional_details,
+        // Scoring configuration - see the type above. `??` not `||` for the two
+        // tri-state flags: `false` is a real recruiter answer ("do not allow
+        // over-qualified"), and only a genuinely absent value should read as unset.
+        experienceMandatory: data.experience_mandatory ?? false,
+        educationMandatory: data.education_mandatory ?? false,
+        industryMandatory: data.industry_mandatory ?? false,
+        locationMandatory: data.location_mandatory ?? false,
+        allowOverqualified: data.allow_overqualified ?? null,
+        jobHoppingEnabled: data.job_hopping_enabled ?? null,
+        salaryMin: data.salary_min,
+        salaryMax: data.salary_max,
+        salaryCurrency: data.salary_currency,
+        compensationType: data.compensation_type,
+        creationStage: data.creation_stage,
+        rawDescription: data.description,
+        hasScoredResumes: (data.scored_resumes_count || 0) > 0,
+        hasAiMatchResults: false, // Will be checked separately
+      };
+
+      // Badge shows the lineage version (version_number) from the JD response
+      // above; do NOT overwrite it with the republish counter (getCurrentVersion).
+
+      // Check if AI Talent Match has been executed for this JD
+      try {
+        const scoredResponse = await jdService.getScoredResumes(jobId, { page_size: 1 });
+        convertedJob.hasScoredResumes = (scoredResponse.total || 0) > 0;
+      } catch (e) {
+        // Ignore error
+      }
+      if (isStale()) return;
+
+      // JD13: Fetch usage status for edit/republish logic
+      try {
+        const usageStatus = await jdService.getUsageStatus(jobId);
+        convertedJob.usageStatus = usageStatus;
+      } catch (e) {
+        // Usage status not available
+        console.warn('Could not fetch usage status:', e);
+      }
+      if (isStale()) return;
+
+      setJob(convertedJob);
+    } catch (error) {
+      if (isStale()) return;
+      console.error('Failed to fetch job details:', error);
+      toast.error('Failed to load job details');
+    } finally {
+      // A stale run leaves the skeleton to the run that replaced it.
+      if (!isStale()) setLoading(false);
+    }
+  };
+
+  const mapStatus = (status: string): 'Published' | 'Draft' | 'Closed' | 'Archived' | 'Disabled' => {
+    const statusMap: Record<string, 'Published' | 'Draft' | 'Closed' | 'Archived' | 'Disabled'> = {
+      'published': 'Published',
+      'active': 'Published',
+      'draft': 'Draft',
+      'closed': 'Closed',
+      'archived': 'Archived',
+      'disabled': 'Disabled',
+    };
+    return statusMap[status?.toLowerCase()] || 'Draft';
+  };
+
+  const calculateDaysActive = (createdAt: string): number => {
+    if (!createdAt) return 0;
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - created.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const handleBack = () => {
+    router.push(fromAiInterview ? '/recruitment/ai-interviews/jd-selection' : '/recruitment/job-openings');
+  };
+
+  /* Being an OLDER version is the whole rule — usage is deliberately not
+     consulted, and neither is how the user navigated here. Whether the version
+     was opened from Job Openings → View Versions or picked from this page's own
+     version badge, the same version gets the same answer. */
+  const versionEditLocked =
+    historicalVersionCheck?.id === jobId && historicalVersionCheck.isHistorical;
+
+  const handleEdit = async (editJob: Job) => {
+    if (checkingEditUsage) return;
+    // Belt and braces: the button is disabled, so this only catches a
+    // keyboard or programmatic activation of it.
+    if (versionEditLocked) return;
+
+    /* Re-read usage AND the lineage at click time rather than trusting what the
+       page loaded with. A recruiter can sit on this screen while a colleague
+       runs the JD through Assessment or AI Interview in another tab, or
+       publishes a newer version of it — in both cases the stale answer is the
+       permissive one. Fetched together so verifying the version costs no extra
+       click latency on top of the usage check that already happened here. */
+    setCheckingEditUsage(true);
+    let usageStatus = (editJob as ExtendedJob).usageStatus;
+    const [usageResult, lineageResult] = await Promise.allSettled([
+      jdService.getUsageStatus(editJob.id),
+      jdService.getLineageVersions(editJob.id),
+    ]);
+    setCheckingEditUsage(false);
+
+    if (usageResult.status === 'fulfilled') {
+      usageStatus = usageResult.value;
+      setJob(prev => (prev ? { ...prev, usageStatus: usageResult.value } : prev));
+    } else {
+      // Endpoint unreachable — fall through on what we already had. Editing is
+      // checked again when jd-creation loads, so this cannot skip the guard.
+      console.warn('[JobDetails] Could not refresh usage status for edit:', usageResult.reason);
+    }
+
+    /* Superseded while the page sat open: the button was enabled because this
+       version WAS the latest when the page loaded. Latch the answer so the
+       button now reads as disabled, and say why — there is no modal for this
+       one, because unlike module usage there is nothing to offer instead. */
+    if (lineageResult.status === 'fulfilled') {
+      const self = (lineageResult.value || []).find((version) => version.id === editJob.id);
+      if (self?.is_latest_version === false) {
+        setHistoricalVersionCheck({ id: editJob.id, isHistorical: true });
+        toast.error('This JD version can no longer be edited', {
+          description: VERSION_EDIT_LOCK_REASON,
+        });
+        return;
+      }
+    }
+
+    const modules = getJDUsageModules(usageStatus?.usage);
+
+    /* Used in any module blocks the edit, and so does an explicit backend
+       refusal — the two can disagree when the JD is held by something that
+       isn't reported as a per-module count. */
+    if (modules.length > 0 || usageStatus?.can_edit === false) {
+      setEditBlock({ modules, reason: usageStatus?.edit_restriction_reason });
+      return;
+    }
+
+    // Not in use. A draft is edited directly; a PUBLISHED JD is edited through its
+    // draft version, never the live row - the editor saves at every step, so the
+    // live job used to change before Republish. The job's existing open draft is
+    // reused if there is one.
+    const fromQuery = fromAiInterview ? '&from=ai-interview' : '';
+    if (editJob.status === 'Draft') {
+      router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create${fromQuery}`);
+      return;
+    }
+    // Published and not in use: Edit changes THIS JD (no new version). The editor
+    // opens it through a working copy, so the live row changes only on Republish.
+    router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create${fromQuery}`);
+  };
+
+  /* Editing an in-use JD forks it into a NEW version — a fresh draft copy with
+     its own id, pre-filled from this one. The in-use JD is left alone, so the
+     assessments, interviews and scores already hanging off it keep pointing at
+     the text they were produced from. */
+  const handleCreateNewVersion = async () => {
+    // A new version is a new JD — needs Create JD permission, not just Edit.
+    if (!(isTenantAdmin || hasPermission('canCreateJD'))) return;
+    if (!jobId || creatingVersion) return;
+    setCreatingVersion(true);
+    try {
+      const newJd = await jdService.createNewVersion(jobId);
+      setEditBlock(null);
+      // The job already had an open draft version: that one is reopened, not a new copy.
+      if (newJd.reused_existing_draft) {
+        toast.success('Opened the existing draft version', {
+          description: `${formatJobSubject({ job_id: newJd.job_id, title: newJd.title, versionNumber: newJd.version_number })} is already in draft. Continue editing it.`,
+        });
+      } else {
+        toast.success('New version created', {
+          description: `${formatJobSubject({ job_id: newJd.job_id, title: newJd.title, versionNumber: newJd.version_number })} was created as a new draft. Edit and publish it independently.`,
+        });
+      }
+      // `new_version=1`: the editor names this "New Version" (reopening the
+      // draft later, without it, reads "Edit New Version").
+      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create${newJd.reused_existing_draft ? '' : '&new_version=1'}${fromAiInterview ? '&from=ai-interview' : ''}`);
+    } catch (error) {
+      console.error('Failed to create new JD version:', error);
+      setCreatingVersion(false);
+      toast.error('Could not create new version', {
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
+    }
+  };
+
+  // JD13: Handle republish for edited JDs
+  const handleRepublish = async (republishJob: Job) => {
+    try {
+      await jdService.publish(republishJob.id);
+      toast.success(formatJobActionMessage(republishJob, 'republished'));
+      fetchJobDetails();
+    } catch (error) {
+      toast.error('Failed to republish job');
+    }
+  };
+
+  // JD15: Show disable confirmation modal
+  const handleDisable = (disableJob: Job) => {
+    setJobToDisable(disableJob);
+    setShowDisableModal(true);
+  };
+
+  // JD15: Confirm and execute disable
+  const confirmDisable = async () => {
+    if (!jobToDisable) return;
+
+    try {
+      await jdService.disable(jobToDisable.id);
+      toast.success(formatJobActionMessage(jobToDisable, 'disabled'));
+      setShowDisableModal(false);
+      setJobToDisable(null);
+      fetchJobDetails();
+    } catch (error: any) {
+      if (error.message?.includes('403') || error.message?.includes('Owner')) {
+        toast.error('Only Owners can disable job descriptions');
+      } else {
+        toast.error('Failed to disable job');
+      }
+    }
+  };
+
+  // JD15: Enable a disabled JD
+  const handleEnable = async (enableJob: Job) => {
+    try {
+      await jdService.enable(enableJob.id);
+      toast.success(formatJobActionMessage(enableJob, 're-enabled'));
+      fetchJobDetails();
+    } catch (error: any) {
+      if (error.message?.includes('403') || error.message?.includes('Owner')) {
+        toast.error('Only Owners can enable job descriptions');
+      } else {
+        toast.error('Failed to enable job');
+      }
+    }
+  };
+
+  /* Archiving asks first, exactly as it does on the Job Openings list — the
+     same `ArchiveJobModal`, so the consequences a recruiter reads do not depend
+     on which screen they started from. `handleArchive` is what
+     `JobDetailView` receives, so it can only ever open the confirm. */
+  const [archiveDialog, setArchiveDialog] = useState<{
+    open: boolean;
+    job: Job | null;
+    busy: boolean;
+  }>({ open: false, job: null, busy: false });
+
+  const handleArchive = (job: Job) => {
+    setArchiveDialog({ open: true, job, busy: false });
+  };
+
+  const confirmArchive = async () => {
+    const job = archiveDialog.job;
+    if (!job) return;
+    setArchiveDialog(prev => ({ ...prev, busy: true }));
+    try {
+      await jdService.updateStatus(job.id, 'archived');
+      toast.success(formatJobActionMessage(job, 'archived'));
+      setArchiveDialog({ open: false, job: null, busy: false });
+      fetchJobDetails();
+    } catch (error) {
+      toast.error('Failed to archive job');
+      /* Left open on failure — closing it would look like the archive worked. */
+      setArchiveDialog(prev => ({ ...prev, busy: false }));
+    }
+  };
+
+  const handleUnarchive = async (job: Job) => {
+    try {
+      await jdService.updateStatus(job.id, 'published');
+      toast.success(formatJobActionMessage(job, 'unarchived and published'));
+      fetchJobDetails();
+    } catch (error) {
+      toast.error('Failed to unarchive job');
+    }
+  };
+
+  const handleDelete = async (job: Job) => {
+    try {
+      await jdService.delete(job.id);
+      toast.success(formatJobActionMessage(job, 'deleted'));
+      router.push('/recruitment/job-openings');
+    } catch (error: any) {
+      toast.error(friendlyErrorMessage(error, "Couldn't delete job description. Please try again."));
+    }
+  };
+
+  const handleNavigateToAITalentMatch = (jobId: string) => {
+    sessionStorage.setItem('preselectedJobId', jobId);
+    // Auto-start AI Talent Match process for this JD
+    router.push('/recruitment/ai-talent-match');
+  };
+
+  if (loading) {
+    return <JobDetailsSkeleton />;
+  }
+
+  if (!job) {
+    return (
+      <div className="tf-page flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600 dark:text-slate-400 mb-4">Job not found</p>
+          <button
+            onClick={handleBack}
+            className="px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-lg dark:bg-slate-700 dark:hover:bg-slate-600"
+          >
+            Back to Jobs
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Find the current Job's position by lineage key, not by this version's own
+  // id — an older version selected from the dropdown still belongs to the
+  // same Job, and Prev/Next must move to the neighboring Job either way, not
+  // to a sibling version of this one.
+  const currentLineageKey = job.job_id || jobId || '';
+  const jobNavCurrentIndex = jobNavList.findIndex((entry) => entry.key === currentLineageKey);
+  const jobNavPrevId = jobNavCurrentIndex > 0 ? jobNavList[jobNavCurrentIndex - 1].id : null;
+  const jobNavNextId =
+    jobNavCurrentIndex >= 0 && jobNavCurrentIndex < jobNavList.length - 1
+      ? jobNavList[jobNavCurrentIndex + 1].id
+      : null;
+
+  const breadcrumbItems = fromAssessmentResult
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        {
+          label: 'AI Assessments',
+          href: assessmentResultOriginTab ? `/recruitment/assessments?tab=${assessmentResultOriginTab}` : '/recruitment/assessments',
+        },
+        ...(resultAssessmentId && !assessmentResultOriginTab
+          ? [{
+              label: resultAssessmentTitle || 'Assessment',
+              href: `/recruitment/assessments/${encodeURIComponent(resultAssessmentId)}/results`,
+            }]
+          : []),
+        ...(resultReturnTo
+          ? [{ label: resultCandidateName || 'Candidate Details', href: resultReturnTo }]
+          : []),
+        { label: job.title || 'Job Details' },
+      ]
+    : fromAssessmentDetails
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'AI Assessments', href: '/recruitment/assessments' },
+        ...(resultAssessmentId
+          ? [{
+              label: resultAssessmentTitle || 'Assessment',
+              href: `/recruitment/assessments/${encodeURIComponent(resultAssessmentId)}${assessmentQuery}`,
+            }]
+          : []),
+        { label: job.title || 'Job Details' },
+      ]
+    : fromAiInterviewResult
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        {
+          label: 'AI Interviews',
+          href: aiResultOriginTab ? `/recruitment/ai-interviews?tab=${aiResultOriginTab}` : '/recruitment/ai-interviews',
+        },
+        ...(interviewId && !aiResultOriginTab
+          ? [{
+              label: interviewTitle || 'Interview Details',
+              href: `/recruitment/ai-interviews/${encodeURIComponent(interviewId)}?detailTab=results`,
+            }]
+          : []),
+        ...(aiResultReturnTo
+          ? [{ label: resultCandidateName || 'Candidate Results', href: aiResultReturnTo }]
+          : []),
+        { label: job.title || 'Job Details' },
+      ]
+    : fromAiInterviewDetails
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+        ...(interviewId
+          ? [{
+              label: interviewTitle || 'Interview Details',
+              href: `/recruitment/ai-interviews/${encodeURIComponent(interviewId)}${interviewQuery}`,
+            }]
+          : []),
+        { label: job.title || 'Job Details' },
+      ]
+    : fromAiInterview
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+        { label: 'Select Job Description', href: '/recruitment/ai-interviews/jd-selection' },
+        { label: job.title || 'Job Details' },
+      ]
+    : fromAssessment
+    ? /* The assessment flow's own trail, with this JD as its leaf — the same
+         shape as the AI Interview case above, and the same labels the flow
+         itself prints for its steps. The Configure crumb carries the jd_id so
+         it returns to this JD's configure step rather than to the picker. */
+      [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'AI Assessments', href: '/recruitment/assessments' },
+        { label: 'Select Job Description', href: '/recruitment/assessments/create?step=select-jd' },
+        ...(jobId
+          ? [{
+              label: 'Configure Assessment',
+              href: `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(jobId)}`,
+            }]
+          : []),
+        { label: job.title || 'Job Details' },
+      ]
+    : undefined;
+
+  return (
+    <div className="tf-page relative flex flex-col">
+      {/* Disable Confirmation Modal */}
+      {/* Disable confirm — the shared component. This page used to render its
+          own header-bar modal that never named the JD being disabled. */}
+      <DisableJobModal
+        isOpen={showDisableModal}
+        jobLabel={jobToDisable ? formatJobVersionLabel(jobToDisable) : ''}
+        job={jobToDisable}
+        onConfirm={confirmDisable}
+        onCancel={() => {
+          setShowDisableModal(false);
+          setJobToDisable(null);
+        }}
+      />
+
+      {/* Archive confirm — the same component the Job Openings list renders. */}
+      <ArchiveJobModal
+        isOpen={archiveDialog.open}
+        jobLabel={archiveDialog.job ? formatJobVersionLabel(archiveDialog.job) : ''}
+        isLoading={archiveDialog.busy}
+        onConfirm={confirmArchive}
+        onCancel={() => setArchiveDialog({ open: false, job: null, busy: false })}
+      />
+
+      <JDEditBlockedModal
+        open={!!editBlock}
+        modules={editBlock?.modules ?? []}
+        reason={editBlock?.reason}
+        jdId={jobId || undefined}
+        atMaxVersions={(job.versionNumber ?? 1) >= 5}
+        canCreate={isTenantAdmin || hasPermission('canCreateJD')}
+        onOpenJobTab={(tab) => {
+          setEditBlock(null);
+          setTabOverride({ tab, n: Date.now() });
+        }}
+        creating={creatingVersion}
+        onClose={() => setEditBlock(null)}
+        onCreateNewVersion={handleCreateNewVersion}
+        onCreateNewJD={() => {
+          setEditBlock(null);
+          router.push('/recruitment/jd-creation');
+        }}
+      />
+
+      <JobDetailView
+        /* Each lineage version is its own JD id, and the version switcher
+           navigates by id — keying on it guarantees every piece of internal
+           state (result tabs, counts, cached config lookups, drill-down views)
+           is rebuilt for the selected version, so nothing from the previously
+           viewed version can leak into this one. */
+        /* Re-keyed when the edit-blocked dialog opens a tab, so the view
+           remounts on it (the view owns its tab; a URL push alone is undone). */
+        key={tabOverride ? `${job.id}:${tabOverride.n}` : job.id}
+        job={job}
+        onBack={handleBack}
+        initialTab={tabOverride?.tab || tabParam || undefined}
+        initialAction={actionParam || undefined}
+        /* RBAC: Edit / Disable / Re-enable / Archive are always rendered; the
+           *Locked flags grey them out (tooltip only) without the permission
+           instead of hiding them. */
+        onEdit={handleEdit}
+        editLocked={!(isTenantAdmin || hasPermission('canUpdateJD'))}
+        /* Only the latest version keeps a live Edit — see
+           VERSION_EDIT_LOCK_REASON above. `editDisabled` is false for it, so
+           the latest version's Edit button renders exactly as it always has.
+
+           `atMaxVersionsInUse` is deliberately NOT included here: disabling
+           the button swaps JDEditBlockedModal (which explains why, names the
+           module holding the JD, and still offers "Create New JD") for a bare
+           hover tooltip with no path forward. Leaving Edit clickable routes
+           every click through handleEdit's live usage re-check below, which
+           shows that modal — matching JobDetailView's own documented intent
+           for the "in use" case. */
+        editDisabled={versionEditLocked}
+        editDisabledReason={VERSION_EDIT_LOCK_REASON}
+        onDisable={handleDisable}
+        onEnable={handleEnable}
+        disableLocked={!(isTenantAdmin || hasPermission('canDisableJD'))}
+        onArchive={handleArchive}
+        archiveLocked={!(isTenantAdmin || hasPermission('canArchiveJD'))}
+        onUnarchive={handleUnarchive}
+        onDelete={handleDelete}
+        onNavigateToAITalentMatch={handleNavigateToAITalentMatch}
+        onRepublish={handleRepublish}
+        isTenantAdmin={isTenantAdmin}
+        user={user}
+        tenant={tenant}
+        breadcrumbItems={breadcrumbItems}
+        prevId={jobNavPrevId}
+        nextId={jobNavNextId}
+        /* A job outside the nav list (archived, disabled, or none published)
+           has no position in it — hide the pager rather than show "0 / N". */
+        currentIndex={jobNavCurrentIndex >= 0 ? jobNavCurrentIndex : undefined}
+        totalCount={jobNavCurrentIndex >= 0 ? jobNavList.length : undefined}
+      />
+    </div>
+  );
+}
+
+export default function JobDetailsRoute() {
+  return (
+    <Suspense fallback={<JobDetailsSkeleton />}>
+      <JobDetailsContent />
+    </Suspense>
+  );
+}

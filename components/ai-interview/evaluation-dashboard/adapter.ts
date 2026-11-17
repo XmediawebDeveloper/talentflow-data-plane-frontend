@@ -1,0 +1,3209 @@
+// Adapter: transforms the backend's ai_evaluation + session config
+// into the dashboard design's DashboardData shape.
+//
+// Cluster Name + Priority come DIRECTLY from the special_instructions config,
+// not from the evaluator's output — that's the authoritative source.
+
+import type {
+  DashboardData, Cluster, Skill, Level, Recommendation, InterviewResponse,
+  PerQuestionDetail, PerQuestionSkill, PerQuestionFollowUp,
+} from './types';
+import { buildSkipReasoner, buildClarificationsByQuestion } from './skipReason';
+import { truncate1 } from '@/lib/utils/matchStatus';
+
+interface ClusterConfigDef {
+  id?: string;
+  name: string;
+  priority: number;     // 3=High, 2=Medium, 1=Low
+  skills: string[];
+  reason?: string;
+}
+
+interface ClusterConfig {
+  mth: ClusterConfigDef[];
+  nth: ClusterConfigDef[];
+}
+
+function scoreToLevel(score: number): Level {
+  if (score >= 7) return 'High';
+  if (score >= 4) return 'Medium';
+  return 'Low';
+}
+
+// Shared client-side alias table. Used by both the Coverage lookup
+// (`lookupAsked`) and the per-question skill-attribution scan. Keys are
+// lowercased substrings that may appear inside JD skill names; values are
+// alternate tokens that may appear in the actual question text.
+const SKILL_ALIASES: Record<string, string[]> = {
+  'git':            ['git', 'github', 'gitlab', 'bitbucket', 'version control'],
+  'version control': ['git', 'github', 'gitlab', 'bitbucket', 'vcs', 'version control'],
+  'aws':            ['aws', 'amazon web services', 'ec2', 's3', 'lambda'],
+  'azure':          ['azure', 'microsoft azure'],
+  'gcp':            ['gcp', 'google cloud'],
+  'cloud':          ['cloud', 'aws', 'azure', 'gcp'],
+  'docker':         ['docker', 'container'],
+  'kubernetes':     ['kubernetes', 'k8s'],
+  'python':         ['python'],
+  'java':           ['java', 'jvm'],
+  'spring':         ['spring', 'spring boot', 'spring framework'],
+  'tensorflow':     ['tensorflow', 'tf'],
+  'pytorch':        ['pytorch', 'torch'],
+  'natural language': ['nlp', 'natural language', 'transformer', 'language model'],
+  'machine learning': ['machine learning', 'ml', 'regression', 'classifier', 'model training'],
+  'deep learning':  ['deep learning', 'neural network', 'cnn', 'rnn', 'transformer'],
+  'kafka':          ['kafka'],
+  'rabbitmq':       ['rabbitmq', 'rabbit mq'],
+  'redis':          ['redis'],
+  'mongodb':        ['mongodb', 'mongo'],
+  'postgresql':     ['postgresql', 'postgres', 'psql'],
+  'oracle':         ['oracle'],
+  'mysql':          ['mysql', 'mariadb'],
+  'prometheus':     ['prometheus'],
+  'grafana':        ['grafana'],
+  'splunk':         ['splunk'],
+  'jwt':            ['jwt', 'json web token'],
+  'elk':            ['elk', 'elasticsearch', 'logstash', 'kibana'],
+  'terraform':      ['terraform', 'iac', 'infrastructure as code'],
+  'restful':        ['rest', 'restful', 'rest api'],
+  'reactive':       ['reactive programming', 'reactive', 'rxjs'],
+  'serverless':     ['serverless', 'lambda function', 'aws lambda'],
+  'genai':          ['genai', 'generative ai', 'llm', 'chatgpt'],
+  'sso':            ['sso', 'single sign-on', 'single sign on'],
+  'single sign':    ['sso', 'single sign-on', 'single sign on'],
+  'design pattern': ['design pattern', 'design patterns'],
+  'microservice':   ['microservice', 'microservices'],
+  'hazelcast':      ['hazelcast'],
+  'ai platforms':   ['ai platforms', 'ai platform', 'modern ai'],
+};
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function wordBoundaryTest(kw: string, blob: string): boolean {
+  if (!kw || !blob) return false;
+  const esc = escapeRegex(kw);
+  const startsWithWord = /^\w/.test(kw);
+  const endsWithWord = /\w$/.test(kw);
+  const pattern = startsWithWord && endsWithWord
+    ? new RegExp(`\\b${esc}\\b`)
+    : new RegExp(esc);
+  return pattern.test(blob);
+}
+
+/** Search keywords for a JD skill name: its comma components plus any
+ *  SKILL_ALIASES entry whose key appears as a substring of the skill name.
+ *  Example: "Familiarity with version control systems like Git" picks up
+ *  the 'git' and 'version control' alias lists. */
+function keywordsForSkill(skillName: string): string[] {
+  const sl = skillName.toLowerCase();
+  const out = new Set<string>();
+  for (const c of sl.split(',').map(c => c.trim()).filter(Boolean)) out.add(c);
+  for (const [aliasKey, aliasList] of Object.entries(SKILL_ALIASES)) {
+    if (sl.includes(aliasKey)) for (const a of aliasList) out.add(a);
+  }
+  return [...out];
+}
+
+// Words that carry no real signal in a skill name — dropping them lets
+// us match arbitrary JD names (technical OR non-technical) on the
+// meaningful tokens. "Stakeholder management" → ["stakeholder",
+// "management"]; "Understanding of neural network architectures" →
+// ["neural", "network", "architectures"]; "Lead generation and CRM" →
+// ["lead", "generation", "crm"].
+const SKILL_STOPWORDS = new Set([
+  // articles / prepositions / conjunctions
+  'a', 'an', 'and', 'or', 'the', 'to', 'of', 'in', 'on', 'at', 'for', 'with',
+  'by', 'from', 'as', 'is', 'are', 'was', 'be', 'been', 'being', 'into',
+  // generic skill-name framing words that appear in many JD entries
+  'understanding', 'familiarity', 'experience', 'knowledge', 'proficiency',
+  'expertise', 'ability', 'skilled', 'skill', 'skills', 'mastery',
+  'capable', 'capacity', 'awareness', 'fluency', 'practice', 'working',
+  'demonstrated', 'strong', 'good', 'basic',
+  // generic connectives
+  'such', 'like', 'including', 'etc', 'various', 'multiple', 'related',
+  'using', 'use', 'used', 'use-case', 'use-cases', 'usage',
+]);
+
+/** Tokenize a skill name into significant words (lowercased, stopword-
+ *  filtered, ≥2 chars). Punctuation is normalized to spaces. */
+function tokenizeSkillName(s: string): string[] {
+  return s.toLowerCase()
+    .replace(/[^\w\s/+#-]/g, ' ')
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(t => t.length >= 2 && !SKILL_STOPWORDS.has(t));
+}
+
+/** Return the JD skill names whose evidence appears in `text`.
+ *
+ *  Matching strategies (any one is enough), in order:
+ *   1. Alias-table hit — for known abbreviations / synonyms (k8s ↔
+ *      kubernetes, jwt ↔ json web token, etc).
+ *   2. Significant-bigram match — distinctive 2-word phrases derived
+ *      from the skill name itself, e.g. "stakeholder management",
+ *      "lead generation", "neural network". Bigrams are the sweet
+ *      spot: specific enough to avoid false positives on common
+ *      single words like "management" or "strategy", general enough
+ *      to work without a hand-curated alias for every domain.
+ *   3. Two-or-more-token match — for skills with multiple significant
+ *      tokens that don't form an adjacent bigram in the text, require
+ *      at least two of them to appear independently (e.g. "Talent
+ *      acquisition strategy" matches "we acquire talent through ...
+ *      strategic ..." because two tokens hit).
+ *   4. Single significant token — only when the JD skill reduces to
+ *      exactly one significant token AND it's distinctive enough
+ *      (≥4 chars, since 3-letter tokens like "ai"/"ml"/"hr" are
+ *      either covered by the alias table or too noisy to single-match).
+ *
+ *  This means the matcher is **content-agnostic**: it works for any
+ *  role — software, sales, HR, finance, design, ops — without any
+ *  per-domain configuration. The alias table only adds value for
+ *  *abbreviations* and *synonyms* the bigram fallback can't catch.
+ */
+function findSkillsInText(text: string, jdSkillNames: string[]): string[] {
+  const blob = text.toLowerCase();
+  if (!blob) return [];
+  const found: string[] = [];
+  const seenLower = new Set<string>();
+  for (const skill of jdSkillNames) {
+    const sl = skill.toLowerCase();
+    if (seenLower.has(sl)) continue;
+
+    // 1) Alias-table hit (covers abbreviations / well-known synonyms).
+    let matched = false;
+    for (const kw of keywordsForSkill(skill)) {
+      if (wordBoundaryTest(kw, blob)) { matched = true; break; }
+    }
+
+    // 2-4) Token-derived fallbacks — work for any skill name without
+    // per-domain configuration.
+    if (!matched) {
+      const tokens = tokenizeSkillName(sl);
+      if (tokens.length >= 2) {
+        // 2) Bigram match.
+        for (let i = 0; i < tokens.length - 1; i++) {
+          const bg = `${tokens[i]} ${tokens[i + 1]}`;
+          if (wordBoundaryTest(bg, blob)) { matched = true; break; }
+        }
+        // 3) ≥2-token independent match (stricter than 1 to avoid noise).
+        if (!matched) {
+          let hits = 0;
+          for (const t of tokens) {
+            if (wordBoundaryTest(t, blob)) {
+              hits += 1;
+              if (hits >= 2) { matched = true; break; }
+            }
+          }
+        }
+      } else if (tokens.length === 1) {
+        // 4) Single distinctive token (≥4 chars; short tokens like
+        // "ai"/"ml"/"hr" are handled by the alias table).
+        const t = tokens[0];
+        if (t.length >= 4 && wordBoundaryTest(t, blob)) matched = true;
+      }
+    }
+
+    if (matched) {
+      found.push(skill);
+      seenLower.add(sl);
+    }
+  }
+  return found;
+}
+
+function priorityNumToLevel(p: number): Level {
+  if (p >= 3) return 'High';
+  if (p === 2) return 'Medium';
+  return 'Low';
+}
+
+function recommendationFromString(raw: any, finalScore: number): Recommendation {
+  const s = (raw ?? '').toString().toUpperCase().trim();
+  if (s === 'STRONG_YES' || s === 'STRONG HIRE') return 'Strong Hire';
+  if (s === 'YES' || s === 'HIRE') return 'Hire';
+  if (s === 'MAYBE' || s === 'CONSIDER') return 'Consider';
+  if (s === 'NO' || s === 'NO HIRE' || s === 'NO_HIRE') return 'No Hire';
+  // Fallback inferred from final score
+  if (finalScore >= 80) return 'Strong Hire';
+  if (finalScore >= 65) return 'Hire';
+  if (finalScore >= 50) return 'Consider';
+  return 'No Hire';
+}
+
+/** Case-insensitive + token-overlap + typo-tolerant skill lookup. */
+function lookupSkillScore(skill: string, scoreMap: Record<string, number>): number {
+  const sl = skill.toLowerCase().trim();
+  const entries = Object.entries(scoreMap).map(([k, v]) => [k.toLowerCase().trim(), v] as const);
+  // 1. exact
+  for (const [k, v] of entries) if (k === sl) return Number(v) || 0;
+  // 2. substring
+  for (const [k, v] of entries) if (k.includes(sl) || sl.includes(k)) return Number(v) || 0;
+  // 3. token overlap
+  const slTokens = new Set(sl.split(/[\s(),]+/).filter(t => t.length > 2));
+  if (slTokens.size > 0) {
+    for (const [k, v] of entries) {
+      const ks = new Set(k.split(/[\s(),]+/).filter(t => t.length > 2));
+      for (const t of slTokens) if (ks.has(t)) return Number(v) || 0;
+    }
+  }
+  return 0;
+}
+
+/** Find the evaluator note (highest-scoring match for this skill). */
+function lookupFeedback(skill: string, evaluations: any[]): string {
+  const sl = skill.toLowerCase().trim();
+  const slTokens = new Set(sl.split(/[\s(),]+/).filter(t => t.length > 2));
+  let best = { score: -1, note: '' };
+  for (const ev of evaluations || []) {
+    const topic = (ev?.evaluation?.topic || ev?.topic || '').toLowerCase().trim();
+    if (!topic) continue;
+    let matched = topic === sl || topic.includes(sl) || sl.includes(topic);
+    if (!matched && slTokens.size > 0) {
+      const ks = new Set(topic.split(/[\s(),]+/).filter((t: string) => t.length > 2));
+      for (const t of slTokens) if (ks.has(t)) { matched = true; break; }
+    }
+    if (matched) {
+      const sc = ev?.evaluation?.overall ?? ev?.score ?? 0;
+      const note = ev?.evaluation?.brief_note || ev?.one_line_note || '';
+      if (typeof sc === 'number' && sc > best.score) best = { score: sc, note };
+    }
+  }
+  return best.note;
+}
+
+/** Distribute weights proportionally so they sum to exactly 100.
+ * Uses largest-remainder method to absorb rounding error on the top cluster. */
+function computeWeights(clusters: ClusterConfigDef[]): number[] {
+  if (clusters.length === 0) return [];
+  const totalPriority = clusters.reduce((sum, c) => sum + (c.priority || 1), 0) || 1;
+  const raw = clusters.map(c => ((c.priority || 1) / totalPriority) * 100);
+  const floored = raw.map(Math.floor);
+  let remainder = 100 - floored.reduce((a, b) => a + b, 0);
+  // Distribute leftover 1s to the entries with the largest fractional parts
+  const fractions = raw
+    .map((r, i) => ({ i, frac: r - Math.floor(r) }))
+    .sort((a, b) => b.frac - a.frac);
+  const out = [...floored];
+  for (const { i } of fractions) {
+    if (remainder <= 0) break;
+    out[i] += 1;
+    remainder--;
+  }
+  return out;
+}
+
+/** Lowercase + strip every non-alphanumeric char, so "CI/CD" ≡ "ci cd" ≡ "cicd"
+ *  and "Page Object Model (POM)" ≡ "pageobjectmodelpom". Used for skill-name
+ *  identity comparisons where punctuation/spacing drifted between the JD
+ *  config, the distribution plan and the evaluator's echo. */
+function compactSkillKey(s: string): string {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+/** True when a question_history row represents a slot that was NEVER delivered
+ *  to the candidate — padding written when the interview ended early
+ *  (`not_asked`), or a slot silently bypassed because its primary was already
+ *  covered (`auto_skipped_by_coverage`). Such rows carry `assigned_skills`, so
+ *  counting them as "asked" marks exactly the skills the candidate was never
+ *  questioned on as Covered (the inverse of the truth). */
+function isUndeliveredHistoryRow(q: any): boolean {
+  const rt = String(q?.response_type || '').trim().toLowerCase();
+  return rt === 'not_asked'
+    || rt === 'not_delivered'
+    || rt === 'unasked'
+    || rt === 'auto_skipped_by_coverage'
+    || !!q?.not_delivered
+    // The backend's un-reached padding row. Older evaluations could carry a
+    // runtime skip label on it (mis-bound to a silence-skipped question), which
+    // rendered it as asked + "auto-skipped" with a 0.0 score.
+    || /^\(not asked\b.*planned question\b/i.test(String(q?.question || '').trim());
+}
+
+/** The row's response type, except a skip label is overridden when the row
+ *  holds the candidate's REAL answer. Ending the interview right after
+ *  answering filed the question as not_answered / skipped while the answer was
+ *  in the transcript (and restored into `answer`), so Question Analysis showed
+ *  an answered question as "Skipped". Placeholders ("[SKIPPED]", "[NOT ASKED]")
+ *  and the End-Interview control line are not answers. */
+function effectiveResponseType(responseType: unknown, answer: unknown): string {
+  const rt = String(responseType || '').toLowerCase();
+  if (rt !== 'skipped' && rt !== 'not_answered' && rt !== 'timeout') return rt;
+  const ans = String(answer || '').trim();
+  if (!ans || ans.startsWith('[')) return rt;
+  if (/wrap up the interview|end (the )?interview/i.test(ans)) return rt;
+  return 'answered';
+}
+
+/** Build cluster data from config (authoritative) + scores from ai_evaluation. */
+function buildClustersFromConfig(
+  configClusters: ClusterConfigDef[],
+  eval_: any,
+  startingNumber: number,
+  /** Skills the Question Distribution plan assigned to the slots that were
+   *  actually DELIVERED in this section (lowercased + compact variants). This is
+   *  the authoritative "was it asked" set — same source the Question Analysis tab
+   *  renders per question. Empty for legacy sessions with no plan snapshot. */
+  plannedAsked: { raw: Set<string>; compact: Set<string> } = { raw: new Set(), compact: new Set() },
+): Cluster[] {
+  const skillScoresMap = (eval_?.skill_scores_map || {}) as Record<string, number>;
+  const evaluations = eval_?.evaluations || [];
+  const clusterInsights = eval_?.cluster_insights || [];
+  // ── Assessment Coverage: was each skill probed by a delivered question? ──
+  // Priority order (first hit wins; see lookupAsked for the full rationale):
+  //   1. The Question Distribution plan for the DELIVERED slots
+  //      (`plannedAsked`, from special_instructions.mth/nth_question_skill_map).
+  //      Authoritative and lossless: every skill a delivered slot was planned
+  //      to probe was asked. Same source the Question Analysis tab renders.
+  //   2. ai_evaluation.skill_assessed_map (server-side map built from
+  //      question_history.assigned_skills + question text).
+  //   3. question_history[i].assigned_skills on DELIVERED rows — the at-ask-time
+  //      planner snapshot (primary + planned secondaries) for each slot.
+  //   4. Question-text scan across evaluations[].question — LAST RESORT, used
+  //      only when none of 1-3 exist (legacy interviews). It is section-blind
+  //      and alias-driven, so it both over-credits (a "version control" mention
+  //      marking GitLab/GitHub Actions/Bitbucket) and under-credits (an "SDLC"
+  //      question never spelling out "SDLC"). Never allowed to supplement a
+  //      real record.
+  const assessedMap = (eval_?.skill_assessed_map || {}) as Record<string, boolean>;
+  const hasAssessedMap = Object.keys(assessedMap).length > 0;
+  const questionHistory = (eval_?.question_history || []) as any[];
+
+  // Collect every skill named in any question_history[].assigned_skills.
+  // Only counts as "available" when at least one entry actually has a
+  // non-empty list (older interviews stored []/null).
+  //
+  // UNDELIVERED ROWS ARE SKIPPED (2026-08-12). The runtime pads question_history
+  // with `not_asked` placeholders when an interview ends early, and each
+  // placeholder carries `assigned_skills` built from the skills the candidate was
+  // NEVER tested on (message_handler._save_interview_results). Counting those
+  // marked precisely the un-asked skills as "Covered" — on a disconnected /
+  // terminated interview that inflated coverage toward 100% while almost nothing
+  // had been asked. The backend's _build_skill_assessed_map already filters these;
+  // this mirrors that guard.
+  const assignedSkillSet = new Set<string>();
+  for (const q of questionHistory) {
+    if (isUndeliveredHistoryRow(q)) continue;
+    // HR questions never probe technical skills — an HR row can carry the next
+    // Must-Have slot's skills when the HR round closes on its last question.
+    if (String(q?.round_type || '').toLowerCase() === 'hr' || q?.hr_question_id) continue;
+    const a = q?.assigned_skills;
+    if (Array.isArray(a)) {
+      for (const s of a) {
+        if (typeof s === 'string' && s.trim()) assignedSkillSet.add(s.toLowerCase().trim());
+      }
+    }
+  }
+  const hasAssignedSnapshot = assignedSkillSet.size > 0;
+  const hasPlannedAsked = plannedAsked.raw.size > 0;
+  // Is ANY authoritative record of what was asked available? When none is, the
+  // question-text keyword scan is the only remaining signal and we fall back to
+  // it (legacy sessions). When one IS available we must NOT run the scan — it
+  // both over- and under-credits (see lookupAsked).
+  const hasAuthoritativeAskedSource =
+    hasPlannedAsked || hasAssessedMap || hasAssignedSnapshot;
+
+  // Question-text blob for the LAST-RESORT scan (legacy sessions with no plan,
+  // no assessed map and no assigned-skills snapshot). Cheap to build, and only
+  // consulted when `hasAuthoritativeAskedSource` is false.
+  const questionBlob = (evaluations as any[])
+    .map(e => (e?.question || ''))
+    .join(' ')
+    .toLowerCase();
+
+  // ── Per-skill delivery flags from `question_skill_map` (AUTHORITATIVE) ────
+  //  Each entry carries `not_delivered`, set by the backend when the row came
+  //  from `_append_undelivered_plan_slots` (a planned question the interview
+  //  never reached). This is the exact structure the Question Analysis tab
+  //  renders, so keying coverage off it makes the two tabs agree BY
+  //  CONSTRUCTION instead of by two independent reconstructions of "which
+  //  slots were delivered" that can — and did — disagree.
+  //
+  //  A skill counts as delivered if ANY entry for it was delivered: Sanity
+  //  Testing is asked on delivered Q5 AND recovered onto un-reached Q9, and the
+  //  delivered occurrence is what matters.
+  //  Entries on HR questions are ignored: HR never probes a skill, but older
+  //  evaluations tagged HR turns with skills from their wording (an unanswered
+  //  "Are you willing to work night shift" → FRMS) and showed them Covered.
+  //  A technical question that was asked counts even if it went unanswered
+  //  (Covered = asked; product rule confirmed 2026-10-17).
+  const hrQuestionNumbers = new Set<string>();
+  for (const q of questionHistory) {
+    if (String(q?.round_type || '').toLowerCase() === 'hr' || q?.hr_question_id) {
+      hrQuestionNumbers.add(String(q?.question_number ?? ''));
+    }
+  }
+  const qsmDelivered = new Set<string>();
+  const qsmSeen = new Set<string>();
+  for (const [qnum, entries] of Object.entries((eval_?.question_skill_map || {}) as Record<string, any>)) {
+    if (!Array.isArray(entries)) continue;
+    if (hrQuestionNumbers.has(String(qnum))) continue;
+    for (const e of entries) {
+      const k = String(e?.skill || '').toLowerCase().trim();
+      if (!k) continue;
+      const c = compactSkillKey(e?.skill);
+      qsmSeen.add(k); if (c) qsmSeen.add(c);
+      if (!e?.not_delivered) { qsmDelivered.add(k); if (c) qsmDelivered.add(c); }
+    }
+  }
+
+  const lookupAsked = (sname: string, score010: number): boolean => {
+    const sl = sname.toLowerCase().trim();
+    const sc = compactSkillKey(sname);
+    // ── Signal 0 (AUTHORITATIVE): question_skill_map delivery flags ───────
+    // Decides BOTH ways when it knows the skill — a skill it lists only under
+    // un-delivered questions is definitively Not Covered, so this must return
+    // false rather than fall through to the plan below. Signal 1 reconstructs
+    // delivered slots by taking plan rows in PLAN ORDER capped at the delivered
+    // count, which credited the wrong slots here: plan Q4 (UAT + Selenium Grid
+    // + Azure Storage) was counted as delivered while the backend had matched
+    // by skill overlap and treated Q4 as un-reached — the very skills Question
+    // Analysis prints as "Not Delivered" showed up Covered.
+    if (qsmSeen.has(sl) || qsmSeen.has(sc)) {
+      return qsmDelivered.has(sl) || qsmDelivered.has(sc);
+    }
+
+
+    // ── Signal 1 (PRIMARY): the Question Distribution plan ────────────────
+    // `special_instructions.mth/nth_question_skill_map` — the same DB-backed
+    // plan the Question Distribution popover and the Question Analysis tab
+    // render, restricted to the slots this section actually DELIVERED. If the
+    // slot was asked, every skill the slot was planned to probe was asked, and
+    // that is exactly what "Covered" means here (independent of the score).
+    //
+    // This is now first because every other signal is lossy. In particular the
+    // stored question_history often carries only the evaluator's single
+    // representative topic per question instead of the full [primary +
+    // secondaries] snapshot, which made coverage read "1 skill per question" —
+    // e.g. a 15-question / 35-skill interview where all 35 were assigned and
+    // scored reported 17/35 (49%). The plan cannot degrade that way.
+    if (hasPlannedAsked && (plannedAsked.raw.has(sl) || plannedAsked.compact.has(sc))) {
+      return true;
+    }
+
+    // ── Signal 2: the backend's skill_assessed_map ────────────────────────
+    if (hasAssessedMap) {
+      for (const k of Object.keys(assessedMap)) {
+        if (!assessedMap[k]) continue;
+        const kl = k.toLowerCase().trim();
+        if (kl === sl || compactSkillKey(k) === sc) return true;
+      }
+    }
+
+    // ── Signal 3: at-ask-time assigned_skills on DELIVERED history rows ───
+    if (assignedSkillSet.has(sl)) return true;
+
+    // ── Signal 4 (LAST RESORT): skill named in a question's text ──────────
+    // Only when NO authoritative record of what was asked exists (legacy
+    // sessions). The scan is wrong in both directions and must never override
+    // or supplement a real record:
+    //   • False positives — the alias table maps git → [github, gitlab,
+    //     bitbucket, version control], so one question saying "version control"
+    //     marked GitLab / GitHub Actions / Bitbucket as Covered; and because the
+    //     alias key is matched as a SUBSTRING of the skill name, "JavaScript"
+    //     picks up the 'java' aliases and a Java question marks it Covered.
+    //   • False negatives — a skill genuinely probed but not literally named
+    //     ("software development lifecycle" never contains "SDLC", "project
+    //     management tools" never contains "Jira") reads as never asked.
+    //   • Section-blind — an NHS skill merely NAMED in an MHS question's text
+    //     is credited to NHS even when no NHS question ran (BUG12's leak, via
+    //     text instead of score).
+    if (!hasAuthoritativeAskedSource && questionBlob) {
+      for (const kw of keywordsForSkill(sname)) {
+        if (wordBoundaryTest(kw, questionBlob)) return true;
+      }
+    }
+
+    // Legacy fallback: no authoritative signal at all → a positive score is the
+    // only evidence the skill was probed. Never trusted when a record exists,
+    // because a score leaks ACROSS SECTIONS — the candidate names an NHS skill
+    // ("Kubernetes", "Azure DevOps") while answering an MHS question, so that
+    // NHS skill scores even though no NHS question was ever asked (BUG12).
+    if (!hasAuthoritativeAskedSource && score010 > 0) return true;
+    return false;
+  };
+
+  // Weights always sum to exactly 100 so displayed math is consistent
+  const weights = computeWeights(configClusters);
+
+  // Phantom-skill filter: cluster definitions in special_instructions.mth_clusters /
+  // nth_clusters often contain MORE skills than the question distribution plan
+  // actually assigns. Those extras (e.g. "Safety-critical engineering",
+  // "MBSE (Model-Based Systems Engineering)", "IBM DOORS / DOORS Next") inflate
+  // the cluster denominator ("19/22 covered" instead of "19/19") and surface
+  // synthetic-looking 0.3/1.0 fallback scores for skills no one was asked.
+  //
+  // Keep a cluster skill ONLY if at least one signal says it was part of the
+  // plan or genuinely covered:
+  //   • appears in any question_history[].assigned_skills (planner snapshot)
+  //   • has a real per-skill score > 0 (either skill_scores_map or cluster_insights)
+  //   • was flagged by the backend's skill_assessed_map
+  //
+  // When NONE of those signals exist for ANY skill in the cluster (legacy
+  // interviews with no assigned snapshot, no scores, no assessed map), fall
+  // back to the full list so we don't strip an entire cluster.
+  // For a PARTIAL / terminated interview (cut short by a proctoring
+  // termination or abandonment) the plan was only partly delivered. Collapsing
+  // the denominator to "just the probed skills" then makes a single asked slot
+  // render as 100% coverage — misleading. So for partial evals we keep the FULL
+  // configured cluster, so coverage honestly reflects how little of the plan was
+  // reached (e.g. 1 of 6 skills). Normal completed interviews are unchanged.
+  return configClusters.map((cc, idx): Cluster => {
+    const weight = weights[idx];
+
+    // Show ALL configured cluster skills — never cull (BUG12). The recruiter
+    // must see every Must-Have / Nice-to-Have skill the interview was set up to
+    // probe, with un-asked ones rendered as "Not Covered", so coverage honestly
+    // reads e.g. "1 of 8" rather than hiding the skills whose questions were
+    // skipped or never reached. (The old plan-culling dropped un-asked skills
+    // from a cluster that had ANY asked skill — e.g. it hid "Test Case Design" /
+    // "Defect Tracking Tools" from a cluster where only "Manual Testing" was
+    // asked — while keeping all skills in clusters with none asked. That
+    // asymmetry is exactly the "8 configured but only 6 shown" report.)
+    const allSkillsForCluster = (cc.skills || []) as string[];
+    const renderSkills = allSkillsForCluster;
+
+    const skills: Skill[] = renderSkills.map((sname): Skill => {
+      // Prefer skill_scores_map (0-10); fall back to lookup in cluster_insights
+      let score010 = lookupSkillScore(sname, skillScoresMap);
+      if (score010 === 0) {
+        // Try cluster_insights skill_scores (score is 0-100 there)
+        for (const ci of clusterInsights) {
+          for (const s of (ci.skill_scores || [])) {
+            if ((s.skill || '').toLowerCase() === sname.toLowerCase()) {
+              score010 = (Number(s.score) || 0) / 10;
+              break;
+            }
+          }
+        }
+      }
+      return {
+        name: sname,
+        score: truncate1(score010),
+        level: scoreToLevel(score010),
+        feedback: lookupFeedback(sname, evaluations) || 'No specific feedback captured for this skill.',
+        asked: lookupAsked(sname, score010),
+        // A real record of what was asked exists (the question_skill_map
+        // delivery flags or any authoritative source lookupAsked reads).
+        askedKnown: hasAuthoritativeAskedSource || qsmSeen.size > 0,
+      };
+    });
+
+    // Cluster score = average of skill scores
+    const scored = skills.filter(s => s.score > 0);
+    const clusterScore = scored.length > 0
+      ? truncate1((scored.reduce((a, s) => a + s.score, 0) / scored.length))
+      : 0;
+
+    return {
+      clusterNumber: startingNumber + idx,
+      name: cc.name,                          // CLUSTER NAME FROM CONFIG
+      priority: priorityNumToLevel(cc.priority), // CLUSTER PRIORITY FROM CONFIG
+      weight,
+      skills,
+      clusterScore,
+    };
+  });
+}
+
+/** Extract HR score from ai_evaluation.section_scores.hr (0-100 → 0-10). */
+function hrScoreFromEval(eval_: any): number {
+  const hr = eval_?.section_scores?.hr?.score;
+  if (typeof hr === 'number' && hr > 0) return Math.round(hr) / 10;
+  return 0;
+}
+
+/** Honest question counts for the report's "Questions Answered" tile.
+ *  Source: question_history (every row carries response_type since the
+ *  response-type backfill). Rows that were never delivered (`not_asked`,
+ *  coverage-bypassed) are excluded from both numbers; a slot counts as
+ *  answered only when response_type is 'answered' — or, for legacy rows that
+ *  predate response_type, when it holds a real (non-placeholder) answer. */
+function countQuestions(eval_: any): { questionsAnswered: number; questionsAsked: number } {
+  const history: any[] = Array.isArray(eval_?.question_history) ? eval_.question_history : [];
+  let asked = 0;
+  let answered = 0;
+  for (const h of history) {
+    if (!h || isUndeliveredHistoryRow(h)) continue;
+    asked += 1;
+    const rt = String(h?.response_type || '').trim().toLowerCase();
+    if (rt === 'answered') { answered += 1; continue; }
+    if (!rt) {
+      const ans = String(h?.response_text || h?.answer || '').trim();
+      if (ans && !ans.startsWith('[')) answered += 1;
+    }
+  }
+  return { questionsAnswered: answered, questionsAsked: asked };
+}
+
+/** Build interview response timeline from question_groups (preferred) or question_history. */
+function buildInterviewResponses(eval_: any): InterviewResponse[] {
+  const groups = eval_?.question_groups || [];
+  if (groups.length > 0) {
+    // Flatten: each main question becomes one response, follow-ups stay within
+    const out: InterviewResponse[] = [];
+    let id = 1;
+    for (const g of groups) {
+      const skills: string[] = [g.skill].filter(Boolean);
+      const duration = g.duration_seconds ? formatMinSec(g.duration_seconds) : '—';
+      const ts = g.timestamp ? formatTimestamp(g.timestamp) : `Q${id}`;
+      out.push({
+        id: id++,
+        timestamp: ts,
+        question: g.question || '',
+        candidateResponse: g.answer || '',
+        skillsCovered: skills,
+        duration,
+      });
+      for (const fu of (g.follow_ups || [])) {
+        out.push({
+          id: id++,
+          timestamp: fu.timestamp ? formatTimestamp(fu.timestamp) : `Q${id-1}f`,
+          question: `↳ ${fu.question || ''}`,
+          candidateResponse: fu.answer || '',
+          skillsCovered: skills,
+          duration: fu.duration_seconds ? formatMinSec(fu.duration_seconds) : '—',
+        });
+      }
+    }
+    return out;
+  }
+
+  // Fallback to question_history. `duration_seconds` is preserved on each
+  // history row by transcript_evaluation_service._build_question_history
+  // (preservation block at ~line 422) — pull it through so the Question
+  // Analysis page actually shows per-Q timings instead of "—" everywhere.
+  const history = eval_?.question_history || [];
+  return history.map((h: any, idx: number): InterviewResponse => {
+    const ds = Number(h?.duration_seconds);
+    return {
+      id: idx + 1,
+      timestamp: h.timestamp ? formatTimestamp(h.timestamp) : `Q${idx + 1}`,
+      question: h.question_text || h.question || '',
+      candidateResponse: h.response_text || h.answer || '',
+      skillsCovered: [h.topic].filter(Boolean),
+      duration: Number.isFinite(ds) && ds > 0 ? formatMinSec(ds) : '—',
+    };
+  });
+}
+
+function formatTimestamp(raw: string): string {
+  try {
+    // Extract HH:MM:SS from ISO
+    const t = new Date(raw);
+    return t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  } catch { return raw; }
+}
+
+function formatMinSec(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  const s = Math.round(totalSec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// Doc-spec priority → weight (10/7/4). Used by per-question breakdown table.
+const PRIORITY_WEIGHT: Record<Level, number> = { High: 10, Medium: 7, Low: 4 };
+
+// No default weight: a skill with no High/Medium/Low priority (not in any
+// cluster) weighs 0, so it drops out of Σ(score×weight)/Σ(weight) — the same
+// rule as the backend's _compute_question_scores. Never weighted as Medium.
+const priorityWeight = (priority: Level | null): number =>
+  priority ? PRIORITY_WEIGHT[priority] : 0;
+
+function priorityLabelToLevel(raw: any): Level {
+  const s = String(raw || '').toLowerCase();
+  if (s === 'high') return 'High';
+  if (s === 'low') return 'Low';
+  return 'Medium';
+}
+
+/** Build per-question detail rows for the timed-mode evaluation breakdown.
+ *
+ *  Backend already emits:
+ *    - `skill_question_map`: { skill → [{ q_num, score, note }] } keyed by display q-num
+ *    - `question_scores`: { q_num → 0-10 weighted score }
+ *    - `skill_priority_map`: { skill → 'high'|'medium'|'low' }
+ *    - `question_groups`: ordered list with `round_type` and `question` text per Q
+ *
+ *  We reverse skill_question_map into per-question rows so the UI can render
+ *  the Σ(score × weight) / Σ(weights) calculation row-by-row.
+ */
+/** Extract the bundled follow-up note from a question_history row, if present.
+ *  The metadata (`followup_bundled` + `followup_reason` + `followup_focus_skill`
+ *  + `followup_source_qnum`) is stamped by the backend when a planned P2/P3 slot
+ *  was reframed as a follow-up because the candidate volunteered the skill
+ *  earlier. Shared by ALL row-builders (history / conversation / groups) so the
+ *  note can NEVER silently disappear just because the source-selection heuristic
+ *  picked a different builder — it's keyed off the saved row, not the builder.
+ *  See [[project_question_analysis_builder_selection]]. */
+function bundledFollowUpFromRow(row: any): PerQuestionDetail['bundledFollowUp'] {
+  // HR questions are ALWAYS standalone — never a reframed follow-up probing a
+  // technical/Must-Have skill. A backend boundary-lag bug sometimes tags an HR
+  // question (e.g. the closing "Why should we hire you?") with a bundled
+  // follow-up on a Must-Have skill; suppress that here so HR questions never
+  // show as "Follow-up" with a cross-round skill note.
+  if (String(row?.round_type || '').toLowerCase() === 'hr') return undefined;
+  const reason = String(row?.followup_reason || '').trim();
+  if (!row?.followup_bundled || !reason) return undefined;
+  const srcQ = row?.followup_source_qnum;
+  const prior = String(row?.followup_prior_level || '').trim().toLowerCase();
+  const excerpt = String(row?.followup_source_excerpt || '').trim();
+  return {
+    reason: reason || undefined,
+    focus_skill: String(row?.followup_focus_skill || '').trim() || undefined,
+    source_qnum: typeof srcQ === 'number' && srcQ > 0 ? srcQ : undefined,
+    prior_level: prior || undefined,
+    source_excerpt: excerpt || undefined,
+  };
+}
+
+/** Index question_history rows by normalized (trimmed, lowercased) question
+ *  text. Lets the conversation / groups builders recover the authoritative
+ *  per-row metadata (round_type section + bundled-followup note) for a turn
+ *  they sourced from elsewhere. First write wins on duplicate text. */
+/** The backend's question score for a question_history row or question group.
+ *  The UI never recomputes it from the skill rows — the backend
+ *  (_compute_question_scores) is the only source. `question_score` wins
+ *  (null = the backend gave this question no score); evaluations written
+ *  before that field existed only carry `score`. A partial (terminated)
+ *  row's runtime `score` is not a question score — it is shown separately as
+ *  displayOnlyQuestionScore. */
+function backendQuestionScore(row: any): number | null {
+  if (!row) return null;
+  if ('question_score' in row) {
+    return typeof row.question_score === 'number' ? truncate1(row.question_score) : null;
+  }
+  if (String(row.score_source || '').toLowerCase() === 'partial_runtime') return null;
+  return typeof row.score === 'number' ? truncate1(row.score) : null;
+}
+
+function indexHistoryByText(questionHistory: any[]): Map<string, any> {
+  const m = new Map<string, any>();
+  for (const h of questionHistory || []) {
+    const txt = String(h?.question || '').trim().toLowerCase();
+    if (txt && !m.has(txt)) m.set(txt, h);
+  }
+  return m;
+}
+
+/** True when an assistant transcript turn is NOT a real interview question:
+ *  Bina's greeting, a silence nudge ("Are you there?"), a bare filler
+ *  transition ("Let's move on to the next question."), or a closing message.
+ *  Used by the source-selection heuristic so these noise turns don't inflate
+ *  the transcript Q-count and wrongly out-vote a complete question_history. */
+/** Meta / non-question assistant turns that must NEVER appear as a scored
+ *  question in Question Analysis: the opening "about the role" warm-up, a
+ *  redirect/deflection, a farewell, or a resume ack. Unlike the greeting
+ *  filters below, this has NO word-count cap — the role warm-up is a long
+ *  (~60-word) statement, so a ≤12-word cap let it slip through and show as
+ *  Must-Have Q1 ("Hi, I'm Bina, your interviewer today. In the role of …").
+ *  Matched by unique lead-ins that never open a real interview question; a real
+ *  question that merely quotes one still has a "?" and is kept. */
+/** True only for a row that is a GENUINE follow-up sub-turn of an earlier main
+ *  question, i.e. `is_follow_up` AND a `parent_question_number` that points at an
+ *  earlier main row.
+ *
+ *  The bare `is_follow_up` flag CANNOT be trusted: the backend's skip-recovery and
+ *  resume paths tag the NEXT MAIN question with `is_follow_up=true` (e.g. a
+ *  "Welcome back — let's continue! …" turn emitted after several skipped
+ *  questions), even though that turn covers its own slot and its own skills.
+ *  Dropping those rows hides delivered questions — it once hid 8-9 of 15 in
+ *  Question Analysis, and it made Cluster Coverage under-count the delivered slots
+ *  so the last question's skills read "Not Covered" (observed: a 4-question ROS
+ *  interview reporting 8/15 covered instead of 11/15, missing exactly Q4's Python /
+ *  Middleware communication / GitHub).
+ *
+ *  Shared by the Question Analysis row filter and the coverage delivered-count so
+ *  the two can never disagree about what counts as a delivered question. */
+function isExplicitFollowUpRow(q: any): boolean {
+  if (!q?.is_follow_up) return false;
+  const parentQn = Number(q?.parent_question_number);
+  const ownQn = Number(q?.question_number);
+  // Mis-labelled: flagged as a follow-up with no usable parent → it is a main.
+  if (!Number.isFinite(parentQn) || parentQn <= 0) return false;
+  if (Number.isFinite(ownQn) && ownQn === parentQn) return true;
+  return parentQn < (ownQn || Number.MAX_SAFE_INTEGER);
+}
+
+function isMetaAssistantTurn(content: string): boolean {
+  const t = (content || '').toLowerCase().trim();
+  if (!t) return false;
+  // Unambiguous silence nudges — these NEVER carry a real question, so match
+  // them even if the turn has a "?" (e.g. "Are you there? Take your time…").
+  const ALWAYS = [
+    'are you there', "didn't get any response", 'did not get any response',
+    "couldn't get any response", 'could not get any response',
+    'if you’re there, please start speaking', "if you're there, please start speaking",
+  ];
+  if (ALWAYS.some(m => t.includes(m))) return true;
+  // "Let's move on to the next question" is a nudge ONLY when it stands alone.
+  // As a PREAMBLE to a real question ("…let's move on to the next question.
+  // What is your expected salary?") it introduces a genuine turn — the HR salary
+  // question was being dropped because it matched here. Treat it as meta only
+  // when NO real question follows the phrase.
+  const MOVE_ON = ['move on to the next question', "let's move on to the next", 'lets move on to the next'];
+  for (const m of MOVE_ON) {
+    const idx = t.indexOf(m);
+    if (idx < 0) continue;
+    const after = t.slice(idx + m.length);
+    const hasTrailingQuestion = after.includes('?') && /[a-z]{3,}/.test(after);
+    if (!hasTrailingQuestion) return true; // bare nudge with nothing real after it
+  }
+  // Statement-only meta (role warm-up, deflection, farewell, resume ack). A real
+  // question that merely quotes one of these still has a "?" and is kept.
+  if (t.includes('?')) return false;
+  const META = [
+    'your interviewer today', "here's a quick overview", 'here is a quick overview',
+    'here to conduct the interview', 'here to conduct this interview',
+    "i'm here to listen", 'im here to listen',
+    "let's focus on the interview", 'lets focus on the interview',
+    'completing the interview', 'responses have been recorded',
+    'wish you all the best', 'future endeavors', 'welcome back',
+    // Closing / sendoff turn — LLM wording varies (often prefixed by an
+    // acknowledgment: "That's a compelling case… This concludes our interview…").
+    // None of these appear in a real interview question.
+    'concludes our interview', 'concludes the interview', 'concludes this interview',
+    'pleasure speaking with you', 'best of luck with the next steps',
+    'best of luck in the next steps',
+    // DETERMINISTIC farewell used on auto-close ("That brings us to the end of
+    // the interview. Thank you for your time, and all the best."). Its exact
+    // words were absent here ("and all the best" ≠ the listed "wish you all the
+    // best"), so the closing turn was counted as a real question → transcript
+    // Q-count out-voted a complete 15-row history → the farewell rendered as a
+    // phantom Q16 in an HR round that does not exist (user report 2026-08-28).
+    'end of the interview', 'brings us to the end', 'thank you for your time',
+    'thank you for participating', 'thanks for your time',
+  ];
+  return META.some(m => t.includes(m));
+}
+
+function isNoiseAssistantTurn(content: string): boolean {
+  const t = (content || '').toLowerCase().trim();
+  if (!t) return true;
+  // Role warm-up / deflection / farewell / resume ack — length-independent.
+  if (isMetaAssistantTurn(t)) return true;
+  // Greeting turn — but ONLY when it's a pure greeting with no question
+  // attached. The combined greeting+Q1 ("Hi! I'm Bina — let's start. Can
+  // you walk me through your React experience?") IS a real interview turn
+  // and must NOT be filtered out, or the convoQApprox count drops below the
+  // history count and the builder-selection heuristic incorrectly routes
+  // away from the COMPLETE history builder. Mirror of the `_isGreeting`
+  // gating inside buildPerQuestionDetailsFromHistory (2026-05-28).
+  if (/\bi['’]?\s*m\s+linda\b/.test(t) || /\bi\s+am\s+linda\b/.test(t)) {
+    const hasQuestion = t.includes('?');
+    const wordCount = t.split(/\s+/).filter(Boolean).length;
+    if (!hasQuestion && wordCount <= 12) return true;
+  }
+  // Silence nudges / attention probes.
+  if (
+    t.startsWith('are you there') || t.startsWith('are you still there') ||
+    t.startsWith('can you hear me') || /^(?:are you|still) with me\b/.test(t) ||
+    (t.includes('take your time') && t.includes('share whatever'))
+  ) return true;
+  // Bare filler transition with no actual question.
+  if (/^let['’]?s move on to the next question\.?$/.test(t)) return true;
+  // Closing.
+  if (
+    t.includes('thank you for completing the interview') ||
+    t.includes('thank you for your time today')
+  ) return true;
+  return false;
+}
+
+function buildPerQuestionDetails(
+  eval_: any,
+  clusterPriorityBySkill: Record<string, Level> = {},
+  clusterCanonicalNameBySkill: Record<string, string> = {},
+  conversationTranscript: any[] = [],
+): PerQuestionDetail[] {
+  // Source dispatch — choose whichever yields the MOST rows so the
+  // Analysis page doesn't undercount turns. The candidates, richest first:
+  //   • conversation_transcript — raw chat log, what the Transcript view
+  //     uses (~30 messages for a 15-turn interview). Used when the backend
+  //     under-recorded question_history (observed: kanimozhi had 31 chat
+  //     messages but only 7 history rows because the skip-flow doesn't
+  //     fire add_question_history_entry on every "I don't know" turn).
+  //   • question_groups + follow_ups — when groups are present and rich.
+  //   • question_history — when groups are sparse or absent.
+  //   • legacy skill_question_map reverse-index — older sessions only.
+  const questionGroups = (eval_?.question_groups || []) as any[];
+  const questionHistory = (eval_?.question_history || []) as any[];
+
+  // Effective count from question_groups = mains + sum(follow_ups).
+  const groupsCount = questionGroups.reduce((sum, g) => {
+    const fu = Array.isArray(g?.follow_ups) ? g.follow_ups.length : 0;
+    return sum + 1 + fu;
+  }, 0);
+  const historyCount = questionHistory.length;
+  const hasAssignedSnapshot = questionHistory.some(
+    q => Array.isArray(q?.assigned_skills) && q.assigned_skills.length > 0
+  );
+
+  // Approximate the count of REAL questions in conversation_transcript: count
+  // assistant turns, but EXCLUDE the greeting / silence-nudge / filler /
+  // closing turns the same way buildPerQuestionDetailsFromConversation does.
+  // The old count included that noise, which inflated the transcript total
+  // (e.g. 21 assistant turns for a 15-question interview) and wrongly made
+  // the conversation source out-vote a COMPLETE question_history — losing the
+  // round_type sectioning (NTH questions vanished), the assigned-skills
+  // snapshot, the per-skill scores, AND the bundled follow-up note (only the
+  // history builder carries those).
+  const convoQApprox = (conversationTranscript || []).filter(
+    m => m?.role === 'assistant' && typeof m?.content === 'string' &&
+         m.content.trim() && !isNoiseAssistantTurn(m.content)
+  ).length;
+
+  // question_history is the richest source when it carries the slot-plan
+  // snapshot (assigned_skills + round_type + bundled-followup metadata +
+  // per-skill scores). Prefer it unless the transcript shows the backend
+  // genuinely UNDER-recorded — i.e. it has materially more real questions
+  // than history rows (the kanimozhi case: 31 chat turns vs 7 history rows
+  // because the skip-flow dropped add_question_history_entry calls). The 0.8
+  // ratio tolerates a turn or two of slack (an unrecorded availability Q, a
+  // filler row) without flipping a complete history to the lossy convo path.
+  const historyIsComplete =
+    hasAssignedSnapshot && historyCount >= convoQApprox * 0.8;
+  if (historyIsComplete) {
+    return buildPerQuestionDetailsFromHistory(eval_, clusterPriorityBySkill, clusterCanonicalNameBySkill);
+  }
+
+  // Pick the richest source.
+  if (convoQApprox > Math.max(groupsCount, historyCount)) {
+    return buildPerQuestionDetailsFromConversation(
+      conversationTranscript,
+      questionHistory,
+      clusterPriorityBySkill,
+      clusterCanonicalNameBySkill,
+      (eval_?.evaluations || []) as any[],
+    );
+  }
+  if (historyCount > groupsCount && hasAssignedSnapshot) {
+    return buildPerQuestionDetailsFromHistory(eval_, clusterPriorityBySkill, clusterCanonicalNameBySkill);
+  }
+  if (questionGroups.length > 0) {
+    return buildPerQuestionDetailsFromGroups(
+      eval_,
+      clusterPriorityBySkill,
+      clusterCanonicalNameBySkill,
+    );
+  }
+  if (hasAssignedSnapshot) {
+    return buildPerQuestionDetailsFromHistory(eval_, clusterPriorityBySkill, clusterCanonicalNameBySkill);
+  }
+  return buildPerQuestionDetailsLegacy(eval_, clusterPriorityBySkill);
+}
+
+/**
+ * Build per-question rows from question_groups (transcript-aligned).
+ *
+ * One row per main Q in groups (follow-ups intentionally skipped here — they
+ * share the parent slot and the Transcript view is the place to drill into
+ * them). Q-numbers are sequential idx+1 over the groups array, matching
+ * buildInterviewResponses' `id: idx+1`, so a recruiter glancing between
+ * Transcript Q7 and Analysis Q7 sees the same question.
+ *
+ * Skills source priority for each Q:
+ *   1. Matching question_history row's assigned_skills (planner snapshot —
+ *      best when persisted, gives the full primary+secondaries set). We
+ *      match by exact question text within the same round_type.
+ *   2. The group's own `skill` field (single skill the backend tagged the
+ *      Q with — always present when groups are emitted).
+ */
+function buildPerQuestionDetailsFromGroups(
+  eval_: any,
+  clusterPriorityBySkill: Record<string, Level> = {},
+  clusterCanonicalNameBySkill: Record<string, string> = {},
+): PerQuestionDetail[] {
+  const groups = (eval_?.question_groups || []) as any[];
+  const questionHistory = (eval_?.question_history || []) as any[];
+  const questionSkillMap = (eval_?.question_skill_map || {}) as Record<string | number, any[]>;
+
+  const scoringRowsForQ = (rawQNum: any): any[] => {
+    const num = Number(rawQNum);
+    const rows = questionSkillMap[num] ?? questionSkillMap[String(rawQNum)];
+    return Array.isArray(rows) ? rows : [];
+  };
+
+  // Index history by exact question text (lowercase) for skill enrichment.
+  const historyByText = new Map<string, any>();
+  for (const h of questionHistory) {
+    const txt = String(h?.question || '').trim().toLowerCase();
+    if (txt && !historyByText.has(txt)) historyByText.set(txt, h);
+  }
+
+  // Greeting detection mirrors buildPerQuestionDetailsFromHistory.
+  const _isGreeting = (txt: string): boolean => {
+    const t = (txt || '').toLowerCase();
+    return /\bi['’]?\s*m\s+linda\b/.test(t) || /\bi\s+am\s+linda\b/.test(t);
+  };
+
+  const sectionFromRT = (rt: any): PerQuestionDetail['section'] => {
+    const r = String(rt || '').toLowerCase();
+    if (r === 'nice_to_have_skills') return 'nth';
+    if (r === 'hr') return 'hr';
+    return 'mth';
+  };
+
+  // Flatten groups → one row per main Q AND one row per follow-up. The
+  // Transcript view (buildInterviewResponses) does the same flattening with
+  // its `id: idx++` counter, so this produces a 1:1 alignment of Q-numbers
+  // between Transcript Q7 and Analysis Q7 — even for follow-ups.
+  //
+  // Each follow-up's skills default to the parent group's skill set (a
+  // follow-up shares the parent's slot, so it probes the same skill).
+  void clusterCanonicalNameBySkill; // (reserved for future skill-name normalization)
+
+  const out: PerQuestionDetail[] = [];
+  let nextQ = 1;
+
+  const dedupeKeepCase = (names: string[]): string[] => {
+    const seen = new Set<string>();
+    const r: string[] = [];
+    for (const s of names) {
+      const k = String(s).toLowerCase().trim();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      r.push(s);
+    }
+    return r;
+  };
+
+  const buildSkillRows = (names: string[], scoringRows: any[] = []): PerQuestionSkill[] =>
+    names.map(name => {
+      const priority = clusterPriorityBySkill[String(name).toLowerCase().trim()] ?? null;
+      const sl = String(name).toLowerCase().trim();
+      const matchedRow = scoringRows.find((r: any) => {
+        const topic = String(r?.skill || r?.topic || '').toLowerCase().trim();
+        return topic === sl || (topic && (topic.includes(sl) || sl.includes(topic)));
+      });
+      return {
+        name,
+        priority,
+        weight: priorityWeight(priority),
+        score: matchedRow ? truncate1((Number(matchedRow?.score) || 0)) : 0,
+        note: matchedRow ? String(matchedRow?.note || '') : '',
+      };
+    });
+
+  for (const g of groups) {
+    const mainQ = String(g?.question || '');
+    // Skip the role warm-up / deflection / farewell / resume ack — these are
+    // not interview questions (length-independent guard; the ≤12-word greeting
+    // filter misses the long role message).
+    if (isMetaAssistantTurn(mainQ)) continue;
+    const mainA = String(g?.answer || '');
+    const matched = historyByText.get(mainQ.trim().toLowerCase());
+    const mainScoreRows = scoringRowsForQ(matched?.question_number ?? g?.q_num);
+
+    // Main Q skills: prefer persisted assigned_skills (richer multi-skill
+    // set), fall back to the group's single g.skill.
+    let mainSkillNames: string[] = [];
+    if (mainScoreRows.length > 0) {
+      mainSkillNames = mainScoreRows.map((r: any) => String(r?.skill || r?.topic || '').trim());
+    } else if (matched && Array.isArray(matched.assigned_skills) && matched.assigned_skills.length > 0) {
+      mainSkillNames = matched.assigned_skills.filter(
+        (s: any) => typeof s === 'string' && s.trim(),
+      );
+    } else if (typeof g?.skill === 'string' && g.skill.trim()) {
+      mainSkillNames = [g.skill.trim()];
+    }
+    mainSkillNames = dedupeKeepCase(mainSkillNames);
+    const section = sectionFromRT(matched?.round_type);
+    const mainSkills = buildSkillRows(mainSkillNames, mainScoreRows);
+
+    out.push({
+      qNum: nextQ++,
+      section,
+      question: mainQ,
+      answer: mainA,
+      // Without these an un-reached question (a selected HR question the
+      // candidate never got to — HR rows carry no assigned_skills, so this
+      // builder is the one picked) rendered as answered with "[NOT ASKED]".
+      responseType: effectiveResponseType(g?.response_type || matched?.response_type, mainA),
+      skipSource: String(matched?.skip_source || '').toLowerCase(),
+      notDelivered: isUndeliveredHistoryRow(g) || isUndeliveredHistoryRow(matched) || !!matched?.not_delivered,
+      skills: mainSkills,
+      // Backend question score for this group (never recomputed here).
+      questionScore: backendQuestionScore(g) ?? backendQuestionScore(matched) ?? 0,
+      // Recover the bundled-followup note from the matched history row so it
+      // survives even when this (groups) builder is the one selected.
+      bundledFollowUp: bundledFollowUpFromRow(matched),
+      // Per-question "why this score" rationale (backend-composed).
+      scoreRationale: String(g?.score_rationale || matched?.score_rationale || ''),
+    });
+
+    // Follow-ups inherit the parent's skill set when their own entry
+    // doesn't carry one. The Transcript renders them with a "↳" prefix;
+    // Analysis just shows them as the next Q-number — keeps Q-numbers
+    // aligned across both tabs.
+    const followUps = Array.isArray(g?.follow_ups) ? g.follow_ups : [];
+    for (const fu of followUps) {
+      const fuQ = String(fu?.question || '');
+      const fuA = String(fu?.answer || '');
+      const fuMatched = historyByText.get(fuQ.trim().toLowerCase());
+      const fuScoreRows = scoringRowsForQ(fuMatched?.question_number ?? fu?.q_num);
+      let fuSkillNames: string[] = [];
+      if (fuScoreRows.length > 0) {
+        fuSkillNames = fuScoreRows.map((r: any) => String(r?.skill || r?.topic || '').trim());
+      } else if (fuMatched && Array.isArray(fuMatched.assigned_skills) && fuMatched.assigned_skills.length > 0) {
+        fuSkillNames = fuMatched.assigned_skills.filter(
+          (s: any) => typeof s === 'string' && s.trim(),
+        );
+      } else if (typeof fu?.skill === 'string' && fu.skill.trim()) {
+        fuSkillNames = [fu.skill.trim()];
+      } else {
+        // Default to parent's skill set so the follow-up isn't shown bare.
+        fuSkillNames = mainSkillNames.slice();
+      }
+      fuSkillNames = dedupeKeepCase(fuSkillNames);
+      const fuSkills = buildSkillRows(fuSkillNames, fuScoreRows);
+
+      out.push({
+        qNum: nextQ++,
+        section,
+        question: fuQ,
+        answer: fuA,
+        skills: fuSkills,
+        questionScore: backendQuestionScore(fuMatched) ?? 0,
+        bundledFollowUp: bundledFollowUpFromRow(fuMatched),
+        scoreRationale: String(fu?.score_rationale || fuMatched?.score_rationale || ''),
+      });
+    }
+    void _isGreeting; // greeting filter intentionally NOT applied here —
+                     // matching Transcript means showing the greeting as Q1.
+  }
+
+  return out;
+}
+
+/**
+ * Build per-question rows from question_history (preferred path).
+ *
+ * Drives off:
+ *   - question_history[i].assigned_skills   — planner snapshot (every skill
+ *                                              the slot was meant to probe)
+ *   - question_history[i].round_type        — section assignment
+ *   - question_history[i].question / answer — display + transcript hook
+ *   - evaluations[] (filtered by question_number + topic) — per-skill score
+ *                                              + evaluator note
+ *
+ * Sequentially renumbers (1..N) for display so gaps from follow-ups /
+ * auto-skipped slots in the raw question_number stream don't surface in
+ * the UI. Filters out follow-ups and slot-auto-skips so the recruiter sees
+ * only the actually-asked main questions.
+ */
+function buildPerQuestionDetailsFromHistory(
+  eval_: any,
+  clusterPriorityBySkill: Record<string, Level> = {},
+  clusterCanonicalNameBySkill: Record<string, string> = {},
+): PerQuestionDetail[] {
+  const questionHistory = (eval_?.question_history || []) as any[];
+  const evaluations = (eval_?.evaluations || []) as any[];
+  const questionSkillMap = (eval_?.question_skill_map || {}) as Record<string | number, any[]>;
+
+  // Group evaluations by question_number → list of skill-rows. A single
+  // delivered question can have multiple eval rows (one per assigned
+  // skill) under the multi-skill scoring scheme.
+  const evalsByQ: Record<number, any[]> = {};
+  for (const ev of evaluations) {
+    const qn = Number(ev?.question_number || 0);
+    if (!qn) continue;
+    (evalsByQ[qn] = evalsByQ[qn] || []).push(ev);
+  }
+
+  const scoringRowsForQ = (qn: number): any[] => {
+    const rows = questionSkillMap[qn] ?? questionSkillMap[String(qn)];
+    return Array.isArray(rows) ? rows : [];
+  };
+
+  // Detector for skipped / IDK responses. The evaluator often
+  // mis-scores these as `topic="Behavioural", score=5.0` (observed in
+  // production: Be25 session q=25/27/29). Without this guard, the
+  // Q-level fallback would propagate that 5.0 to every planned skill
+  // on the question — showing the candidate as having demonstrated
+  // skills they explicitly didn't answer.
+  const isSkippedOrIdk = (entry: any): boolean => {
+    const rt = String(entry?.response_type || '').toLowerCase();
+    // Backend-set response_type covers timer/silence skips + the
+    // dedicated IDK pipeline. auto_skipped_by_coverage is already
+    // filtered earlier, but kept here for safety.
+    if (
+      rt === 'skipped' || rt === 'not_answered' || rt === 'timeout' || rt === 'idk' ||
+      rt === 'low_coverage' || rt === 'auto_skipped_by_coverage'
+    ) {
+      return true;
+    }
+    // Fallback to answer text — older sessions stored "[SKIPPED]" /
+    // "I don't know" without setting response_type cleanly.
+    const ansRaw = String(entry?.answer || '').trim();
+    if (!ansRaw) return true;
+    const ans = ansRaw.toLowerCase();
+    if (ans === '[skipped]') return true;
+    if (ans === "i don't know." || ans === "i don't know" || ans === 'i dont know' || ans === 'i dont know.') return true;
+    if (ans === "i don't know yet" || ans === 'idk' || ans === "i'm not sure" || ans === 'not sure') return true;
+    return false;
+  };
+
+  // Per-skill score lookup: prefer exact topic match, then substring.
+  // Returns `is_fallback: true` (with the question-level entry.score)
+  // when the evaluator emitted no row for this specific skill. Reason:
+  // the evaluator scores the skill its eval row names, which often
+  // diverges from the planned skill when the LLM-emitted question text
+  // covered a different topic than the slot plan (slot drift in older
+  // sessions). Without a fallback, the candidate is shown 0 for skills
+  // they actually answered — misleading. With the fallback, the score
+  // reflects their overall answer quality on that question and a "Q"
+  // badge in the UI tells the reviewer it's not a direct per-skill
+  // assessment.
+  //
+  // SKIPPED/IDK CAVEAT: When `isSkipped=true`, the fallback is
+  // suppressed (score=0, is_skipped=true). The evaluator commonly
+  // mis-scores skipped/IDK answers as topic="Behavioural" with
+  // score=5.0 — falling back to that would show the candidate as
+  // having demonstrated skills they explicitly didn't answer.
+  const scoreForSkill = (
+    qn: number,
+    skill: string,
+    qLevelFallback: number | null,
+    isSkipped: boolean,
+  ): { score: number; note: string; is_fallback: boolean; is_skipped: boolean; is_unscored: boolean } => {
+    const sl = skill.toLowerCase().trim();
+    const scoringRows = scoringRowsForQ(qn);
+    const rows = evalsByQ[qn] || [];
+    const readScore = (r: any): number => {
+      const raw = Number(r?.score ?? r?.evaluation?.overall ?? 0);
+      return Math.max(0, Math.min(10, isFinite(raw) ? raw : 0));
+    };
+    const readNote = (r: any): string =>
+      String(r?.one_line_note || r?.evaluation?.brief_note || '').slice(0, 250);
+    const readScoringScore = (r: any): number =>
+      Math.max(0, Math.min(10, Number(r?.score) || 0));
+    const readScoringNote = (r: any): string =>
+      String(r?.note || '').slice(0, 250);
+
+    // Prefer the backend's whole-interview question-skill rows when present.
+    for (const r of scoringRows) {
+      const topic = String(r?.skill || r?.topic || '').toLowerCase().trim();
+      if (topic === sl) {
+        return { score: readScoringScore(r), note: readScoringNote(r), is_fallback: false, is_skipped: false, is_unscored: false };
+      }
+    }
+    for (const r of scoringRows) {
+      const topic = String(r?.skill || r?.topic || '').toLowerCase().trim();
+      if (topic && (topic.includes(sl) || sl.includes(topic))) {
+        return { score: readScoringScore(r), note: readScoringNote(r), is_fallback: false, is_skipped: false, is_unscored: false };
+      }
+    }
+
+    // Exact then substring match — these are real local per-skill scores
+    // (even on skipped questions, if the evaluator did emit one).
+    for (const r of rows) {
+      const topic = String(r?.topic || r?.evaluation?.topic || '').toLowerCase().trim();
+      if (topic === sl) {
+        return { score: readScore(r), note: readNote(r), is_fallback: false, is_skipped: false, is_unscored: false };
+      }
+    }
+    for (const r of rows) {
+      const topic = String(r?.topic || r?.evaluation?.topic || '').toLowerCase().trim();
+      if (topic && (topic.includes(sl) || sl.includes(topic))) {
+        return { score: readScore(r), note: readNote(r), is_fallback: false, is_skipped: false, is_unscored: false };
+      }
+    }
+    // Skipped/IDK: suppress fallback. Show 0 with the is_skipped flag
+    // so the UI can render a "Skipped" badge — better than a misleading
+    // 5.0 inherited from the evaluator's "Behavioural" mis-score.
+    if (isSkipped) {
+      return { score: 0, note: '', is_fallback: false, is_skipped: true, is_unscored: false };
+    }
+    // (Q-level fallback REMOVED 2026-08-14.) This used to substitute the
+    // question's OVERALL score when a planned skill had no matching per-skill
+    // row, badged "Q" — a legacy crutch for "slot drift" in OLDER sessions.
+    // It is no longer needed: the backend now emits a question_skill_map row
+    // for EVERY assigned skill (a real score, or 0 with a "No evidence" note),
+    // so a planned skill is ALWAYS matched by the lookups above. When the
+    // fallback did fire it only MASKED an incomplete map by fabricating a
+    // plausible number (e.g. React showing the question's 4.6 instead of its
+    // real 1.0), which made the Skills-assessed table disagree with the Score
+    // Rationale and produced impossible footers like "36.2 ÷ 11 = 4.60".
+    //
+    // Now: a genuinely unmatched skill falls through to is_unscored → the UI
+    // renders an honest "Not evaluated" (EXCLUDED from the weighted average)
+    // instead of a made-up score, so any real gap stays visible rather than
+    // being papered over. (`qLevelFallback` is retained in the signature but no
+    // longer consulted.)
+    return { score: 0, note: '', is_fallback: false, is_skipped: false, is_unscored: true };
+  };
+
+  const sectionFromRT = (rt: any): PerQuestionDetail['section'] => {
+    const r = String(rt || '').toLowerCase();
+    if (r === 'nice_to_have_skills') return 'nth';
+    if (r === 'hr') return 'hr';
+    return 'mth';
+  };
+
+  // Filter: only main questions actually delivered to the candidate.
+  // - is_follow_up: skip (sub-interactions roll up under their parent)
+  // - response_type='auto_skipped_by_coverage': slot was bypassed, never asked
+  // - empty question text: synthetic placeholder rows from padding
+  // - duplicate skip rows: when a slot times out or is auto-skipped after a
+  //   candidate stops responding, the backend records a row that inherits
+  //   `current_question` (the last spoken question text). The same Q text
+  //   then appears 2-5 times in the UI with only the first being the real
+  //   ask. Collapse later skip rows that share question text + round_type
+  //   with an earlier row in the same section.
+  // Greeting filter: Bina's opening turn often contains "I'm Bina" intro
+  // text. The PURE greeting ("Hi! I'm Bina, your AI interviewer. Let's
+  // begin.") has no question mark and should be dropped. But the COMBINED
+  // greeting+Q1 ("Hi! I'm Bina — let's start. Can you tell me about your
+  // React experience?") DOES carry the actual Q1 and must NOT be dropped —
+  // dropping it makes Q1 disappear from Question Analysis entirely.
+  //
+  // 2026-05-28 fix: gate on "no question mark" AND "no substantive content
+  // beyond the greeting". The original blanket drop ("i'm linda" anywhere
+  // → discard") was hiding Q1 whenever Bina's first turn combined intro
+  // and question. Restoring Q1 requires being more discriminating about
+  // what counts as a "pure greeting" turn.
+  const _isGreeting = (q: any): boolean => {
+    const txt = String(q?.question || '').toLowerCase();
+    const hasLindaIntro =
+      /\bi['’]?\s*m\s+bina\b/.test(txt) || /\bi\s+am\s+bina\b/.test(txt);
+    if (!hasLindaIntro) return false;
+    // If the turn carries an actual question (question mark present), it is
+    // the combined greeting+Q1 — keep it so Q1 isn't dropped.
+    if (txt.includes('?')) return false;
+    // If the turn is long enough to plausibly contain a question without
+    // punctuation (e.g. "Tell me about your React experience"), keep it.
+    // 12 words is generous — pure greetings are well under this.
+    const wordCount = txt.split(/\s+/).filter(Boolean).length;
+    if (wordCount > 12) return false;
+    return true;
+  };
+  // Stamp each history row with its chronological position BEFORE filtering
+  // so dropped rows (greeting / duplicates) don't shift the surviving rows'
+  // numbers. The Q-numbers shown on the Analysis page then match the
+  // Transcript view's Q-numbers exactly — Transcript Q3 = Analysis Q3.
+  const indexedHistory = questionHistory.map((q, idx) => ({ ...q, _historyIdx: idx }));
+
+  // Filter relaxed (was previously dropping is_follow_up + several
+  // skip-response-types + same-text skip rows). Reason: the backend
+  // mis-labels follow-up rows. After a candidate says "I don't know" the
+  // skip-recovery path emits the NEXT main question with is_follow_up=true
+  // tagged on it, even though the new question covers a different slot
+  // and different skills. Dropping those rows hid 8-9 of 15 delivered
+  // questions on observed sessions, leaving the recruiter convinced the
+  // interview broke. Now we drop only:
+  //   • greeting (combined intro + Q1)
+  //   • empty question text
+  //   • auto_skipped_by_coverage (slot was bypassed, never asked)
+  //   • exact-duplicate question text within the same round (collapses
+  //     timeout/silence echo rows that inherit the previous question text)
+  const _seenExactKeys = new Set<string>();
+  // Split history into main candidates and explicit follow-ups. A row
+  // counts as a follow-up only when `is_follow_up=true` AND a non-empty
+  // parent_question_number points to an earlier main row (lower qnum).
+  // Bug-tagged rows where is_follow_up=true but parent_question_number is
+  // missing/equal still flow into the main filter (backwards-compat with
+  // the skip-recovery mis-tagging documented earlier).
+  // Same predicate the coverage delivered-count uses — see isExplicitFollowUpRow.
+  const explicitFollowUps = indexedHistory.filter(isExplicitFollowUpRow);
+  const followUpHistoryIds = new Set(
+    explicitFollowUps.map(f => Number(f._historyIdx)),
+  );
+  const mains = indexedHistory.filter(q => {
+    if (followUpHistoryIds.has(Number(q._historyIdx))) return false;
+    if (_isGreeting(q)) return false;
+    // Length-independent meta guard — catches the long role warm-up /
+    // deflection / farewell that the ≤12-word _isGreeting misses.
+    if (isMetaAssistantTurn(String(q?.question || ''))) return false;
+    if (!q?.question || !String(q.question).trim()) return false;
+    const rt = String(q?.response_type || '').toLowerCase();
+    if (rt === 'auto_skipped_by_coverage') return false;
+    const _qText = String(q.question).trim().toLowerCase();
+    const _rtKey = String(q?.round_type || '').toLowerCase();
+    const _key = `${_rtKey}::${_qText}`;
+    if (_seenExactKeys.has(_key)) return false;
+    _seenExactKeys.add(_key);
+    return true;
+  });
+  // Sort by the chronological history index so Analysis order matches
+  // Transcript order. The transcript adapter renders rows in their raw
+  // history-array order; we now mirror that here even after filtering.
+  mains.sort((a, b) => Number(a._historyIdx) - Number(b._historyIdx));
+
+  // Group follow-ups by their parent_question_number so each main row
+  // can attach the right set when we render it. Each entry preserves
+  // the chronological order they were asked (history index ascending).
+  explicitFollowUps.sort((a, b) => Number(a._historyIdx) - Number(b._historyIdx));
+  const followUpsByParentQn = new Map<number, PerQuestionFollowUp[]>();
+  for (const fu of explicitFollowUps) {
+    const parentQn = Number(fu?.parent_question_number);
+    if (!Number.isFinite(parentQn) || parentQn <= 0) continue;
+    const ev = (evalsByQ[parentQn] || []).find(
+      e => String(e?.question || '').trim() === String(fu?.question || '').trim(),
+    );
+    const fuScore = typeof fu?.score === 'number'
+      ? fu.score
+      : ev
+        ? Math.max(0, Math.min(10, Number(ev?.score ?? ev?.evaluation?.overall ?? 0)))
+        : undefined;
+    const entry: PerQuestionFollowUp = {
+      question: String(fu?.question || '').trim(),
+      answer: String(fu?.answer || '').trim(),
+      topic: String(fu?.topic || ev?.topic || ev?.evaluation?.topic || '').trim() || undefined,
+      score: typeof fuScore === 'number' ? truncate1(fuScore) : undefined,
+      note: String(ev?.one_line_note || ev?.evaluation?.brief_note || '').slice(0, 250) || undefined,
+      // Trigger metadata stamped by the backend when the followup fired.
+      // Drives the "Note: This follow-up was asked because..." line in
+      // the UI so recruiters know why an extra question appeared at
+      // this slot.
+      reason: String(fu?.followup_reason || '').trim() || undefined,
+      focus_skill: String(fu?.followup_focus_skill || '').trim() || undefined,
+      source_qnum: typeof fu?.followup_source_qnum === 'number' && fu.followup_source_qnum > 0
+        ? fu.followup_source_qnum
+        : undefined,
+    };
+    if (!followUpsByParentQn.has(parentQn)) followUpsByParentQn.set(parentQn, []);
+    followUpsByParentQn.get(parentQn)!.push(entry);
+  }
+
+  // Map evaluator topic strings (possibly truncated / paraphrased — e.g.
+  // "cloud platforms") back to the canonical JD skill name (e.g.
+  // "Familiarity with cloud platforms like AWS or Azure") so the per-Q
+  // breakdown uses the same wording as the cluster panels. Falls back
+  // to the raw topic when no JD match.
+  const canonicalKeys = Object.keys(clusterCanonicalNameBySkill);
+  const normalizeSkillName = (topic: string): string => {
+    const tl = String(topic || '').toLowerCase().trim();
+    if (!tl) return topic;
+    const exact = clusterCanonicalNameBySkill[tl];
+    if (exact) return exact;
+    let best: string | null = null;
+    let bestLen = 0;
+    for (const k of canonicalKeys) {
+      if (k.includes(tl) || tl.includes(k)) {
+        if (k.length > bestLen) {
+          best = clusterCanonicalNameBySkill[k];
+          bestLen = k.length;
+        }
+      }
+    }
+    return best || topic;
+  };
+
+  return mains.map((q, idx): PerQuestionDetail => {
+    // Two question numbers, used for different things:
+    //   • origQ: the raw question_number from the history row. Used for
+    //     lookup against evalsByQ (the LLM evaluator keys per-skill rows
+    //     by this number, so the join must use the original value).
+    //   • displayQ: the row's chronological position in question_history,
+    //     so Analysis Q-numbers MATCH Transcript Q-numbers. The transcript
+    //     adapter (buildInterviewResponses) uses `id: idx + 1` over the
+    //     unfiltered history array. We mirror that here by reading the
+    //     `_historyIdx` we stamped on each row before filtering — that
+    //     position survives the filter so a row dropped from Analysis
+    //     (greeting / duplicate) doesn't shift the numbers of rows that
+    //     remain. A candidate sees Transcript Q3 = Analysis Q3, every time.
+    const origQ = Number(q?.question_number || (idx + 1));
+    const historyIdx = Number((q as any)?._historyIdx);
+    const displayQ = Number.isFinite(historyIdx) ? historyIdx + 1 : idx + 1;
+    const section = sectionFromRT(q?.round_type);
+    const assigned: string[] = Array.isArray(q?.assigned_skills) ? q.assigned_skills : [];
+    const recoveredRows = scoringRowsForQ(origQ);
+
+    // Source priority for the displayed skill rows — recruiter spec
+    // 2026-05-20: the Question Analysis tab must mirror the Question
+    // Distribution plan exactly, so the planner snapshot
+    // (`assigned_skills`) is now the primary source. This is what the
+    // recruiter configured + what Question Distribution UI shows; the
+    // Analysis tab has to match for the two views to line up.
+    //   1. Planner snapshot — `assigned_skills` (the slot plan).
+    //   2. Keyword scan of the actual question text (fallback when
+    //      assigned_skills is empty, e.g. legacy interviews predating
+    //      Phase 1 DB-derived slot truth).
+    //   3. Evaluator's topic attribution (final fallback).
+    const jdSkillNames = Object.values(clusterCanonicalNameBySkill);
+    const fromText = findSkillsInText(String(q?.question || ''), jdSkillNames);
+
+    const evalRows = evalsByQ[origQ] || [];
+    const evalTopics: string[] = [];
+    for (const r of evalRows) {
+      const t = String(r?.topic || r?.evaluation?.topic || '').trim();
+      if (t && t.toLowerCase() !== 'general') evalTopics.push(t);
+    }
+
+    let baseNames: string[];
+    if (recoveredRows.length > 0) {
+      baseNames = recoveredRows.map((r: any) => String(r?.skill || r?.topic || '').trim());
+    } else if (assigned.length > 0) {
+      baseNames = assigned;
+    } else if (fromText.length > 0) {
+      baseNames = fromText;
+    } else if (evalTopics.length > 0) {
+      baseNames = evalTopics.map(normalizeSkillName);
+    } else {
+      baseNames = [];
+    }
+
+    // Case-insensitive dedupe, preserve first-seen casing.
+    const seen = new Set<string>();
+    const skillNames: string[] = [];
+    for (const s of baseNames) {
+      const k = String(s).toLowerCase().trim();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      skillNames.push(s);
+    }
+
+    // Read entry.score once — used both for per-skill fallback and the
+    // final questionScore. When candidate answered substantively but the
+    // evaluator didn't break out per-skill (slot drift / multi-skill Q
+    // with only one assessed topic), every planned skill falls back to
+    // this value so the candidate isn't shown 0 for skills they
+    // effectively answered. is_fallback flag drives the "Q" badge in
+    // the display layer. For SKIPPED/IDK responses, the fallback is
+    // suppressed (see scoreForSkill) so the misleading evaluator score
+    // (often "Behavioural"=5.0 for IDK) doesn't propagate.
+    const partialDisplayScore = (
+      String(q?.score_source || '').toLowerCase() === 'partial_runtime'
+      && typeof q?.score === 'number'
+    ) ? Number(q.score) : null;
+    const entryScore = partialDisplayScore === null && typeof q?.score === 'number'
+      ? q.score
+      : null;
+    const isSkippedRow = isSkippedOrIdk(q);
+    const rowNotDelivered = isUndeliveredHistoryRow(q);
+
+    const skills: PerQuestionSkill[] = skillNames.map(skillName => {
+      const priority = clusterPriorityBySkill[String(skillName).toLowerCase().trim()] ?? null;
+      const weight = priorityWeight(priority);
+      const { score, note, is_fallback, is_skipped, is_unscored } = scoreForSkill(
+        origQ, skillName, entryScore, isSkippedRow,
+      );
+      return {
+        name: skillName,
+        priority,
+        weight,
+        score: truncate1(score),
+        note,
+        is_fallback,
+        // An un-reached question is NOT "skipped by the candidate" — its skills
+        // carry recovered scores, so don't render a "Skipped" badge on them.
+        is_skipped: rowNotDelivered ? false : is_skipped,
+        is_unscored,
+        not_delivered: rowNotDelivered || undefined,
+      };
+    });
+    skills.sort((a, b) => b.weight - a.weight || b.score - a.score);
+
+    // Weighted question score = Σ(score × weight) / Σ(weight) — the spec's
+    // exact formula (AIU104), computed from the SAME per-skill scores shown on
+    // the card so the displayed arithmetic is always self-consistent (this is
+    // what fixes the "56.0 ÷ 27 = 8.00" mismatch: the question score must be the
+    // weighted average of the rows the recruiter sees). Only skills with NO
+    // evaluator score (is_unscored — cancelled/incomplete eval) are EXCLUDED; a
+    // real 0-scored skill (asked but not demonstrated) is a genuine gap and MUST
+    // count, so a strong answer on one skill can't hide zeros on the others.
+    // Question score comes from the backend only (_compute_question_scores);
+    // it is never recomputed from the skill rows here.
+    const backendQS = backendQuestionScore(q);
+    const questionScore = backendQS ?? 0;
+    // A skill with no priority (weight 0) can't carry the question score, so a
+    // question whose only scored skills are unprioritized is "Not evaluated".
+    const hasEvaluatedSkill = skills.some(k => !k.is_unscored && k.weight > 0);
+    // Whole question is "Not evaluated" only when the evaluator produced NO
+    // usable score rows for any skill on the slot. A real no-answer / skip /
+    // IDK turn is still an evaluated question with score 0, so it must stay
+    // counted instead of collapsing to "Not Evaluated".
+    const isUnscored = backendQS === null && (
+      (q != null && 'question_score' in q) || (skills.length > 0 && !hasEvaluatedSkill)
+    );
+
+    // Attach explicit follow-ups for this main Q. Looked up by the raw
+    // history question_number (origQ) since follow-up entries store the
+    // same `parent_question_number`. displayQ is a chronological index
+    // and doesn't match parent_question_number on older sessions.
+    const followUps = followUpsByParentQn.get(origQ);
+
+    // Bundled follow-up (Option A): this slot's single main question doubled
+    // as a follow-up because a planned P2/P3 skill was volunteered earlier.
+    // The note metadata lives on the main entry itself (not in followUps).
+    const bundledFollowUp = bundledFollowUpFromRow(q);
+
+    return {
+      // Use origQ (backend question_number) not displayQ (historyIdx+1).
+      // displayQ shifts when any history entry is filtered before MHS Q1
+      // (e.g. a reconnect-ack at historyIdx=0), causing MHS Q1→slot2,
+      // Q2→slot3 … a full one-slot mis-mapping of plan skills.
+      // origQ is the backend's authoritative slot counter — stable regardless
+      // of how many rows were filtered from the raw history array.
+      qNum: origQ,
+      // Chronological position in question_history — the true ask order
+      // across sections (ranked into askedNum after section bucketing).
+      askedOrder: displayQ,
+      section,
+      question: String(q?.question || ''),
+      answer: String(q?.answer || ''),
+      // Carry the response type + skip source so the UI can distinguish
+      // "Skipped" (candidate pressed Skip → skip_source='candidate') from
+      // "Not Answered" (silence / timer / auto advance with no reply).
+      responseType: effectiveResponseType(q?.response_type, q?.answer),
+      skipSource: String(q?.skip_source || '').toLowerCase(),
+      skills,
+      questionScore,
+      isUnscored,
+      // Un-reached planned question (candidate ended early). Its skills are
+      // still scored via recovery; the card shows a "Not Delivered" badge.
+      notDelivered: isUndeliveredHistoryRow(q),
+      displayOnlyQuestionScore: partialDisplayScore ?? undefined,
+      followUps: followUps && followUps.length > 0 ? followUps : undefined,
+      bundledFollowUp,
+      // Per-question "why this score" rationale (backend-composed). The history
+      // builder is the PREFERRED source when question_history is complete, so
+      // without this the amber "Why this score" block never rendered for most
+      // completed interviews — only ones that fell through to the groups builder.
+      scoreRationale: String((q as any)?.score_rationale || ''),
+    };
+  });
+}
+
+/**
+ * Build per-question rows from conversation_transcript (raw chat log).
+ *
+ * Used when question_history under-records (observed: kanimozhi session had
+ * 31 chat messages but only 7 question_history rows because the skip flow
+ * for "I don't know" responses doesn't fire add_question_history_entry on
+ * every turn). The transcript view already renders all 15 turns from
+ * conversation_transcript; this builder mirrors that so the Analysis tab
+ * shows the same set.
+ *
+ * Pairing logic:
+ *   - Walk the messages in order, skip system / meta-assistant messages
+ *   - Each assistant message starts a new Q card
+ *   - The next user message (if any) becomes that Q's answer
+ *   - An assistant followed by another assistant (no user response) emits
+ *     a Q card with empty answer
+ *   - Skills are looked up by exact question-text match against
+ *     question_history.assigned_skills, falling back to [] when no match
+ */
+function buildPerQuestionDetailsFromConversation(
+  messages: any[],
+  questionHistory: any[],
+  clusterPriorityBySkill: Record<string, Level> = {},
+  clusterCanonicalNameBySkill: Record<string, string> = {},
+  evaluations: any[] = [],
+): PerQuestionDetail[] {
+  // JD skill names (canonical) for the text-scan fallback. When question_
+  // history doesn't have a matching row for a turn, we scan Bina's question
+  // text for any JD skill name and surface those as the assessed skills.
+  // Catches turns the backend never persisted (skip-flow gaps) where the
+  // question clearly probed real JD skills ("Python, R, or Java...").
+  const jdSkillNames = Object.values(clusterCanonicalNameBySkill);
+
+  // Index evaluations by exact question text for score lookup. Each LLM
+  // evaluator row carries `evaluation.overall` (0-10 score) and
+  // `evaluation.topic` (the skill scored). The same Q can have multiple
+  // rows when multi-skill scoring is on — collect all of them.
+  const evalsByText = new Map<string, any[]>();
+  for (const e of evaluations || []) {
+    const txt = String(e?.question || '').trim().toLowerCase();
+    if (!txt) continue;
+    if (!evalsByText.has(txt)) evalsByText.set(txt, []);
+    evalsByText.get(txt)!.push(e);
+  }
+  // Index history by exact question text for skill enrichment + section
+  // tagging. The section comes from the matched history row's round_type;
+  // without it, every conversation-sourced card would default to MHS and
+  // HR-round questions would silently disappear from the HR section.
+  const skillsByText = new Map<string, string[]>();
+  const roundTypeByText = new Map<string, string>();
+  for (const h of questionHistory) {
+    const txt = String(h?.question || '').trim().toLowerCase();
+    if (!txt) continue;
+    if (!roundTypeByText.has(txt)) {
+      const rt = String(h?.round_type || '').trim();
+      if (rt) roundTypeByText.set(txt, rt);
+    }
+    if (skillsByText.has(txt)) continue;
+    const assigned = Array.isArray(h?.assigned_skills)
+      ? h.assigned_skills.filter((s: any) => typeof s === 'string' && s.trim())
+      : [];
+    if (assigned.length > 0) skillsByText.set(txt, assigned);
+  }
+  // Full history rows by text — recovers the bundled-followup note for a turn
+  // even when this (conversation) builder is the one selected. Without this
+  // lookup the note only ever appears via the history builder, so any
+  // selection flip drops it. See [[project_question_analysis_builder_selection]].
+  const historyByText = indexHistoryByText(questionHistory);
+  const bundledForQuestion = (qText: string): PerQuestionDetail['bundledFollowUp'] =>
+    bundledFollowUpFromRow(historyByText.get(qText.trim().toLowerCase()));
+  // Per-question "why this score" rationale — recovered from the matched
+  // history row (this convo builder has no eval rows of its own).
+  const rationaleForQuestion = (qText: string): string =>
+    String(historyByText.get(qText.trim().toLowerCase())?.score_rationale || '');
+  const sectionFromRT = (rt: string): PerQuestionDetail['section'] => {
+    const r = (rt || '').toLowerCase();
+    if (r === 'nice_to_have_skills') return 'nth';
+    if (r === 'hr') return 'hr';
+    return 'mth';
+  };
+  // HR-question heuristic for turns that aren't in question_history (so no
+  // round_type to read). HR rounds use a small set of stable opener
+  // phrasings — match on any of them and tag as 'hr' so the card lands
+  // in the HR section. Conservative: anything that doesn't match a
+  // pattern defaults to 'mth' as before.
+  //
+  // Expanded after seeing real sessions tag motivation/career-fit/
+  // certifications/availability Qs as MHS. Categories covered:
+  //   • Self-intro / background ("tell me about yourself")
+  //   • Motivation / role fit ("what attracted you", "career goals", etc.)
+  //   • Strengths / weaknesses / achievements
+  //   • Behavioral (conflict / challenge / teamwork stories)
+  //   • Logistics (salary, notice period, start date, availability)
+  //   • Credential check (certifications) — these are factual, not skill-evaluative
+  const _looksLikeHR = (q: string): boolean => {
+    const t = (q || '').toLowerCase();
+    return (
+      /\btell me about yourself\b/.test(t)
+      // Motivation / role fit — covers "what attracted you", "why this role",
+      // "career goals", "how do you see it aligning"
+      || /\bwhat (?:attracted|drew|brought) you (?:to)?\b/.test(t)
+      || /\bwhy (?:do|did) you (?:want to|wish to)? ?(?:join|work|apply|choose)\b/.test(t)
+      || /\b(?:career|professional) (?:goals?|aspirations?|growth|development|plan)\b/.test(t)
+      || /\baligning? with your (?:career|professional|long.?term)\b/.test(t)
+      || /\bmotivat(?:es|ed|ion)\b/.test(t)
+      || /\bwhere do you see yourself\b/.test(t)
+      // Strengths / weaknesses / achievements
+      || /\bgreatest (?:strength|weakness|achievement)\b/.test(t)
+      || /\b(?:biggest|notable|proudest) (?:achievement|accomplishment)\b/.test(t)
+      // Behavioral stories — team / conflict / challenge
+      || /\bteam(work)? (?:experience|collaboration|player)\b/.test(t)
+      || /\bdescribe a (?:conflict|challenge|difficult|time when)\b/.test(t)
+      || /\btell me about a time\b/.test(t)
+      // Logistics — availability / salary / notice / start date
+      || /\bwould you be able to (?:start|join|relocate)\b/.test(t)
+      || /\b(?:start|join) (?:immediately|right away|asap)\b/.test(t)
+      || /\b(?:notice|joining) period\b/.test(t)
+      || /\bsalary (?:expectation|range)\b/.test(t)
+      || /\bavailable to (?:start|join|relocate)\b/.test(t)
+      // 2026-05-21: additional HR patterns observed in real sessions
+      // (Chandra session b70e3a37: backend tagged HR Qs as `nth` due to
+      // a round-transition timing bug — qh.round_type can't be trusted
+      // for these. The frontend heuristic must catch them on the
+      // question text alone so HR section isn't empty.)
+      //   • "Are you open to {learning|relocating|...}" — growth/fit
+      //   • "Are you available for {onsite|remote|hybrid|relocation}" —
+      //     work-arrangement availability
+      //   • "Are you comfortable working {in|with} a team" — collaboration
+      //   • "Work style and preferences" — soft-skill probe opener
+      //   • "How do you handle {pressure|stress|deadlines}" — behavioral
+      || /\bare you open to\b/.test(t)
+      || /\bare you available for\b/.test(t)
+      || /\bare you (?:comfortable|willing|interested) (?:working|to work|with)\b/.test(t)
+      || /\bwork style and preferences\b/.test(t)
+      || /\bhow do you handle (?:pressure|stress|deadlines|conflict)\b/.test(t)
+      // Credentials — certifications are factual recall, treated as HR-style
+      // verification rather than skill-evaluative (the skill itself is
+      // scored elsewhere when Bina actually probes it).
+      || /\bdo you have (?:any|the) (?:.{0,20})?certification/.test(t)
+      || /\bcertification(?:s|s? to mention)?\b/.test(t)
+    );
+  };
+  // 2026-05-21: prefix-tolerant section lookup. The backend strips
+  // acknowledgment prefixes ("No problem, let's move on. ", "Thank you
+  // for sharing. ", "No worries, let's keep moving. ", etc.) from some
+  // question_history entries — specifically the ones following an IDK
+  // turn — while the conversation_transcript keeps the full prefix.
+  // Exact-text matching against roundTypeByText then misses those
+  // questions and they default to 'mth' even though their planned
+  // round_type was 'nice_to_have_skills' / 'hr'. Observed for Chandra
+  // (session b70e3a37): NTH showed only 2 rows because Q11 AWS, Q12
+  // Docker, Q14 "open to learning", Q15 "available onsite" all matched
+  // qh entries by suffix but not by exact text.
+  //
+  // Build a SUFFIX index keyed on the stored qh question — Bina's
+  // transition prefix is always at the START in the transcript, never
+  // at the end, so suffix containment is a safe heuristic.
+  const roundTypeBySuffix: Array<{ key: string; rt: string }> = [];
+  for (const [key, rt] of roundTypeByText.entries()) {
+    // Skip very short qh entries (< 30 chars) — they risk substring
+    // matching unrelated long questions. The real cases we want to
+    // catch are full-sentence questions whose prefix got stripped.
+    if (key.length >= 30) {
+      roundTypeBySuffix.push({ key, rt });
+    }
+  }
+  // Sort longest-first so the most specific suffix wins (avoids a
+  // generic short qh entry shadowing a longer-matching one).
+  roundTypeBySuffix.sort((a, b) => b.key.length - a.key.length);
+
+  const resolveSection = (questionText: string): PerQuestionDetail['section'] => {
+    const txt = questionText.trim().toLowerCase();
+    // HR text heuristic FIRST — it overrides qh's round_type, which is
+    // unreliable for HR questions (backend can tag them as `nth` if the
+    // round transition fires late). When the question text is
+    // unambiguously HR-style, trust the text over qh.
+    if (_looksLikeHR(questionText)) return 'hr';
+    const fromHistory = roundTypeByText.get(txt);
+    if (fromHistory) return sectionFromRT(fromHistory);
+    // Prefix-tolerant fallback: transcript text ends with stored qh text.
+    for (const { key, rt } of roundTypeBySuffix) {
+      if (txt.endsWith(key)) return sectionFromRT(rt);
+    }
+    return 'mth';
+  };
+
+  // Drop noise: system messages, empty content, Bina's meta-only chatter
+  // (greeting prefixes with no follow-up question, closing thank-yous,
+  // and silence-nudge prompts like "Are you there?" — those aren't real
+  // interview questions, they're attention probes that shouldn't get
+  // graded slots).
+  const _isClosing = (c: string): boolean => {
+    const t = c.toLowerCase();
+    return (
+      t.includes('thank you for completing the interview') ||
+      t.includes('thank you for your time today') ||
+      (t.includes('your responses have been recorded') && t.includes('wish you all the best')) ||
+      t.includes('concludes our interview') ||
+      t.includes('concludes the interview') ||
+      t.includes('concludes this interview') ||
+      t.includes('pleasure speaking with you') ||
+      t.includes('best of luck with the next steps') ||
+      t.includes('best of luck in the next steps')
+    );
+  };
+  const _isSilenceNudge = (c: string): boolean => {
+    const t = c.toLowerCase().trim();
+    return (
+      t.startsWith('are you there?') ||
+      t.startsWith('are you still there?') ||
+      t.startsWith('are you there ') ||
+      // "Take your time — share whatever comes to mind" is the standard
+      // soft prompt Bina fires after the first silence wait; not a Q.
+      t.includes('take your time') && t.includes('share whatever') ||
+      // "Can you hear me?" mic-check prompts
+      t.startsWith('can you hear me?') ||
+      // Generic "Are you with me?" / "Still with me?" check-ins
+      /^(?:are you|still) with me\??/i.test(t)
+    );
+  };
+  const cleaned = (messages || []).filter(m =>
+    m?.role !== 'system'
+    && typeof m?.content === 'string'
+    && m.content.trim()
+    && !(m.role === 'assistant' && _isClosing(m.content))
+    && !(m.role === 'assistant' && _isSilenceNudge(m.content))
+    // Role warm-up / deflection / farewell / resume ack — length-independent.
+    && !(m.role === 'assistant' && isMetaAssistantTurn(m.content))
+  );
+
+  // Per-skill score lookup from evaluations[]. Match by question text +
+  // skill name (case-insensitive, with substring fallback for evaluator
+  // paraphrasing). When a question has exactly one eval row, reuse its
+  // score for every assigned skill so single-tag LLM output doesn't leave
+  // every skill at 0.
+  const lookupSkillScoreAndNote = (
+    questionText: string,
+    skillName: string,
+  ): { score: number; note: string } => {
+    const rows = evalsByText.get(questionText.trim().toLowerCase()) || [];
+    const sl = skillName.toLowerCase().trim();
+    const readScore = (r: any): number => {
+      const raw = Number(r?.evaluation?.overall ?? r?.score ?? 0);
+      return Math.max(0, Math.min(10, isFinite(raw) ? raw : 0));
+    };
+    const readNote = (r: any): string =>
+      String(r?.evaluation?.brief_note || r?.one_line_note || '').slice(0, 250);
+    for (const r of rows) {
+      const topic = String(r?.evaluation?.topic || r?.topic || '').toLowerCase().trim();
+      if (topic === sl) return { score: readScore(r), note: readNote(r) };
+    }
+    for (const r of rows) {
+      const topic = String(r?.evaluation?.topic || r?.topic || '').toLowerCase().trim();
+      if (topic && (topic.includes(sl) || sl.includes(topic))) {
+        return { score: readScore(r), note: readNote(r) };
+      }
+    }
+    if (rows.length === 1) {
+      return { score: readScore(rows[0]), note: readNote(rows[0]) };
+    }
+    return { score: 0, note: '' };
+  };
+
+  const buildSkillRows = (questionText: string, names: string[]): PerQuestionSkill[] =>
+    names.map(name => {
+      const priority = clusterPriorityBySkill[String(name).toLowerCase().trim()] ?? null;
+      const { score, note } = lookupSkillScoreAndNote(questionText, name);
+      return {
+        name,
+        priority,
+        weight: priorityWeight(priority),
+        score: truncate1(score),
+        note,
+      };
+    });
+
+  // Resolve skills for a question text. Priority order:
+  //   1. Text scan against JD skill names — PREFERRED because Bina's
+  //      actual question wording is the ground truth for "what was asked",
+  //      and the planner-side assigned_skills frequently drift when the LLM
+  //      ignores the slot rule (observed: Q2 planned for "Semantic Search /
+  //      LLMs / AI Agents" but Bina asked about "NLP pipelines / BERT /
+  //      Hugging Face" — the displayed skills should match the question).
+  //   2. Planner snapshot (question_history.assigned_skills) — fallback
+  //      when the question text contains no recognizable JD skill names
+  //      (e.g. a generic transition Q, or a Q-text whose skill mentions
+  //      use non-canonical wording).
+  const resolveSkills = (questionText: string): string[] => {
+    if (jdSkillNames.length > 0) {
+      const fromText = findSkillsInText(questionText, jdSkillNames);
+      if (fromText.length > 0) return fromText;
+    }
+    const fromHistory = skillsByText.get(questionText.trim().toLowerCase());
+    if (fromHistory && fromHistory.length > 0) return fromHistory;
+    return [];
+  };
+
+  const buildAndScore = (qText: string): {
+    skills: PerQuestionSkill[];
+    score: number;
+  } => {
+    const skills = buildSkillRows(qText, resolveSkills(qText));
+    // Backend question score of the matching history row (never recomputed).
+    const row = historyByText.get(qText.trim().toLowerCase());
+    return { skills, score: backendQuestionScore(row) ?? 0 };
+  };
+
+  const out: PerQuestionDetail[] = [];
+  let qNum = 0;
+  let pending: { question: string } | null = null;
+
+  for (const m of cleaned) {
+    if (m.role === 'assistant') {
+      if (pending) {
+        // Previous assistant had no user response — emit it as a Q with
+        // empty answer so the recruiter sees the question that was asked.
+        const { skills, score } = buildAndScore(pending.question);
+        out.push({
+          qNum: ++qNum,
+          section: resolveSection(pending.question),
+          question: pending.question,
+          answer: '',
+          skills,
+          questionScore: score,
+          bundledFollowUp: bundledForQuestion(pending.question),
+          scoreRationale: rationaleForQuestion(pending.question),
+        });
+      }
+      pending = { question: String(m.content) };
+    } else if (m.role === 'user' && pending) {
+      const { skills, score } = buildAndScore(pending.question);
+      out.push({
+        qNum: ++qNum,
+        section: resolveSection(pending.question),
+        question: pending.question,
+        answer: String(m.content),
+        skills,
+        questionScore: score,
+        bundledFollowUp: bundledForQuestion(pending.question),
+        scoreRationale: rationaleForQuestion(pending.question),
+      });
+      pending = null;
+    }
+    // user message without pending assistant: ignore (orphan)
+  }
+  // Trailing assistant message without a response
+  if (pending) {
+    const { skills, score } = buildAndScore(pending.question);
+    out.push({
+      qNum: ++qNum,
+      section: resolveSection(pending.question),
+      question: pending.question,
+      answer: '',
+      skills,
+      questionScore: score,
+      bundledFollowUp: bundledForQuestion(pending.question),
+      scoreRationale: rationaleForQuestion(pending.question),
+    });
+  }
+
+  return out;
+}
+
+/**
+ * Legacy per-question builder — drives off skill_question_map (reverse
+ * index) + question_groups. Used only for interviews predating the
+ * assigned_skills preservation fix, where question_history rows lack the
+ * slot-plan snapshot. Suffers from the documented issues (single-skill
+ * attribution per question, safety-net phantom skills polluting the list,
+ * missing rows for questions with no skill_question_map entry).
+ */
+function buildPerQuestionDetailsLegacy(
+  eval_: any,
+  clusterPriorityBySkill: Record<string, Level> = {},
+): PerQuestionDetail[] {
+  const skillQMap = (eval_?.skill_question_map || {}) as Record<
+    string,
+    Array<{ q_num: number; score: number; note?: string }>
+  >;
+  const questionScores = (eval_?.question_scores || {}) as Record<string | number, number>;
+  // skill_priority_map is the SECTION map ("must_have" | "nice_to_have" | "hr"),
+  // NOT the priority. It's a misnomer in the backend payload. Real per-skill
+  // P1/P2/P3 priority comes from the cluster the skill lives in — passed in
+  // here as `clusterPriorityBySkill` so the per-question breakdown shows the
+  // same priority chip as the Skills Assessment Summary tab.
+  const groups = (eval_?.question_groups || []) as Array<any>;
+
+  // q_num (1-based display index) → { section, question, answer }
+  const qMeta: Record<number, { section: PerQuestionDetail['section']; question: string; answer: string }> = {};
+  groups.forEach((g, idx) => {
+    const display = idx + 1;
+    const rt = String(g?.round_type || '').toLowerCase();
+    let section: PerQuestionDetail['section'] = 'mth';
+    if (rt === 'nice_to_have_skills') section = 'nth';
+    else if (rt === 'hr') section = 'hr';
+    qMeta[display] = {
+      section,
+      question: String(g?.question || g?.main_question || ''),
+      answer: String(g?.answer || g?.main_answer || ''),
+    };
+  });
+
+  // Reverse skill_question_map → per-question skill rows
+  const perQ: Record<number, PerQuestionSkill[]> = {};
+  for (const [topic, rows] of Object.entries(skillQMap || {})) {
+    const priority = clusterPriorityBySkill[topic.toLowerCase().trim()] ?? null;
+    const weight = priorityWeight(priority);
+    for (const r of rows || []) {
+      const q = Number(r?.q_num || 0);
+      if (!q) continue;
+      const score = Math.max(0, Math.min(10, Number(r?.score) || 0));
+      (perQ[q] = perQ[q] || []).push({
+        name: topic,
+        priority,
+        weight,
+        score: truncate1(score),
+        note: String(r?.note || '').slice(0, 250),
+      });
+    }
+  }
+
+  // Sort skills within each question by weight desc (High→Low) so the
+  // breakdown reads top-down by importance — matches the doc example.
+  Object.values(perQ).forEach(rows => rows.sort((a, b) => b.weight - a.weight || b.score - a.score));
+
+  return Object.entries(perQ)
+    .map(([qStr, skills]): PerQuestionDetail => {
+      const qNum = Number(qStr);
+      const meta = qMeta[qNum] || { section: 'mth' as const, question: '', answer: '' };
+      const qsRaw = questionScores[qNum] ?? questionScores[String(qNum)];
+      const questionScore = typeof qsRaw === 'number'
+        ? truncate1(qsRaw)
+        : 0;
+      return {
+        qNum,
+        section: meta.section,
+        question: meta.question,
+        answer: meta.answer,
+        skills,
+        questionScore,
+      };
+    })
+    .sort((a, b) => a.qNum - b.qNum);
+}
+
+function formatDurationMinutes(min: number): string {
+  if (!min || min < 1) return `${Math.round((min || 0) * 60)}s`;
+  if (min < 60) return `${Math.round(min * 10) / 10} min`;
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return `${h}h ${m}m`;
+}
+
+/** Main entry point. */
+export function buildDashboardData(params: {
+  ai_evaluation: any;
+  cluster_config: ClusterConfig;
+  candidate: { name: string; role?: string; email?: string };
+  interview: { mode?: string; completed_at?: string | null; created_at?: string };
+  /** Per-round budget from the session row. Used to derive plannedCounts
+   *  (denominator for Section Score per spec). When absent, plannedCounts
+   *  fall back to 0 and the consumer can use delivered count instead. */
+  rounds_config?: Array<{
+    type?: string;
+    planned_questions?: number;
+    enabled?: boolean;
+    hr_stage?: string;
+    hr_questions?: Array<{ question_text?: string; stage?: string | null } | string>;
+  }>;
+  /** Raw chat log (assistant/user messages) — flows through to the Question
+   *  Analysis builder as a fallback when question_history is sparse. Same
+   *  source the Transcript view renders from. Caller should pass
+   *  liveSession.conversation_transcript ?? interview.conversation_transcript. */
+  conversation_transcript?: any[];
+  /** Raw special_instructions JSON string from the session row. Used to
+   *  extract `mth_question_skill_map` + `nth_question_skill_map` so the
+   *  Question Analysis tab can display the SAME skills per slot as the
+   *  Question Distribution UI — strictly, no extras. Per recruiter spec
+   *  2026-05-20. */
+  special_instructions?: string | null;
+}): DashboardData {
+  const { ai_evaluation: eval_, cluster_config, candidate, interview, rounds_config, conversation_transcript, special_instructions } = params;
+  const isPartialEval = eval_?.partial === true || eval_?.evaluation_incomplete === true;
+
+  // Planned question counts per section — feeds the Question Analysis page's
+  // section-score denominator. Sum across all enabled rounds matching each
+  // type (multi-round configurations are rare but supported).
+  const plannedCounts = (() => {
+    let mh = 0, nh = 0;
+    for (const r of (rounds_config || [])) {
+      if (r?.enabled === false) continue;
+      const t = String(r?.type || '').toLowerCase();
+      const pq = Number(r?.planned_questions) || 0;
+      if (pq <= 0) continue;
+      if (t === 'must_have_skills') mh += pq;
+      else if (t === 'nice_to_have_skills') nh += pq;
+    }
+    return { mustHave: mh, niceToHave: nh };
+  })();
+
+  // ── Question Distribution plan (hoisted) ───────────────────────────────
+  // Parsed here rather than further down because Cluster Coverage needs it as
+  // its PRIMARY "was this skill asked" signal — see buildClustersFromConfig's
+  // lookupAsked. The Question Analysis alignment block below reuses these same
+  // two consts.
+  const parsedSpecialInstructions = (() => {
+    if (!special_instructions || typeof special_instructions !== 'string') return null;
+    try {
+      const p = JSON.parse(special_instructions);
+      return p && typeof p === 'object' ? p : null;
+    } catch {
+      return null;
+    }
+  })();
+  const planRowsBySection: Record<'mth' | 'nth', any[]> = { mth: [], nth: [] };
+  if (parsedSpecialInstructions) {
+    const mth = Array.isArray(parsedSpecialInstructions.mth_question_skill_map)
+      ? parsedSpecialInstructions.mth_question_skill_map
+      : [];
+    const nth = Array.isArray(parsedSpecialInstructions.nth_question_skill_map)
+      ? parsedSpecialInstructions.nth_question_skill_map
+      : [];
+    planRowsBySection.mth = [...mth].sort((a, b) =>
+      (Number(a?.question_number) || 0) - (Number(b?.question_number) || 0),
+    );
+    planRowsBySection.nth = [...nth].sort((a, b) =>
+      (Number(a?.question_number) || 0) - (Number(b?.question_number) || 0),
+    );
+  }
+
+  // ── How many MAIN questions each section actually DELIVERED ────────────
+  // Coverage must reflect the plan slots that were REACHED, not the whole plan —
+  // otherwise an interview that ended after 4 of 15 questions would report every
+  // configured skill as Covered. Counting rule mirrors the Question Analysis
+  // main-row filter: no follow-ups, no empty/meta text, no undelivered
+  // placeholders, and same-text duplicates within a round collapsed (the
+  // timeout/silence echo rows that inherit the previous question's text).
+  const deliveredMainCountBySection = (() => {
+    const out: Record<'mth' | 'nth', number> = { mth: 0, nth: 0 };
+    const seen = new Set<string>();
+    for (const h of ((eval_?.question_history || []) as any[])) {
+      // NOT a bare `is_follow_up` check — see isExplicitFollowUpRow. A resume /
+      // skip-recovery turn is mis-tagged as a follow-up while being a real
+      // delivered question, and dropping it under-counts the reached slots.
+      if (!h || isExplicitFollowUpRow(h)) continue;
+      if (isUndeliveredHistoryRow(h)) continue;
+      const qText = String(h?.question || '').trim();
+      if (!qText) continue;
+      if (isMetaAssistantTurn(qText)) continue;
+      const rt = String(h?.round_type || '').toLowerCase();
+      if (rt === 'hr') continue;                    // HR carries no skill plan
+      const sec: 'mth' | 'nth' = rt === 'nice_to_have_skills' ? 'nth' : 'mth';
+      const key = `${rt}::${qText.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out[sec] += 1;
+    }
+    // Fallback when question_history is absent/unusable: the runtime's own
+    // per-round counter.
+    for (const rt of ((eval_?.round_tracking || []) as any[])) {
+      const t = String(rt?.type || '').toLowerCase();
+      const sec: 'mth' | 'nth' | null =
+        t === 'must_have_skills' ? 'mth' : t === 'nice_to_have_skills' ? 'nth' : null;
+      if (!sec || out[sec] > 0) continue;
+      const actual = Number(rt?.actual_questions_asked);
+      if (Number.isFinite(actual) && actual > 0) out[sec] = actual;
+    }
+    return out;
+  })();
+
+  /** Skills the DELIVERED questions were actually attributed to, per section.
+   *  Used to identify WHICH plan slots ran — see plannedAskedBySection. */
+  const deliveredSkillKeysBySection = (() => {
+    const out: Record<'mth' | 'nth', Set<string>> = { mth: new Set(), nth: new Set() };
+    for (const h of ((eval_?.question_history || []) as any[])) {
+      if (!h || isExplicitFollowUpRow(h) || isUndeliveredHistoryRow(h)) continue;
+      const rt = String(h?.round_type || '').toLowerCase();
+      if (rt === 'hr') continue;
+      const sec: 'mth' | 'nth' = rt === 'nice_to_have_skills' ? 'nth' : 'mth';
+      const names = [
+        ...(Array.isArray(h?.assigned_skills) ? h.assigned_skills : []),
+        h?.topic,
+      ];
+      for (const n of names) {
+        if (typeof n !== 'string' || !n.trim()) continue;
+        out[sec].add(n.toLowerCase().trim());
+        const c = compactSkillKey(n);
+        if (c) out[sec].add(c);
+      }
+    }
+    return out;
+  })();
+
+  /** Union of [primary, ...secondaries] over the plan slots this section actually
+   *  delivered — the authoritative set of skills that were asked. */
+  const plannedAskedBySection = (() => {
+    const build = (sec: 'mth' | 'nth') => {
+      const raw = new Set<string>();
+      const compact = new Set<string>();
+      const rows = planRowsBySection[sec];
+      const delivered = deliveredMainCountBySection[sec];
+      if (rows.length === 0 || delivered <= 0) return { raw, compact };
+      // WHICH slots ran is matched by SKILL IDENTITY, not by position. The plan's
+      // `question_number` is the round-robin renumbered order produced by
+      // _apply_cross_priority_mix, which diverges from the ask order whenever a
+      // slot is consumed out of turn (auto-skip, swap, an opening HR slot). Taking
+      // "the first N slots" therefore credited a slot that was never asked —
+      // observed as 9/11 covered against only 8 skills in Question Analysis, the
+      // extra one being "Scripting in Python or JavaScript" from an unasked slot.
+      // This is the same order-independent join `applyPlanForSection` uses for the
+      // Question Analysis tab, so the two tabs now agree by construction.
+      const deliveredKeys = deliveredSkillKeysBySection[sec];
+      const matched = deliveredKeys.size > 0
+        ? rows.filter(r => {
+            const names = [
+              String(r?.primary_skill || ''),
+              ...(Array.isArray(r?.secondary_skills) ? r.secondary_skills : []),
+            ];
+            return names.some(n => typeof n === 'string' && n.trim() && (
+              deliveredKeys.has(n.toLowerCase().trim())
+              || deliveredKeys.has(compactSkillKey(n))
+            ));
+          }).slice(0, delivered)   // never credit more slots than questions delivered
+        // No per-question skill signal at all (legacy rows with neither
+        // assigned_skills nor topic): fall back to plan order.
+        : rows.slice(0, Math.min(delivered, rows.length));
+      for (const r of matched) {
+        const names = [
+          String(r?.primary_skill || ''),
+          ...(Array.isArray(r?.secondary_skills) ? r.secondary_skills : []),
+        ];
+        for (const n of names) {
+          if (typeof n !== 'string' || !n.trim()) continue;
+          raw.add(n.toLowerCase().trim());
+          const c = compactSkillKey(n);
+          if (c) compact.add(c);
+        }
+      }
+      return { raw, compact };
+    };
+    const built = { mth: build('mth'), nth: build('nth') };
+    // Diagnostic: the plan is the only lossless "was it asked" signal. When it is
+    // missing while clusters DO exist, coverage silently degrades to the stored
+    // history's representative topic (~1 skill per question) + the keyword scan.
+    // Legitimate causes: a section with 0 planned questions, a config saved
+    // before mth/nth_question_skill_map existed, or `special_instructions` not
+    // threaded into buildDashboardData by the calling tab.
+    for (const sec of ['mth', 'nth'] as const) {
+      const cfg = sec === 'mth' ? (cluster_config?.mth || []) : (cluster_config?.nth || []);
+      if (cfg.length > 0 && built[sec].raw.size === 0) {
+        console.warn(
+          `[Coverage] ${sec.toUpperCase()}: no Question-Distribution plan resolved ` +
+          `(planRows=${planRowsBySection[sec].length}, delivered=${deliveredMainCountBySection[sec]}) — ` +
+          `coverage falls back to skill_assessed_map / assigned_skills and may under-report.`,
+        );
+      }
+    }
+    return built;
+  })();
+
+  const mustHaveClusters = buildClustersFromConfig(
+    cluster_config?.mth || [],
+    eval_,
+    1,
+    plannedAskedBySection.mth,
+  );
+  const niceToHaveClusters = buildClustersFromConfig(
+    cluster_config?.nth || [],
+    eval_,
+    mustHaveClusters.length + 1,
+    plannedAskedBySection.nth,
+  );
+
+  // Section scores: prefer backend `section_question_avg` (simple average of
+  // per-question scores, 0-10 — drives the recruiter Pass/Fail per spec).
+  // Fall back to cluster-weighted derivation when backend hasn't supplied it.
+  const mthQAvg = eval_?.section_question_avg?.mth;
+  const nthQAvg = eval_?.section_question_avg?.nth;
+  const mthBackend = eval_?.section_scores?.mth?.score;
+  const nthBackend = eval_?.section_scores?.nth?.score;
+  const mustHaveAvg = (typeof mthQAvg === 'number')
+    ? truncate1(mthQAvg)
+    : (mustHaveClusters.length > 0
+        ? truncate1(mustHaveClusters.reduce((a, c) => a + c.clusterScore * c.weight / 100, 0))
+        : (typeof mthBackend === 'number' && mthBackend > 0 ? truncate1(mthBackend / 10) : 0));
+  const niceToHaveAvg = (typeof nthQAvg === 'number')
+    ? truncate1(nthQAvg)
+    : (niceToHaveClusters.length > 0
+        ? truncate1(niceToHaveClusters.reduce((a, c) => a + c.clusterScore * c.weight / 100, 0))
+        : (typeof nthBackend === 'number' && nthBackend > 0 ? truncate1(nthBackend / 10) : 0));
+  const hr = hrScoreFromEval(eval_);
+
+  // Determine which sections actually exist in this interview
+  const sectionsPresent = {
+    mustHave: mustHaveClusters.length > 0 || mustHaveAvg > 0,
+    niceToHave: niceToHaveClusters.length > 0 || niceToHaveAvg > 0,
+    hr: hr > 0 || !!eval_?.section_scores?.hr,
+  };
+
+  // Base weights — HR is excluded from scoring evaluation per product spec,
+  // so its base weight is 0. Remaining 100% splits between MTH and NTH.
+  // Renormalize to sum to 100 based on which sections actually exist.
+  const BASE_MTH = 70, BASE_NTH = 30, BASE_HR = 0;
+  const baseSum =
+    (sectionsPresent.mustHave   ? BASE_MTH : 0) +
+    (sectionsPresent.niceToHave ? BASE_NTH : 0) +
+    (sectionsPresent.hr         ? BASE_HR  : 0);
+  const weights = {
+    mustHave:   sectionsPresent.mustHave   && baseSum > 0 ? (BASE_MTH / baseSum) * 100 : 0,
+    niceToHave: sectionsPresent.niceToHave && baseSum > 0 ? (BASE_NTH / baseSum) * 100 : 0,
+    hr:         sectionsPresent.hr         && baseSum > 0 ? (BASE_HR  / baseSum) * 100 : 0,
+  };
+
+  // Final score = (MHS × w_mth + NHS × w_nth + HR × w_hr) — where weights are
+  // fractional (w/100). Each section score is 0-10, so × 10 at the end scales
+  // the total to 0-100. Round to 1 decimal.
+  const weightedSum =
+    mustHaveAvg   * (weights.mustHave   / 100) +
+    niceToHaveAvg * (weights.niceToHave / 100) +
+    hr            * (weights.hr         / 100);
+  const finalScore = Math.round(weightedSum * 100) / 10;
+
+  const summary = eval_?.interview_summary || {};
+  const rawRec = summary?.hiring_recommendation;
+  // Backend now emits `final_result: "Pass" | "Fail"` derived from MHS section
+  // average (≥6.0 → Pass). Treat it as the authoritative gate when available
+  // and map onto the existing recommendation enum (Pass → Hire, Fail → No Hire)
+  // so downstream UI/PDF rendering keep working without schema churn.
+  const backendFinal = (eval_?.final_result || '').toString().toLowerCase();
+  const recommendation: Recommendation =
+    backendFinal === 'pass' ? 'Hire'
+    : backendFinal === 'fail' ? 'No Hire'
+    : recommendationFromString(rawRec, finalScore);
+
+  const strengths: string[] = Array.isArray(summary?.key_strengths)
+    ? summary.key_strengths
+    : Array.isArray(eval_?.strengths) ? eval_.strengths : [];
+  const weaknesses: string[] = Array.isArray(summary?.key_concerns)
+    ? summary.key_concerns
+    : Array.isArray(eval_?.weaknesses) ? eval_.weaknesses : [];
+  const aiSummary: string = summary?.summary
+    || summary?.narrative_insight
+    || eval_?.narrative_insight
+    || eval_?.capability_score_reasoning
+    || '';
+
+  const dateISO = interview.completed_at || interview.created_at || '';
+  const dateStr = dateISO ? new Date(dateISO).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+
+  const modeNormalized = (interview.mode || '').toLowerCase();
+  const mode: 'Timed' | 'Conversational' = modeNormalized === 'fixed' ? 'Timed' : 'Conversational';
+
+  // ── Timed-mode doc-spec result (MHS section_question_avg ≥ 6.0 → Pass) ──
+  // backendFinal already normalised above ('pass'/'fail'/'') — prefer it.
+  // Fall back to recomputing locally so older sessions without `final_result`
+  // still render a Pass/Fail when MHS data is available.
+  const MHS_THRESHOLD = 6.0;
+  let finalResult: 'Pass' | 'Fail' | null = null;
+  if (backendFinal === 'pass') finalResult = 'Pass';
+  else if (backendFinal === 'fail') finalResult = 'Fail';
+  else if (typeof mthQAvg === 'number') {
+    finalResult = mthQAvg >= MHS_THRESHOLD ? 'Pass' : 'Fail';
+  }
+
+  const questionScoresRaw = (eval_?.question_scores || {}) as Record<string | number, number>;
+  const questionScores: Record<number, number> = {};
+  for (const [k, v] of Object.entries(questionScoresRaw)) {
+    const n = Number(k);
+    if (Number.isFinite(n) && typeof v === 'number') {
+      questionScores[n] = truncate1(v);
+    }
+  }
+
+  // Build skill → cluster priority map so the Question-by-Question breakdown
+  // shows the same P1/P2/P3 chip as the Skills Assessment Summary (same skill
+  // can't appear as P1 in one tab and P2 in another). Also collect the
+  // canonical (original-cased) JD skill name for each lowercased key so the
+  // per-Q breakdown can normalize the evaluator's (often abbreviated) topic
+  // strings back to the JD wording the rest of the UI uses.
+  const clusterPriorityBySkill: Record<string, Level> = {};
+  const clusterCanonicalNameBySkill: Record<string, string> = {};
+  for (const c of [...mustHaveClusters, ...niceToHaveClusters]) {
+    for (const s of c.skills) {
+      const key = (s.name || '').toLowerCase().trim();
+      if (key) {
+        clusterPriorityBySkill[key] = c.priority;
+        if (!clusterCanonicalNameBySkill[key]) clusterCanonicalNameBySkill[key] = s.name;
+      }
+    }
+  }
+  const perQuestionDetailsRaw = buildPerQuestionDetails(
+    eval_,
+    clusterPriorityBySkill,
+    clusterCanonicalNameBySkill,
+    conversation_transcript || [],
+  );
+
+  // ── HR alignment with the selected HR questions ────────────────────────
+  // Mirrors the Question Distribution popover: every selected HR question is
+  // one HR row, Opening ones first and Closing ones last, in list order.
+  //   * A Must-Have/Nice-to-Have row whose text IS a selected HR question
+  //     becomes that HR question. (The runtime files questions by plan
+  //     position, so the 2nd Opening HR question asked on Must-Have slot 1's
+  //     position arrived as a "Flask Framework" Must-Have row.)
+  //   * A selected HR question with no row at all gets a "Not Asked" row,
+  //     so ending the interview early never makes one disappear.
+  type HrBankEntry = { text: string; stage: 'opening' | 'closing' };
+  const hrBank: HrBankEntry[] = [];
+  for (const r of (rounds_config || [])) {
+    if (r?.enabled === false || String(r?.type || '').toLowerCase() !== 'hr') continue;
+    for (const q of (Array.isArray(r?.hr_questions) ? r.hr_questions : [])) {
+      const text = String((typeof q === 'string' ? q : q?.question_text) || '').trim();
+      if (!text) continue;
+      const rawStage = (typeof q === 'object' && q?.stage) || r?.hr_stage;
+      hrBank.push({ text, stage: rawStage === 'opening' ? 'opening' : 'closing' });
+    }
+  }
+  const hrToks = (s: string) =>
+    new Set(String(s || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2));
+  // Strong match only: the row covers >= 80% of the HR question's words, or
+  // the two texts are >= 45% alike overall (the runtime's HR match threshold).
+  const hrMatchScore = (rowText: string, bankText: string): number => {
+    const a = hrToks(rowText);
+    const b = hrToks(bankText);
+    if (!a.size || !b.size) return 0;
+    let inter = 0;
+    b.forEach(w => { if (a.has(w)) inter++; });
+    const coverage = inter / b.size;
+    const jaccard = inter / (a.size + b.size - inter);
+    return Math.max(coverage >= 0.8 ? coverage : 0, jaccard >= 0.45 ? jaccard : 0);
+  };
+  let perQuestionDetailsAligned: PerQuestionDetail[] = perQuestionDetailsRaw;
+  if (hrBank.length > 0) {
+    const claimed = new Map<number, PerQuestionDetail>();
+    const bankOf = new Map<PerQuestionDetail, number>();
+    // One-to-one, best score first, so two similar HR questions can't both be
+    // claimed by the one that was asked.
+    const claimGreedy = (rows: PerQuestionDetail[]) => {
+      const cands: Array<[number, PerQuestionDetail, number]> = [];
+      for (const row of rows) {
+        hrBank.forEach((b, i) => {
+          if (claimed.has(i)) return;
+          const s = hrMatchScore(row.question, b.text);
+          if (s > 0) cands.push([s, row, i]);
+        });
+      }
+      cands.sort((x, y) => y[0] - x[0]);
+      for (const [, row, i] of cands) {
+        if (claimed.has(i) || bankOf.has(row)) continue;
+        claimed.set(i, row);
+        bankOf.set(row, i);
+      }
+    };
+    claimGreedy(perQuestionDetailsRaw.filter(r => r.section === 'hr' && !r.notDelivered));
+    claimGreedy(perQuestionDetailsRaw.filter(r => r.section !== 'hr' && !r.notDelivered));
+    claimGreedy(perQuestionDetailsRaw.filter(r => r.section === 'hr' && r.notDelivered));
+
+    // Spoken but never recorded: End pressed after Bina asked a question but
+    // before its answer timer started, so no history row exists (the backend
+    // then reads it as un-reached). The transcript still holds Bina's turn —
+    // that question WAS asked, so show it as asked-but-not-answered, never
+    // "Not Asked".
+    const tx = (conversation_transcript || []).filter((m: any) =>
+      (m?.role === 'assistant' || m?.role === 'user')
+      && typeof m?.content === 'string'
+      && !m?.interstitial
+      && !m?.is_clarification);
+    const normTxt = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const spoken = new Map<number, { txIdx: number; text: string; answer: string }>();
+    const usedTx = new Set<number>();
+    hrBank.forEach((b, i) => {
+      const owner = claimed.get(i);
+      if (owner && !owner.notDelivered) return; // already shown as asked
+      let best = -1;
+      let bestScore = 0;
+      tx.forEach((m: any, ti: number) => {
+        if (m.role !== 'assistant' || usedTx.has(ti)) return;
+        const s = hrMatchScore(m.content, b.text);
+        if (s > bestScore) { bestScore = s; best = ti; }
+      });
+      if (best < 0) return;
+      usedTx.add(best);
+      const parts: string[] = [];
+      for (let k = best + 1; k < tx.length && tx[k].role === 'user'; k++) {
+        const t = String(tx[k].content || '').trim();
+        if (t) parts.push(t);
+      }
+      spoken.set(i, { txIdx: best, text: String(tx[best].content).trim(), answer: parts.join(' ') });
+    });
+    const spokenRow = (i: number, base?: PerQuestionDetail): PerQuestionDetail => {
+      const sp = spoken.get(i)!;
+      return {
+        ...(base || {}),
+        qNum: base?.qNum ?? 10000 + i,
+        section: 'hr',
+        question: sp.text,
+        answer: sp.answer,
+        responseType: sp.answer ? 'answered' : 'not_answered',
+        skipSource: '',
+        skills: [],
+        questionScore: 0,
+        isUnscored: true,
+        notDelivered: false,
+        hrStage: hrBank[i].stage,
+        hrBankIndex: i,
+      };
+    };
+
+    const out: PerQuestionDetail[] = [];
+    for (const row of perQuestionDetailsRaw) {
+      const bi = bankOf.get(row);
+      if (row.section === 'hr' && row.notDelivered && bi !== undefined && spoken.has(bi)) {
+        out.push(spokenRow(bi, row));
+        continue;
+      }
+      if (row.section !== 'hr') {
+        if (bi === undefined) { out.push(row); continue; }
+        // HR is review-only: no plan skills, no score.
+        out.push({
+          ...row,
+          section: 'hr',
+          skills: [],
+          questionScore: 0,
+          isUnscored: true,
+          displayOnlyQuestionScore: undefined,
+          bundledFollowUp: undefined,
+          scoreRationale: '',
+          hrStage: hrBank[bi].stage,
+          hrBankIndex: bi,
+        });
+        continue;
+      }
+      if (bi === undefined) {
+        // An un-reached HR row whose question is already shown as asked.
+        if (row.notDelivered && hrBank.some((b, i) => claimed.has(i) && hrMatchScore(row.question, b.text) > 0)) {
+          continue;
+        }
+        out.push(row);
+        continue;
+      }
+      out.push({ ...row, hrStage: hrBank[bi].stage, hrBankIndex: bi });
+    }
+    hrBank.forEach((b, i) => {
+      if (claimed.has(i)) return;
+      if (spoken.has(i)) { out.push(spokenRow(i)); return; }
+      out.push({
+        qNum: 10000 + i,
+        section: 'hr',
+        question: b.text,
+        answer: '',
+        responseType: 'not_asked',
+        skipSource: '',
+        skills: [],
+        questionScore: 0,
+        isUnscored: true,
+        notDelivered: true,
+        hrStage: b.stage,
+        hrBankIndex: i,
+      });
+    });
+    // Ask-order slot for a transcript-recovered row: just after the last
+    // recorded question Bina spoke before it.
+    for (const r of out) {
+      if (r.notDelivered || typeof r.hrBankIndex !== 'number' || !spoken.has(r.hrBankIndex)) continue;
+      const at = spoken.get(r.hrBankIndex)!.txIdx;
+      let prev: number | undefined;
+      for (const o of out) {
+        if (o === r || o.notDelivered || typeof o.askedOrder !== 'number') continue;
+        const k = normTxt(o.question);
+        const oi = tx.findIndex((m: any) => m.role === 'assistant' && normTxt(m.content) === k);
+        if (oi >= 0 && oi < at && (prev === undefined || o.askedOrder > prev)) prev = o.askedOrder;
+      }
+      r.askedOrder = prev !== undefined ? prev + 0.5 : r.askedOrder;
+    }
+    perQuestionDetailsAligned = out;
+  }
+
+  // ── Strict Question-Distribution alignment ─────────────────────────────
+  // Recruiter spec (2026-05-20): the Question Analysis tab MUST show the
+  // exact set of skills configured for each slot in the Question
+  // Distribution UI. No keyword-scan extras, no evaluator topic extras,
+  // no leftovers from older buggy `assigned_skills` writes.
+  //
+  // Source: `special_instructions.mth_question_skill_map[]` and
+  // `nth_question_skill_map[]` — same DB-backed plan the Question
+  // Distribution UI reads. Each row carries `primary_skill` +
+  // `secondary_skills` for that slot.
+  //
+  // Mapping: history rows are bucketed by section, sorted by qNum
+  // ascending; the i-th row in MTH maps to MTH slot (i+1), same for NTH.
+  // For HR, no skill plan exists (HR is question-bank-text-based), so
+  // HR rows keep their existing (likely empty) skills list.
+  //
+  // When `special_instructions` is missing/malformed or no plan exists
+  // for a slot, the row's existing `skills` is preserved as fallback —
+  // older interviews predate this snapshot and shouldn't regress.
+  //
+  // `parsedSpecialInstructions` + `planRowsBySection` are hoisted above the
+  // cluster build (Cluster Coverage consumes the same plan) — reused here.
+  const buildSkillsFromPlanRow = (row: any): PerQuestionSkill[] => {
+    if (!row) return [];
+    const primary = String(row?.primary_skill || '').trim();
+    const secs = Array.isArray(row?.secondary_skills)
+      ? row.secondary_skills.filter((s: any) => typeof s === 'string' && s.trim())
+      : [];
+    const names: string[] = [];
+    if (primary) names.push(primary);
+    for (const s of secs) names.push(s);
+    // Case-insensitive dedupe.
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const n of names) {
+      const k = n.toLowerCase().trim();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      unique.push(n);
+    }
+    return unique.map(name => {
+      const priority = clusterPriorityBySkill[name.toLowerCase().trim()] ?? null;
+      return {
+        name,
+        priority,
+        weight: priorityWeight(priority),
+        score: 0,
+        note: '',
+      };
+    });
+  };
+
+  // ── Per-section cap: enforce the configured plan size ────────────────
+
+  // ── Per-section cap: enforce the configured plan size ────────────────
+  // Recruiter spec (2026-05-20): Question Analysis shows EXACTLY the
+  // planned questions — no excess rows from inflated counters, burst
+  // re-emissions, or evaluator follow-up bookkeeping. If the backend
+  // recorded N > planned for a section (defensive against any residual
+  // drift after Phase 1+2 deploy), trim to the first `planned` entries
+  // per section in chronological order (qNum ascending).
+  //
+  // Cap source priority:
+  //   1. `eval_.round_tracking[].planned_questions` (most authoritative —
+  //      reflects what the runtime actually targeted).
+  //   2. `rounds_config[].planned_questions` (config snapshot fallback).
+  // When neither has a positive value for a section, that section is
+  // left uncapped (won't filter anything out by accident).
+  const sectionCap: { mth: number | null; nth: number | null; hr: number | null } = {
+    mth: null, nth: null, hr: null,
+  };
+  const sectionKey = (rt: string): keyof typeof sectionCap | null => {
+    const t = (rt || '').toLowerCase();
+    if (t === 'must_have_skills') return 'mth';
+    if (t === 'nice_to_have_skills') return 'nth';
+    if (t === 'hr') return 'hr';
+    return null;
+  };
+  // SUM per section: HR is split into two rounds of the same type (Opening HR +
+  // Closing HR). Overwriting kept only the last round's count, so with 2
+  // opening + 1 closing the HR cap was 1 and the trim below dropped the
+  // second asked question and every "Not Asked" HR row.
+  const trackedCap: typeof sectionCap = { mth: null, nth: null, hr: null };
+  for (const rt of (eval_?.round_tracking || [])) {
+    const k = sectionKey(rt?.type);
+    if (!k) continue;
+    const pq = Number(rt?.planned_questions);
+    if (Number.isFinite(pq) && pq > 0) trackedCap[k] = (trackedCap[k] ?? 0) + pq;
+  }
+  const configCap: typeof sectionCap = { mth: null, nth: null, hr: null };
+  for (const r of (rounds_config || [])) {
+    if (r?.enabled === false) continue;
+    const k = sectionKey(r?.type);
+    if (!k) continue;
+    const pq = Number(r?.planned_questions);
+    if (Number.isFinite(pq) && pq > 0) configCap[k] = (configCap[k] ?? 0) + pq;
+  }
+  for (const k of ['mth', 'nth', 'hr'] as const) {
+    sectionCap[k] = trackedCap[k] ?? configCap[k]; // round_tracking wins when present
+  }
+  // HR rows are already one per selected HR question (alignment above) —
+  // trimming them could only drop a real question.
+  if (hrBank.length > 0) sectionCap.hr = null;
+  // HR order = Question Distribution order: Opening (list order), then rows
+  // not matched to the list (ask order), then Closing (list order).
+  const hrOrderKey = (r: PerQuestionDetail): [number, number] => {
+    if (typeof r.hrBankIndex !== 'number') return [1, r.qNum];
+    return [r.hrStage === 'opening' ? 0 : 2, r.hrBankIndex];
+  };
+  const perQuestionDetails: PerQuestionDetail[] = (() => {
+    const buckets: Record<'mth' | 'nth' | 'hr', PerQuestionDetail[]> = { mth: [], nth: [], hr: [] };
+    for (const row of perQuestionDetailsAligned) {
+      buckets[row.section].push(row);
+    }
+    // Chronological order (qNum ascending) so the first N planned are kept,
+    // not arbitrary tail entries from burst/duplicate noise.
+    for (const key of ['mth', 'nth', 'hr'] as const) {
+      if (key === 'hr' && hrBank.length > 0) {
+        buckets.hr.sort((a, b) => {
+          const [ga, ia] = hrOrderKey(a);
+          const [gb, ib] = hrOrderKey(b);
+          return ga - gb || ia - ib;
+        });
+      } else {
+        buckets[key].sort((a, b) => a.qNum - b.qNum);
+      }
+      const cap = sectionCap[key];
+      if (cap !== null && buckets[key].length > cap) {
+        console.warn(
+          `[QuestionAnalysis] ${key.toUpperCase()} has ${buckets[key].length} rows but plan = ${cap}; trimming excess.`,
+        );
+        buckets[key] = buckets[key].slice(0, cap);
+      }
+    }
+
+    // ── Override skills with the Question Distribution plan ─────────
+    // For each row in MTH/NTH, replace `skills` with the planned slot's
+    // [primary, ...secondaries] from special_instructions. Scores are
+    // preserved by matching plan-skill names against the original row's
+    // skills (case-insensitive); any plan skill not found in the row
+    // falls back to the row's questionScore with the Q badge — same
+    // policy as the per-skill score path.
+    const applyPlanForSection = (
+      section: 'mth' | 'nth',
+      planRows: any[],
+      rows: PerQuestionDetail[],
+      // Retained for call-site compatibility; the join no longer uses a
+      // positional offset (the index join it fed was the wrong-slot source).
+      _sectionOffset: number = 0,
+    ): PerQuestionDetail[] => {
+      if (planRows.length === 0) return rows;
+      // ONE plan slot ↔ ONE question row. `usedSlots` tracks slots already
+      // claimed so a slot's skills can NEVER be painted onto more than one
+      // question — that reuse was the "same skill repeats across many questions"
+      // bug. Slots bind by skill-identity first (order-independent), else by the
+      // NEXT-UNUSED slot in plan order — both mirror the Question Distribution
+      // popover (which the recruiter confirms is correct) and cannot duplicate
+      // or cross-pull a slot.
+      const usedSlots = new Set<any>();
+      const slotOfRow = new Map<PerQuestionDetail, number>();
+      const mapped = rows.map((row) => {
+        // Pair each row with its plan slot by SKILL IDENTITY — NOT by positional
+        // arithmetic. `row.qNum` is the backend GLOBAL ask-order question_number,
+        // while the plan's `question_number` is the round-robin (P1/P2/P3)
+        // renumbered order from _apply_cross_priority_mix. Those two axes diverge
+        // whenever a global slot is consumed before/among the skill questions (an
+        // opening HR/greeting slot, a skip, or a follow-up) or a slot is asked out
+        // of renumbered order — so the old `globalQ - sectionOffset` →
+        // planByQnum.get(slotNum) join returned a DIFFERENT slot's skill (e.g. the
+        // STLC question showing Q3's "communication" skill). The backend already
+        // bound the CORRECT plan skills to this row (assigned_skills /
+        // question_skill_map on the SAME ask-order axis as the text), so recover
+        // the slot by best skill-set overlap, which is order-independent and
+        // deterministic because plan slots carry disjoint skills.
+        const rowSkillSet = new Set(
+          row.skills.map(s => String(s?.name || '').toLowerCase().trim()).filter(Boolean),
+        );
+        let planRow: any = null;
+        if (rowSkillSet.size > 0) {
+          let bestScore = 0;
+          for (const pr of planRows) {
+            if (usedSlots.has(pr)) continue; // a slot binds to only one question
+            const prPrimary = String(pr?.primary_skill || '').toLowerCase().trim();
+            const prSecs = (Array.isArray(pr?.secondary_skills) ? pr.secondary_skills : [])
+              .map((s: any) => String(s || '').toLowerCase().trim())
+              .filter(Boolean);
+            let overlap = 0;
+            for (const n of [prPrimary, ...prSecs]) {
+              if (n && rowSkillSet.has(n)) overlap++;
+            }
+            // Weight a primary-skill match higher so the owning slot wins ties.
+            const scoreVal = overlap * 2 + (prPrimary && rowSkillSet.has(prPrimary) ? 1 : 0);
+            if (scoreVal > bestScore) {
+              bestScore = scoreVal;
+              planRow = pr;
+            }
+          }
+        }
+        // Fallback (row skills didn't overlap any UNUSED slot — zero-overlap /
+        // legacy rows): take the NEXT UNUSED plan slot in plan order.
+        // Deterministic, unique, and matches the Distribution popover. The old
+        // `globalQ - sectionOffset` / planRows[idx] join pulled an arbitrary,
+        // possibly-already-shown slot — the wrong/duplicate-mapping source.
+        if (!planRow) {
+          planRow = planRows.find(pr => !usedSlots.has(pr)) ?? null;
+        }
+        if (!planRow) return row;
+        usedSlots.add(planRow); // consume: never reuse this slot for another row
+        slotOfRow.set(row, planRows.indexOf(planRow));
+        const planSkills = buildSkillsFromPlanRow(planRow);
+        if (planSkills.length === 0) return row;
+        // Index existing per-skill scores from the original row.
+        const existingByName: Record<string, PerQuestionSkill> = {};
+        for (const s of row.skills) {
+          existingByName[s.name.toLowerCase().trim()] = s;
+        }
+        const rowUndelivered = !!row.notDelivered;
+        const isSkippedRow = !rowUndelivered && (
+          (row.skills.some(s => s.is_skipped)) ||
+          (!row.answer || !row.answer.trim())
+        );
+        let matchCount = 0;
+        const replacedSkills: PerQuestionSkill[] = planSkills.map(ps => {
+          const match = existingByName[ps.name.toLowerCase().trim()];
+          if (match) {
+            matchCount++;
+            // Preserve original per-skill score + flags exactly.
+            return { ...match, priority: ps.priority, weight: ps.weight };
+          }
+          // Un-reached question, plan skill with no scored row → 0, not
+          // demonstrated anywhere (never a "Skipped" badge or Q-fallback).
+          if (rowUndelivered) {
+            return { ...ps, score: 0, not_delivered: true };
+          }
+          // No direct match on a delivered question → 0 with Skipped badge for a
+          // skipped turn, otherwise "Not evaluated" (is_unscored). The old
+          // question-level "Q" fallback was removed (it fabricated numbers).
+          if (isSkippedRow) {
+            return { ...ps, score: 0, is_skipped: true };
+          }
+          return { ...ps, score: 0, is_unscored: true };
+        });
+        // If NONE of the plan slot's skills matched what the evaluator actually
+        // scored on this question, the plan-binding picked the wrong slot (the
+        // eval scored the answer under different skill names than this plan
+        // slot). Replacing would show every skill "Not evaluated" while the
+        // question keeps a positive score — a contradiction. KEEP the row's real
+        // scored skills instead, so the score and the skill rows always agree.
+        const rowHasRealScores = row.skills.some(s => !s.is_unscored && !s.is_skipped);
+        if (matchCount === 0 && rowHasRealScores) {
+          return row;
+        }
+        // The question score stays the backend's value — swapping in the plan
+        // slot's skill rows never recomputes it.
+        return { ...row, skills: replacedSkills };
+      });
+      // Every planned slot is one row: a slot no row took (e.g. its position
+      // was used by an HR question, now moved back to HR) is shown "Not Asked"
+      // instead of disappearing, up to the section's planned count.
+      const slotIdx = new Map<PerQuestionDetail, number>();
+      mapped.forEach((r, i) => {
+        const s = slotOfRow.get(rows[i]);
+        if (s !== undefined) slotIdx.set(r, s);
+      });
+      const target = sectionCap[section] ?? planRows.length;
+      planRows.forEach((pr, i) => {
+        if (usedSlots.has(pr) || mapped.length >= target) return;
+        const planSkills = buildSkillsFromPlanRow(pr);
+        if (planSkills.length === 0) return;
+        const row: PerQuestionDetail = {
+          qNum: 10000 + i,
+          section,
+          question: `(Not asked — planned question on ${planSkills[0].name}; interview ended before it was reached)`,
+          answer: '',
+          responseType: 'not_asked',
+          skipSource: '',
+          skills: planSkills.map(ps => ({ ...ps, score: 0, not_delivered: true })),
+          questionScore: 0,
+          notDelivered: true,
+        };
+        slotIdx.set(row, i);
+        mapped.push(row);
+      });
+      // Asked rows keep ask order; un-reached rows follow in plan order, like
+      // the Question Distribution list.
+      const delivered = mapped.filter(r => !r.notDelivered);
+      const undelivered = mapped
+        .filter(r => r.notDelivered)
+        .map((r, i) => ({ r, i }))
+        .sort((a, b) =>
+          (slotIdx.get(a.r) ?? Infinity) - (slotIdx.get(b.r) ?? Infinity) || a.i - b.i)
+        .map(x => x.r);
+      return [...delivered, ...undelivered];
+    };
+    // MHS offset = 0 (starts at global Q1).
+    // NHS offset = planned MHS count so slot 9 → section-local 1, etc.
+    const mthOffset = 0;
+    const nthOffset = sectionCap.mth ?? 0;
+    buckets.mth = applyPlanForSection('mth', planRowsBySection.mth, buckets.mth, mthOffset);
+    buckets.nth = applyPlanForSection('nth', planRowsBySection.nth, buckets.nth, nthOffset);
+    // HR rows keep their existing skills (HR is bank-text-based; no plan).
+
+    // ── Renumber qNum to clean 1-based section-local index ──────────
+    // Recruiter spec 2026-05-21: Question Analysis Q-numbers must
+    // match the Question Distribution UI exactly — Q1-Q8 in MTH,
+    // Q1-Q4 in NTH, Q1-Q3 in HR. Previous behavior used `_historyIdx`
+    // (raw history-array position), which produced gaps like
+    // "MTH Q1, Q2, Q3, Q4, Q5, Q6, Q15, Q16" when buffer-mode rows
+    // crept into the data (observed: kanimozhi's session, 21 rows
+    // for a 15-Q interview with q_nums 1-22). After sort+cap, the
+    // displayed slot numbers should mirror the plan slot numbers.
+    // This also makes Analysis Q5 = Question Distribution slot 5,
+    // so the recruiter cross-references map 1:1.
+    //
+    // Interview-wide ask order (askedNum) is ranked BEFORE the renumber, from
+    // the history position when the builder stamped one, else the builder's
+    // chronological qNum. Un-reached rows rank after every asked row.
+    // Un-reached rows follow in Question Distribution order: Opening HR, MHS,
+    // NHS, Closing HR (then each section's own order), not by raw qNum.
+    const distGroup = (r: PerQuestionDetail) =>
+      r.section === 'mth' ? 1 : r.section === 'nth' ? 2 : r.hrStage === 'opening' ? 0 : 3;
+    const ranked = [...buckets.mth, ...buckets.nth, ...buckets.hr]
+      .map((row, i) => ({ row, i }))
+      .sort((a, b) =>
+        Number(!!a.row.notDelivered) - Number(!!b.row.notDelivered)
+        || (a.row.notDelivered
+          ? distGroup(a.row) - distGroup(b.row)
+          : (a.row.askedOrder ?? a.row.qNum) - (b.row.askedOrder ?? b.row.qNum))
+        || a.i - b.i);
+    const askedNumOf = new Map<PerQuestionDetail, number>();
+    ranked.forEach(({ row }, rank) => askedNumOf.set(row, rank + 1));
+    for (const key of ['mth', 'nth', 'hr'] as const) {
+      buckets[key] = buckets[key].map((row, idx) => ({
+        ...row,
+        qNum: idx + 1,
+        askedNum: askedNumOf.get(row),
+        // Never asked → never scored (older evaluations stored a recovered
+        // score on these slots). Adds 0 to its section's planned-count average.
+        ...(row.notDelivered ? { questionScore: 0 } : {}),
+      }));
+    }
+
+    return [...buckets.mth, ...buckets.nth, ...buckets.hr];
+  })();
+
+  // ── Skip-reason annotation ──────────────────────────────────────────────
+  // For questions with no real answer, attach HOW it was skipped (candidate
+  // "Next Question" vs "Are you there?" silence vs timer) so the Question
+  // Analysis answer block can differentiate them, matching the Transcript tab.
+  // Same derivation (buildSkipReasoner): transcript-sequence first, skip_source
+  // as enhancement. "answered" is decided here from the row's answer text +
+  // responseType, mirroring EvaluationDashboardV2's noRealAnswer rule.
+  {
+    const _reasoner = buildSkipReasoner(conversation_transcript || [], (eval_?.question_history as any[]) || []);
+    for (const _row of perQuestionDetails) {
+      const _rt = (_row.responseType || '').toLowerCase();
+      const _ans = (_row.answer || '').trim();
+      const _noRealAnswer = !_ans
+        || _ans.toLowerCase() === '[skipped]'
+        || ['skipped', 'not_answered', 'timeout', 'low_coverage', 'idk'].includes(_rt);
+      if (_noRealAnswer) {
+        const _reason = _reasoner(_row.question || '', false);
+        if (_reason) _row.skipReason = _reason;
+      }
+    }
+  }
+
+  // ── Clarification annotation ────────────────────────────────────────────
+  // Attach the clarification turns ("Clarify"/CL1, CL2…) that fired within
+  // each question's slot, derived from the raw conversation_transcript and
+  // grouped under their parent question — exactly how the Transcript tab
+  // surfaces them. Without this the Question Analysis tab silently dropped
+  // every clarification (it builds from question_history, which has no
+  // clarification rows). Match by question text (fuzzy, like the skip
+  // reasoner) so plan-remapped skills don't break the association.
+  {
+    const _getClar = buildClarificationsByQuestion(conversation_transcript || []);
+    for (const _row of perQuestionDetails) {
+      const _clars = _getClar(_row.question || '');
+      if (_clars.length > 0) _row.clarifications = _clars;
+    }
+  }
+
+  // ── Derive ALL scores from perQuestionDetails (single source of truth) ──
+  // Question Analysis is always correct because it aligns each question's
+  // skills/scores to the saved distribution plan. Overview, Eval Report,
+  // and Skill Breakdown used to pull from skill_scores_map / evaluations[]
+  // which don't align to the plan — causing the "Overview wrong, QA right"
+  // discrepancy. Rebuilding everything from perQuestionDetails guarantees
+  // all four tabs show identical numbers.
+
+  // 1. Per-skill score map — take the first non-skipped/non-unscored score
+  //    for each skill; fall back to the first occurrence if all are skipped.
+  const qaSkillScore = new Map<string, number>();
+  for (const qRow of perQuestionDetails) {
+    for (const sk of qRow.skills) {
+      const key = (sk.name || '').toLowerCase().trim();
+      if (!key) continue;
+      if (!qaSkillScore.has(key)) {
+        // Seed with whatever is here; will be upgraded by a good score below.
+        qaSkillScore.set(key, sk.is_unscored || sk.is_skipped ? 0 : (sk.score ?? 0));
+      } else if (!sk.is_unscored && !sk.is_skipped && sk.score > 0) {
+        // Overwrite with the first real score we encounter.
+        qaSkillScore.set(key, sk.score);
+      }
+    }
+  }
+
+  // 2. Rebuild cluster skill scores and cluster averages from QA map.
+  const rebuildClustersFromQA = (clusters: Cluster[]): Cluster[] =>
+    clusters.map(cluster => {
+      const updatedSkills: Skill[] = cluster.skills.map(sk => {
+        const qaScore = qaSkillScore.get((sk.name || '').toLowerCase().trim());
+        if (typeof qaScore !== 'number') return sk;
+        // Take the SCORE only — never the `asked` flag. A positive score can
+        // come from RECOVERY: `_append_undelivered_plan_slots` emits a row for
+        // every planned question the interview never reached, and each of its
+        // skills is scored by whole-interview recovery ("Recovered from Q3").
+        // That is real evidence, but it is NOT coverage — no question probing
+        // that skill was ever delivered to the candidate.
+        //
+        // `sk.asked` is already the delivered-only truth (buildClustersFromConfig
+        // resolves it from the Question Distribution plan restricted to DELIVERED
+        // slots, the backend's skill_assessed_map, and at-ask-time assigned_skills
+        // on delivered history rows — all three skip `not_asked` padding). ORing
+        // in `qaScore > 0` overrode that and marked every recovered skill Covered:
+        // an interview that delivered 5 of 10 MHS questions reported 23/24 skills
+        // (96%) covered, with only the one recovered-at-0 skill (ISTQB) left as
+        // Not Covered. Undelivered questions belong in Question Analysis — where
+        // they show as "Not Delivered" with their mapped skills and score
+        // rationale — not in the coverage counts.
+        return { ...sk, score: qaScore };
+      });
+      const scoredSkills = updatedSkills.filter(sk => sk.score > 0);
+      const newClusterScore = scoredSkills.length > 0
+        ? truncate1(scoredSkills.reduce((sum, sk) => sum + sk.score, 0) / scoredSkills.length)
+        : 0;
+      return { ...cluster, skills: updatedSkills, clusterScore: newClusterScore };
+    });
+
+  const mustHaveClustersQA  = rebuildClustersFromQA(mustHaveClusters);
+  const niceToHaveClustersQA = rebuildClustersFromQA(niceToHaveClusters);
+
+  // 3. Section averages = simple average of every question that was evaluated
+  //    (not isUnscored). MUST match QuestionsView's per-section math exactly,
+  //    otherwise the headline numbers in Overview / Skill Breakdown / Eval
+  //    Report diverge from the per-Q badges the recruiter sees in Question
+  //    Analysis. The old `questionScore > 0` filter dropped answered questions
+  //    that scored a hard 0.0, inflating these tabs relative to Q Analysis.
+  const mthQARows = perQuestionDetails.filter(q => q.section === 'mth' && !q.isUnscored);
+  const nthQARows = perQuestionDetails.filter(q => q.section === 'nth' && !q.isUnscored);
+
+  // Section average = Σ(scored question scores) ÷ PLANNED question count — the
+  // EXACT denominator QuestionsView uses (Math.max(plannedCounts, scoredRows)),
+  // the backend `capability_score` (= section avg ÷ planned × 10, the score the
+  // Results list shows), and backend `_compute_section_scores`. It must match
+  // ALL of those or the headline numbers diverge across views.
+  //
+  // WHY THIS CHANGED (2026-08-14): this used to prefer the backend
+  // `section_question_avg` / divide by the ANSWERED count. That put the Eval
+  // Report headline on a ÷ANSWERED basis (e.g. 4.33 → Match 43%) while the
+  // Question Analysis section score and the Results-list score were already on
+  // ÷PLANNED (e.g. 17.5 → 18%). Same candidate, two different scores. Everything
+  // is now ÷PLANNED: un-reached / unanswered questions count as 0 and do NOT
+  // shrink the denominator (product decision — ending early or skipping cannot
+  // inflate the section score by hiding the gaps). `section_question_avg` is no
+  // longer preferred because it carries the old ÷ANSWERED denominator.
+  const mthPlannedDenom = Math.max(plannedCounts?.mustHave || 0, mthQARows.length);
+  const mustHaveAvgQA = mthPlannedDenom > 0
+    ? truncate1(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthPlannedDenom)
+    : mustHaveAvg; // keep original if QA produced no scored rows (old sessions)
+
+  const nthPlannedDenom = Math.max(plannedCounts?.niceToHave || 0, nthQARows.length);
+  const niceToHaveAvgQA = nthPlannedDenom > 0
+    ? truncate1(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthPlannedDenom)
+    : niceToHaveAvg;
+
+  // 4. Final score from QA-derived section averages.
+  //    TIMED mode: the headline "Match Score" is Must-Have Section Score ×10
+  //    ONLY — Nice-to-Have is informational and HR isn't scored, per the
+  //    timed-eval spec. This makes the report headline equal the backend's
+  //    stored score shown in the Results list (both MHS×10), fixing the
+  //    36% (list) vs 45% (report) mismatch. Conversational mode keeps the
+  //    section-weighted blend.
+  const weightedSumQA =
+    mustHaveAvgQA   * (weights.mustHave   / 100) +
+    niceToHaveAvgQA * (weights.niceToHave / 100) +
+    hr              * (weights.hr         / 100);
+  // PARITY GUARD (invite-list % === Results %): the invite popup shows
+  // Math.round(capability_score). The Results headline MUST equal it, so when
+  // the backend stored capability_score we use that SAME value verbatim rather
+  // than an independent recompute that can cross a .5 rounding boundary and
+  // read 20 vs 21. Fall back to the QA-derived recompute only for legacy evals
+  // that never stored capability_score. (capability_score is already on the
+  // 0-100 scale = MHS section avg ÷ planned × 10, so it is scale-identical.)
+  const _recomputedFinalQA = (mode === 'Timed' && sectionsPresent.mustHave)
+    ? Math.round(mustHaveAvgQA * 100) / 10
+    : Math.round(weightedSumQA * 100) / 10;
+  const finalScoreQA = (typeof eval_?.capability_score === 'number')
+    ? eval_.capability_score
+    : _recomputedFinalQA;
+
+  // Headline Must-Have Section Score. The backend's stored
+  // `section_question_avg.mth` is AUTHORITATIVE — it is the exact value the
+  // Results/invite list shows (× 10) and the one Pass/Fail is gated on. The
+  // frontend `mustHaveAvgQA` is an independent per-skill recompute that can
+  // drift by ~0.1 (e.g. backend 6.61 vs recompute 6.50 → list 66% vs report
+  // 65%), so for the HEADLINE we display the backend value verbatim when
+  // present (Timed mode) and fall back to the recompute only for legacy evals
+  // that never stored it. The per-Q recompute is still used for the Question
+  // Analysis tab's per-question badges. (2026-08-19)
+  const _backendMth = eval_?.section_question_avg?.mth;
+  const mustHaveHeadline = (mode === 'Timed' && typeof _backendMth === 'number')
+    ? _backendMth
+    : mustHaveAvgQA;
+
+  // 5. Pass/Fail from the authoritative MHS average (prefer backend final).
+  let finalResultQA: 'Pass' | 'Fail' | null = null;
+  if (!isPartialEval) {
+    if (backendFinal === 'pass') finalResultQA = 'Pass';
+    else if (backendFinal === 'fail') finalResultQA = 'Fail';
+    else if (mustHaveHeadline > 0) finalResultQA = mustHaveHeadline >= MHS_THRESHOLD ? 'Pass' : 'Fail';
+    else finalResultQA = finalResult;
+  }
+
+  return {
+    candidate: {
+      name: candidate.name,
+      role: candidate.role || 'Candidate',
+      email: candidate.email,
+    },
+    interview: {
+      mode,
+      duration: formatDurationMinutes(eval_?.duration_minutes || 0),
+      date: dateStr,
+    },
+    isPartialEvaluation: isPartialEval,
+    scores: {
+      mustHave:   truncate1(mustHaveHeadline),
+      niceToHave: truncate1(niceToHaveAvgQA),
+      hr:         truncate1(hr),
+      final:      finalScoreQA,
+    },
+    weights: {
+      mustHave: Math.round(weights.mustHave * 100) / 100,
+      niceToHave: Math.round(weights.niceToHave * 100) / 100,
+      hr: Math.round(weights.hr * 100) / 100,
+    },
+    sectionsPresent,
+    strengths,
+    weaknesses,
+    aiSummary,
+    recommendation,
+    mustHaveClusters:  mustHaveClustersQA,
+    niceToHaveClusters: niceToHaveClustersQA,
+    interviewResponses: buildInterviewResponses(eval_),
+    ...countQuestions(eval_),
+    finalResult: finalResultQA,
+    mhsThreshold: MHS_THRESHOLD,
+    questionScores,
+    perQuestionDetails,
+    plannedCounts,
+  };
+}
