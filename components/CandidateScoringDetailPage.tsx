@@ -3193,7 +3193,7 @@ Best regards`);
                     scoring={{
                       allowOverqualified: jdDetails.allow_overqualified,
                       jobHoppingEnabled: jdDetails.job_hopping_enabled,
-                      overqualifiedNoNote: 'Experience above the maximum of the range fails Experience',
+                      overqualifiedNoNote: 'Experience more than 3 years above the maximum fails Experience',
                     }}
                     aiExtracted={jdDetails.creation_method === 'ai_generated'}
                     defaultOpen
