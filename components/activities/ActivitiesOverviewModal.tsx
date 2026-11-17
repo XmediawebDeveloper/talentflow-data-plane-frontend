@@ -128,12 +128,19 @@ export default function ActivitiesOverviewModal({
   const curPage = Math.min(page, lastPage);
   const pageRows = list.slice((curPage - 1) * perPage, curPage * perPage);
 
-  const manageable = list.filter(r => r.canManage);
+  /* A job can be ticked only when a bulk action applies to it: cancel (still
+     running) or Send again / Re-score (has failed / cancelled rows). Select
+     All and the checkbox column hide when no job qualifies. */
+  const actionable = (r: ActivityRow) => r.canManage && (r.running || r.retryable > 0);
+  const manageable = list.filter(actionable);
+  const canSelect = mine.some(actionable);
   const allPicked = manageable.length > 0 && manageable.every(r => picked.has(r.key));
   const toggleAll = () => setPicked(allPicked ? new Set() : new Set(manageable.map(r => r.key)));
   const toggle = (key: string) => setPicked(prev => { const nx = new Set(prev); if (nx.has(key)) nx.delete(key); else nx.add(key); return nx; });
 
-  const pickedRows = mine.filter(r => picked.has(r.key));
+  /* Only ticks that still apply: a job that finished cleanly while ticked
+     drops out instead of leaving a stale "1 selected". */
+  const pickedRows = mine.filter(r => picked.has(r.key) && actionable(r));
   const retryRows = pickedRows.filter(r => r.retryable > 0 && !r.running);
   const retryCount = retryRows.reduce((t, r) => t + r.retryable, 0);
   const cancelRows = pickedRows.filter(r => r.running);
@@ -283,17 +290,19 @@ export default function ActivitiesOverviewModal({
 
           {/* toolbar */}
           <div className="flex flex-wrap items-center gap-2">
-            <label className={`inline-flex h-9 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] pl-[11px] pr-3 text-sm ${manageable.length ? '' : 'opacity-50'}`}>
-              <input type="checkbox" className="tf-checkbox" checked={allPicked} disabled={!manageable.length} onChange={toggleAll} aria-label="Select all jobs" />
-              Select All <span className="tf-meta">({n(manageable.length)})</span>
-            </label>
+            {canSelect && (
+              <label className={`inline-flex h-9 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] pl-[11px] pr-3 text-sm ${manageable.length ? '' : 'opacity-50'}`}>
+                <input type="checkbox" className="tf-checkbox" checked={allPicked} disabled={!manageable.length} onChange={toggleAll} aria-label="Select all jobs" />
+                Select All <span className="tf-meta">({n(manageable.length)})</span>
+              </label>
+            )}
             <label className="flex h-9 min-w-[12rem] flex-1 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 sm:max-w-xs">
               <Search className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
               <input value={q} onChange={e => { setQ(e.target.value); reset(); }} placeholder="Search JD ID or job…" className="w-full bg-transparent text-sm outline-none" aria-label="Search jobs" />
             </label>
-            {picked.size > 0 && (
+            {pickedRows.length > 0 && (
               <div className="ml-auto flex flex-wrap items-center gap-2">
-                <span className="tf-meta">{picked.size} selected</span>
+                <span className="tf-meta">{pickedRows.length} selected</span>
                 {retryCount > 0 && (
                   <Button variant="primary" size="sm" icon={<RotateCcw className="h-3.5 w-3.5" />} onClick={() => setConfirmRetry(retryRows)}>
                     {m.again} ({n(retryCount)})
@@ -314,9 +323,11 @@ export default function ActivitiesOverviewModal({
             <table className="w-full min-w-[880px] text-left">
               <thead>
                 <tr className="bg-[var(--surface)]">
-                  <th className="w-8 px-3 py-2">
-                    <input type="checkbox" className="tf-checkbox" checked={allPicked} disabled={!manageable.length} onChange={toggleAll} aria-label="Select all jobs" />
-                  </th>
+                  {canSelect && (
+                    <th className="w-8 px-3 py-2">
+                      <input type="checkbox" className="tf-checkbox" checked={allPicked} disabled={!manageable.length} onChange={toggleAll} aria-label="Select all jobs" />
+                    </th>
+                  )}
                   <th className="tf-th px-3 py-2">S.No</th>
                   <th className="tf-th px-3 py-2">Job</th>
                   <th className="tf-th px-3 py-2">Version</th>
@@ -335,10 +346,14 @@ export default function ActivitiesOverviewModal({
                   const pct = pctOf(r);
                   return (
                     <tr key={r.key} className={picked.has(r.key) ? 'bg-brand-blue/[0.04]' : 'hover:bg-[var(--surface)]'}>
-                      <td className="px-3 py-2">
-                        <input type="checkbox" className="tf-checkbox" checked={picked.has(r.key)} disabled={!r.canManage} onChange={() => toggle(r.key)}
-                          aria-label={`Select ${r.code ?? ''} ${r.title}`} title={r.canManage ? undefined : 'Only the person who started it (or an admin) can change it'} />
-                      </td>
+                      {canSelect && (
+                        <td className="px-3 py-2">
+                          {actionable(r) && (
+                            <input type="checkbox" className="tf-checkbox" checked={picked.has(r.key)} onChange={() => toggle(r.key)}
+                              aria-label={`Select ${r.code ?? ''} ${r.title}`} />
+                          )}
+                        </td>
+                      )}
                       <td className="tf-td px-3 py-2 tabular-nums">{(curPage - 1) * perPage + i + 1}</td>
                       <td className="px-3 py-2">
                         <button type="button" onClick={() => onOpenRow(r)} className="flex max-w-[16rem] items-center gap-1.5 text-left hover:text-brand-blue" title="Open this job's progress">
