@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react';
+import { Check, EyeOff, Info, Minus } from 'lucide-react';
 
 /**
  * The "Job Eligibility" note above a job list run in JobOpeningPickerList's
@@ -13,14 +13,47 @@ const SCORING_ELIGIBILITY =
 export const MATCH_ELIGIBILITY =
   'Every job is listed in every status except Draft — Published, Republished, Disabled and Archived — and View Versions shows its versions the same way. Only Published (or Republished) jobs and versions can be selected for AI Talent Match; Disabled and Archived ones are shown greyed out for reference. Drafts are not listed.';
 
+/* The statuses the sentence names, as a glanceable legend. */
+const LEGEND: { label: string; tone: string; Icon: typeof Check; hint: string }[] = [
+  { label: 'Published', tone: 'bg-success-subtle text-success ring-success-line', Icon: Check, hint: 'Can be selected' },
+  { label: 'Republished', tone: 'bg-success-subtle text-success ring-success-line', Icon: Check, hint: 'Can be selected' },
+  { label: 'Disabled', tone: 'bg-[var(--muted)] text-[var(--muted-foreground)] ring-[var(--border)]', Icon: Minus, hint: 'Shown greyed out for reference' },
+  { label: 'Archived', tone: 'bg-[var(--muted)] text-[var(--muted-foreground)] ring-[var(--border)]', Icon: Minus, hint: 'Shown greyed out for reference' },
+  { label: 'Draft', tone: 'bg-[var(--card)] text-[var(--text-muted)] ring-[var(--border)] line-through', Icon: EyeOff, hint: 'Not listed' },
+];
+
 export default function JobEligibilityNote({
   className = '',
   description = SCORING_ELIGIBILITY,
+  showLegend = false,
 }: {
   className?: string;
   /** The rule this list applies. Defaults to the Resume Scoring wording. */
   description?: string;
+  /** Status chips (Published · Republished · Disabled · Archived · Draft)
+   *  beside the title, ahead of the full sentence. */
+  showLegend?: boolean;
 }) {
+  if (showLegend) {
+    return (
+      <div className={`rounded-sm border border-[var(--info-line)] bg-[var(--info-subtle)] px-3 py-2.5 ${className}`}>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--info-strong)]">
+            <Info className="h-4 w-4 shrink-0" />
+            Job Eligibility
+          </p>
+          <ul className="flex flex-wrap items-center gap-1.5" aria-label="Job statuses">
+            {LEGEND.map(({ label, tone, Icon, hint }) => (
+              <li key={label} title={hint} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${tone}`}>
+                <Icon className="h-3 w-3 shrink-0" />{label}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="mt-1.5 tf-meta leading-relaxed">{description}</p>
+      </div>
+    );
+  }
   return (
     <div className={`flex items-start gap-2 rounded-lg bg-brand-blue/[0.06] border border-brand-blue/20 px-3 py-2.5 ${className}`}>
       <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />

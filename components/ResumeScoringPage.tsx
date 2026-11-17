@@ -12,6 +12,7 @@ import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useResumeActivityTrail, readScoringOrigin, clearScoringOrigin, type TrailCrumb } from '@/lib/utils/resumeActivityTrail';
 import ScoredResumesTable, { candidateGroupKey } from './ScoredResumesTable';
+import { VersionScopeStrip, VersionScopeSwitch } from '@/components/resume-scoring/VersionScope';
 import ListPagination from './ListPagination';
 import SelectSourceModal from './SelectSourceModal';
 import JobOpeningPickerList, { JobSelection } from './jobs/JobOpeningPickerList';
@@ -639,6 +640,10 @@ export default function ResumeScoringPage({
   const resolveHistoryGroupKey = (item: ScoredResumeData): string =>
     resolveHistoryLineageEntry(item)?.job_id || historyLineageKey(item);
   const [selectedJob, setSelectedJob] = useState('');
+  /* The job picker's reload trigger, and whether a run finished in the
+     current "Select Applicants to Score" popup. */
+  const [pickerReloadSignal, setPickerReloadSignal] = useState(0);
+  const scoredInPopupRef = useRef(false);
   const [resumeSource, setResumeSource] = useState<'my-resumes' | 'internal-database' | null>(null);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [showResults, setShowResults] = useState(false);
@@ -2330,6 +2335,20 @@ export default function ResumeScoringPage({
 
   const selectedJobData = jobs.find(j => j.id === selectedJob) || (extraJobRecord?.id === selectedJob ? extraJobRecord : undefined);
 
+  /* The "Select Applicants to Score" popup keeps the job it was opened for,
+     so the picker's own selection can be let go of the moment a run finishes
+     (below) without closing the popup that shows its result. */
+  const [modalJobSnapshot, setModalJobSnapshot] = useState<typeof selectedJobData>(undefined);
+  useEffect(() => {
+    if (!showResumeSelectionModal) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setModalJobSnapshot(undefined);
+      return;
+    }
+    if (selectedJobData && !modalJobSnapshot) setModalJobSnapshot(selectedJobData);
+  }, [showResumeSelectionModal, selectedJobData, modalJobSnapshot]);
+  const modalJobData = showResumeSelectionModal ? (modalJobSnapshot ?? selectedJobData) : undefined;
+
   /**
    * A pick (or a cleared pick) from the static job picker below. This page's
    * own `jobs` list is one row per lineage's LATEST published version — a
@@ -2454,27 +2473,48 @@ export default function ResumeScoringPage({
   /* Scoring finished / popup closed: refresh the scores only. The page and
      the view stay as they are (2026-11-17) — no jump to the JD's results;
      the recruiter goes there through View Results when they want to. */
+  /* After a job is scored and its popup closed (2026-11-17): the job is
+     unpicked and the job list reloads (fresh "Scored" counts) — the page
+     stays where it is. */
+  const clearPickAfterScoring = () => {
+    scoredInPopupRef.current = false;
+    handleJobPicked(null);
+    setPickerReloadSignal(n => n + 1);
+  };
   const refreshScoresInPlace = async () => {
     invalidateGlobalScoredResumes();
     await onRefreshHistory?.();
   };
-  const resumeSelectionModal = showResumeSelectionModal && selectedJobData ? (
+  const resumeSelectionModal = modalJobData ? (
     <SelectSourceModal
-      jobId={selectedJob}
-      jobTitle={selectedJobData.title}
-      jobShortId={selectedJobData.job_id}
-      jobVersion={selectedJobData.current_version && selectedJobData.current_version > 0 ? selectedJobData.current_version : null}
-      onClose={() => setShowResumeSelectionModal(false)}
-      onScoringFinished={() => { void refreshScoresInPlace(); }}
+      jobId={modalJobData.id}
+      jobTitle={modalJobData.title}
+      jobShortId={modalJobData.job_id}
+      jobVersion={modalJobData.current_version && modalJobData.current_version > 0 ? modalJobData.current_version : null}
+      onClose={() => {
+        setShowResumeSelectionModal(false);
+        if (scoredInPopupRef.current) clearPickAfterScoring();
+      }}
+      /* A run finished (2026-11-17): let go of the job and reload the job
+         list (fresh "Scored" counts) right away — whichever way the recruiter
+         leaves afterwards (Close, the toast's View, My Activities). The popup
+         stays open on the result; it renders from its own snapshot. */
+      onScoringFinished={() => {
+        scoredInPopupRef.current = true;
+        void refreshScoresInPlace();
+        clearPickAfterScoring();
+      }}
       onScoringComplete={() => {
         void refreshScoresInPlace();
         setShowResumeSelectionModal(false);
+        clearPickAfterScoring();
       }}
       onViewResult={(item) => {
+        const jobIdForResult = modalJobData.id;
         setShowResumeSelectionModal(false);
-        setPendingViewResult({ jobId: selectedJob, resumeId: item.resumeId });
+        setPendingViewResult({ jobId: jobIdForResult, resumeId: item.resumeId });
         const known = scoredHistory
-          .find(h => h.jobId === selectedJob)?.scoredResumes
+          .find(h => h.jobId === jobIdForResult)?.scoredResumes
           ?.some((r: any) => r.resumeId === item.resumeId || r.resume_id === item.resumeId || r.id === item.resumeId);
         if (!known) {
           invalidateGlobalScoredResumes();
@@ -2885,7 +2925,7 @@ export default function ResumeScoringPage({
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     {/* JD ID before the title — the same badge the job rows use. */}
                     {jdCodeOf(selectedHistoryItem) && (
-                      <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0 max-w-[9rem] sm:max-w-none truncate" title={jdCodeOf(selectedHistoryItem)}>{jdCodeOf(selectedHistoryItem)}</JobIdBadge>
+                      <JobIdBadge className={JOB_ID_BADGE_FIT} title={jdCodeOf(selectedHistoryItem)}>{jdCodeOf(selectedHistoryItem)}</JobIdBadge>
                     )}
                     <h1 className="tf-page-title [overflow-wrap:anywhere] min-w-0">{selectedHistoryItem.jobTitle}</h1>
                     {/* Disabled / Archived — same badge as the job list row. */}
@@ -2898,101 +2938,43 @@ export default function ResumeScoringPage({
                         </span>
                       );
                     })()}
-                    {/* Version badge with View Job Detail as a small eye joined
-                        to it (the JD it opens is that version) — the same
-                        treatment as the resume version badge on the candidate
-                        page. With no version to name, the eye stands alone. */}
-                    <span className="inline-flex h-6 items-stretch rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 overflow-hidden flex-shrink-0 whitespace-nowrap">
-                    {detailsVersionNumber && detailsVersionNumber >= 1 && (
-                      detailsVersionRows.length > 1 ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="Switch version"
-                              title="Switch version"
-                              className="inline-flex items-center gap-1 pl-2 pr-1.5 hover:bg-gray-100 dark:hover:bg-slate-700/60 hover:text-brand-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
-                              v{detailsVersionNumber}
-                              <ChevronDown className="w-3 h-3" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="w-44">
-                            {detailsVersionRows.map(v => (
-                              <DropdownMenuItem
-                                key={v.id}
-                                className="group"
-                                disabled={v.id === selectedHistoryItem.jobId}
-                                onSelect={() => goToVersion(v.id, v.title || selectedHistoryItem.jobTitle)}
-                              >
-                                <span className={MENU_ITEM_SCALE_CLASS}>v{v.version_number}{v.isLatest ? ' · Latest' : ''}</span>
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 pl-2 pr-1.5 tf-meta">
-                          <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
-                          v{detailsVersionNumber}
-                        </span>
-                      )
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setShowJobDetailModal(true)}
-                      title="View Job Detail"
-                      aria-label="View Job Detail"
-                      className={`inline-flex items-center justify-center px-1.5 ${detailsVersionNumber && detailsVersionNumber >= 1 ? 'border-l border-gray-200 dark:border-slate-700' : ''} hover:bg-gray-100 dark:hover:bg-slate-700/60 hover:text-brand-blue transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40`}
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
-                    </span>
-                    {/* "Show All Versions" — every version's scored resumes
-                        for this job in one table, instead of only the version
-                        the page is scoped to. Sits beside the version badge
-                        because it answers the same question the badge asks:
-                        which version's candidates am I looking at. */}
-                    {canShowAllVersions && (
-                      <button
-                        type="button"
-                        aria-pressed={showingAllVersions}
-                        title={
-                          showingAllVersions
-                            ? 'Showing candidates from every version — switch back to this version only'
-                            : 'Show candidates from every version of this job'
-                        }
-                        onClick={() =>
-                          showingAllVersions
-                            ? setAllVersionsJobId(null)
-                            : showAllVersionsFor(selectedHistoryItem)
-                        }
-                        className={`inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors flex-shrink-0 whitespace-nowrap ${
-                          showingAllVersions
-                            ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/15'
-                            : 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue'
-                        }`}
-                      >
-                        {isLoadingAllVersions ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Layers className="w-3 h-3" />
-                        )}
-                        Show All Versions
-                      </button>
-                    )}
+                    {/* Which version's candidates the list shows: a small
+                        two-way switch (Version vN ▾ | All versions) right
+                        beside the job; the strip below says it and flashes
+                        when it changes. */}
+                    <VersionScopeSwitch
+                      versionNumber={detailsVersionNumber}
+                      versions={detailsVersionRows.map(v => ({
+                        id: v.id,
+                        versionNumber: v.version_number,
+                        isLatest: v.isLatest,
+                        title: v.title,
+                        scored: lineageScoredItems.find(h => h.jobId === v.id)?.totalScored,
+                      }))}
+                      currentId={selectedHistoryItem.jobId}
+                      onPickVersion={v => goToVersion(v.id, v.title || selectedHistoryItem.jobTitle)}
+                      canShowAll={canShowAllVersions}
+                      showingAll={showingAllVersions}
+                      loadingAll={isLoadingAllVersions}
+                      onShowAll={() => showAllVersionsFor(selectedHistoryItem)}
+                      onShowThis={() => setAllVersionsJobId(null)}
+                      onViewJob={() => setShowJobDetailModal(true)}
+                    />
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 tf-meta">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      {formatIST(selectedHistoryItem.scoredAt)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <FileText className="w-3.5 h-3.5" />
-                      {showingAllVersions
-                        ? `${lineageTotalScored} candidates scored across ${lineageScoredItems.length} versions`
-                        : `${selectedHistoryItem.totalScored} candidates scored`}
-                    </span>
+                  <div className="mt-1.5">
+                    <VersionScopeStrip
+                      scopeKey={`${selectedHistoryItem.jobId}:${showingAllVersions}`}
+                      showingAll={showingAllVersions}
+                      versionNumber={detailsVersionNumber}
+                      allVersionsLabel={lineageScoredItems
+                        .map(versionNumberOf)
+                        .filter((v): v is number => v != null)
+                        .sort((x, y) => x - y)
+                        .map(v => `v${v}`)
+                        .join(', ')}
+                      count={showingAllVersions ? lineageTotalScored : selectedHistoryItem.totalScored}
+                      scoredAtLabel={formatIST(selectedHistoryItem.scoredAt)}
+                    />
                   </div>
                 </div>
               </div>
@@ -3043,9 +3025,10 @@ export default function ResumeScoringPage({
                       ? `${detailsJobLockReason} — new resumes can't be scored against it`
                       : !canRunScoring ? 'You do not have permission to score resumes' : ''
                   }
-                  className={`w-full sm:w-auto ${!canRunScoring || detailsJobLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  size="sm"
+                  className={`w-full sm:w-auto whitespace-nowrap ${!canRunScoring || detailsJobLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <ClipboardList className="w-4 h-4" />
+                  <ClipboardList className="w-3.5 h-3.5" />
                   Score New Resumes
                 </Button>
               </div>
@@ -3072,7 +3055,10 @@ export default function ResumeScoringPage({
           onClose={() => setShowJobDetailModal(false)}
           jdId={selectedHistoryItem.jobId}
           jdTitle={selectedHistoryItem.jobTitle}
-          initialVersionNumber={detailsVersionNumber}
+          /* The eye follows the version switch: on one version, that
+             version's JD (with tabs to the others); under All versions,
+             the version list to compare. */
+          initialVersionNumber={showingAllVersions ? undefined : detailsVersionNumber}
           /* Go to JD, moved here from the header: opens the version on
              screen in the popup (this page's version unless another is
              being previewed). */
@@ -3101,6 +3087,8 @@ export default function ResumeScoringPage({
         {/* Scored Resumes Table */}
         <ScoredResumesTable
           resumes={scoredResumesData}
+          /* No "Scored Resumes" heading: the job card above names the list. */
+          title=""
           /* Row Invite ▸ and the selection's Actions → Create / Send
              Assessment | AI Interview for this job — Job Details' popup. */
           onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem, detailsVersionNumber), candidates: asScoreCandidates(candidates) })}
@@ -4546,7 +4534,7 @@ export default function ResumeScoringPage({
                           {/* The scoring record's own JD code, else the full JD
                               record's — some scores come back without it. */}
                           {jdCodeOf(item) && (
-                            <JobIdBadge className={`h-7 leading-6 ${JOB_ID_BADGE_FIT}`} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge>
+                            <JobIdBadge className={JOB_ID_BADGE_FIT} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge>
                           )}
                           <h3
                             className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
@@ -4936,7 +4924,7 @@ export default function ResumeScoringPage({
                         )}
                       </td>
                       <td className="tf-td hidden sm:table-cell">
-                        {jdCodeOf(item) ? <JobIdBadge className="inline-flex h-7 items-center">{jdCodeOf(item)}</JobIdBadge> : <span className="tf-hint">—</span>}
+                        {jdCodeOf(item) ? <JobIdBadge className={JOB_ID_BADGE_FIT} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge> : <span className="tf-hint">—</span>}
                       </td>
                       <td className="tf-td">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -5978,19 +5966,28 @@ export default function ResumeScoringPage({
           JobOpeningPickerList), just rendered inline instead of behind a
           popup. Everything after picking a job — Select Resumes, and the
           scoring flow beyond it — stays a popup, unchanged. */}
-      <div className="tf-card-soft p-3 sm:p-4 mb-5">
-        <label className="block tf-label mb-2">
-          Select Job Description
-        </label>
+      <section className="tf-card mb-5 overflow-hidden" aria-labelledby="score-select-jd">
+        {/* Section header — a title bar, like the page's other cards. */}
+        <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 sm:px-4">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+            <Briefcase className="h-4 w-4 text-brand-blue" />
+          </span>
+          <h2 id="score-select-jd" className="tf-section-title">
+            Select Job Description
+          </h2>
+        </div>
+        <div className="p-3 sm:p-4">
 
         {/* Every non-draft job is listed — Published, Disabled and Archived —
             by its latest non-draft version, with its non-draft versions under
             View Versions (excludeDraftsOnly). Only a Published version can be
             scored; the rest are shown greyed out and unselectable. */}
-        <JobEligibilityNote className="mb-3" />
+        <JobEligibilityNote className="mb-4" showLegend />
 
         <JobOpeningPickerList
           listAnchorRef={jobPickerListRef}
+          reloadSignal={pickerReloadSignal}
+          layout="page"
           selection={pickerSelection}
           onSelectionChange={handleJobPicked}
           onProceed={() => {
@@ -6011,8 +6008,8 @@ export default function ResumeScoringPage({
           /* No ✓ badge on the picked card — the radio + highlight mark it. */
           hideSelectedTick
         />
-
-      </div>
+        </div>
+      </section>
       </div>
 
       {/* Resume Selection Modal — the same self-contained "Select Applicants to

@@ -732,12 +732,10 @@ export default function JobOpeningsPage() {
           jobVersion={scoreResumesJob.versionNumber && scoreResumesJob.versionNumber > 0 ? scoreResumesJob.versionNumber : null}
           cancelInFooter
           onClose={() => setScoreResumesJob(null)}
-          onScoringFinished={() => {
-            const job = scoreResumesJob;
-            toast.success(`Scoring finished for ${formatJobSubject({ ...job, versionNumber: job.versionNumber ?? 1 })}.`, {
-              action: { label: 'View scored resumes', onClick: () => router.push(`/recruitment/job-details?id=${job.id}&tab=scored-resumes`) },
-            });
-          }}
+          /* The "scored successfully" toast comes from My Activities, for
+             every scoring run — not here too. Kept as a no-op so a row's
+             Retry does not fall back to onScoringComplete and close the popup. */
+          onScoringFinished={() => {}}
           onScoringComplete={() => setScoreResumesJob(null)}
           onViewResult={(item) => {
             const job = scoreResumesJob;

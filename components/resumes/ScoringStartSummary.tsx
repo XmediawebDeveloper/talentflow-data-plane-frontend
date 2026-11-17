@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle, ChevronDown, ClipboardList, Info, Loader2, Redo2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import JobIdBadge from '@/components/jobs/JobIdBadge';
+import JobIdBadge, { JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { scoringService } from '@/lib/services/scoringService';
 import { checkQuotaStatus } from '@/lib/services/usageTrackingService';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
@@ -119,7 +119,7 @@ export default function ScoringStartSummary({ request, onBack, onCancel, onStart
           <div className="min-w-0">
             <h2 className="tf-section-title sm:text-lg tracking-tight">Score {plural(resumeIds.length, 'resume')}</h2>
             <div className="flex items-center gap-2 mt-1 min-w-0">
-              {job.jobCode && <JobIdBadge className="inline-flex h-6 items-center flex-shrink-0">{job.jobCode}</JobIdBadge>}
+              {job.jobCode && <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.jobCode}>{job.jobCode}</JobIdBadge>}
               <span className="tf-label truncate">{job.title}</span>
               <span className="px-2 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
                 v{job.version ?? 1}
