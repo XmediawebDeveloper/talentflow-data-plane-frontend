@@ -105,6 +105,9 @@ export default function GlobalScoringProgressIndicator() {
      Resume Scoring) into one summary card, with status chips and a search;
      "View overall" opens every job of a module in one popup. */
   const [overviewKind, setOverviewKind] = useState<ActivityKind | null>(null);
+  /* The run popup was opened from "Overall Activity" (this module's tab):
+     its Back button returns there instead of to the page. */
+  const [backToOverview, setBackToOverview] = useState<ActivityKind | null>(null);
   const [dockFilter, setDockFilter] = useState<'all' | 'running' | 'done' | 'look'>('all');
   const [dockQuery, setDockQuery] = useState('');
   /* A group the recruiter opened / closed by hand; otherwise it is open while
@@ -278,6 +281,12 @@ export default function GlobalScoringProgressIndicator() {
         progressData={toModalItems(modalJob)}
         headerJobVersion={modalJob.jobVersion}
         showScoreColumn
+        onBack={backToOverview ? () => {
+          setModalJobId(null);
+          setOverviewKind(backToOverview);
+          setBackToOverview(null);
+        } : undefined}
+        backLabel="Back to Overall Activity"
         batchId={modalJob.batchId}
         /* Keep the corner widget's counts in step with Cancel / Retry —
            the run's own poller may already have stopped. */
@@ -333,6 +342,7 @@ export default function GlobalScoringProgressIndicator() {
      anywhere else this widget builds it from the context. */
   const openRun = (job: ScoringJob) => {
     setListOpen(false);
+    setBackToOverview(null);
     if (onRestorePanel) { onRestorePanel(); return; }
     setModalJobId(job.jobId);
   };
@@ -440,9 +450,20 @@ export default function GlobalScoringProgressIndicator() {
   const openOverviewRow = (row: ActivityRow) => {
     setOverviewKind(null);
     const job = scoringJobOf(row);
-    if (job) { openRun(job); return; }
+    if (job) {
+      openRun(job);
+      if (!onRestorePanel) setBackToOverview(row.kind);
+      return;
+    }
     const inv = inviteJobOf(row);
-    if (inv) invite?.setOpenResultsFor(inv.job_id, inv.failed > 0 && !isBulkInviteActive(inv) ? 'failed' : 'all');
+    if (inv) {
+      const kind = row.kind;
+      invite?.setOpenResultsFor(
+        inv.job_id,
+        inv.failed > 0 && !isBulkInviteActive(inv) ? 'failed' : 'all',
+        () => setOverviewKind(kind),
+      );
+    }
   };
   const removeOverviewRow = (row: ActivityRow) => {
     const job = scoringJobOf(row);

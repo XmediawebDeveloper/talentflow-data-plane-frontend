@@ -183,7 +183,7 @@ export default function ActivitiesOverviewModal({
             <span className="hidden sm:inline">Minimize</span>
           </Button>
         }
-        cancelLabel="Cancel"
+        cancelLabel="Close"
         footerStart="Jobs keep running in the background — you can leave this popup at any time."
         bodyClassName="!pt-4"
       >

@@ -1,6 +1,6 @@
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { X, Clock, CheckCircle2, XCircle, AlertCircle, AlertTriangle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, ChevronDown, Eye, ClipboardList, Ban, Layers, Square, CheckSquare, Coins, Filter as FilterIcon } from 'lucide-react';
+import { X, ArrowLeft, Clock, CheckCircle2, XCircle, AlertCircle, AlertTriangle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, ChevronDown, Eye, ClipboardList, Ban, Layers, Square, CheckSquare, Coins, Filter as FilterIcon } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useModuleQuota } from '@/contexts/QuotaContext';
@@ -146,6 +146,11 @@ interface BulkScoringProgressModalProps {
   /** The JD version this run scores against, for the header — used when the
    *  rows themselves don't carry `jobVersion` (most hosts). */
   headerJobVersion?: number | null;
+  /** Opened from another popup (e.g. "Overall Activity"): renders a back
+   *  button at the start of the header that returns there. */
+  onBack?: () => void;
+  /** Where Back goes, for its tooltip / label. */
+  backLabel?: string;
 }
 
 /** Backend match_status ('exact_match', 'Partial Match', …) → the popup's verdict. */
@@ -183,6 +188,8 @@ export default function BulkScoringProgressModal({
   batchId,
   onBatchStatus,
   headerJobVersion,
+  onBack,
+  backLabel = 'Back',
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
 
@@ -817,6 +824,18 @@ export default function BulkScoringProgressModal({
           {/* Top row: icon+title and action buttons */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+              {onBack && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onBack}
+                  className="w-8 flex-shrink-0 !px-0"
+                  aria-label={backLabel}
+                  title={backLabel}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+              )}
               <div className="hidden sm:flex w-11 h-11 bg-brand-blue/10 rounded-xl items-center justify-center flex-shrink-0">
                 <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
               </div>
