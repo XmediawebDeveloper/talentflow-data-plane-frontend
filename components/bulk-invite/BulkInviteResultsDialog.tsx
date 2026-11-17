@@ -1,6 +1,6 @@
 'use client';
 
-import { Minus, Send } from 'lucide-react';
+import { ArrowLeft, Minus, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -20,6 +20,8 @@ export default function BulkInviteResultsDialog({
   job,
   onClose,
   onMinimize,
+  onBack,
+  backLabel = 'Back',
   initialTab = 'all',
 }: {
   job: TrackedBulkInvite;
@@ -29,6 +31,10 @@ export default function BulkInviteResultsDialog({
   onClose: () => void;
   /** Minimize, top right: down to the widget's round icon. */
   onMinimize?: () => void;
+  /** Opened from another popup (e.g. "Overall Activity"): a Back button at
+   *  the start of the header returns there. */
+  onBack?: () => void;
+  backLabel?: string;
 }) {
   const kindLabel = job.kind === 'assessment' ? 'Assessment' : 'AI Interview';
   const jdTitle = job.jdTitle ?? job.jd_title ?? undefined;
@@ -72,6 +78,11 @@ export default function BulkInviteResultsDialog({
       title={job.mode === 'resend' ? `${kindLabel} — new links` : `${kindLabel} invitations`}
       subtitle={subtitle}
       zIndexClass="z-[70]"
+      headerStart={onBack ? (
+        <Button variant="secondary" size="sm" onClick={onBack} className="w-8 shrink-0 !px-0" aria-label={backLabel} title={backLabel}>
+          <ArrowLeft className="w-4 h-4" />
+        </Button>
+      ) : undefined}
       headerExtra={onMinimize ? (
         <Button variant="secondary" size="sm" onClick={onMinimize} className="w-8 !px-0" aria-label="Minimize" title="Minimize — sending carries on; the icon stays bottom right">
           <Minus className="w-4 h-4" />

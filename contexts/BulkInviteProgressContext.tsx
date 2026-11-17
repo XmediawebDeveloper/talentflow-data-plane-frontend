@@ -73,7 +73,11 @@ interface BulkInviteProgressContextType {
   /** The job id a results view should open, if any, and on which tab. */
   openResultsFor: string | null;
   openResultsTab: BulkInviteResultsTab;
-  setOpenResultsFor: (jobId: string | null, tab?: BulkInviteResultsTab) => void;
+  /** `onBack`: the results view was opened from another popup (e.g.
+   *  "Overall Activity") — it shows a Back button that calls this. */
+  setOpenResultsFor: (jobId: string | null, tab?: BulkInviteResultsTab, onBack?: () => void) => void;
+  /** Back from the open results view, when it was opened from another popup. */
+  openResultsBack: (() => void) | null;
   /** Re-read "my sends" from the server now. */
   refreshMine: () => void;
   /** The round invite icon is on screen (bottom-right). The scoring widget
@@ -177,7 +181,7 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
   const [identity, setIdentity] = useState<string | null>(null);
   const [jobs, setJobs] = useState<TrackedBulkInvite[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [openResults, setOpenResults] = useState<{ id: string; tab: BulkInviteResultsTab } | null>(null);
+  const [openResults, setOpenResults] = useState<{ id: string; tab: BulkInviteResultsTab; onBack?: () => void } | null>(null);
   const [widget, setWidget] = useState<BulkInviteWidgetView>('hidden');
   const pathname = usePathname();
 
@@ -293,8 +297,8 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     if (!open) setWidget((w) => (w === 'hidden' ? 'icon' : w));
   }, []);
 
-  const setOpenResultsFor = useCallback((jobId: string | null, tab: BulkInviteResultsTab = 'all') => {
-    setOpenResults(jobId ? { id: jobId, tab } : null);
+  const setOpenResultsFor = useCallback((jobId: string | null, tab: BulkInviteResultsTab = 'all', onBack?: () => void) => {
+    setOpenResults(jobId ? { id: jobId, tab, onBack } : null);
   }, []);
 
   /* "My sends" from the server: merged in (server counts win, this
@@ -404,6 +408,7 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
   const value = useMemo<BulkInviteProgressContextType>(() => ({
     jobs, activeJobs, track, sync, dismiss, restore, inPopupIds, setInPopup,
     openResultsFor: openResults?.id ?? null, openResultsTab: openResults?.tab ?? 'all', setOpenResultsFor,
+    openResultsBack: openResults?.onBack ?? null,
     widget, setWidget, refreshMine, iconShown, setIconShown,
   }), [jobs, activeJobs, track, sync, dismiss, restore, inPopupIds, setInPopup, openResults, setOpenResultsFor, widget, refreshMine, iconShown]);
 
