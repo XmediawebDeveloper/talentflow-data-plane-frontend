@@ -3316,6 +3316,9 @@ export default function AIInterviewConfig() {
             three and pushed the first real control below the fold. */}
 
         {/* Step indicators */}
+        {/* Progress only on this step: the one step behind it is Select JD,
+            which is changed with the Change JD button (it can lose work), and
+            steps ahead are reached with Continue, which checks the form. */}
         <AIInterviewStepIndicator currentStep={CURRENT_STEP} topOffset={breadcrumbHeight} />
 
         {/* ── The JD this configuration is being built against ──────────────
@@ -4240,13 +4243,20 @@ export default function AIInterviewConfig() {
                 <button
                   type="button"
                   onClick={() => {
-                    // Leaves to the interview list (never Step 1, Select JD);
-                    // the prompt only when there is something to save or lose.
+                    // Exit goes one step back, to Step 1 (Select JD) — the
+                    // page this step was opened from. Started from Job
+                    // Details / an invite instead, it returns there (those
+                    // flows never passed through Select JD). The prompt only
+                    // when there is something to save or lose; its Save /
+                    // Discard land on the same place.
+                    const target = fromInviteOrigin || fromJobDetails
+                      ? LIST_TARGET
+                      : '/recruitment/ai-interviews/jd-selection';
                     if (!needsLeavePrompt()) {
-                      navigateToInterviewList();
+                      goTo(target);
                       return;
                     }
-                    setPendingNavigation(LIST_TARGET);
+                    setPendingNavigation(target);
                     setShowUnsavedDialog(true);
                   }}
                   className="tf-btn tf-btn-secondary px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors whitespace-normal font-normal"

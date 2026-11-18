@@ -2386,6 +2386,12 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
 .tf-page-scroll {
   scrollbar-gutter: stable;
 }
+/* The My Activities round button (GlobalScoringProgressIndicator) floats
+   bottom-right. While it is shown, the page gets room at the bottom so its
+   last rows / buttons can be scrolled clear of it instead of hidden under it. */
+html:has([data-activity-dock]) .tf-page-scroll {
+  padding-bottom: 4.5rem;
+}
 html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gray-900/"], [class*="bg-gray-800/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"], [class*="bg-opacity-"]), [data-slot="dialog-overlay"], [aria-modal="true"])),
 html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gray-900/"], [class*="bg-gray-800/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"], [class*="bg-opacity-"]), [data-slot="dialog-overlay"], [aria-modal="true"])) body,
 html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gray-900/"], [class*="bg-gray-800/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"], [class*="bg-opacity-"]), [data-slot="dialog-overlay"], [aria-modal="true"])) .tf-page-scroll {
