@@ -999,6 +999,12 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     ]);
 
     await exportRows(format, JOBS_EXPORT_HEADERS, rows, `jobs-export-${new Date().toISOString().split('T')[0]}`, { sheetName: 'Job Openings' });
+    // Like every other bulk action: once the file is written, the selection and
+    // the actions bar clear. Only on success — if exportRows throws, this line is
+    // skipped and ExportFormatModal stays open with its error toast, so the user
+    // can retry with the same selection. No list refresh: export changes no data.
+    clearSelection();
+    setShowBulkActions(false);
   };
 
   // Close dropdown when clicking outside

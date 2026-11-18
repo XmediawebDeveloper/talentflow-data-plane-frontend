@@ -57,6 +57,9 @@ export interface ScoredResumesExportModalProps {
   /** Sent with the export audit event when it is a real JD id. */
   auditJdId?: string;
   onClose: () => void;
+  /** Called once the file has been written (not on Cancel) — hosts clear their
+   *  row selection here. onClose still fires afterwards. */
+  onExported?: () => void;
 }
 
 export default function ScoredResumesExportModal({
@@ -66,6 +69,7 @@ export default function ScoredResumesExportModal({
   rowJobCode,
   auditJdId,
   onClose,
+  onExported,
 }: ScoredResumesExportModalProps) {
   const [exportFormat, setExportFormat] = useState<'csv' | 'xls'>('csv');
   const [exportColumnOptions, setExportColumnOptions] = useState(EXPORT_COLUMN_OPTIONS);
@@ -173,6 +177,7 @@ export default function ScoredResumesExportModal({
     triggerDownload(new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' }), fileName('csv'));
 
     toast.success(`Exported ${rows.length} records to CSV`);
+    onExported?.();
     onClose();
     scoringService.logClientExport('csv', rows.length, isUuid(auditJdId) ? auditJdId : undefined);
   };
@@ -230,6 +235,7 @@ export default function ScoredResumesExportModal({
       fileName('xlsx'),
     );
     toast.success(`Exported ${rows.length} records to Excel`);
+    onExported?.();
     onClose();
     scoringService.logClientExport('excel', rows.length, isUuid(auditJdId) ? auditJdId : undefined);
   };

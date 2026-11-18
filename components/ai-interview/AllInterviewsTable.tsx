@@ -712,6 +712,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
     toast.success(`Exported ${selectedRows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
     onExported?.({ format: exportFormat, recordCount: selectedRows.length, tab, ids: selectedRows.map((row) => row.id) });
     setShowExportModal(false);
+    // Export done — clear the ticks, which also hides the Actions bar.
+    setSelectedIds(new Set());
   };
 
   useEffect(() => {

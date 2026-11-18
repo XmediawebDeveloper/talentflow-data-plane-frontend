@@ -43,7 +43,9 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
         toast.error('Failed to resolve resumes', { id: toastId });
       }
 
-      onResolved();
+      // Every item failed: nothing changed, so stay open with the same items
+      // (and the caller's selection) for a retry instead of reporting "resolved".
+      if (succeeded > 0) onResolved();
     } catch (error) {
       console.error('Bulk resolution error:', error);
       toast.error('Failed to resolve versioned resumes', { id: toastId });

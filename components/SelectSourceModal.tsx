@@ -1116,34 +1116,10 @@ export default function SelectSourceModal({
             {/* Search and Bulk Actions */}
             <div className="px-3 sm:px-6 py-3 sm:py-4 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search by name, email, skills..."
-                    className="w-full h-9 pl-9 pr-4 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-gray-50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-800 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-colors"
-                  />
-                </div>
-                <div className="flex items-center gap-2 sm:gap-4">
-                  {/* Upload Resume button - only for My Resumes tab + canUploadResumes RBAC */}
-                  {activeTab === 'my-resumes' && (
-                    <button
-                      onClick={() => { if (!canUploadResumes) return; openUploadToFolder(); }}
-                      aria-disabled={!canUploadResumes}
-                      title={!canUploadResumes ? 'You do not have permission to upload resumes' : undefined}
-                      className={`h-9 px-3 sm:px-4 text-sm whitespace-nowrap rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
-                        canUploadResumes
-                          ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                          : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-                      }`}
-                    >
-                      <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      <span className="hidden sm:inline">Upload Resume</span>
-                      <span className="sm:hidden">Upload</span>
-                    </button>
-                  )}
+                {/* Select All ▾ sits before the search box, on the same row
+                    (phones included); Upload stays on the right. */}
+                <div className="flex flex-1 min-w-0 items-center gap-2 sm:gap-4">
+                <div className="shrink-0">
                   {(() => {
                     /* The Job Openings "Select All ▾" menu (JD module):
                        this page / every resume in the folder / clear. Same
@@ -1181,6 +1157,36 @@ export default function SelectSourceModal({
                     );
                   })()}
                 </div>
+                <div className="flex-1 min-w-0 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search by name, email, skills..."
+                    className="w-full h-9 pl-9 pr-4 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-gray-50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-800 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-colors"
+                  />
+                </div>
+                </div>
+                {/* Upload Resume button - only for My Resumes tab + canUploadResumes RBAC */}
+                {activeTab === 'my-resumes' && (
+                  <div className="flex items-center justify-end">
+                    <button
+                      onClick={() => { if (!canUploadResumes) return; openUploadToFolder(); }}
+                      aria-disabled={!canUploadResumes}
+                      title={!canUploadResumes ? 'You do not have permission to upload resumes' : undefined}
+                      className={`h-9 px-3 sm:px-4 text-sm whitespace-nowrap rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
+                        canUploadResumes
+                          ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Upload Resume</span>
+                      <span className="sm:hidden">Upload</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 

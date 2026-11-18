@@ -411,8 +411,13 @@ export default function JDListPage() {
         toast.error(`Failed to delete ${failCount} job description(s)`);
       }
 
-      setSelectedJds([]);
-      fetchJDs();
+      // Keep the selection when every delete failed so the user can retry;
+      // otherwise clear it and reload the list (the jds effect would also clear it).
+      if (successCount > 0) {
+        setSelectedJds([]);
+        setBulkActionsOpen(false);
+        fetchJDs();
+      }
     } catch (error) {
       toast.error('Failed to delete job descriptions');
     }
@@ -486,6 +491,9 @@ export default function JDListPage() {
     const dateStr = new Date().toISOString().split('T')[0];
     await exportData(format, rows, JD_EXPORT_COLUMNS, `job-descriptions-${dateStr}`, { sheetName: 'Job Descriptions' });
     toast.success(`Exported ${jdsToExport.length} job description${jdsToExport.length !== 1 ? 's' : ''}`);
+    // Export succeeded: clear the selection and close the bulk menu. No refresh — nothing changed.
+    setSelectedJds([]);
+    setBulkActionsOpen(false);
   };
 
   const getStatusBadge = (status: string, currentVersion?: number) => {

@@ -959,13 +959,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   /** Bumped by a send from a tracker's Invite More, so the tracker left open
    *  under the popup lists the new invitations at once. */
   const [trackerRefreshSignal, setTrackerRefreshSignal] = useState(0);
+  /** Bumped by a successful send from a popup opened off the AI Talent Match
+   *  tab's Actions menu, so that tab drops its (now acted-on) row selection. */
+  const [aiMatchSelectionResetSignal, setAiMatchSelectionResetSignal] = useState(0);
   /** Opens the popup with a tab's ticked candidates, each tagged with that tab
    *  as its source (the popup's group headings). */
-  const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource) =>
+  const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource, onSent?: () => void) =>
     setInviteDialog({
       kind,
       candidates: candidates.map((c) => ({ ...c, source })),
       openOn: source === 'talent-match' ? 'talent-match' : undefined,
+      // e.g. the Scored Resumes table's own clear, when opened from its selection.
+      onSent: onSent ? () => onSent() : undefined,
     });
   // AI Interview Version History dialog (history icon on the AI Interview heading).
   const [showAIVersionHistory, setShowAIVersionHistory] = useState(false);
@@ -2668,6 +2673,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onSent={(kind, sent) => {
             if (kind === 'assessment') void fetchAssessmentResults();
             else setAiInterviewCount((prev) => Math.max(prev + sent, 1));
+            // Bulk send from the AI Talent Match tab succeeded: clear its selection.
+            if (inviteDialog.openOn === 'talent-match') setAiMatchSelectionResetSignal((n) => n + 1);
             inviteDialog.onSent?.(kind, sent);
           }}
         />
@@ -4431,7 +4438,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               hiddenColumnIds={['jdId', 'jobTitle']}
               /* Actions ▸ AI Assessment / AI Interview Invite: the AI Talent
                  Match tab's version popups, with the ticked candidates. */
-              onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'score-resume')}
+              onOpenInviteDialog={(kind, invitees, _fromSelection, clearSelection) => openInviteDialog(kind, invitees, 'score-resume', clearSelection)}
               /* Row ⋮: Create / Send Assessment | AI Interview directly, no Invite ▸. */
               inlineRowInviteItems
               initialMatchStatus={scoredResumesMatchFilter}
@@ -4665,6 +4672,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           loading={loadingAiMatch}
           canRunAiMatch={permissions.canRunAiMatch}
           jobLockedReason={jobInactive ? jobInactiveReason : null}
+          selectionResetSignal={aiMatchSelectionResetSignal}
           onRunMatch={handleAITalentMatch}
           onScoreSelected={(selected) => { if (selected.length > 0) setAiMatchScoreReview(selected); }}
           onScoreAll={() => {
@@ -5304,6 +5312,7 @@ function AIMatchTabContent({
   loading,
   canRunAiMatch,
   jobLockedReason = null,
+  selectionResetSignal = 0,
   onRunMatch,
   onScoreSelected,
   onScoreAll,
@@ -5328,6 +5337,9 @@ function AIMatchTabContent({
   /* A disabled / archived JD: Run AI Match and Score (row and Score
      Selected) stay visible, greyed out with this as the reason. */
   jobLockedReason?: string | null;
+  /* Bumped by the parent after a bulk action on the ticked rows succeeds
+     (an invite send); each change clears the selection. */
+  selectionResetSignal?: number;
   onRunMatch: () => void;
   onScoreSelected: (selected: MatchedCandidate[]) => void;
   onScoreAll: () => void;
@@ -5342,6 +5354,11 @@ function AIMatchTabContent({
     ? 'You do not have permission to run AI Talent Match'
     : jobLockedReason ?? null;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // A bulk action on the selection succeeded upstream — drop the selection
+  // (the Actions bar hides with it).
+  useEffect(() => {
+    if (selectionResetSignal > 0) setSelectedIds(new Set());
+  }, [selectionResetSignal]);
   /* Rows opened to show their remaining details (Phone, Location, Skills,
      Uploaded By / Date, Attachments) — display only. */
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
@@ -5562,6 +5579,8 @@ function AIMatchTabContent({
       title: `${title} - AI Talent Match`,
     });
     toast.success(`Exported ${rows.length} candidate${rows.length !== 1 ? 's' : ''} to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+    // Export succeeded: clear the selection (hides the Actions bar). No refresh — nothing changed.
+    setSelectedIds(new Set());
   };
 
   /* Create / Send Assessment | AI Interview — the Scored Resumes tab's
