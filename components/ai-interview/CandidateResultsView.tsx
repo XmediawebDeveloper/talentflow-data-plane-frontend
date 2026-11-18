@@ -2623,7 +2623,9 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 : 'bg-destructive-subtle/50 text-gray-600 dark:text-slate-300 hover:bg-destructive-subtle hover:text-destructive'
                             }`
                           : `${tabPill(isActive)} whitespace-nowrap`
-                      } lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:whitespace-normal lg:shadow-none ${
+                      /* Below lg: each pill grows to share its row, so the
+                         wrapped rows fill the width whatever the phone's size. */
+                      } max-lg:flex-auto max-lg:justify-center lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:whitespace-normal lg:shadow-none ${
                         isActive
                           ? isAlertTab
                             ? 'lg:bg-destructive-subtle lg:text-destructive lg:font-medium lg:ring-1 lg:ring-destructive-line'

@@ -34,6 +34,7 @@ const nextConfig: NextConfig = {
   },
 
   experimental: {
+    agentUpgrade: 'security',
     // Optimize barrel file imports — avoids bundling entire libraries when only a few exports are used.
     // Critical for lucide-react (1000+ icons) and all @radix-ui packages.
     optimizePackageImports: [

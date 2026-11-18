@@ -538,7 +538,9 @@ export default function SelectSourceModal({
       );
       return;
     }
-    const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
+    const visibleIds = filteredResumes
+      .filter(r => !r.is_archived && !(r.is_tenant_user_email || r.isTenantUserEmail))
+      .map(r => r.id);
     if (visibleIds.length === 0) return;
     setSelectedResumes(prev =>
       selected
@@ -828,6 +830,13 @@ export default function SelectSourceModal({
     const resume = resumes.find(r => r.id === resumeId);
     if (resume?.is_archived) {
       toast.error('Archived resumes cannot be scored. Please select an active resume.');
+      return;
+    }
+
+    // Block if the resume's email belongs to an existing team member —
+    // same restriction the Resume Database module enforces.
+    if (resume && (resume.is_tenant_user_email || resume.isTenantUserEmail)) {
+      toast.error('This email belongs to an existing team member. It cannot be selected.');
       return;
     }
 
@@ -1390,7 +1399,11 @@ export default function SelectSourceModal({
                        this page / every resume in the folder / clear. Same
                        archived guard and "keep picks from other folders"
                        rule the old button had. */
-                    const selectable = new Set(filteredResumes.filter(r => !r.is_archived).map(r => r.id));
+                    const selectable = new Set(
+                      filteredResumes
+                        .filter(r => !r.is_archived && !(r.is_tenant_user_email || r.isTenantUserEmail))
+                        .map(r => r.id),
+                    );
                     const visibleIds = Array.from(selectable);
                     const pageIds = pageResumeIds.filter(id => selectable.has(id));
                     const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedResumes.includes(id));
@@ -1644,6 +1657,11 @@ export default function SelectSourceModal({
                   onSelectResume={handleToggleResume}
                   onSelectAll={handleTableSelectAll}
                   hideHeaderSelectAll
+                  /* A resume whose email belongs to an existing team member
+                     is greyed out and locked out of selection/actions, same
+                     as the Resume Database module's My Resumes / Internal DB
+                     views. */
+                  showTeamMemberBadge
                   /* Tablets get the desktop table, not the phone cards. */
                   tableFrom="md"
                   onPageItemsChange={setPageResumeIds}
