@@ -778,7 +778,19 @@ export default function AIInterviewPreview() {
               }
             />
             {/* Step indicator — a direct child of the card, so it can stick. */}
-            <AIInterviewStepIndicator currentStep={CURRENT_STEP} topOffset={breadcrumbHeight} />
+            <AIInterviewStepIndicator
+              currentStep={CURRENT_STEP}
+              topOffset={breadcrumbHeight}
+              /* Configure = the cards' Edit, Clusters = Back. Not on the
+                 published screen above: that config is submitted. */
+              /* Finished steps go back; Select JD is changed with Change JD. */
+              clickableSteps={[2, 3]}
+              disabled={publishing}
+              onStepClick={(step) => {
+                if (step === 2) editInConfigure();
+                else if (step === 3) goBack();
+              }}
+            />
 
             {/* Header */}
             <div className="mb-6">

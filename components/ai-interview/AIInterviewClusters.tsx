@@ -3205,7 +3205,15 @@ export default function AIInterviewClusters() {
               }
             />
           {/* Step indicator — a direct child of the card, so it can stick. */}
-          <AIInterviewStepIndicator currentStep={CURRENT_STEP} topOffset={breadcrumbHeight} />
+          <AIInterviewStepIndicator
+            currentStep={CURRENT_STEP}
+            topOffset={breadcrumbHeight}
+            /* Finished steps go back (Configure = Back, which saves first).
+               Steps ahead are reached with Continue; Select JD with Change JD. */
+            clickableSteps={[2]}
+            disabled={saving || generating}
+            onStepClick={(step) => { if (step === 2) handleBack(); }}
+          />
 
           {/* Header */}
           <div className="mb-6">

@@ -39,16 +39,26 @@ interface Props {
    * breadcrumb (z-30) covering this band.
    */
   topOffset?: number;
+  /**
+   * Steps the recruiter may jump to from here. Each page passes only the
+   * steps its own buttons can reach, and `onStepClick` calls THOSE buttons'
+   * handlers (Back / Continue / Change JD / Edit) — so a click saves the
+   * draft, runs the step's checks, or raises the unsaved-changes dialog
+   * exactly as the button would. Anything not listed stays plain progress.
+   */
+  clickableSteps?: readonly AIInterviewStep[];
+  onStepClick?: (step: AIInterviewStep) => void;
+  /** A save / generate is in flight: every step is inert until it lands. */
+  disabled?: boolean;
 }
 
 /**
- * Progress only, never navigation. Completed steps used to be clickable
- * shortcuts back; the pages' own Back buttons are the one way to leave a step,
- * because each of them knows how to leave it safely (save the draft, or raise
- * the unsaved-changes dialog). Sticky, so the recruiter always sees where in
- * the flow they are on the long Configure and Clusters pages.
+ * The wizard's progress, sticky so the recruiter always sees where in the
+ * flow they are on the long Configure and Clusters pages. Steps the page
+ * lists in `clickableSteps` are buttons that go there through the page's own
+ * safe navigation; the rest are progress only.
  */
-export function AIInterviewStepIndicator({ currentStep, topOffset = 0 }: Props) {
+export function AIInterviewStepIndicator({ currentStep, topOffset = 0, clickableSteps, onStepClick, disabled = false }: Props) {
   return (
     /* The negative margins are the page card's padding (p-4 md:p-8), so the
        band spans the card edge to edge and nothing scrolls past its sides.
@@ -65,6 +75,7 @@ export function AIInterviewStepIndicator({ currentStep, topOffset = 0 }: Props) 
             const isCompleted = stepNum < currentStep;
             const isCurrent = stepNum === currentStep;
             const isLast = i === AI_INTERVIEW_STEPS.length - 1;
+            const isClickable = !!onStepClick && !isCurrent && !!clickableSteps?.includes(stepNum);
 
             /* Circle + inline label. */
             const pillContent = (
@@ -111,7 +122,20 @@ export function AIInterviewStepIndicator({ currentStep, topOffset = 0 }: Props) 
             return (
               <div key={label} className="flex items-center gap-2 sm:gap-4">
                 {/* Step pill: circle + inline label */}
-                <div className="flex items-center gap-2.5">{pillContent}</div>
+                {isClickable ? (
+                  <button
+                    type="button"
+                    onClick={() => onStepClick?.(stepNum)}
+                    disabled={disabled}
+                    title={`Go to ${label}`}
+                    aria-label={`Go to step ${stepNum}: ${label}`}
+                    className="group flex items-center gap-2.5 rounded-full pr-2 -mr-2 transition-opacity cursor-pointer [&>div:first-child>div]:transition-transform hover:[&>div:first-child>div]:scale-110 hover:[&>div:first-child>div]:ring-4 hover:[&>div:first-child>div]:ring-brand-blue/20 hover:[&>div:last-child]:text-brand-blue hover:[&>div:last-child]:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {pillContent}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2.5" aria-current={isCurrent ? 'step' : undefined}>{pillContent}</div>
+                )}
 
                 {/* Connector line — between steps, full color when previous is done */}
                 {!isLast && (
