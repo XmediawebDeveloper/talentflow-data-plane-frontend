@@ -1474,6 +1474,16 @@ function CurrentPlanContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [purchaseHold]);
 
+  // A plan bought directly from the company was activated by the Control Plane
+  // (websocket 'plan_updated' -> window 'plan-updated'): show it without a reload.
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
+  useEffect(() => {
+    const onPlanUpdated = async () => { await fetchDataRef.current(await refetchQuota()); };
+    window.addEventListener('plan-updated', onPlanUpdated);
+    return () => window.removeEventListener('plan-updated', onPlanUpdated);
+  }, [refetchQuota]);
+
   // Auto-select plan from URL parameter (from pricing page flow)
   useEffect(() => {
     if (encodedPlanFromUrl && plans.length > 0 && !selectedPlanForPayment) {

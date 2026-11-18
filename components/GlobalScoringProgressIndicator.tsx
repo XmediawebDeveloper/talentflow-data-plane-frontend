@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useScoringProgress, ScoringJob, toMatchResult } from '@/contexts/ScoringProgressContext';
-import { CheckCircle2, Loader2, Layers, ChevronDown, ChevronRight, Maximize2, Search, Trash2, Sparkles, Play, FileText, ClipboardList, Video, Upload } from 'lucide-react';
+import { CheckCircle2, Loader2, Layers, ChevronDown, ChevronRight, Maximize2, Search, Trash2, Sparkles, Play, FileText, ClipboardList, Video, Upload, X } from 'lucide-react';
 import ActivitiesOverviewModal, { ACTIVITY_MODULE, type ActivityKind, type ActivityRow } from '@/components/activities/ActivitiesOverviewModal';
 import AppModal from '@/components/ui/app-modal';
 import { bulkInviteService } from '@/lib/services/bulkInviteService';
@@ -12,7 +12,7 @@ import { inviteStateOf, inviteVersionOf } from '@/components/bulk-invite/BulkInv
 import { bulkInviteNeedsLook, formatTimeLeft, isBulkInviteActive } from '@/lib/services/bulkInviteService';
 import type { TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
 import { useExternalBackgroundTasks, type ExternalBackgroundTask } from '@/lib/backgroundTasks';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import SuccessAnimation from '@/components/ui/success-animation';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -86,6 +86,13 @@ export default function GlobalScoringProgressIndicator() {
       document.removeEventListener('keydown', onKey);
     };
   }, [listOpen]);
+  /* Moving to another page (sidebar, breadcrumb, browser Back, a link inside
+     a row) closes the list too — it must never stay open over the new page. */
+  const pathname = usePathname();
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setListOpen(false);
+  }, [pathname]);
   const wasMainPanelOpen = useRef(isMainPanelOpen);
 
   /* The full popup, opened right where the recruiter is — no page owns this
@@ -616,16 +623,17 @@ export default function GlobalScoringProgressIndicator() {
                 <Maximize2 /><span className="max-[359px]:sr-only">View all</span>
               </Button>
             )}
-            <Button
-              variant="secondary"
-              size="sm"
-              className="!h-5 !w-5 !px-0 !rounded-md"
-              onClick={() => { setListOpen(false); setMinimized(true); }}
-              aria-label="Minimize"
-              title="Minimize"
+            {/* Close: hides the list back into the round button. Tasks keep
+                running; nothing is removed. */}
+            <button
+              type="button"
+              onClick={() => { setListOpen(false); setMinimized(true); toggleRef.current?.focus(); }}
+              aria-label="Close My Activities"
+              title="Close (tasks keep running)"
+              className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-destructive-subtle hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
             >
-              <ChevronDown className="h-3 w-3" />
-            </Button>
+              <X className="h-3.5 w-3.5" />
+            </button>
           </header>
           {/* Status chips (4+ tasks) and a search (10+). */}
           {items.length >= 4 && (
@@ -742,6 +750,9 @@ export default function GlobalScoringProgressIndicator() {
       <button
         type="button"
         ref={toggleRef}
+        /* globals.css reads this to leave room under the page so the
+           button never sits on top of the last row's buttons. */
+        data-activity-dock=""
         onClick={() => { setListOpen(!expanded); setMinimized(expanded); dismissWidgetHint(); }}
         aria-expanded={expanded}
         aria-label={runningCount
