@@ -39,7 +39,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import {
   ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2,
-  Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
+  Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle,
   Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Download,
   Play, MoreVertical, X,
 } from 'lucide-react';
@@ -1006,6 +1006,57 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       + (scoped ? `&from=job-results&root=${encodeURIComponent(configId)}` : ''));
   };
 
+  /* Row ⋮ — View Details, Create / Send Assessment | AI Interview for this
+     row's candidate, Download Report. Same menu as the Assessment results row;
+     the table row and the list card both use it. */
+  const renderRowMenu = (session: AIInterviewResponse) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={portaled ? ROW_ACTION_BUTTON_CLASS : 'h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30'}
+          aria-label={`Actions for ${session.candidate_name || 'candidate'}`}
+          title="Actions"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
+        <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => handleViewDetails(session)}>
+          <Eye className="w-4 h-4 text-menu-icon-view" />
+          <span>View Details</span>
+        </DropdownMenuItem>
+        {onOpenInviteDialog && (
+          <>
+            <DropdownMenuSeparator className="my-1 bg-gray-100" />
+            <RowInviteItems
+              onInvite={(kind) => onOpenInviteDialog(kind, [{
+                id: session.resume_id || session.id,
+                name: session.candidate_name || '',
+                email: session.candidate_email || '',
+                resumeId: session.resume_id,
+              }])}
+            />
+            <DropdownMenuSeparator className="my-1 bg-gray-100" />
+          </>
+        )}
+        <DropdownMenuItem
+          className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
+          disabled={!canDownloadReports || !canTryReport(session) || downloadingReportId === session.id}
+          title={!canDownloadReports ? AI_REPORT_DOWNLOAD_DENIED : !canTryReport(session) ? 'Report available once the interview is evaluated' : undefined}
+          onClick={() => handleDownloadReport(session.id)}
+        >
+          {downloadingReportId === session.id ? (
+            <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
+          ) : (
+            <Download className="w-4 h-4 text-menu-icon-download" />
+          )}
+          <span>Download Report</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   /* Embedded in the Job Details "AI Interview Result" tab (toolbar portals into
      that card's slot). When so, the toolbar controls drop to the 36px height of
      the AI Talent Match reference; the standalone results page keeps 38px. */
@@ -1923,61 +1974,44 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     />
                   }
                   title={
+                    /* CID chip right after the name, as on the Assessment Results card. */
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="min-w-0 [overflow-wrap:anywhere]">{showName(session.candidate_name) || 'Unknown'}</span>
+                      {session.candidate_cid && (
+                        <span className="shrink-0 text-2xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded">
+                          {session.candidate_cid}
+                        </span>
+                      )}
                     </span>
                   }
                   badges={
                     <>
-                      {col('interviewVersion') && rowInterviewVersion(session) != null && (
-                        <VersionPill kind="interview" version={rowInterviewVersion(session)!} />
-                      )}
                       <SessionStatusChip session={session} />
+                      {col('proctoring') && session.status === 'completed' && (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>{risk.level}</span>
+                      )}
                     </>
                   }
-                  meta={[
-                    { icon: <Mail />, label: session.candidate_email ? <span className="[overflow-wrap:anywhere]">{session.candidate_email}</span> : null },
-                    {
-                      icon: <CalendarDays />,
-                      label: session.completed_at
-                        ? <>Completed {formatIST(session.completed_at)}</>
-                        : session.started_at
-                          ? <>Started {formatIST(session.started_at)}</>
-                          : null,
-                    },
+                  /* Labelled lines, as on the Assessment Results card. */
+                  fields={[
+                    { label: 'Email', value: session.candidate_email ? <span className="[overflow-wrap:anywhere]">{session.candidate_email}</span> : null },
+                    { label: 'Started', value: session.started_at ? formatIST(session.started_at) : null },
+                    { label: 'Completed', value: session.completed_at ? formatIST(session.completed_at) : null },
+                    { label: 'Duration', value: formatDuration(session) !== '—' ? formatDuration(session) : null },
                   ]}
                   footer={
-                    (col('score') || (col('result') && result) || (col('proctoring') && session.status === 'completed')) ? (
-                      <>
-                        {col('score') && (
-                          <MobileStatChip tone={score == null ? 'neutral' : score >= 60 ? 'success' : 'danger'}>
-                            Score {score != null ? `${score}%` : '—'}
-                          </MobileStatChip>
-                        )}
-                        {col('result') && result && <ResultBadge result={result} />}
-                        {col('proctoring') && session.status === 'completed' && (
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>{risk.level}</span>
-                        )}
-                      </>
+                    /* One chip: the score with its Pass / Fail inside ("Score 72% - Pass"). */
+                    (col('score') || (col('result') && result)) ? (
+                      <MobileStatChip tone={result ? (result === 'Pass' ? 'success' : 'danger') : score == null ? 'neutral' : score >= 60 ? 'success' : 'danger'}>
+                        {col('score') && <>Score {score != null ? `${score}%` : '—'}</>}
+                        {col('score') && col('result') && result && ' - '}
+                        {col('result') && result}
+                      </MobileStatChip>
                     ) : undefined
                   }
-                  actions={
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleViewDetails(session)}
-                        title="View Details"
-                        aria-label="View Details"
-                        className="tf-icon-btn-outline"
-                      >
-                        <Eye />
-                      </button>
-                      {/* Download Report — the table's own button (same
-                          permission / not-evaluated rules). Create / Send lives
-                          in the toolbar's Actions. */}
-                      <ResultRowActions session={session} onView={() => handleViewDetails(session)} hideView />
-                    </>
-                  }
+                  /* ⋮ on the name row, as on the Assessment Results card. */
+                  actions={renderRowMenu(session)}
+                  actionsOnNameRow
                 />
               );
             })}
@@ -2181,51 +2215,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                               ticked rows), Download Report. Same menu as the
                               Assessment results row. */}
                           <span className="inline-flex align-middle" onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  type="button"
-                                  className={portaled ? ROW_ACTION_BUTTON_CLASS : 'h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30'}
-                                  aria-label={`Actions for ${session.candidate_name || 'candidate'}`}
-                                  title="Actions"
-                                >
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
-                                <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => handleViewDetails(session)}>
-                                  <Eye className="w-4 h-4 text-menu-icon-view" />
-                                  <span>View Details</span>
-                                </DropdownMenuItem>
-                                {onOpenInviteDialog && !portaled && (
-                                  <>
-                                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                                    <RowInviteItems
-                                      onInvite={(kind) => onOpenInviteDialog(kind, [{
-                                        id: session.resume_id || session.id,
-                                        name: session.candidate_name || '',
-                                        email: session.candidate_email || '',
-                                        resumeId: session.resume_id,
-                                      }])}
-                                    />
-                                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                                  </>
-                                )}
-                                <DropdownMenuItem
-                                  className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
-                                  disabled={!canDownloadReports || !canTryReport(session) || downloadingReportId === session.id}
-                                  title={!canDownloadReports ? AI_REPORT_DOWNLOAD_DENIED : !canTryReport(session) ? 'Report available once the interview is evaluated' : undefined}
-                                  onClick={() => handleDownloadReport(session.id)}
-                                >
-                                  {downloadingReportId === session.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
-                                  ) : (
-                                    <Download className="w-4 h-4 text-menu-icon-download" />
-                                  )}
-                                  <span>Download Report</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            {renderRowMenu(session)}
                           </span>
                         </td>
                       </tr>
