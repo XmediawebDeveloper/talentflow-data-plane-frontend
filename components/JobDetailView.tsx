@@ -2508,6 +2508,24 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     }
   ];
 
+  /* Background work on this job moved: invites going out (Assessment Results,
+     the AI interview invite count, the tracker) or resumes being scored
+     (Scored Resumes) — re-read so the tabs' counts change as it happens.
+     Must stay ABOVE the early returns below (applicants view, pending resume,
+     AI interview candidate drill-down): calling it after them skips its hooks
+     on those renders and crashes the page with React error #300. */
+  useBackgroundWorkRefresh((detail) => {
+    if (detail.jdId && detail.jdId !== job.id) return;
+    if (detail.kind === 'invite') {
+      void fetchAssessmentResults();
+      aiInterviewConfigFetchedRef.current = false;
+      void loadAIInterviewConfig();
+      setTrackerRefreshSignal((n) => n + 1);
+    } else {
+      void fetchScoredResumes();
+    }
+  });
+
   // Show applicants view
   if (showApplicantsView) {
     return (
@@ -2673,20 +2691,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         />
   ) : null;
 
-  /* Background work on this job moved: invites going out (Assessment Results,
-     the AI interview invite count, the tracker) or resumes being scored
-     (Scored Resumes) — re-read so the tabs' counts change as it happens. */
-  useBackgroundWorkRefresh((detail) => {
-    if (detail.jdId && detail.jdId !== job.id) return;
-    if (detail.kind === 'invite') {
-      void fetchAssessmentResults();
-      aiInterviewConfigFetchedRef.current = false;
-      void loadAIInterviewConfig();
-      setTrackerRefreshSignal((n) => n + 1);
-    } else {
-      void fetchScoredResumes();
-    }
-  });
 
   if (viewingScoredResume) {
     const _scoredIdx = scoredResumes.findIndex(
