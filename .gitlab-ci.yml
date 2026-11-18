@@ -6,8 +6,8 @@
 # Branches:
 #   ci/cd-staging → lint → build → deploy:staging   (automatic)
 #   aws     → lint → build → deploy:production (MANUAL button in GitLab UI)
-#   aws_live → Check → Build → Push to ECR → Deploy → Health check (automatic
-#             on merge from production) — deploys to the AWS EC2 instance.
+#   aws_live → Check → Build → Push to ECR → Deploy → Health check (MANUAL:
+#             Run pipeline on aws_live) — deploys to the AWS EC2 instance.
 #             Jobs live in .gitlab/ci/aws-live.yml.
 #
 # REQUIRED GitLab CI/CD variables (Settings → CI/CD → Variables) — these are
