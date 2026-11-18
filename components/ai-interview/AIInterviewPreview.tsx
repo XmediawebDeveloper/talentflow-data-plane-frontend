@@ -23,7 +23,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
-import WizardDiscardButton from './WizardDiscardButton';
+import WizardDiscardButton, { WIZARD_DISCARD_MOBILE_CLASS } from './WizardDiscardButton';
 import { isUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import {
   clearStaging, endEditSession, hasPendingThisVisit, markStaging, shouldAnnounceRestoredEdits,
@@ -1344,14 +1344,16 @@ export default function AIInterviewPreview() {
             {/* In normal flow at the end of the page (not sticky), matching
                 the Configure step. */}
             <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-              <div className="flex items-center justify-between sm:justify-start gap-2">
+              {/* Phones: two rows of two equal halves — Back | Discard over
+                  Save as Draft | Publish — matching the Clusters step. */}
+              <div className="flex items-center max-sm:items-stretch sm:justify-start gap-2 max-sm:*:flex-1 max-sm:*:justify-center">
                 <Button variant="secondary" size="md" onClick={goBack} icon={<ArrowLeft className="w-4 h-4" />}>
-                  Back to Clusters
+                  <span className="sm:hidden">Back</span>
+                  <span className="hidden sm:inline">Back to Clusters</span>
                 </Button>
-                <WizardDiscardButton onClick={handleDiscard} label={discardDeletesVersion ? 'Discard' : 'Discard changes'} />
+                <WizardDiscardButton onClick={handleDiscard} label={discardDeletesVersion ? 'Discard' : 'Discard changes'} className={WIZARD_DISCARD_MOBILE_CLASS} />
               </div>
-              {/* Phones stack the two actions full-width, Publish on top. */}
-              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="grid grid-cols-2 sm:flex sm:flex-row sm:items-center gap-2">
                 <Button variant="secondary" size="md" onClick={handleSaveAsDraft} className="w-full sm:w-auto justify-center">
                   Save as Draft
                 </Button>
@@ -1370,7 +1372,8 @@ export default function AIInterviewPreview() {
                 >
                   {publishing ? 'Publishing...' : (
                     <>
-                      Publish Interview
+                      <span className="sm:hidden">Publish</span>
+                      <span className="hidden sm:inline">Publish Interview</span>
                       <ChevronRight className="w-4 h-4" />
                     </>
                   )}

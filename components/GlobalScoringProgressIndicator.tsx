@@ -603,7 +603,11 @@ export default function GlobalScoringProgressIndicator() {
           aria-label="My Activities"
           aria-hidden={!expanded}
           inert={!expanded}
-          className={`fixed bottom-16 ${rightCls} z-40 flex max-h-[min(480px,calc(100dvh-6rem))] w-[calc(100vw-1.5rem)] sm:w-[20rem] flex-col overflow-hidden rounded-xl border border-[var(--border-dark)] bg-[var(--muted)] text-[var(--popover-foreground)] shadow-2xl origin-bottom-right motion-reduce:transition-none motion-reduce:animate-none ${expanded ? 'visible opacity-100 animate-in fade-in zoom-in-95 duration-200' : 'invisible pointer-events-none translate-x-2 translate-y-3 scale-[0.12] opacity-0 transition-[translate,scale,opacity,visibility] duration-[260ms] ease-in'}`}
+          /* bottom-[4.75rem]: the round button is bottom-6 + h-10 = 4rem tall
+             and its count badge pokes 4px above that, so bottom-16 sat the
+             popup's bottom-right corner (the "Clear finished" footer) right
+             on the badge. 76px leaves a clean 8px gap above the badge. */
+          className={`fixed bottom-[4.75rem] ${rightCls} z-40 flex max-h-[min(480px,calc(100dvh-6.75rem))] w-[calc(100vw-1.5rem)] sm:w-[20rem] flex-col overflow-hidden rounded-xl border border-[var(--border-dark)] bg-[var(--muted)] text-[var(--popover-foreground)] shadow-2xl origin-bottom-right motion-reduce:transition-none motion-reduce:animate-none ${expanded ? 'visible opacity-100 animate-in fade-in zoom-in-95 duration-200' : 'invisible pointer-events-none translate-x-2 translate-y-3 scale-[0.12] opacity-0 transition-[translate,scale,opacity,visibility] duration-[260ms] ease-in'}`}
         >
           <header className="flex items-center gap-1 border-b border-[var(--info-line)] bg-[var(--info-subtle)] px-2.5 py-1.5">
             <Layers className="h-3 w-3 text-brand-blue" />
@@ -649,7 +653,9 @@ export default function GlobalScoringProgressIndicator() {
               )}
             </div>
           )}
-          <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-1.5">
+          {/* Thin auto-hiding bar (the app's scrollbar-auto-hide) and
+              overscroll-contain so the list never drags the page behind it. */}
+          <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain scrollbar-auto-hide scrollbar-light p-1.5">
             {groupKinds.map(kind => {
               const group = visibleItems.filter(i => i.kind === kind);
               /* One job in a module: its own row, no group around it. */

@@ -1543,7 +1543,9 @@ export default function AssessmentVersionHistoryPanel({
                   }
                   fields={[
                     { label: 'Experience', value: group.experience || '—' },
-                    { label: 'Created', value: <CreatedCell createdOn={group.createdOn} createdBy={group.createdBy} /> },
+                    /* Phone card: two plain fields, not CreatedCell (whose own "Created On:" / "Created By:" labels doubled up under a "Created:" label). */
+                    { label: 'Created On', value: group.createdOn ? formatISTDate(group.createdOn) : '—' },
+                    { label: 'Created By', value: group.createdBy || '—' },
                   ]}
                   footer={
                     <>
@@ -1819,7 +1821,9 @@ export default function AssessmentVersionHistoryPanel({
                           ? <span aria-label="Loading experience" className="inline-block h-4 w-16 rounded bg-gray-200 dark:bg-slate-700 animate-pulse align-middle" />
                           : '—'),
                       },
-                      { label: 'Created', value: <CreatedCell createdOn={group.createdOn} createdBy={group.createdBy} /> },
+                      /* Phone card: two plain fields, not CreatedCell (whose own "Created On:" / "Created By:" labels doubled up under a "Created:" label). */
+                    { label: 'Created On', value: group.createdOn ? formatISTDate(group.createdOn) : '—' },
+                    { label: 'Created By', value: group.createdBy || '—' },
                     ]}
                     footer={
                       <>

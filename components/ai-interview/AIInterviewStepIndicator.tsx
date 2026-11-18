@@ -59,7 +59,11 @@ export function AIInterviewStepIndicator({ currentStep, topOffset = 0 }: Props) 
       {/* Same framed strip the JD wizard uses: soft gradient card with a
           rounded border, so both creation flows read as one component. */}
       <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-900 px-3 py-3 sm:px-5 sm:py-4">
-        <div className="flex items-center justify-center gap-2 sm:gap-4">
+        {/* Below lg (phones / tablets) the connectors flex so the four steps
+            always fit the strip — fixed widths, centred, spilled out past both
+            sides on tablets. From lg (laptop / desktop) the original design:
+            centred, fixed 96px connectors, every label. */}
+        <div className="flex items-center gap-2 sm:gap-3 lg:justify-center lg:gap-4">
           {AI_INTERVIEW_STEPS.map((label, i) => {
             const stepNum = (i + 1) as AIInterviewStep;
             const isCompleted = stepNum < currentStep;
@@ -95,7 +99,9 @@ export function AIInterviewStepIndicator({ currentStep, topOffset = 0 }: Props) 
                   )}
                 </div>
                 <div
-                  className={`hidden sm:block text-sm whitespace-nowrap font-medium transition-colors duration-300 ${
+                  /* sm–md: only the current step's label, so the strip fits;
+                     every label from md. */
+                  className={`hidden ${isCurrent ? 'sm:block' : 'md:block'} text-sm whitespace-nowrap font-medium transition-colors duration-300 ${
                     isCurrent
                       ? 'text-brand-blue-deep'
                       : isCompleted
@@ -109,14 +115,14 @@ export function AIInterviewStepIndicator({ currentStep, topOffset = 0 }: Props) 
             );
 
             return (
-              <div key={label} className="flex items-center gap-2 sm:gap-4">
+              <div key={label} className={`flex items-center gap-2 sm:gap-3 lg:gap-4 min-w-0 ${isLast ? 'flex-none' : 'flex-1 lg:flex-none'}`}>
                 {/* Step pill: circle + inline label */}
-                <div className="flex items-center gap-2.5">{pillContent}</div>
+                <div className="flex items-center gap-2.5 shrink-0">{pillContent}</div>
 
                 {/* Connector line — between steps, full color when previous is done */}
                 {!isLast && (
                   <div
-                    className={`w-5 sm:w-12 lg:w-24 h-0.5 rounded-full transition-colors duration-500 ${
+                    className={`flex-1 min-w-3 lg:flex-none lg:w-24 h-0.5 rounded-full transition-colors duration-500 ${
                       isCompleted ? 'bg-brand-blue' : 'bg-gray-200'
                     }`}
                   />

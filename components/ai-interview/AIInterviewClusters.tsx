@@ -32,7 +32,7 @@ import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStep
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import { useJdLocations } from '@/hooks/useJdLocations';
 import { useJdExperience } from '@/hooks/useJdExperience';
-import WizardDiscardButton from './WizardDiscardButton';
+import WizardDiscardButton, { WIZARD_DISCARD_MOBILE_CLASS } from './WizardDiscardButton';
 import { isUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import {
   clearStaging, hasPendingThisVisit, markStaging, shouldAnnounceRestoredEdits,
@@ -4300,16 +4300,16 @@ export default function AIInterviewClusters() {
                 the Configure step. */}
             <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               {/* Mobile: two rows — leave (Back + Discard) over advance (Save +
-                  Continue), each button sharing its row — instead of four buttons
-                  in one line that overflowed the viewport. */}
-              <div className="flex items-center justify-between sm:justify-start gap-2">
+                  Continue) — every button an equal half of its row
+                  (max-sm:*:flex-1, stretched to one height). */}
+              <div className="flex items-center max-sm:items-stretch sm:justify-start gap-2 max-sm:*:flex-1 max-sm:*:justify-center">
                 <Button variant="secondary" size="md" onClick={handleBack} disabled={saving || generating} icon={<ArrowLeft className="w-4 h-4" />}>
                   <span className="sm:hidden">Back</span>
                   <span className="hidden sm:inline">Back to Configure</span>
                 </Button>
-                <WizardDiscardButton onClick={handleDiscard} disabled={saving || generating} label={discardDeletesVersion ? 'Discard' : 'Discard changes'} />
+                <WizardDiscardButton onClick={handleDiscard} disabled={saving || generating} label={discardDeletesVersion ? 'Discard' : 'Discard changes'} className={WIZARD_DISCARD_MOBILE_CLASS} />
               </div>
-              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
+              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 max-sm:*:justify-center">
                 <Button
                   variant="secondary"
                   size="md"

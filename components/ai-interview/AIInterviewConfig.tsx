@@ -43,7 +43,7 @@ import { PROXY_INTEGRITY_VERIFICATION_ENABLED } from '@/lib/constants/featureFla
 import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
-import WizardDiscardButton from './WizardDiscardButton';
+import WizardDiscardButton, { WIZARD_DISCARD_MOBILE_CLASS } from './WizardDiscardButton';
 import { markUnsavedVersion, isUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import {
   clearStaging, hasPendingThisVisit, markStaging, shouldAnnounceRestoredEdits,
@@ -73,11 +73,13 @@ const CANDIDATE_LANGUAGES = ['English'] as const;
 /* The tabs of the Additional Settings card. Proxy verification is behind its
    feature flag, so the tab only exists where the panel does. */
 type AdditionalSettingTab = 'video' | 'languages' | 'proxy';
-const ADDITIONAL_SETTING_TABS: { key: AdditionalSettingTab; label: string; icon: LucideIcon }[] = [
-  { key: 'video', label: 'Introduction Video', icon: Video },
-  { key: 'languages', label: 'Candidate Languages', icon: Globe },
+/* `short` is the phone label: three equal pills share ~300px there, so the
+   full names would wrap onto two lines. */
+const ADDITIONAL_SETTING_TABS: { key: AdditionalSettingTab; label: string; short: string; icon: LucideIcon }[] = [
+  { key: 'video', label: 'Introduction Video', short: 'Intro Video', icon: Video },
+  { key: 'languages', label: 'Candidate Languages', short: 'Language', icon: Globe },
   ...(PROXY_INTEGRITY_VERIFICATION_ENABLED
-    ? [{ key: 'proxy' as const, label: 'QR Verification', icon: QrCode }]
+    ? [{ key: 'proxy' as const, label: 'QR Verification', short: 'QR Verify', icon: QrCode }]
     : []),
 ];
 
@@ -3365,10 +3367,14 @@ export default function AIInterviewConfig() {
           </div>
         </div>
 
-        <div className="tf-grid-3">
+        {/* One column up to xl (tablets and 1024px laptops, where the app's side
+            menu leaves too little room for a 2/3 + 1/3 split — the summary was
+            a sliver and the skill tables cramped); settings + summary side by
+            side from 1280px. */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
           {/* ── Left: main config ── */}
-          <div className="lg:col-span-2 space-y-5">
+          <div className="xl:col-span-2 space-y-5 min-w-0">
 
             {/* ── Interview Mode + Make Clusters ── */}
             <div className="tf-card-soft p-4 space-y-4">
@@ -3675,30 +3681,41 @@ export default function AIInterviewConfig() {
                 />
               </div>
 
-              {/* Below sm the tabs share the row equally, icon over a wrapping
-                  label: in one nowrap line the second tab was cut off at
-                  "Candidate Langua" with the scrollbar hidden. */}
-              <div role="tablist" aria-label="Additional settings" className="mt-3 px-4 flex items-stretch sm:items-center gap-1 border-b border-gray-100 overflow-x-auto scrollbar-hide">
-                {ADDITIONAL_SETTING_TABS.map(tab => {
-                  const active = additionalTab === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      onClick={() => setAdditionalTab(tab.key)}
-                      className={`tf-tab-line flex-1 sm:flex-none flex-col sm:flex-row justify-center text-center sm:whitespace-nowrap -mb-px ${
-                        active
-                          ? 'tf-tab-line-active'
-                          : ''
-                      }`}
-                    >
-                      <tab.icon className="w-4 h-4 flex-shrink-0" />
-                      {tab.label}
-                    </button>
-                  );
-                })}
+              {/* Segmented control: one soft track, equal-width pills, the
+                  chosen one filled brand-blue (tf-tab-pill). Phones: the track
+                  spans the card and each pill shows a short one-line label
+                  (icons from xs up) — the old underline tabs stacked the icon
+                  over a two-line label there. sm+: the track hugs its pills
+                  (inline-grid, equal 1fr columns = widest label) with full
+                  names. */}
+              <div className="px-4 pt-3">
+                <div
+                  role="tablist"
+                  aria-label="Additional settings"
+                  style={{ gridTemplateColumns: `repeat(${ADDITIONAL_SETTING_TABS.length}, minmax(0, 1fr))` }}
+                  className="grid sm:inline-grid w-full sm:w-auto gap-1 p-1 rounded-xl bg-gray-100 ring-1 ring-inset ring-gray-200/70 dark:bg-[var(--surface-hover)] dark:ring-white/[0.06]"
+                >
+                  {ADDITIONAL_SETTING_TABS.map(tab => {
+                    const active = additionalTab === tab.key;
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        title={tab.label}
+                        onClick={() => setAdditionalTab(tab.key)}
+                        className={`tf-tab-pill tf-focus flex items-center justify-center gap-1.5 min-w-0 px-2 sm:px-4 py-2 whitespace-nowrap cursor-pointer ${
+                          active ? 'tf-tab-pill-active' : 'hover:bg-white/80 hover:text-brand-blue'
+                        }`}
+                      >
+                        <tab.icon className="hidden xs:block w-4 h-4 flex-shrink-0" />
+                        <span className="truncate sm:hidden">{tab.short}</span>
+                        <span className="hidden sm:inline">{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {additionalTab === 'video' && (
@@ -3960,15 +3977,21 @@ export default function AIInterviewConfig() {
               )}
 
               {PROXY_INTEGRITY_VERIFICATION_ENABLED && additionalTab === 'proxy' && (
-                <div role="tabpanel" className="p-4 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-                        <QrCode className="w-5 h-5 text-brand-blue" />
-                      </div>
-                      <span className="tf-row-name tracking-tight">Enable QR Verification</span>
+                <div role="tabpanel" className="p-4">
+                  {/* Icon | title over description | toggle: the description
+                      lines up under the title instead of under the icon. */}
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+                      <QrCode className="w-5 h-5 text-brand-blue" />
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                    <div className="flex-1 min-w-0">
+                      {/* min-h-10 centres the title on the 40px icon. */}
+                      <span className="flex items-center min-h-10 tf-row-name tracking-tight">Enable QR Verification</span>
+                      <p className="tf-meta">
+                        Pause the interview once, after the first must-have-skills question, to verify the candidate&apos;s physical environment via a QR code and their phone&apos;s camera.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 h-10">
                       <input
                         type="checkbox"
                         checked={environmentVerificationEnabled}
@@ -3978,19 +4001,16 @@ export default function AIInterviewConfig() {
                       <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
                     </label>
                   </div>
-                  <p className="tf-meta">
-                    Pause the interview once, after the first must-have-skills question, to verify the candidate&apos;s physical environment via a QR code and their phone&apos;s camera.
-                  </p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* ── Right: Summary sidebar ── */}
-          <div className="space-y-4">
+          {/* ── Right: Summary sidebar ── (full width under the settings on tablets) */}
+          <div className="space-y-4 min-w-0">
 
             {/* Weightage distribution */}
-            <div className="tf-card-soft p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto scrollbar-auto-hide">
+            <div className="tf-card-soft p-4 xl:sticky xl:top-6 xl:max-h-[calc(100dvh-8rem)] xl:overflow-y-auto scrollbar-auto-hide">
               <div className="mb-4">
                 <SectionHeader
                   icon={ClipboardList}
@@ -4259,6 +4279,8 @@ export default function AIInterviewConfig() {
                 onClick={() => void discardCurrentVersion(LIST_TARGET)}
                 disabled={savingDraft}
                 label={discardDeletesVersion ? 'Discard' : 'Discard changes'}
+                /* Standalone page only: the wizard popup's footer has its own layout. */
+                className={embedded ? '' : WIZARD_DISCARD_MOBILE_CLASS}
               />
             </>
           );
@@ -4315,9 +4337,9 @@ export default function AIInterviewConfig() {
           }
           return (
             <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
-              {/* On phones the bar is two rows (leave / advance) rather than four
-                  stacked buttons. */}
-              <div className="flex items-center justify-between sm:justify-start gap-2">
+              {/* On phones the bar is two rows (leave / advance), every button
+                  an equal half of its row — matching Clusters and Preview. */}
+              <div className="flex items-center max-sm:items-stretch sm:justify-start gap-2 max-sm:*:flex-1 max-sm:*:justify-center">
                 {leaveActions}
               </div>
               <div className="flex flex-row items-stretch sm:items-center gap-2">
