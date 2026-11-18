@@ -55,6 +55,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import SearchableSelect from '@/components/ui/searchable-select';
@@ -159,6 +162,8 @@ const ROUND_SHORT_LABELS: Record<string, string> = {
 };
 
 type TabKey = 'all' | 'all-interviews' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'invitation-status' | 'processing' | 'audit' | 'consent' | 'settings';
+/* Phones: these leave the underlined tab strip for the status menu on the search line. */
+const PHONE_STATUS_TABS: TabKey[] = ['published', 'draft', 'completed', 'archived'];
 type OverviewCardKey = 'jobs' | 'interviews' | 'active' | 'draft' | 'interviewed';
 /* 'candidate-results' (Results) pages its own rows on the server
    (GET /ai-interview/candidate-results) with every label it shows, so opening
@@ -254,8 +259,10 @@ export default function AIInterview() {
      whichever tab is open. Phones start on cards — tables only scroll sideways
      there; the restore below still wins on larger screens. */
   const [listDisplayMode, setListDisplayMode] = useState<ListDisplayMode>('list');
+  // Phones: a short search placeholder that fits beside the status menu.
+  const [isPhone, setIsPhone] = useState(false);
   useEffect(() => {
-    if (isPhoneWidth()) setListDisplayMode('grid');
+    if (isPhoneWidth()) { setListDisplayMode('grid'); setIsPhone(true); }
   }, []);
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const [listScrollRequest, setListScrollRequest] = useState(0);
@@ -3226,8 +3233,10 @@ export default function AIInterview() {
               </p>
             </div>
           </div>
-          {/* Phones: the buttons stack full width, as the Job Openings header's. From sm unchanged. */}
-          <div className="flex max-sm:flex-col max-sm:items-stretch sm:items-center gap-2 sm:gap-3 sm:flex-wrap xl:flex-nowrap">
+          {/* Phones: a 2×2 grid — Units Left | HR Question Bank over Send Invite |
+              Create — instead of four full-width rows; labels shorten to fit a
+              half-width box. From sm unchanged. */}
+          <div className="max-sm:grid max-sm:grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3 sm:flex-wrap xl:flex-nowrap">
             {/* AI Interview Quota Card */}
             {totalUnits > 0 && (
               <QuotaBadge
@@ -3246,14 +3255,15 @@ export default function AIInterview() {
               }}
               aria-disabled={!canAccessHRQuestionBank}
               title={!canAccessHRQuestionBank ? 'You do not have permission to access the HR Question Bank' : ''}
-              className={`inline-flex items-center justify-center gap-1.5 h-10 border px-4 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
+              className={`inline-flex items-center justify-center gap-1.5 h-10 min-w-0 border px-3 sm:px-4 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
                 canAccessHRQuestionBank
                   ? 'border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5'
                   : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
               }`}
             >
               <ClipboardList className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>HR Question Bank</span>
+              <span className="truncate sm:hidden">Question Bank</span>
+              <span className="hidden sm:inline">HR Question Bank</span>
             </button>
             <Button
               variant="secondary"
@@ -3263,7 +3273,7 @@ export default function AIInterview() {
                 openInterviewInvite();
               }}
               aria-disabled={!canShareAIInterviews}
-              className={`${(!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
+              className={`max-sm:px-3 ${(!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
               // Inline so it beats the secondary variant's border-[var(--border)];
               // matches the HR Question Bank button's border-brand-blue/30.
               style={{ borderColor: 'color-mix(in srgb, var(--brand-blue) 30%, transparent)' }}
@@ -3280,11 +3290,13 @@ export default function AIInterview() {
                 router.push('/recruitment/ai-interviews/jd-selection');
               }}
               aria-disabled={!canCreateAIInterviews}
-              className={`${(!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
+              /* No quota badge (3 items): Create takes the full second row on phones. */
+              className={`max-sm:px-3 ${totalUnits > 0 ? '' : 'max-sm:col-span-2'} ${(!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
               title={!canCreateAIInterviews ? 'You do not have permission to create AI interviews' : ''}
               icon={<Plus className="w-3.5 h-3.5" />}
             >
-              Create AI Interview
+              <span className="sm:hidden">Create Interview</span>
+              <span className="hidden sm:inline">Create AI Interview</span>
             </Button>
           </div>
         </div>
@@ -3435,7 +3447,7 @@ export default function AIInterview() {
               searchValue={searchQuery}
               searchDebounceMs={0}
               onSearchChange={setSearchQuery}
-              searchPlaceholder="Search by job title, ID or skill..."
+              searchPlaceholder={isPhone ? 'Search jobs' : 'Search by job title, ID or skill...'}
               onToggleFilters={() => setShowAIFilters((open) => !open)}
               filtersOpen={showAIFilters}
               activeFilterCount={aiFilterCount}
@@ -3554,8 +3566,10 @@ export default function AIInterview() {
             Descriptions page's status-pill row (no "Show:" label). */}
         <div className="tf-jobs-contents flex items-start justify-between gap-2 flex-wrap">
         <div className="tf-jobs-contents flex items-center gap-1.5 flex-wrap w-full">
-          {/* `contents` from sm (the row as before); on phones one underlined strip. */}
-          <div className="tf-jobs-status-tabs contents" role="tablist" aria-label="AI interview views">
+          {/* `contents` from sm (the row as before). Phones (--line): an underlined
+              strip of the VIEW tabs across the card's top; Active / Draft /
+              Archived move into the status menu on the search line below. */}
+          <div className="tf-jobs-status-tabs tf-jobs-status-tabs--line contents" role="tablist" aria-label="AI interview views">
           {(() => {
             // Server counts (/configs/stats, the same shared WHERE the lists
             // page with), as on Assessments. `configs` now holds only the
@@ -3569,6 +3583,7 @@ export default function AIInterview() {
             ];
           })().map(tab => {
             const isActive = activeTab === tab.key;
+            const isStatusTab = PHONE_STATUS_TABS.includes(tab.key as TabKey);
             return (
               <button
                 key={tab.key}
@@ -3576,6 +3591,10 @@ export default function AIInterview() {
                 role="tab"
                 aria-selected={isActive}
                 aria-current={isActive ? 'page' : undefined}
+                /* Phones: the status tabs live in the status menu instead, and
+                   Configured Jobs stays underlined while one of them is picked. */
+                data-phone-hide={isStatusTab || undefined}
+                data-phone-active={(tab.key === 'all' && PHONE_STATUS_TABS.includes(activeTab)) || undefined}
                 className={`px-2.5 h-9 inline-flex items-center rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                   isActive
                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
@@ -3653,6 +3672,46 @@ export default function AIInterview() {
             })}
           </div>
           </div>
+          {/* Phones: the status menu on the search line — ( search ) [● Active 231 ▾] [⚙]
+              — standing in for the Active / Draft / Archived tabs the underlined
+              strip drops. Only on the job lists it filters. */}
+          {isConfigListTab && !showUngroupedList && (() => {
+            const statusOptions = [
+              { key: 'all' as const, label: 'All jobs', count: stats?.total_jobs ?? 0, dot: 'bg-brand-blue' },
+              { key: 'published' as const, label: 'Active', count: stats?.published_configs ?? 0, dot: 'bg-success' },
+              { key: 'draft' as const, label: 'Draft', count: stats?.draft_configs ?? 0, dot: 'bg-brand-orange' },
+              { key: 'archived' as const, label: 'Archived', count: stats?.archived_configs ?? 0, dot: 'bg-gray-400' },
+            ];
+            const current = statusOptions.find((o) => o.key === activeTab) ?? statusOptions[0];
+            return (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="tf-ai-statusmenu sm:hidden inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900 hover:border-brand-blue/40 data-[state=open]:border-brand-blue/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    aria-label={`Status: ${current.label}, ${current.count}`}
+                  >
+                    <span className={`h-2 w-2 rounded-full flex-shrink-0 ${current.dot}`} aria-hidden="true" />
+                    {current.label}
+                    <span className="font-medium text-gray-500 dark:text-slate-400 tabular-nums">{current.count.toLocaleString()}</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52 bg-white dark:bg-slate-900">
+                  <DropdownMenuLabel className="text-xs text-gray-500">Status</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={current.key} onValueChange={(v) => openListView(v as TabKey)}>
+                    {statusOptions.map((o) => (
+                      <DropdownMenuRadioItem key={o.key} value={o.key}>
+                        <span className={`h-2 w-2 rounded-full flex-shrink-0 ${o.dot}`} aria-hidden="true" />
+                        <span className="flex-1">{o.label}</span>
+                        <span className="text-xs font-semibold text-gray-500 tabular-nums">{o.count.toLocaleString()}</span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          })()}
           {/* Phones: Clear Sort, the Sort menu and Refresh on a line of their own, right. */}
           <div className="tf-jobs-tools contents">
           {/* Clear Sort (portalled in by All Interviews) and Sort by — in the
@@ -3718,7 +3777,7 @@ export default function AIInterview() {
             icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
             className="tf-jobs-refresh flex-shrink-0 !h-9 sm:ml-auto"
           >
-            <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
+            <span className="hidden max-sm:inline 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
           )}
           </div>
@@ -3907,11 +3966,16 @@ export default function AIInterview() {
                         }`}
                       >
                         <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
+                          {/* Header — identity left, status pill top-right on the
+                              same line (phones / tablets). From @4xl the wrapper
+                              is `contents`, so both fall back into the desktop
+                              row as separate columns, unchanged. */}
+                          <div className="flex items-start justify-between gap-2 @4xl/ai-row:contents">
                           {/* Identity — icon, Job ID, title. As on the Job Openings
                               card (JobOpeningSummary): ID + name keep one line and
                               truncate, and the job badge wraps under them on a phone
                               rather than squeezing the name; one line again from @4xl. */}
-                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 min-w-0 @4xl/ai-row:flex-nowrap @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
+                          <div className="flex-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 min-w-0 @4xl/ai-row:flex-none @4xl/ai-row:flex-nowrap @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
                             <div className={`${JOB_HEADLINE_ROW} gap-2.5`}>
                               <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
                                 <Briefcase className="h-4 w-4 text-brand-blue" />
@@ -3935,7 +3999,8 @@ export default function AIInterview() {
 
                           {/* Status of the job's representative interview —
                               boxed to a fixed width so the metric columns line up. */}
-                          <div className="flex-shrink-0 @4xl/ai-row:w-[104px] flex flex-wrap items-center gap-1">
+                          {/* mt-1.5 centres the pill on the 36px job icon beside it. */}
+                          <div className="flex-shrink-0 mt-1.5 @4xl/ai-row:mt-0 @4xl/ai-row:w-[104px] flex flex-wrap items-center justify-end @4xl/ai-row:justify-start gap-1">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${statusPill}`}>
                               <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
                               {statusPillLabel}
@@ -3943,18 +4008,15 @@ export default function AIInterview() {
                             {/* Live, with saved edits waiting for Publish. */}
                             {hasUnpublishedChanges(config) && <UnpublishedChangesChip />}
                           </div>
+                          </div>
 
-                          {/* Totals for the job. Two columns on a phone, four in a
-                              divided row once there is width for them. */}
-                          <div className={listDisplayMode === 'grid' && openVersionsFor !== config.id
-                            ? 'grid grid-cols-2 gap-x-2 gap-y-3'
-                            : 'tf-grid-stats @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0'}>
+                          {/* Totals for the job. Phones / tablets: a 2×2 grid of soft
+                              tiles. From @4xl: four columns in one divided row. */}
+                          <div className="grid grid-cols-2 gap-2 @4xl/ai-row:grid-cols-4 @4xl/ai-row:gap-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
                             {rowMetrics.map(({ key, icon: MetricIcon, iconClass, value, label }) => (
                               <div
                                 key={key}
-                                className={listDisplayMode === 'grid' && openVersionsFor !== config.id
-                                  ? 'min-w-0'
-                                  : 'min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0'}
+                                className="min-w-0 rounded-lg bg-slate-50 ring-1 ring-inset ring-gray-100 px-3 py-2 dark:bg-slate-800/50 dark:ring-slate-700/60 @4xl/ai-row:rounded-none @4xl/ai-row:!bg-transparent @4xl/ai-row:ring-0 @4xl/ai-row:py-0 @4xl/ai-row:border-l @4xl/ai-row:border-gray-100 dark:@4xl/ai-row:border-slate-700/60 @4xl/ai-row:first:border-l-0 @4xl/ai-row:first:pl-0"
                               >
                                 <div className="flex items-center gap-1.5">
                                   <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
@@ -3965,12 +4027,12 @@ export default function AIInterview() {
                             ))}
                           </div>
 
-                          {/* Actions — View Versions, Track, Result. flex-wrap so
-                              three buttons never overflow a narrow phone card;
-                              their own labels also collapse to icon-only below
-                              sm: for the same reason. */}
+                          {/* Actions — View Versions, Track, Result. Phones /
+                              tablets: a full-width footer row under a hairline,
+                              each button an equal share (*:flex-1) with its label.
+                              From @4xl: right-aligned, natural widths. */}
                           <div
-                            className="flex items-center flex-wrap gap-2 flex-shrink-0 self-start @4xl/ai-row:self-auto @4xl/ai-row:ml-auto"
+                            className="flex items-center gap-2 flex-shrink-0 w-full pt-3 border-t border-gray-100 dark:border-slate-700/60 *:flex-1 *:justify-center @4xl/ai-row:w-auto @4xl/ai-row:pt-0 @4xl/ai-row:border-t-0 @4xl/ai-row:*:flex-none @4xl/ai-row:ml-auto"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {hasVersionHistory && (
@@ -4025,7 +4087,7 @@ export default function AIInterview() {
                                 title={trackReason}
                               >
                                 <Radar className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Track</span>
+                                <span>Track</span>
                               </button>
                             )}
 
@@ -4047,7 +4109,7 @@ export default function AIInterview() {
                               title={resultReason}
                             >
                               <BarChart2 className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Result</span>
+                              <span>Result</span>
                             </button>
                           </div>
                         </div>

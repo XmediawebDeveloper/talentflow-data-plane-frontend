@@ -290,6 +290,15 @@ const SINGLE_LINE_ROW =
    text-xs with 14px icons and tighter gaps, and each field stays whole on one
    line — so they wrap as whole units ("By Deepak Raj", "4 assessed") instead
    of breaking mid-name or mid-word inside a narrow column. */
+/* `mergeInfoRows` (AI Interview wizard header): the card shares its width with
+   View JD / Change JD, so on tablets and 1024px laptops the one line ran past
+   the card and scrolled under a visible native bar (plain `scrollbar-hide`
+   loses to the global thin-scrollbar rule). Below xl the items wrap, each kept
+   whole; from xl it is one line, scrolling if it must, with the native bar
+   truly hidden (tf-hide-native-scrollbar). */
+const MERGED_INFO_ROW =
+  'flex-wrap gap-x-3 gap-y-1.5 [&>span]:whitespace-nowrap xl:flex-nowrap xl:gap-y-0 xl:whitespace-nowrap xl:overflow-x-auto tf-hide-native-scrollbar xl:[&>span]:flex-shrink-0';
+
 const PHONE_GRID_ROW =
   'max-sm:text-xs max-sm:gap-x-3 max-sm:gap-y-1.5 max-sm:[&>span]:whitespace-nowrap max-sm:[&>span]:max-w-full max-sm:[&>span]:gap-1 max-sm:[&_svg]:w-3.5 max-sm:[&_svg]:h-3.5';
 
@@ -434,7 +443,7 @@ export default function JobOpeningSummary({
 
       {mergeInfoRows ? (
         /* Both rows as one line */
-        <div className={`flex items-center text-sm text-gray-600 dark:text-slate-400 mb-2 ${SINGLE_LINE_ROW}`}>
+        <div className={`flex items-center text-sm text-gray-600 dark:text-slate-400 mb-2 ${MERGED_INFO_ROW}`}>
           <JobOpeningPrimaryItems job={job} hideEmpty={hideEmptyFields} />
           {showMetaRow && <JobOpeningMetaItems job={job} showIcons={showMetaIcons} showCounts={showCountBadges} coloredCounts={coloredCountBadges} applicantsLabel={applicantsLabel} />}
         </div>
