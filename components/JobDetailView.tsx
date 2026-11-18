@@ -1,9 +1,10 @@
 'use client'
 
 import { phoneCentredLeft } from '@/lib/hooks/useCenteredMenuOnPhone';
-import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, CheckCircle2, CheckSquare, Square, MoreVertical, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video, FileDown } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, CheckCircle2, CheckSquare, Square, MoreVertical, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video, FileDown } from 'lucide-react';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
+import { useBackgroundWorkRefresh } from '@/lib/backgroundWorkEvents';
 import { createPortal } from 'react-dom';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -13,13 +14,14 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { jdService, JDLineageVersion, JDLocation, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
-import { formatLocationGroups, formatJobVersionLabel, formatLastUpdated, getPublishedDate } from '@/lib/utils/jobOpeningDisplay';
+import { formatLocationGroups, formatJobVersionLabel, formatLastUpdated, getPublishedDate, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
 import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
+import { MobileRecordCard } from '@/components/ui/mobile-record-card';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import ExtractedDataSummary from '@/components/jobs/ExtractedDataSummary';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
@@ -27,13 +29,12 @@ import { SortByControl } from '@/components/ui/select-all-menu';
 import ListPagination from '@/components/ListPagination';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import { useIsMobile } from '@/components/ui/use-mobile';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import AITalentMatchConfirmModal from './AITalentMatchConfirmModal';
 import { JobActionLockProvider } from '@/components/jobs/JobActionLock';
-import ResumeUploadModal from './ResumeUploadModal';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import { resumeService } from '@/lib/services/resumeService';
-import ResumeScoring from './ResumeScoring';
 import JobApplicants from './JobApplicants';
 import ScoredResumesTable, {
   useScoringActionPermissions,
@@ -82,7 +83,7 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { usePlanFeature, usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { useScoringProgress, toMatchResult } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
@@ -614,13 +615,17 @@ const JOB_ICON_ACTION_BASE =
    Hover now only deepens the same hue, which is what a hover should do:
    confirm the target, not introduce it.
 
-   The three hues are the ones this app already uses for these actions — blue
-   for edit, the red `Ban` of the job list's Disable row, and the shared
+   The three hues are the job list ⋮ menu's own for these actions — blue for
+   edit, its Disable row's orange-700 `Ban`, and the shared
    `--menu-icon-archive` token — rather than a palette invented here. */
 const JOB_ICON_ACTION_EDIT =
   'text-brand-blue hover:bg-brand-blue/10 hover:border-brand-blue/40';
 const JOB_ICON_ACTION_DISABLE =
-  'text-destructive hover:bg-destructive-subtle hover:border-destructive-line';
+  'text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-500/10 hover:border-orange-200 dark:hover:border-orange-500/30';
+/* Re-enable / Unarchive: green, as the job list ⋮ menu's Re-enable JD and
+   Unarchive Job rows (text-success). */
+const JOB_RESTORE_ACTION =
+  '!text-success !border-success-line hover:!bg-success-subtle';
 const JOB_ICON_ACTION_ARCHIVE =
   'text-menu-icon-archive hover:bg-brand-orange/10 hover:border-brand-orange/40';
 
@@ -703,12 +708,27 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
    * "Preferred" criteria share the 40% block and never fail a candidate on their own.
    */
   const requirementLabel = requirementBadge;
-  /* The breadcrumb still pins at the top, but the tab bar below it no longer
-     sticks — the toolbar lives inside it now and must scroll naturally with the
-     page (matching the Job Openings master, whose toolbar doesn't pin either).
-     That removed the measured top-offset the pinned bar used to need.
-     `breadcrumbBarRef` is still handed to PageBreadcrumb for its own layout. */
-  const breadcrumbBarRef = useRef<HTMLElement | null>(null);
+  /* The tab card (tabs + its toolbar row) pins directly under the sticky
+     breadcrumb, so its `top` is the breadcrumb's real height — re-measured on
+     resize, because the bar grows when its RecordPager row wraps (tablet /
+     phone). A callback ref held in state, not useRef + a mount-only effect:
+     the first renders are loading / early-return views with no breadcrumb, so
+     a mount-only measure found null and the tabs tucked under a wrapped crumb.
+     Same fix as CandidateScoringDetailPage. */
+  const [breadcrumbBarEl, breadcrumbBarRef] = useState<HTMLElement | null>(null);
+  const [tabBarTop, setTabBarTop] = useState(52);
+  /* The pinned tab card itself — the Overview right column measures it so it
+     pins BELOW the tabs rather than sliding under them. */
+  const [tabCardEl, setTabCardEl] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const bar = breadcrumbBarEl;
+    if (!bar || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setTabBarTop(bar.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [breadcrumbBarEl]);
 
   const jobBreadcrumbItems = breadcrumbItems ?? [
     { label: 'Dashboard', href: '/dashboard' },
@@ -737,10 +757,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   });
   const toggleActionGroup = (group: keyof typeof openActionGroups) =>
     setOpenActionGroups(prev => ({ ...prev, [group]: !prev[group] }));
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showScoringView, setShowScoringView] = useState(false);
   const [showApplicantsView, setShowApplicantsView] = useState(false);
-  const [uploadedResumes, setUploadedResumes] = useState<any[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   // True while the Create action resolves whether this JD already has an
   // assessment, so the button shows a spinner instead of feeling unresponsive.
@@ -957,13 +974,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   /** Bumped by a send from a tracker's Invite More, so the tracker left open
    *  under the popup lists the new invitations at once. */
   const [trackerRefreshSignal, setTrackerRefreshSignal] = useState(0);
+  /** Bumped by a successful send from a popup opened off the AI Talent Match
+   *  tab's Actions menu, so that tab drops its (now acted-on) row selection. */
+  const [aiMatchSelectionResetSignal, setAiMatchSelectionResetSignal] = useState(0);
   /** Opens the popup with a tab's ticked candidates, each tagged with that tab
    *  as its source (the popup's group headings). */
-  const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource) =>
+  const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource, onSent?: () => void) =>
     setInviteDialog({
       kind,
       candidates: candidates.map((c) => ({ ...c, source })),
       openOn: source === 'talent-match' ? 'talent-match' : undefined,
+      // e.g. the Scored Resumes table's own clear, when opened from its selection.
+      onSent: onSent ? () => onSent() : undefined,
     });
   // AI Interview Version History dialog (history icon on the AI Interview heading).
   const [showAIVersionHistory, setShowAIVersionHistory] = useState(false);
@@ -2064,7 +2086,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     const GAP = 16;
     const measure = () => {
       const viewportH = scroller ? scroller.clientHeight : window.innerHeight;
-      const pinnedTop = (breadcrumbBarRef.current?.offsetHeight ?? 0) + GAP;
+      // Below the breadcrumb AND the sticky tab card pinned under it.
+      const pinnedTop = (breadcrumbBarEl?.offsetHeight ?? 0) + (tabCardEl?.offsetHeight ?? 0) + GAP;
       const columnH = column.offsetHeight;
       setRightColumnTop(
         pinnedTop + columnH + GAP <= viewportH ? pinnedTop : viewportH - columnH - GAP
@@ -2074,9 +2097,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     const ro = new ResizeObserver(measure);
     ro.observe(column);
     if (scroller) ro.observe(scroller);
-    if (breadcrumbBarRef.current) ro.observe(breadcrumbBarRef.current);
+    if (breadcrumbBarEl) ro.observe(breadcrumbBarEl);
+    if (tabCardEl) ro.observe(tabCardEl);
     return () => ro.disconnect();
-  }, [activeTab]);
+  }, [activeTab, breadcrumbBarEl, tabCardEl]);
   // Recent Activity panel — 10 events per page.
   const [activityPage, setActivityPage] = useState(1);
   const ACTIVITY_PAGE_SIZE = 10;
@@ -2268,8 +2292,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         return 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
       case 'Disabled':  // JD15: Disabled status styling
         return 'bg-destructive-subtle text-destructive border-destructive-line';
-      case 'Archived':
-        return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'Archived': {
+        // The Job Openings list's own Archived badge (getStatusConfig), so the
+        // two pages always read the same.
+        const archived = getStatusConfig('Archived');
+        return `${archived.bg} ${archived.text} ${archived.border}`;
+      }
       default:
         return 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
     }
@@ -2360,7 +2388,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         jobId: job.id,
         source: 'Internal DB' as const,
       }));
-      startScoringJob(batchId, job.title, initialItems, returnUrl);
+      startScoringJob(batchId, job.title, initialItems, returnUrl, { batchId });
 
       toast.success(`Scoring started for ${resumeIds.length} candidate(s).`);
       setActiveTab('scored-resumes');
@@ -2374,9 +2402,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           items.forEach((item: any) => {
             const itemId = `${batchId}-${item.resume_id}`;
             const itemStatus = normalizeScoringStatus(item.status);
-            if (itemStatus === 'completed') {
+            if (item.status === 'cancelled') {
+              updateItemStatus(batchId, itemId, 'Cancelled', {
+                errorReason: item.error_message || 'Cancelled before scoring started',
+              });
+            } else if (itemStatus === 'completed') {
               updateItemStatus(batchId, itemId, 'Scored successfully', {
                 score: item.overall_score,
+                overallRating10: item.overall_rating_10,
+                matchResult: toMatchResult(item.match_status),
                 scoredDateTime: new Date().toISOString(),
               });
             } else if (itemStatus === 'failed') {
@@ -2431,54 +2465,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     toast.error(`AI Matching failed: ${error}`);
   };
 
-  const handleAddApplications = () => {
-    setShowAddApplicantsMenu(false);
-    setShowUploadModal(true);
-  };
-
   const handleSelectApplicants = () => {
     setShowAddApplicantsMenu(false);
     setShowSelectSourceModal(true);
-  };
-
-  const handleResumeUpload = (files: File[]) => {
-    // Mock scoring data
-    const mockResumes = files.map((file, index) => ({
-      id: `resume-${Date.now()}-${index}`,
-      name: file.name.replace(/\.(pdf|doc|docx)$/, '').replace(/[-_]/g, ' '),
-      email: `candidate${index + 1}@example.com`,
-      phone: `+1 (555) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`,
-      location: ['New York, NY', 'San Francisco, CA', 'Austin, TX', 'Remote'][Math.floor(Math.random() * 4)],
-      score: Math.floor(Math.random() * 30) + 70,
-      matchStatus: ['excellent', 'good', 'fair'][Math.floor(Math.random() * 3)] as 'excellent' | 'good' | 'fair',
-      experience: ['2-3 years', '3-5 years', '5+ years'][Math.floor(Math.random() * 3)],
-      education: ['Bachelor\'s Degree', 'Master\'s Degree', 'PhD'][Math.floor(Math.random() * 3)],
-      skills: ['React', 'TypeScript', 'Node.js', 'Python', 'AWS', 'Docker'].sort(() => Math.random() - 0.5).slice(0, 4),
-      strengths: [
-        'Strong technical background in required technologies',
-        'Relevant industry experience',
-        'Excellent communication skills',
-        'Leadership experience'
-      ].sort(() => Math.random() - 0.5).slice(0, 2),
-      gaps: [
-        'Limited experience with specific framework',
-        'Education level below preferred',
-        'Geographic location distance'
-      ].sort(() => Math.random() - 0.5).slice(0, 2)
-    }));
-
-    setUploadedResumes(mockResumes);
-    setShowUploadModal(false);
-    setShowScoringView(true);
-  };
-
-  const handleProceedToApplicants = () => {
-    setShowScoringView(false);
-    setShowApplicantsView(true);
-  };
-
-  const handleBackFromScoring = () => {
-    setShowScoringView(false);
   };
 
   const handleBackFromApplicants = () => {
@@ -2541,28 +2530,30 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     }
   ];
 
-  // Show scoring view
-  if (showScoringView) {
-    return (
-      <ResumeScoring
-        jobTitle={job.title}
-        resumes={uploadedResumes}
-        onBack={handleBackFromScoring}
-        onProceedToApplicants={handleProceedToApplicants}
-      />
-    );
-  }
+  /* Background work on this job moved: invites going out (Assessment Results,
+     the AI interview invite count, the tracker) or resumes being scored
+     (Scored Resumes) — re-read so the tabs' counts change as it happens.
+     Must stay ABOVE the early returns below (applicants view, pending resume,
+     AI interview candidate drill-down): calling it after them skips its hooks
+     on those renders and crashes the page with React error #300. */
+  useBackgroundWorkRefresh((detail) => {
+    if (detail.jdId && detail.jdId !== job.id) return;
+    if (detail.kind === 'invite') {
+      void fetchAssessmentResults();
+      aiInterviewConfigFetchedRef.current = false;
+      void loadAIInterviewConfig();
+      setTrackerRefreshSignal((n) => n + 1);
+    } else {
+      void fetchScoredResumes();
+    }
+  });
 
   // Show applicants view
   if (showApplicantsView) {
     return (
       <JobApplicants
         jobTitle={job.title}
-        applicants={[...mockApplicants, ...uploadedResumes.map(r => ({
-          ...r,
-          status: 'New' as const,
-          appliedDate: 'Just now'
-        }))]}
+        applicants={mockApplicants}
         onBack={handleBackFromApplicants}
       />
     );
@@ -2717,6 +2708,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onSent={(kind, sent) => {
             if (kind === 'assessment') void fetchAssessmentResults();
             else setAiInterviewCount((prev) => Math.max(prev + sent, 1));
+            // Bulk send from the AI Talent Match tab succeeded: clear its selection.
+            if (inviteDialog.openOn === 'talent-match') setAiMatchSelectionResetSignal((n) => n + 1);
             inviteDialog.onSent?.(kind, sent);
           }}
         />
@@ -3304,9 +3297,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   )
                 )}
 
-                {/* Orange on hover, matching the job list's Disable menu item —
-                    it takes the JD out of service, so it should not look like
-                    the neutral pair either side of it. */}
+                {/* Orange, matching the job list's Disable menu item — it takes
+                    the JD out of service, so it should not look like the
+                    neutral pair either side of it. */}
                 {onDisable && (
                   <button
                     onClick={() => { if (!disableLocked) handleDisable(); }}
@@ -3346,11 +3339,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <div className="flex items-center gap-2">
                 {onEnable && (
                   <Button
-                    variant="primary"
+                    variant="secondary"
                     onClick={() => { if (!disableLocked) onEnable(job); }}
                     aria-disabled={disableLocked || undefined}
-                    className={`${(disableLocked ? 'opacity-60 cursor-not-allowed' : undefined) ?? ''} disabled:opacity-50`}
-                    icon={<CheckCircle className="w-4 h-4" />}
+                    className={`${JOB_RESTORE_ACTION} ${(disableLocked ? 'opacity-60 cursor-not-allowed' : undefined) ?? ''} disabled:opacity-50`}
+                    icon={<CheckCircle2 className="w-4 h-4" />}
                     aria-label="Re-enable this JD"
                     title={disableLocked ? 'You do not have permission to re-enable job descriptions' : 'Re-enable this JD'}
                   >
@@ -3365,13 +3358,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <div className="flex items-center gap-2">
                 {onUnarchive && (
                   <Button
-                    variant="primary"
+                    variant="secondary"
                     // Same lock as Archive (2026-11-10): it had none, so Viewer saw it enabled.
                     onClick={() => { if (!archiveLocked) onUnarchive(job); }}
                     aria-disabled={archiveLocked || undefined}
-                    className={archiveLocked ? 'opacity-60 cursor-not-allowed' : undefined}
+                    className={`${JOB_RESTORE_ACTION} ${archiveLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                     title={archiveLocked ? 'You do not have permission to unarchive job descriptions' : 'Unarchive this JD'}
-                    icon={<ArchiveRestore className="w-4 h-4" />}
+                    icon={<RefreshCw className="w-4 h-4" />}
                   >
                     Unarchive
                   </Button>
@@ -3408,9 +3401,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         </div>
       </div>
 
-      {/* Tab Navigation — NOT sticky: the tabs and the toolbar they hold scroll
-          naturally with the page, like the Job Openings master toolbar. */}
+      {/* Tab Navigation — sticky, pinned flush under the sticky breadcrumb at
+          its MEASURED height (tabBarTop). z-20 keeps it under the crumb bar
+          (z-30) and over the page content scrolling beneath it. */}
       <div
+        ref={setTabCardEl}
+        style={{ top: tabBarTop }}
         /* pb-2 only on Overview: that tab has no toolbar row below the tabs, so
            without it the underline track would sit flush against the card's
            bottom border (reading as a doubled border at the rounded corners).
@@ -3418,7 +3414,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
            Phones / tablets (below lg): on Overview this card and the job
            description card below join into ONE card — the tab track becomes the
            divider — the way the result tabs' toolbar sits inside this card. */
-        className={`mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5${activeTab === 'overview' ? ' pb-2 max-lg:mb-0 max-lg:pb-0 max-lg:rounded-b-none max-lg:border-b-0 max-lg:shadow-none' : ''}`}
+        className={`sticky z-20 mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5${activeTab === 'overview' ? ' pb-2 max-lg:mb-0 max-lg:pb-0 max-lg:rounded-b-none max-lg:border-b-0 max-lg:shadow-none' : ''}`}
       >
         {/* Underline tabs. The border-b "track" is on this NON-scrolling outer
             div; the inner div is the horizontal scroll container (scrollbar-hide,
@@ -3744,7 +3740,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               scoring={{
                 allowOverqualified: job.allowOverqualified,
                 jobHoppingEnabled: job.jobHoppingEnabled,
-                overqualifiedNoNote: 'Experience well above the range scores lower',
+                overqualifiedNoNote: 'Experience more than 3 years above the maximum fails Experience',
               }}
               aiExtracted={job.creation_method === 'ai_generated'}
             />
@@ -4465,7 +4461,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               hiddenColumnIds={['jdId', 'jobTitle']}
               /* Actions ▸ AI Assessment / AI Interview Invite: the AI Talent
                  Match tab's version popups, with the ticked candidates. */
-              onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'score-resume')}
+              onOpenInviteDialog={(kind, invitees, _fromSelection, clearSelection) => openInviteDialog(kind, invitees, 'score-resume', clearSelection)}
               /* Row ⋮: Create / Send Assessment | AI Interview directly, no Invite ▸. */
               inlineRowInviteItems
               initialMatchStatus={scoredResumesMatchFilter}
@@ -4699,6 +4695,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           loading={loadingAiMatch}
           canRunAiMatch={permissions.canRunAiMatch}
           jobLockedReason={jobInactive ? jobInactiveReason : null}
+          selectionResetSignal={aiMatchSelectionResetSignal}
           onRunMatch={handleAITalentMatch}
           onScoreSelected={(selected) => { if (selected.length > 0) setAiMatchScoreReview(selected); }}
           onScoreAll={() => {
@@ -4734,15 +4731,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         />
       )}
       </JobActionLockProvider>
-
-      {/* Resume Upload Modal */}
-      {showUploadModal && (
-        <ResumeUploadModal
-          jobTitle={job.title}
-          onClose={() => setShowUploadModal(false)}
-          onSubmit={handleResumeUpload}
-        />
-      )}
 
       {/* Draft assessment prompt — Create found an unpublished draft for this JD.
           Publishing happens here rather than on the assessment details page,
@@ -5347,6 +5335,7 @@ function AIMatchTabContent({
   loading,
   canRunAiMatch,
   jobLockedReason = null,
+  selectionResetSignal = 0,
   onRunMatch,
   onScoreSelected,
   onScoreAll,
@@ -5371,6 +5360,9 @@ function AIMatchTabContent({
   /* A disabled / archived JD: Run AI Match and Score (row and Score
      Selected) stay visible, greyed out with this as the reason. */
   jobLockedReason?: string | null;
+  /* Bumped by the parent after a bulk action on the ticked rows succeeds
+     (an invite send); each change clears the selection. */
+  selectionResetSignal?: number;
   onRunMatch: () => void;
   onScoreSelected: (selected: MatchedCandidate[]) => void;
   onScoreAll: () => void;
@@ -5385,6 +5377,11 @@ function AIMatchTabContent({
     ? 'You do not have permission to run AI Talent Match'
     : jobLockedReason ?? null;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // A bulk action on the selection succeeded upstream — drop the selection
+  // (the Actions bar hides with it).
+  useEffect(() => {
+    if (selectionResetSignal > 0) setSelectedIds(new Set());
+  }, [selectionResetSignal]);
   /* Rows opened to show their remaining details (Phone, Location, Skills,
      Uploaded By / Date, Attachments) — display only. */
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
@@ -5408,6 +5405,9 @@ function AIMatchTabContent({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
+  // Phones (<768px): list only - the toggle is hidden and grid is never used there
+  const isMobile = useIsMobile();
+  const effectiveDisplayMode: ListDisplayMode = isMobile ? 'list' : displayMode;
   /* The secondary filters (phone / location / experience range) collapse behind
      a "More Filters" toggle so this tab's toolbar reads as one row like the Job
      Openings master and the sibling tabs, rather than an always-expanded second
@@ -5424,6 +5424,13 @@ function AIMatchTabContent({
     setFilterExperienceMin('');
     setFilterExperienceMax('');
   };
+  // One tag per filter the More Filters badge counts, so the two always agree.
+  const aiMatchFilterChips: FilterChip[] = [
+    filterPhone.trim() !== '' && { key: 'phone', label: 'Phone', value: filterPhone.trim(), onRemove: () => setFilterPhone('') },
+    filterLocation.trim() !== '' && { key: 'location', label: 'Location', value: filterLocation.trim(), onRemove: () => setFilterLocation('') },
+    filterExperienceMin !== '' && { key: 'expMin', label: 'Experience (min)', value: `${filterExperienceMin} yrs`, onRemove: () => setFilterExperienceMin('') },
+    filterExperienceMax !== '' && { key: 'expMax', label: 'Experience (max)', value: `${filterExperienceMax} yrs`, onRemove: () => setFilterExperienceMax('') },
+  ].filter(Boolean) as FilterChip[];
 
   // Attachments column → Version History popup. Same fetch-and-fallback
   // pattern as the standalone AI Talent Match page's handleAttachmentsClick:
@@ -5595,6 +5602,8 @@ function AIMatchTabContent({
       title: `${title} - AI Talent Match`,
     });
     toast.success(`Exported ${rows.length} candidate${rows.length !== 1 ? 's' : ''} to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+    // Export succeeded: clear the selection (hides the Actions bar). No refresh — nothing changed.
+    setSelectedIds(new Set());
   };
 
   /* Create / Send Assessment | AI Interview — the Scored Resumes tab's
@@ -5739,6 +5748,8 @@ function AIMatchTabContent({
           /* The built-in More Filters (and Reset) at the 36px band via
              `compactButtons` — the same buttons the sibling result tabs use. */
           onToggleFilters={() => setShowMoreFilters((open) => !open)}
+          // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+          filterChips={aiMatchFilterChips}
           compactButtons
           filtersOpen={showMoreFilters}
           activeFilterCount={aiMatchActiveFilterCount}
@@ -5746,7 +5757,10 @@ function AIMatchTabContent({
           onClearFilters={clearAiMatchFilters}
           /* h-9 on the List/Grid switch at every width so it lines up with
              Select All on phones too (36px, 16px icons), not only from sm. */
-          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" />}
+          /* Always passed: `trailing` is what switches ListToolbar to its even,
+             stacked tab-card layout on narrow widths. Below md (useIsMobile's
+             768px) the switch itself is hidden and the list is forced. */
+          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4 max-md:!hidden" />}
           beforeSearch={
             <>
               {/* Select All — the shared ToolbarSelectAll (this page / all /
@@ -5818,7 +5832,8 @@ function AIMatchTabContent({
           filterPanel={
             /* pb-4 keeps the inputs off the card's bottom border (they were 1px
                from it); gap-3 sm:gap-4 matches the master's field spacing. */
-            <div className="tf-grid-4 [&>div]:min-w-0 pb-4">
+            <div className="pb-4">
+            <div className="tf-grid-4 [&>div]:min-w-0">
               <div>
                 <label className="block tf-label mb-1.5">Phone</label>
                 <input
@@ -5859,6 +5874,9 @@ function AIMatchTabContent({
                   className="tf-input"
                 />
               </div>
+            </div>
+            {/* Active filter tags as the panel's last line — phones / tablets only. */}
+            <FilterChipsPanelLine chips={aiMatchFilterChips} />
             </div>
           }
           />
@@ -6030,8 +6048,8 @@ function AIMatchTabContent({
 
       {/* Table / Grid */}
       <div className="tf-card overflow-hidden">
-        {displayMode === 'grid' ? (
-          <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto p-4">
+        {effectiveDisplayMode === 'grid' ? (
+          <div className="max-h-[calc(100dvh-20rem)] overflow-auto p-4">
             {filteredCandidates.length === 0 ? (
               <div className="px-4 py-12 text-center tf-body-muted">
                 No candidates match the current filters.
@@ -6072,9 +6090,9 @@ function AIMatchTabContent({
                         label={candidate.name || 'candidate'}
                         selectionActive={selectedIds.size > 0}
                       />
-                      {/* pl-6 keeps the corner select seal off the avatar — it shows on touch, on
+                      {/* pl-7 keeps the corner select seal off the avatar — it shows on touch, on
                           hover, and on every card once anything is selected. */}
-                      <div className="flex items-start gap-2.5 pl-6">
+                      <div className="flex items-start gap-2.5 pl-7">
                         <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 min-w-0">
@@ -6151,7 +6169,7 @@ function AIMatchTabContent({
             header stays pinned. Header background/border live on the cells so the
             pinned row paints solid over the rows sliding underneath. */
         <>
-        <div className="hidden lg:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
+        <div className="hidden lg:block max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
           {/* With no rows the width floor and the header come off — see
               `TABLE_EMPTY_PANEL_CLASS`. A 1450px table centres its one empty cell across
               1450px, which put the message off the side of the shell behind a
@@ -6162,7 +6180,7 @@ function AIMatchTabContent({
               email, pills, icon checkboxes and ⋮ row-action button. Same data,
               same handlers: the row opens the candidate, ⋮ offers that and the
               Attachments the old column held. */}
-          <table className={`w-full table-auto ${filteredCandidates.length === 0 ? '' : 'min-w-[880px]'}`}>
+          <table className={`w-full table-auto ${filteredCandidates.length === 0 ? '' : 'min-w-[1000px]'}`}>
             {filteredCandidates.length > 0 && (
             <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
@@ -6171,6 +6189,7 @@ function AIMatchTabContent({
                 <th className="tf-th-cell w-10 tf-sticky-col-left tf-th" aria-label="Select" />
                 <th className="tf-th-cell text-center tf-th">Rating</th>
                 <th className="tf-th-cell text-left tf-th">Candidate</th>
+                <th className="tf-th-cell text-left tf-th">Role</th>
                 <th className="tf-th-cell text-left tf-th">Experience</th>
                 <th className="tf-th-cell text-center tf-th">Resume Version</th>
                 <th className="tf-th-cell text-left tf-th">Scored Status</th>
@@ -6181,7 +6200,7 @@ function AIMatchTabContent({
             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
               {filteredCandidates.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-0">
+                  <td colSpan={8} className="p-0">
                     <div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 dark:text-slate-500`}>
                       No candidates match the current filters.
                     </div>
@@ -6252,6 +6271,9 @@ function AIMatchTabContent({
                           </div>
                           {candidate.email && <p className="tf-meta truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
                         </div>
+                      </td>
+                      <td className="tf-td tf-body">
+                        <p className="truncate max-w-[14rem]" title={candidate.title || undefined}>{candidate.title || '—'}</p>
                       </td>
                       <td className="tf-td tf-body whitespace-nowrap">{candidate.experience || '-'}</td>
                       <td className="tf-td text-center whitespace-nowrap">
@@ -6387,7 +6409,7 @@ function AIMatchTabContent({
                         AI Talent Match page's expanded-row panel. */}
                     {isExpanded && (
                       <tr className="bg-gray-50/60 dark:bg-slate-800/30">
-                        <td colSpan={7} className="tf-td" onClick={(e) => e.stopPropagation()}>
+                        <td colSpan={8} className="tf-td" onClick={(e) => e.stopPropagation()}>
                           <div className="tf-panel overflow-x-auto">
                             <table className="w-full min-w-[760px]">
                               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
@@ -6485,12 +6507,9 @@ function AIMatchTabContent({
                       className="rounded border-gray-300 flex-shrink-0"
                     />
                   }
-                  title={
-                    <span className="flex min-w-0 items-center gap-2">
-                      <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
-                      <span className="min-w-0 truncate">{formatCandidateFirstName(candidate.name)}</span>
-                    </span>
-                  }
+                  /* Job role sits tight under the name (meta's default mt-2 → mt-1). */
+                  className="[&_.tf-record-meta]:mt-1"
+                  title={<span className="block min-w-0 truncate">{formatCandidateFirstName(candidate.name)}</span>}
                   /* Resume Archived sits with the status on the top row, never on
                      the name line, where it squeezed the name to a letter. */
                   badges={<>
@@ -6504,22 +6523,28 @@ function AIMatchTabContent({
                         <XCircle className="w-3 h-3" />Not Scored
                       </span>
                     )}
+                    {/* Rating: a compact badge beside the scored status (was a footer chip). */}
+                    <span
+                      title={`Rating ${candidate.rank || '-'}`}
+                      className={`tf-badge tabular-nums ${
+                        rank >= 7 ? 'bg-success-subtle text-success'
+                        : rank >= 4 ? 'bg-warning-subtle text-warning-strong'
+                        : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500'
+                      }`}
+                    >
+                      <Star className="w-3 h-3" />Rating {candidate.rank || '-'}
+                    </span>
                   </>}
                   meta={[
                     { icon: <Briefcase className="w-3.5 h-3.5 shrink-0" />, label: candidate.title },
-                    { label: candidate.email || '—' },
                   ]}
                   fields={[
+                    { label: 'Email', value: candidate.email || '—' },
                     { label: 'Experience', value: candidate.experience || '—' },
                     { label: 'Location', value: candidate.location || '—' },
                     { label: 'Phone', value: splitPhoneNumbers(candidate.phone, 1)[0] || '—' },
                     { label: 'Uploaded', value: uploadDate },
                   ]}
-                  footer={
-                    <MobileStatChip tone={rank >= 7 ? 'success' : rank >= 4 ? 'warning' : 'neutral'} icon={<Star className="w-3 h-3" />}>
-                      Rank {candidate.rank || '-'}
-                    </MobileStatChip>
-                  }
                   actions={
                     <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(candidate); }} icon={<Paperclip className="w-3.5 h-3.5" />}>
                       {candidate.attachmentCount ?? 1}
@@ -6530,6 +6555,7 @@ function AIMatchTabContent({
                     <div className="mt-2 flex flex-wrap items-center gap-1">
                       <SkillsList
                         skills={candidate.skills}
+                        max={1}
                         expandInline
                         chipClassName="max-w-full px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 [overflow-wrap:anywhere]"
                         moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap"

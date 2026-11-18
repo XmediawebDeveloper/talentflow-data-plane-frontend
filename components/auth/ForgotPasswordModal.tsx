@@ -475,7 +475,10 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                 <VerifyCodeArt />
                 <div>
                   <p className="tf-fp-prompt-title">Enter the 6-digit code we sent to your email</p>
-                  <p className="tf-fp-prompt-copy">Please check your inbox and enter the code below.</p>
+                  <p className="tf-fp-prompt-copy">
+                    Please check your inbox and enter the code below. Signing in for the first time? We&apos;ve
+                    emailed you a temporary password instead. Use it to sign in.
+                  </p>
                 </div>
               </div>
               <div className={`tf-otp-stage tf-otp-stage--${otpPhase}`}>

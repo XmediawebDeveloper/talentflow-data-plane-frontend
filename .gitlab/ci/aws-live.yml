@@ -1,7 +1,8 @@
 # =============================================================================
 # AWS Live — frontend deploy to the AWS EC2 instance
 #
-# Trigger: merge `production` → `aws_live`. Pushes to `production` run nothing.
+# Trigger: MANUAL only — CI/CD → Pipelines → Run pipeline → branch `aws_live`.
+# A merge or push into `aws_live` (or `production`) starts nothing.
 #
 #   Check ─► Build ─► Push (ECR) ─► Deploy (SSH) ─► Health check (auto-rollback)
 #
@@ -38,7 +39,9 @@ variables:
 .aws-live:
   tags: [$AWS_RUNNER_TAG]
   rules:
-    - if: '$CI_COMMIT_BRANCH == "aws_live"'
+    # only a pipeline started by hand ("Run pipeline"); merges into aws_live
+    # don't deploy the frontend on their own
+    - if: '$CI_COMMIT_BRANCH == "aws_live" && $CI_PIPELINE_SOURCE == "web"'
 
 # aws CLI via its container, so the runner needs only docker
 .aws-cli: &aws-cli

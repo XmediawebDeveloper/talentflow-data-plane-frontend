@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
 import { LayoutGrid, List } from 'lucide-react';
+import { useIsMobile } from './use-mobile';
 
 export type ListDisplayMode = 'list' | 'grid';
 
@@ -23,11 +25,18 @@ export default function ListViewToggle({
   onChange: (mode: ListDisplayMode) => void;
   className?: string;
 }) {
+  /* Mobile (< md) is list-only: the switch is hidden there, so a grid choice
+     carried over from a wider screen (or restored state) falls back to list. */
+  const isMobile = useIsMobile();
+  useEffect(() => {
+    if (isMobile && value === 'grid') onChange('list');
+  }, [isMobile, value, onChange]);
+
   return (
     <div
       /* Hook for page toolbars' phone layout (globals.css, `.tf-jobs-toolbar`). */
       data-list-view-toggle=""
-      className={`inline-flex items-center gap-0.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-0.5 shrink-0 ${className}`}
+      className={`inline-flex items-center gap-0.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-0.5 shrink-0 ${className} max-md:!hidden`}
     >
       <button
         type="button"

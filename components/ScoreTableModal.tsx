@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, BarChart3 } from 'lucide-react';
+import { X, BarChart3, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { jdService } from '@/lib/services/jdService';
@@ -59,7 +59,12 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
     jdService.getScoredResumes(jdId, { page_size: 100 })
       .then((res: any) => {
         if (cancelled) return;
-        const match = (res.items || []).find((r: any) => r.id === resume.id);
+        const items = res.items || [];
+        /* Exact score id first. A host that only knows the candidate (the
+           scoring progress popup without a batch score id) falls back to that
+           resume's score on this JD. */
+        const match = items.find((r: any) => r.id === resume.id)
+          || (resume.resumeId ? items.find((r: any) => (r.resume_id || r.resumeId) === resume.resumeId) : undefined);
         setDetail(match || null);
       })
       .catch((err: any) => {
@@ -70,7 +75,7 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [resume.id, resume.jdId, jobId]);
+  }, [resume.id, resume.resumeId, resume.jdId, jobId]);
 
   // Deterministic variation based on the score id, matching
   // CandidateScoringDetailPage's own fallback generator — keeps a criterion
@@ -131,10 +136,20 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
   const scoredJobVersion = resume.jobVersion || detail?.jd_version_number || jobVersion || null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-6xl h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+    /* Below `sm` this is a full-screen docked page (edge to edge, back arrow,
+       slides up from the bottom) rather than a floating card. */
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-0 sm:p-6">
+      <div className="bg-white sm:rounded-2xl sm:shadow-2xl w-full sm:max-w-6xl h-dvh sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden max-sm:animate-in max-sm:fade-in max-sm:slide-in-from-bottom-8 max-sm:duration-200">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 max-sm:pt-[max(0.75rem,env(safe-area-inset-top))] border-b border-gray-100 bg-white sm:bg-gray-50 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Back"
+              className="sm:hidden -ml-1.5 flex h-9 w-9 flex-shrink-0 items-center justify-center self-start rounded-full text-gray-700 hover:bg-gray-100 active:bg-gray-200"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
             <div className="hidden sm:flex w-10 h-10 rounded-xl bg-brand-blue items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
@@ -157,7 +172,7 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
                       {resume.jobCode || jobCode}
                     </span>
                   )}
-                  {jobTitle && <span className="truncate min-w-0">{jobTitle}</span>}
+                  {jobTitle && <span className="truncate min-w-0 max-sm:flex-1 max-sm:basis-0">{jobTitle}</span>}
                   {header.jobVersion != null && (
                     <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
                       v{header.jobVersion}
@@ -176,13 +191,13 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
               {/* Candidate · Job ID · Job Title · Job Version — the ID and
                   version as the light brand chips the match tables use. */}
               <div className="flex flex-wrap items-center gap-1.5 tf-body-muted min-w-0">
-                <span className="truncate">{resume.candidateName || 'Candidate'}</span>
+                <span className="truncate max-sm:basis-full max-sm:font-medium max-sm:text-gray-700">{resume.candidateName || 'Candidate'}</span>
                 {(resume.jobCode || jobCode) && (
                   <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
                     {resume.jobCode || jobCode}
                   </span>
                 )}
-                {jobTitle && <span className="truncate">{jobTitle}</span>}
+                {jobTitle && <span className="truncate max-sm:min-w-0 max-sm:flex-1 max-sm:basis-0">{jobTitle}</span>}
                 {scoredJobVersion != null && (
                   <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">
                     V{scoredJobVersion}
@@ -192,7 +207,7 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
             </div>
             )}
           </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
             {jobPager && jobPager.total > 1 && (
               <MiniPagination
                 page={jobPager.page}
@@ -212,6 +227,18 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
             </Button>
           </div>
         </div>
+        {/* Mobile: the job pager gets its own bar under the header. */}
+        {jobPager && jobPager.total > 1 && (
+          <div className="sm:hidden flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+            <span className="tf-caption">Scored jobs</span>
+            <MiniPagination
+              page={jobPager.page}
+              totalPages={jobPager.total}
+              onPageChange={jobPager.onPageChange}
+              aria-label="Scored jobs"
+            />
+          </div>
+        )}
         {/* score-table-modal-body: the only vertical scroller in this modal.
             DetailedScorecardTab's rubric table grows to its content (it does not
             use `.tf-table-shell`), so nothing nested inside competes for the
@@ -228,7 +255,7 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
             read as the table and summary card being cut off with blank space
             stranded beside them. Stating it kills that axis outright regardless
             of what a future child does. */}
-        <div className="score-table-modal-body flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+        <div className="score-table-modal-body flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-6 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
           {loading ? (
             <div className="space-y-4">
               {/* Overall score summary row */}

@@ -346,6 +346,11 @@ export default function JDVersionHistoryModal({
   const [selectedVersion, setSelectedVersion] = useState<JDHistoryVersion | null>(null);
   const [compareChecked, setCompareChecked] = useState<string[]>([]);
   const [comparePair, setComparePair] = useState<{ older: JDHistoryVersion; newer: JDHistoryVersion } | null>(null);
+  /* Which open the loaded data belongs to. Until this open's data is in, the
+     popup shows its skeleton — never the previous open's list for a frame
+     (that flash, then the skeleton, then the version, was the glitch). */
+  const loadKey = `${jdId}:${initialVersionNumber ?? 'all'}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
 
   const fetchVersionHistory = useCallback(async () => {
     setLoading(true);
@@ -396,6 +401,7 @@ export default function JDVersionHistoryModal({
       setVersions([]);
     } finally {
       setLoading(false);
+      setLoadedKey(`${jdId}:${initialVersionNumber ?? 'all'}`);
     }
   }, [initialVersionNumber, jdId, jdTitle]);
 
@@ -411,6 +417,7 @@ export default function JDVersionHistoryModal({
     setSelectedVersion(null);
     setCompareChecked([]);
     setComparePair(null);
+    setLoadedKey(null);
     onClose();
   };
 
@@ -520,24 +527,33 @@ export default function JDVersionHistoryModal({
 
   if (!isOpen) return null;
 
+  /* Still loading THIS open — and whether it opens on one version, so the
+     header and skeleton already have that shape (no jump when it lands). */
+  const busy = loading || loadedKey !== loadKey;
+  const openingOne = busy && initialVersionNumber != null;
+
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6" onClick={closeModal}>
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6 animate-in fade-in duration-200 motion-reduce:animate-none" onClick={closeModal}>
       <div
-        className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col"
+        className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full h-[calc(100dvh-1.5rem)] sm:h-[min(46rem,calc(100dvh-3rem))] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 motion-reduce:animate-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
           <div className="flex items-center gap-3 min-w-0">
             {selectedVersion ? (
+              /* Named, not a bare arrow: on a single version it was not clear
+                 the other versions were one click away. */
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
                 onClick={() => setSelectedVersion(null)}
-                className=""
-                aria-label="Back to version list"
+                className="whitespace-nowrap"
+                aria-label="Back to all versions"
+                title="See every version of this JD"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4" />
+                {versions.length > 1 && <span className="hidden sm:inline">All versions ({versions.length})</span>}
               </Button>
             ) : (
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
@@ -547,9 +563,9 @@ export default function JDVersionHistoryModal({
             <div className="min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 <h2 className="tf-section-title sm:text-lg tracking-tight truncate min-w-0">
-                  {selectedVersion ? `Version ${selectedVersion.version_number}.0` : 'Version History'}
+                  {selectedVersion ? `Version ${selectedVersion.version_number}.0` : openingOne ? `Version ${initialVersionNumber}.0` : 'Version History'}
                 </h2>
-                {!selectedVersion && versions.length > 0 && (
+                {!busy && !selectedVersion && versions.length > 0 && (
                   <span className="tf-badge flex-shrink-0 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                     {versions.length} version{versions.length !== 1 ? 's' : ''}
                   </span>
@@ -581,7 +597,7 @@ export default function JDVersionHistoryModal({
                 Go to JD
               </Button>
             )}
-            {!selectedVersion && versions.length > 1 && (
+            {!busy && !selectedVersion && versions.length > 1 && (
               <Button
                 type="button"
                 variant="primary"
@@ -613,7 +629,54 @@ export default function JDVersionHistoryModal({
           </div>
         </div>
 
-        {!selectedVersion && versions.length > 0 && (
+        {/* Viewing one version of a multi-version JD: every version one click
+            away as a tab, and a straight Compare with its neighbour. */}
+        {!busy && selectedVersion && versions.length > 1 && (() => {
+          const idx = versions.findIndex((v) => v.id === selectedVersion.id);
+          // versions are newest first: idx + 1 is the older neighbour.
+          const other = versions[idx + 1] ?? versions[idx - 1];
+          return (
+            <div className="flex-shrink-0 flex flex-wrap items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10">
+              <div role="tablist" aria-label="Versions" className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                {versions.map((v, i) => {
+                  const on = v.id === selectedVersion.id;
+                  const latest = v.is_latest_version || i === 0;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={on}
+                      onClick={() => setSelectedVersion(v)}
+                      className={`inline-flex h-7 items-center gap-1 rounded-md border px-2.5 text-xs font-medium whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${on
+                        ? 'border-brand-blue bg-brand-blue text-white'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/40 hover:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'}`}
+                    >
+                      v{v.version_number}
+                      {latest && <span className={on ? 'text-white/80' : 'text-brand-blue'}>· Latest</span>}
+                      {v.id === jdId && !on && <span className="text-gray-400 dark:text-slate-500">· this page</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              {other && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => openComparison(selectedVersion, other)}
+                  title={`See what changed between v${Math.min(selectedVersion.version_number, other.version_number)} and v${Math.max(selectedVersion.version_number, other.version_number)}`}
+                  className="whitespace-nowrap"
+                >
+                  <History className="w-3.5 h-3.5" />
+                  Compare v{selectedVersion.version_number} ↔ v{other.version_number}
+                </Button>
+              )}
+            </div>
+          );
+        })()}
+
+        {!busy && !selectedVersion && versions.length > 0 && (
           <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 tf-meta">
             <History className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
             <span>
@@ -623,7 +686,25 @@ export default function JDVersionHistoryModal({
         )}
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-          {loading ? (
+          {openingOne ? (
+            <div className="space-y-4" aria-busy="true">
+              <div className="tf-panel p-4">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 shrink-0 rounded-lg" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-3.5 w-64" />
+                  </div>
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                </div>
+              </div>
+              <div className="tf-card-soft p-4 sm:p-6 space-y-3">
+                {Array.from({ length: 9 }).map((_, i) => (
+                  <Skeleton key={i} className={`h-3.5 ${i % 3 === 2 ? 'w-2/3' : 'w-full'}`} />
+                ))}
+              </div>
+            </div>
+          ) : busy ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div
@@ -649,7 +730,7 @@ export default function JDVersionHistoryModal({
               ))}
             </div>
           ) : selectedVersion ? (
-            <div className="space-y-4">
+            <div key={selectedVersion.id} className="space-y-4 animate-in fade-in duration-200 motion-reduce:animate-none">
               {/* The version being viewed, described by the shared card. */}
               <VersionHeaderCard
                 version={selectedVersion}
@@ -687,7 +768,7 @@ export default function JDVersionHistoryModal({
               </div>
             </div>
           ) : versions.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-3 animate-in fade-in duration-200 motion-reduce:animate-none">
               {versions.map((version, index) => {
                 const isLatest = version.is_latest_version || index === 0;
                 const isCurrentPage = version.id === jdId;
@@ -795,7 +876,9 @@ export default function JDVersionHistoryModal({
         <div className="border-t border-gray-200 dark:border-slate-700 px-4 py-3 sm:px-6 sm:py-4 bg-gray-50 dark:bg-slate-800/50">
           <div className="flex justify-between items-center gap-3">
             <p className="tf-meta sm:text-sm min-w-0">
-              {selectedVersion
+              {busy
+                ? 'Loading…'
+                : selectedVersion
                 ? `Viewing version ${selectedVersion.version_number}`
                 : compareChecked.length > 0
                   ? `${compareChecked.length} of 2 selected to compare`
@@ -811,7 +894,7 @@ export default function JDVersionHistoryModal({
                   Cancel
                 </Button>
               )}
-              {!selectedVersion && versions.length > 1 && (
+              {!busy && !selectedVersion && versions.length > 1 && (
                 <Button
                   type="button"
                   variant="primary"
@@ -828,7 +911,7 @@ export default function JDVersionHistoryModal({
                   variant="secondary"
                   onClick={() => setSelectedVersion(null)}
                 >
-                  Back to List
+                  {versions.length > 1 ? `All versions (${versions.length})` : 'Back to List'}
                 </Button>
               )}
             </div>

@@ -244,7 +244,7 @@ export default function JDOverviewSections({
           scoring={showScoringDetail ? {
             allowOverqualified: jd.allow_overqualified,
             jobHoppingEnabled: jd.job_hopping_enabled,
-            overqualifiedNoNote: 'Experience well above the range scores lower',
+            overqualifiedNoNote: 'Experience more than 3 years above the maximum fails Experience',
           } : undefined}
           aiExtracted={jd.creation_method === 'ai_generated'}
         />

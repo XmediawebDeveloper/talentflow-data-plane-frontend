@@ -370,6 +370,7 @@ export interface AnswerSubmission {
   code_execution_error?: string;
   time_taken_seconds?: number;  // Time spent on question
   is_draft?: boolean;  // True = draft (auto-save, editable), False = submitted (locked)
+  final_save?: boolean;  // Last draft sent when the timer hits zero (accepted briefly past the deadline)
 }
 
 export interface SubmitAnswerResponse {
@@ -773,13 +774,22 @@ export const candidateService = {
   },
 
   /**
-   * Prepare assessment - triggers background question generation
-   * Call this when user clicks "Begin Assessment"
+   * Prepare assessment - finds/creates the attempt.
+   *
+   * At "Begin Assessment" call it WITHOUT options: no question generation (no
+   * LLM call) runs before the candidate starts. At the start gate (after system
+   * check, HR and fullscreen) pass `{ startGeneration: true }` — only then does
+   * the backend dispatch question generation.
    */
-  async prepareAssessment(token: string): Promise<PrepareAssessmentResponse> {
+  async prepareAssessment(
+    token: string,
+    options: { startGeneration?: boolean } = {},
+  ): Promise<PrepareAssessmentResponse> {
     try {
       const response = await candidateApi.post<PrepareAssessmentResponse>(
-        `/candidate/assessment/${token}/prepare`
+        `/candidate/assessment/${token}/prepare`,
+        undefined,
+        options.startGeneration ? { params: { start_generation: 'true' } } : undefined,
       );
       return response.data;
     } catch (error) {

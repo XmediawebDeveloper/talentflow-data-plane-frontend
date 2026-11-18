@@ -5,6 +5,7 @@ import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import { TableSkeleton } from '@/components/ui/skeleton';
@@ -38,7 +39,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import {
   ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2,
-  Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
+  Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle,
   Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Download,
   Play, MoreVertical, X,
 } from 'lucide-react';
@@ -890,6 +891,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       });
       toast.success(`Exported ${rows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
       setShowExportModal(false);
+      // Export done — clear the ticks, which also hides the bulk bar.
+      setSelected(new Map());
     } catch (error) {
       toast.error(friendlyErrorMessage(error, "Couldn't export results. Please try again."));
     } finally {
@@ -918,6 +921,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     setIsBulkWorking(true);
     let done = 0;
     let failed = 0;
+    const failedSessions: AIInterviewResponse[] = [];
     // One at a time: each resend emails a candidate, and one failure must not
     // stop the rest.
     for (const session of targets) {
@@ -927,6 +931,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         done++;
       } catch {
         failed++;
+        failedSessions.push(session);
       }
     }
     if (done > 0) {
@@ -940,7 +945,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     // Reload first, so the table is already current when the dialog closes
     // and the selection clears (rows no longer flash their old status).
     await loadSessions();
-    setSelected(new Map());
+    // Keep only the ones that failed ticked, so a retry acts on them.
+    setSelected(new Map(failedSessions.map((s) => [s.id, s])));
     setIsBulkWorking(false);
     setBulkAction(null);
   };
@@ -967,6 +973,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       } else if (skipped > 0) {
         toast.success(`Downloaded ${downloaded} report${downloaded === 1 ? '' : 's'}. ${skipped} candidate${skipped === 1 ? ' has' : 's have'} no report yet.`);
       }
+      // Download went through — clear the ticks (hides the bulk bar). Kept
+      // when nothing downloaded or some reports failed, so the user can retry.
+      if (downloaded > 0 && failed === 0) setSelected(new Map());
     } catch (err) {
       console.error('[AIInterviewResults] Bulk PDF download failed:', err);
       toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');
@@ -1004,6 +1013,57 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     router.push(`/recruitment/ai-interviews/${ownConfigId}/results/details?session_id=${session.id}`
       + (scoped ? `&from=job-results&root=${encodeURIComponent(configId)}` : ''));
   };
+
+  /* Row ⋮ — View Details, Create / Send Assessment | AI Interview for this
+     row's candidate, Download Report. Same menu as the Assessment results row;
+     the table row and the list card both use it. */
+  const renderRowMenu = (session: AIInterviewResponse) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={portaled ? ROW_ACTION_BUTTON_CLASS : 'h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30'}
+          aria-label={`Actions for ${session.candidate_name || 'candidate'}`}
+          title="Actions"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
+        <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => handleViewDetails(session)}>
+          <Eye className="w-4 h-4 text-menu-icon-view" />
+          <span>View Details</span>
+        </DropdownMenuItem>
+        {onOpenInviteDialog && (
+          <>
+            <DropdownMenuSeparator className="my-1 bg-gray-100" />
+            <RowInviteItems
+              onInvite={(kind) => onOpenInviteDialog(kind, [{
+                id: session.resume_id || session.id,
+                name: session.candidate_name || '',
+                email: session.candidate_email || '',
+                resumeId: session.resume_id,
+              }])}
+            />
+            <DropdownMenuSeparator className="my-1 bg-gray-100" />
+          </>
+        )}
+        <DropdownMenuItem
+          className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
+          disabled={!canDownloadReports || !canTryReport(session) || downloadingReportId === session.id}
+          title={!canDownloadReports ? AI_REPORT_DOWNLOAD_DENIED : !canTryReport(session) ? 'Report available once the interview is evaluated' : undefined}
+          onClick={() => handleDownloadReport(session.id)}
+        >
+          {downloadingReportId === session.id ? (
+            <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
+          ) : (
+            <Download className="w-4 h-4 text-menu-icon-download" />
+          )}
+          <span>Download Report</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   /* Embedded in the Job Details "AI Interview Result" tab (toolbar portals into
      that card's slot). When so, the toolbar controls drop to the 36px height of
@@ -1087,6 +1147,43 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             onToggleOrder={() => { setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc')); setCurrentPage(1); }}
           />
         );
+        /* Active filter tags — one per filter `countFilters` counts (the
+           score range and the completion-date range are one tag each; Result
+           is the toolbar's own dropdown, not counted, so no tag). Job Version
+           only standalone and Status only embedded, as the count has them. */
+        const formatChipDate = (v: string) => {
+          const d = new Date(`${v}T00:00:00`);
+          return Number.isNaN(d.getTime())
+            ? v
+            : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        };
+        const cf = search.filters;
+        const activeFilterChips: FilterChip[] = ([
+          portaled && cf.status !== DEFAULT_RESULT_STATUS && {
+            key: 'status', label: 'Status',
+            value: RESULT_STATUS_OPTIONS.find((o) => o.value === cf.status)?.label ?? cf.status,
+            onRemove: () => search.setFilter('status', DEFAULT_RESULT_STATUS),
+          },
+          (cf.scoreMin || cf.scoreMax) && {
+            key: 'score', label: 'Score Range',
+            value: cf.scoreMin && cf.scoreMax ? `${cf.scoreMin}% – ${cf.scoreMax}%`
+              : cf.scoreMin ? `from ${cf.scoreMin}%` : `up to ${cf.scoreMax}%`,
+            onRemove: () => search.setFilters({ ...cf, scoreMin: '', scoreMax: '' }),
+          },
+          (cf.dateFrom || cf.dateTo) && {
+            key: 'completed', label: 'Completed',
+            value: cf.dateFrom && cf.dateTo ? `${formatChipDate(cf.dateFrom)} – ${formatChipDate(cf.dateTo)}`
+              : cf.dateFrom ? `from ${formatChipDate(cf.dateFrom)}` : `until ${formatChipDate(cf.dateTo)}`,
+            onRemove: () => search.setFilters({ ...cf, dateFrom: '', dateTo: '' }),
+          },
+          !portaled && cf.jobVersion && { key: 'jobVersion', label: 'Job Version', value: `V${cf.jobVersion}`, onRemove: () => search.setFilter('jobVersion', '') },
+          cf.interviewVersion && { key: 'interviewVersion', label: 'Interview Version', value: `V${cf.interviewVersion}`, onRemove: () => search.setFilter('interviewVersion', '') },
+          cf.inviteSource && {
+            key: 'inviteSource', label: 'Source',
+            value: INVITE_SOURCE_FILTER_OPTIONS.find((o) => o.value === cf.inviteSource)?.label ?? cf.inviteSource,
+            onRemove: () => search.setFilter('inviteSource', ''),
+          },
+        ] as (FilterChip | false | '')[]).filter(Boolean) as FilterChip[];
         const toolbarBlock = (
         /* Standalone, phones (globals.css, `.tf-jobs-toolbar`): the Job Openings
            list's lines — search · filter icon, Result, Invite, Columns · Export,
@@ -1143,9 +1240,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
           filtersApplied={search.filtersApplied}
-          /* Reset — standalone only; Job Details has none (the Scored
-             Resumes-style panel there carries no clear control either). */
-          onClearFilters={portaled ? undefined : search.reset}
+          /* Reset — on every view, Job Details included (the Job Openings
+             reference): search + every filter back to the defaults. */
+          onClearFilters={search.reset}
           compactButtons={portaled}
           /* Standalone: the Job Openings (JD) page's two-row toolbar. Row 1
              (this ListToolbar): Search → Result → More Filters → Customize
@@ -1190,6 +1287,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
              Match reference's gap) so it doesn't sit flush on the tab card's
              bottom edge — the Job Details toolbar slot has no bottom padding. */
           className={portaled ? undefined : 'mb-0'}
+          /* Active filter tags: hover popup on More Filters (lg+). */
+          filterChips={activeFilterChips}
         >
           {/* Customize Columns / Export — standalone only as buttons;
               embedded in Job Details they are items in the Actions pill. */}
@@ -1435,6 +1534,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             </div>
           </div>
 
+          {/* Active filter tags — the panel's last line (phones / tablets). */}
+          <FilterChipsPanelLine chips={activeFilterChips} />
           </div>
         )}
         {/* Standalone: the Job Openings (JD) page's panel — a divider and a
@@ -1529,6 +1630,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 />
               </div>
             </div>
+            <FilterChipsPanelLine chips={activeFilterChips} />
           </div>
         )}
 
@@ -1633,13 +1735,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             )}
             {/* Status pills — as the Job Openings page's All Jobs /
                 Published / Draft … Same state the dropdown drove. */}
-            <div className="tf-jobs-status-tabs contents">
+            <div className="tf-jobs-status-tabs contents" role="tablist" aria-label="Result status">
             {RESULT_STATUS_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => search.setFilter('status', opt.value)}
-                aria-pressed={statusFilter === opt.value}
+                role="tab"
+                aria-selected={statusFilter === opt.value}
                 className={tabPill(statusFilter === opt.value)}
               >
                 {opt.label}
@@ -1738,9 +1841,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       label={session.candidate_name || 'candidate'}
                       selectionActive={selected.size > 0}
                     />
-                    {/* pl-6 keeps the corner select seal off the avatar — it shows on
+                    {/* pl-7 keeps the corner select seal off the avatar — it shows on
                         touch, on hover, and on every card once anything is selected. */}
-                    <div className="flex items-start gap-2.5 pl-6">
+                    <div className="flex items-start gap-2.5 pl-7">
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 truncate">
                           {showName(session.candidate_name) || 'Unknown'}
@@ -1879,61 +1982,44 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     />
                   }
                   title={
+                    /* CID chip right after the name, as on the Assessment Results card. */
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="min-w-0 [overflow-wrap:anywhere]">{showName(session.candidate_name) || 'Unknown'}</span>
+                      {session.candidate_cid && (
+                        <span className="shrink-0 text-2xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded">
+                          {session.candidate_cid}
+                        </span>
+                      )}
                     </span>
                   }
                   badges={
                     <>
-                      {col('interviewVersion') && rowInterviewVersion(session) != null && (
-                        <VersionPill kind="interview" version={rowInterviewVersion(session)!} />
-                      )}
                       <SessionStatusChip session={session} />
+                      {col('proctoring') && session.status === 'completed' && (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>{risk.level}</span>
+                      )}
                     </>
                   }
-                  meta={[
-                    { icon: <Mail />, label: session.candidate_email ? <span className="[overflow-wrap:anywhere]">{session.candidate_email}</span> : null },
-                    {
-                      icon: <CalendarDays />,
-                      label: session.completed_at
-                        ? <>Completed {formatIST(session.completed_at)}</>
-                        : session.started_at
-                          ? <>Started {formatIST(session.started_at)}</>
-                          : null,
-                    },
+                  /* Labelled lines, as on the Assessment Results card. */
+                  fields={[
+                    { label: 'Email', value: session.candidate_email ? <span className="[overflow-wrap:anywhere]">{session.candidate_email}</span> : null },
+                    { label: 'Started', value: session.started_at ? formatIST(session.started_at) : null },
+                    { label: 'Completed', value: session.completed_at ? formatIST(session.completed_at) : null },
+                    { label: 'Duration', value: formatDuration(session) !== '—' ? formatDuration(session) : null },
                   ]}
                   footer={
-                    (col('score') || (col('result') && result) || (col('proctoring') && session.status === 'completed')) ? (
-                      <>
-                        {col('score') && (
-                          <MobileStatChip tone={score == null ? 'neutral' : score >= 60 ? 'success' : 'danger'}>
-                            Score {score != null ? `${score}%` : '—'}
-                          </MobileStatChip>
-                        )}
-                        {col('result') && result && <ResultBadge result={result} />}
-                        {col('proctoring') && session.status === 'completed' && (
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>{risk.level}</span>
-                        )}
-                      </>
+                    /* One chip: the score with its Pass / Fail inside ("Score 72% - Pass"). */
+                    (col('score') || (col('result') && result)) ? (
+                      <MobileStatChip tone={result ? (result === 'Pass' ? 'success' : 'danger') : score == null ? 'neutral' : score >= 60 ? 'success' : 'danger'}>
+                        {col('score') && <>Score {score != null ? `${score}%` : '—'}</>}
+                        {col('score') && col('result') && result && ' - '}
+                        {col('result') && result}
+                      </MobileStatChip>
                     ) : undefined
                   }
-                  actions={
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleViewDetails(session)}
-                        title="View Details"
-                        aria-label="View Details"
-                        className="tf-icon-btn-outline"
-                      >
-                        <Eye />
-                      </button>
-                      {/* Download Report — the table's own button (same
-                          permission / not-evaluated rules). Create / Send lives
-                          in the toolbar's Actions. */}
-                      <ResultRowActions session={session} onView={() => handleViewDetails(session)} hideView />
-                    </>
-                  }
+                  /* ⋮ on the name row, as on the Assessment Results card. */
+                  actions={renderRowMenu(session)}
+                  actionsOnNameRow
                 />
               );
             })}
@@ -2137,51 +2223,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                               ticked rows), Download Report. Same menu as the
                               Assessment results row. */}
                           <span className="inline-flex align-middle" onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  type="button"
-                                  className={portaled ? ROW_ACTION_BUTTON_CLASS : 'h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30'}
-                                  aria-label={`Actions for ${session.candidate_name || 'candidate'}`}
-                                  title="Actions"
-                                >
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
-                                <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => handleViewDetails(session)}>
-                                  <Eye className="w-4 h-4 text-menu-icon-view" />
-                                  <span>View Details</span>
-                                </DropdownMenuItem>
-                                {onOpenInviteDialog && !portaled && (
-                                  <>
-                                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                                    <RowInviteItems
-                                      onInvite={(kind) => onOpenInviteDialog(kind, [{
-                                        id: session.resume_id || session.id,
-                                        name: session.candidate_name || '',
-                                        email: session.candidate_email || '',
-                                        resumeId: session.resume_id,
-                                      }])}
-                                    />
-                                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                                  </>
-                                )}
-                                <DropdownMenuItem
-                                  className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
-                                  disabled={!canDownloadReports || !canTryReport(session) || downloadingReportId === session.id}
-                                  title={!canDownloadReports ? AI_REPORT_DOWNLOAD_DENIED : !canTryReport(session) ? 'Report available once the interview is evaluated' : undefined}
-                                  onClick={() => handleDownloadReport(session.id)}
-                                >
-                                  {downloadingReportId === session.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
-                                  ) : (
-                                    <Download className="w-4 h-4 text-menu-icon-download" />
-                                  )}
-                                  <span>Download Report</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            {renderRowMenu(session)}
                           </span>
                         </td>
                       </tr>

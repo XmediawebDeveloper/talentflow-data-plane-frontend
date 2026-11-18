@@ -82,3 +82,53 @@ export function useResumeActivityTrail(searchParams: { get: (key: string) => str
     backHref: active ? trail![trail!.length - 1].href : null,
   };
 }
+
+/* ── Scoring started from Resume Database ────────────────────────────────
+   Score Resume in Resume Database (My Resumes / Shared Database) hands the
+   batch to Resume Scoring, which used to greet the recruiter with its own
+   trail (Dashboard › Resume Scoring › <job>). The resume pool's trail is
+   recorded for that job instead, and the URL is tagged
+   `from=resume-database`: Resume Scoring shows
+   Dashboard › Resume Database › <job> for that job, until the
+   recruiter goes to the Resume Scoring overview or opens the page any other
+   way (the route drops the record when it is entered without the tag). */
+
+export const FROM_RESUME_DATABASE = 'resume-database';
+const SCORING_ORIGIN_KEY = 'scoringOriginTrail';
+
+interface ScoringOrigin {
+  jobId: string;
+  trail: TrailCrumb[];
+}
+
+/** Saved by Resume Database just before it navigates to Resume Scoring. */
+export function rememberScoringOrigin(jobId: string, trail: TrailCrumb[]): void {
+  try {
+    sessionStorage.setItem(SCORING_ORIGIN_KEY, JSON.stringify({ jobId, trail } satisfies ScoringOrigin));
+  } catch { /* storage blocked: Resume Scoring keeps its own trail */ }
+}
+
+export function clearScoringOrigin(): void {
+  try {
+    sessionStorage.removeItem(SCORING_ORIGIN_KEY);
+  } catch { /* nothing to clear */ }
+}
+
+/** The Resume Database crumbs for `jobId` (Dashboard excluded), or null. */
+export function readScoringOrigin(jobId: string | null | undefined): TrailCrumb[] | null {
+  if (!jobId) return null;
+  try {
+    const raw = sessionStorage.getItem(SCORING_ORIGIN_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ScoringOrigin;
+    if (parsed?.jobId !== jobId || !Array.isArray(parsed.trail) || parsed.trail.length === 0) return null;
+    // In-app recruitment paths only, as for the resume trail above.
+    const ok = parsed.trail.every(
+      (c) => c && typeof c.label === 'string' && typeof c.href === 'string'
+        && c.href.startsWith('/recruitment/') && !c.href.startsWith('//') && !c.href.includes('://')
+    );
+    return ok ? parsed.trail : null;
+  } catch {
+    return null;
+  }
+}

@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from './utils';
+import FilterSelect from './filter-select';
 
 /* Toolbar size (h-9) — the same as More Filters / Export beside it. */
 const TRIGGER_CLASS =
@@ -154,21 +155,20 @@ export function SortByControl<T extends string>({
           drop to 12px / 24px below sm, which read as a smaller, odd control
           in a row of 14px ones. */}
       <div className="inline-flex items-center bg-brand-blue/5 dark:bg-brand-blue/10 rounded-lg p-1 transition-all">
-        <div className="relative">
-          <select
+        {/* Fixed width so the two views' option lists don't shift the row.
+            Narrower below 375px only, where the 9.5rem box clipped at 320. */}
+        {/* The wrapper carries the width (page toolbars resize it on phones);
+            the trigger fills it. No border or focus outline inside the pill —
+            the app-wide button:focus-visible outline otherwise reappears each
+            time the list closes and hands focus back to the trigger. */}
+        <div className="relative min-w-0 w-[7.5rem] 2xs:w-[9.5rem]">
+          <FilterSelect
             value={value}
-            onChange={(e) => onChange(e.target.value as T)}
-            aria-label="Sort by"
-            // Fixed width: a native select sizes to its longest option, so the
-            // two views' option lists made the row (and search box) shift.
-            // Narrower below 375px only, where the 9.5rem box clipped at 320.
-            className="appearance-none w-[7.5rem] 2xs:w-[9.5rem] truncate h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 tf-body cursor-pointer"
-          >
-            {options.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 dark:text-slate-400" />
+            onChange={(v) => onChange(v as T)}
+            ariaLabel="Sort by"
+            options={options}
+            className="w-full sm:w-full py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 data-[size=default]:h-7 sm:data-[size=default]:h-7 rounded-md sm:rounded-md border-0 bg-transparent dark:bg-transparent shadow-none tf-body focus-visible:!outline-none focus-visible:ring-0"
+          />
         </div>
         <button
           type="button"

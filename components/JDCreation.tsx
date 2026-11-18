@@ -11154,7 +11154,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       Allow Overqualified Candidates <span className="text-destructive">*</span>
                     </h3>
                     <p className="tf-meta">
-                      Should candidates with more experience than the maximum for this role be scored favorably (Yes), or treated as a mismatch (No)? With No, any experience above the To value fails the Experience criterion.
+                      Should candidates with more experience than the maximum for this role be scored favorably (Yes), or treated as a mismatch (No)? With No, candidates up to 3 years above the To value are still eligible; more than 3 years above it fails the Experience criterion.
                     </p>
                   </div>
                   {/* The app's Tip box — the colours, Lightbulb and bold lead-in

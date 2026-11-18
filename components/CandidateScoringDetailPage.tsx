@@ -1,5 +1,6 @@
 'use client';
 
+import JobIdBadge, { JOB_ID_BADGE_CLASS, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { CREATE_SEND_BUTTON_CLASS, CANDIDATE_ACTION_BUTTON_CLASS } from '@/lib/constants/createSendActions';
 import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, ThumbsUp, ThumbsDown, Loader2, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send, Plus, ClipboardList, Video } from 'lucide-react';
@@ -229,6 +230,9 @@ interface CandidateScoringDetailPageProps {
    * whose two entries are exactly those two buttons.
    */
   inlineHeaderActions?: boolean;
+  /** View Resume as an eye joined to the resume version badge (no "View
+   *  Resume" button among the header actions) — always so in the flat header. */
+  viewResumeOnVersionBadge?: boolean;
 }
 
 /**
@@ -249,7 +253,7 @@ function byNewestVersion(a: any, b: any): number {
   return bTime - aTime;
 }
 
-export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore, versionReadOnly = false, inlineHeaderActions = false }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore, versionReadOnly = false, inlineHeaderActions = false, viewResumeOnVersionBadge = false }: CandidateScoringDetailPageProps) {
   /* The candidate the page is SHOWING, which lags `resumeProp` while Previous /
      Next loads the next one. The header used to read the new prop at once while
      the score, AI analysis and Score Table still showed the previous
@@ -277,18 +281,22 @@ export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitl
   /* The sticky tab bar below pins directly under the sticky breadcrumb, so its
      offset is the breadcrumb's real height — re-measured on resize, because the
      bar grows when its RecordPager row wraps. Hardcoding the height let the
-     crumb bar overlap and swallow the tab bar's clicks. */
-  const breadcrumbBarRef = useRef<HTMLElement | null>(null);
+     crumb bar overlap and swallow the tab bar's clicks.
+     A callback ref (state), not useRef + []-effect: the first render is the
+     !isDataReady skeleton, which has no breadcrumb, so a mount-only effect
+     found null, never measured, and left the tabs pinned at 52px — half
+     tucked under a wrapped (taller) breadcrumb. */
+  const [breadcrumbBarEl, breadcrumbBarRef] = useState<HTMLElement | null>(null);
   const [tabBarTop, setTabBarTop] = useState(52);
   useEffect(() => {
-    const bar = breadcrumbBarRef.current;
+    const bar = breadcrumbBarEl;
     if (!bar || typeof ResizeObserver === 'undefined') return;
     const measure = () => setTabBarTop(bar.getBoundingClientRect().height);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(bar);
     return () => observer.disconnect();
-  }, []);
+  }, [breadcrumbBarEl]);
 
   // Share Resume dialog state.
   const [showShareResumeModal, setShowShareResumeModal] = useState(false);
@@ -392,6 +400,8 @@ export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitl
   /* See `inlineHeaderActions`. Each flat button keeps its menu entry's gate,
      and why it is disabled, as a tooltip. */
   const flatHeaderActions = inlineHeaderActions && viaInviteDialog;
+  // View Resume lives on the resume version badge rather than in the header actions.
+  const viewResumeOnBadge = flatHeaderActions || viewResumeOnVersionBadge;
   const inviteBlockedReason = (may: boolean, planLocked: boolean) =>
     !may ? 'You do not have permission to invite candidates' : inviteBlockedByRecord ? inviteBlockedByRecordReason : planLocked ? PLAN_LOCKED_MESSAGE : undefined;
 
@@ -1559,8 +1569,8 @@ Best regards`);
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
                 {resume.resumeVersion && (versionReadOnly || resumeVersions.length === 0 ? (
-                  flatHeaderActions ? (
-                    /* Flat: View Resume as a small eye joined to the version
+                  viewResumeOnBadge ? (
+                    /* View Resume as a small eye joined to the version
                        badge — the resume it opens is that version. */
                     <span className="inline-flex items-stretch shrink-0 whitespace-nowrap rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
                       <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1">
@@ -1578,10 +1588,22 @@ Best regards`);
                      resume: a version scored for this job opens that score; one
                      never scored here opens its preview. */
                   <div className="relative shrink-0" ref={versionMenuRef}>
+                    {/* With viewResumeOnBadge the picker and the View Resume eye
+                        are one badge, as with a plain version; the menu stays
+                        outside it so the badge's rounded clip never cuts it. */}
+                    <span
+                      className={viewResumeOnBadge
+                        ? 'inline-flex items-stretch whitespace-nowrap rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden'
+                        : 'contents'}
+                    >
                     <button
                       type="button"
                       onClick={() => setShowVersionMenu((v) => !v)}
-                      className="inline-flex items-center gap-1 whitespace-nowrap px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+                      className={`inline-flex items-center gap-1 whitespace-nowrap px-2 sm:px-2.5 py-0.5 sm:py-1 text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer ${
+                        viewResumeOnBadge
+                          ? 'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40'
+                          : 'rounded-md border border-blue-200'
+                      }`}
                       aria-label={`Select resume version, currently Version ${resume.resumeVersion}`}
                       aria-haspopup="menu"
                       aria-expanded={showVersionMenu}
@@ -1589,6 +1611,8 @@ Best regards`);
                       Version {resume.resumeVersion}
                       <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showVersionMenu ? 'rotate-180' : ''}`} />
                     </button>
+                    {viewResumeOnBadge && renderViewResumeEye(true)}
+                    </span>
 
                     {showVersionMenu && (
                       <div
@@ -1640,9 +1664,9 @@ Best regards`);
                     )}
                   </div>
                 ))}
-                {/* Flat, with no plain version badge to join: the same eye as
-                    a badge of its own beside the version picker (or title). */}
-                {flatHeaderActions && !(resume.resumeVersion && (versionReadOnly || resumeVersions.length === 0)) && (
+                {/* No version badge to join (no version at all): the same eye
+                    as a badge of its own beside the title. */}
+                {viewResumeOnBadge && !resume.resumeVersion && (
                   <span className="inline-flex items-stretch rounded-md bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
                     {renderViewResumeEye(false)}
                   </span>
@@ -1686,8 +1710,11 @@ Best regards`);
             )}
 
             {/* ml-auto keeps the actions right-aligned on one line, and simply
-                wraps to the next line when the badges run out of room. */}
-            <div className="flex flex-wrap items-center gap-2 ml-auto">
+                wraps to the next line when the badges run out of room.
+                Flat (wide Create / Send buttons): below xl they drop to their
+                own full-width row, left-aligned under the badges instead of
+                hanging off the right edge. */}
+            <div className={`flex flex-wrap items-center gap-2 ${flatHeaderActions ? 'w-full xl:w-auto xl:ml-auto' : 'ml-auto'}`}>
               {/* Share leads the group: sending the resume on is a step that
                   usually comes before inviting anyone to anything. */}
               {RESUME_EMAIL_SHARE_ENABLED && viewResumeId && (
@@ -1828,9 +1855,9 @@ Best regards`);
               </div>
               )}
 
-              {/* Flat: View Resume is the eye on the resume version badge
-                  (renderViewResumeEye), not a button here. */}
-              {!flatHeaderActions && (
+              {/* With viewResumeOnBadge, View Resume is the eye on the resume
+                  version badge (renderViewResumeEye), not a button here. */}
+              {!viewResumeOnBadge && (
                 <button
                   type="button"
                   onClick={handleViewResume}
@@ -1904,9 +1931,9 @@ Best regards`);
                     page header's own chips (`JobDetailView`). Both come from
                     the list row, else from the JD this page already loaded. */}
                 {(resume.jobCode || jdDetails?.job_id) && (
-                  <span className="inline-flex items-center px-2 py-0.5 mr-1.5 bg-brand-blue text-white rounded-md text-xs font-semibold font-mono tracking-wide align-middle whitespace-nowrap">
+                  <JobIdBadge className={`mr-1.5 align-middle whitespace-nowrap ${JOB_ID_BADGE_FIT}`}>
                     {resume.jobCode || jdDetails?.job_id}
-                  </span>
+                  </JobIdBadge>
                 )}
                 <button
                   type="button"
@@ -3014,7 +3041,7 @@ Best regards`);
                         <button
                           type="button"
                           onClick={() => setShowJdNavConfirm(true)}
-                          className="tf-btn tf-btn-primary px-2 py-0.5 bg-brand-blue rounded-md text-xs font-semibold font-mono tracking-wide hover:bg-brand-blue-2 transition-colors whitespace-normal shadow-none gap-0 justify-start"
+                          className={`${JOB_ID_BADGE_CLASS} ${JOB_ID_BADGE_FIT} hover:bg-brand-blue-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40`}
                         >
                           {jdDetails.job_id}
                         </button>
@@ -3174,7 +3201,7 @@ Best regards`);
                     scoring={{
                       allowOverqualified: jdDetails.allow_overqualified,
                       jobHoppingEnabled: jdDetails.job_hopping_enabled,
-                      overqualifiedNoNote: 'Experience above the maximum of the range fails Experience',
+                      overqualifiedNoNote: 'Experience more than 3 years above the maximum fails Experience',
                     }}
                     aiExtracted={jdDetails.creation_method === 'ai_generated'}
                     defaultOpen

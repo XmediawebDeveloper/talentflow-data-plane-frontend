@@ -10,6 +10,7 @@ import { aiInterviewService, AIInterviewAuditActivity } from '@/lib/services/aiI
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import { useAuth } from '@/components/providers/AuthProvider';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
@@ -20,6 +21,7 @@ import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
+import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
 
 type CategoryFilter = 'all' | 'config_lifecycle' | 'candidate_activity';
 
@@ -296,6 +298,21 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
     return category === 'config_lifecycle' ? 'Lifecycle' : 'Candidate';
   };
 
+  /* One tag per filter `countFilters` counts — the From/To range is one. */
+  const formatChipDate = (v: string) => {
+    const d = new Date(`${v}T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const activeFilterChips: FilterChip[] = (filterDateFrom || filterDateTo) ? [{
+    key: 'date', label: 'Date',
+    value: filterDateFrom && filterDateTo
+      ? `${formatChipDate(filterDateFrom)} – ${formatChipDate(filterDateTo)}`
+      : filterDateFrom ? `from ${formatChipDate(filterDateFrom)}` : `until ${formatChipDate(filterDateTo)}`,
+    onRemove: () => search.setFilters({ ...search.filters, dateFrom: '', dateTo: '' }),
+  }] : [];
+
   const toolbarEl = (
     <>
       {/* Same heading treatment as every other tab's — title + count, right
@@ -315,6 +332,8 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
       activeFilterCount={search.activeFilterCount}
       filtersApplied={search.filtersApplied}
       onClearFilters={search.reset}
+      /* Active filter tags: hover popup on More Filters (lg+). */
+      filterChips={activeFilterChips}
       className="mb-0"
       filterPanel={
       <div>
@@ -324,9 +343,9 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
             <DateField
               id="audit-date-from"
               aria-label="Date From"
-              value={search.draftFilters.dateFrom}
-              max={search.draftFilters.dateTo || undefined}
-              onChange={(v) => search.setDraftFilter('dateFrom', v)}
+              value={search.filters.dateFrom}
+              max={search.filters.dateTo || undefined}
+              onChange={(v) => search.setFilter('dateFrom', v)}
             />
           </div>
           <div>
@@ -334,24 +353,15 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
             <DateField
               id="audit-date-to"
               aria-label="Date To"
-              value={search.draftFilters.dateTo}
-              min={search.draftFilters.dateFrom || undefined}
-              onChange={(v) => search.setDraftFilter('dateTo', v)}
+              value={search.filters.dateTo}
+              min={search.filters.dateFrom || undefined}
+              onChange={(v) => search.setFilter('dateTo', v)}
             />
           </div>
         </div>
 
-        {/* Panel footer: "Done" applies the selection and reveals the
-            toolbar Clear - same flow as job-openings. */}
-        <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => { search.applyFilters(); setShowFilters(false); }}
-          >
-            Done
-          </Button>
-        </div>
+        {/* Active filter tags — the panel's last line (phones / tablets). */}
+        <FilterChipsPanelLine chips={activeFilterChips} />
       </div>
       }
     >
@@ -541,6 +551,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
               entityLabel="activity"
               emptyTitle="No activity yet"
               emptyDescription="AI interview and candidate events appear here as they happen."
+              illustration={<FolderIconIllustration icon={Activity} />}
               onReset={search.reset}
             />
           ) : (
@@ -591,7 +602,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                           label={activity.title}
                           selectionActive={selectedKeys.size > 0}
                         />
-                        <div className="flex items-start gap-2.5">
+                        <div className="flex items-start gap-2.5 pl-7">
                           <div className={`flex-shrink-0 w-9 h-9 rounded-full border-2 ${colors.border} ${colors.bg} flex items-center justify-center ${colors.icon}`}>
                             {icon}
                           </div>

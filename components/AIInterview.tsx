@@ -9,6 +9,7 @@ import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { collapseAIInterviewLineages } from '@/lib/utils/aiInterviewJobOrder';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
+import { useBackgroundWorkRefresh } from '@/lib/backgroundWorkEvents';
 import { createPortal } from 'react-dom';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
@@ -46,6 +47,7 @@ const AIInterviewCandidateResults = dynamic(() => import('@/components/ai-interv
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState, type InviteStatusOption } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import AIInterviewTrackInvitesModal from '@/components/AIInterviewTrackInvitesModal';
+import InviteProgressDialog from '@/components/bulk-invite/InviteProgressDialog';
 import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore, matchesInviteResultFilter, inviteResult, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
 import ExportColumnsModal from '@/components/ExportColumnsModal';
 import { downloadSessionReports, canTryReport } from '@/components/ai-interview/evaluation-dashboard/downloadSessionReport';
@@ -53,6 +55,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import SearchableSelect from '@/components/ui/searchable-select';
@@ -78,6 +83,7 @@ import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-
 import { isPhoneWidth, useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from '@/components/ai-interview/ResultRowActions';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import ListCountBadge from '@/components/ui/list-count-badge';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -102,6 +108,7 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
 import type { AIConfigListQuery, AIConfigListFilters } from '@/lib/services/aiInterviewService';
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
+import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 /* The version panel's 3-dot menu trigger — the 32px bordered square matched to
    the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx, and to the
@@ -155,6 +162,8 @@ const ROUND_SHORT_LABELS: Record<string, string> = {
 };
 
 type TabKey = 'all' | 'all-interviews' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'invitation-status' | 'processing' | 'audit' | 'consent' | 'settings';
+/* Phones: these leave the underlined tab strip for the status menu on the search line. */
+const PHONE_STATUS_TABS: TabKey[] = ['published', 'draft', 'completed', 'archived'];
 type OverviewCardKey = 'jobs' | 'interviews' | 'active' | 'draft' | 'interviewed';
 /* 'candidate-results' (Results) pages its own rows on the server
    (GET /ai-interview/candidate-results) with every label it shows, so opening
@@ -190,6 +199,18 @@ const INVITATION_STATUS_TAB_OPTIONS: InviteStatusOption[] = [
 ];
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 const CONFIG_FETCH_PAGE_SIZE = 100;
+
+/** A 'YYYY-MM-DD' filter date as a filter tag shows it: 01 Nov 2026. */
+const formatChipDate = (v: string) => {
+  const d = new Date(`${v}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? v
+    : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+/** One date range (counted as one filter) as one tag value. */
+const formatChipDateRange = (from: string, to: string) =>
+  from && to ? `${formatChipDate(from)} – ${formatChipDate(to)}`
+    : from ? `from ${formatChipDate(from)}` : `until ${formatChipDate(to)}`;
 
 /** One string for the list filters the page-reset effect watches. */
 const listFilterKey = (v: Record<string, unknown>) =>
@@ -238,8 +259,10 @@ export default function AIInterview() {
      whichever tab is open. Phones start on cards — tables only scroll sideways
      there; the restore below still wins on larger screens. */
   const [listDisplayMode, setListDisplayMode] = useState<ListDisplayMode>('list');
+  // Phones: a short search placeholder that fits beside the status menu.
+  const [isPhone, setIsPhone] = useState(false);
   useEffect(() => {
-    if (isPhoneWidth()) setListDisplayMode('grid');
+    if (isPhoneWidth()) { setListDisplayMode('grid'); setIsPhone(true); }
   }, []);
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const [listScrollRequest, setListScrollRequest] = useState(0);
@@ -488,6 +511,8 @@ export default function AIInterview() {
 
   // 3-dot menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  /* ⋯ View Progress: the interview version whose invite sends are shown. */
+  const [progressFor, setProgressFor] = useState<AIInterviewResponse | null>(null);
   /* Which row has its JD version history open — one at a time, keyed by config
      id, exactly as the Assessments Job List holds its own. Persisted with the
      rest of the list state below so coming back from an interview page finds
@@ -1229,6 +1254,10 @@ export default function AIInterview() {
     if (activeTab === 'invitation-status') loadAllInviteStatuses(true);
     setRefreshSignal((n) => n + 1);
   };
+  /* onSent runs when a send is only queued; the invites go out in the
+     background. Re-read the same way as they actually go out (and once more
+     when the send finishes), so Invitations Sent moves without a reload. */
+  useBackgroundWorkRefresh(() => inviteSentRefreshRef.current(), ['invite']);
 
   /** Open THE invite popup. With a config: that job + that interview version
    *  (version cards hidden). Without: the popup's own picker of every
@@ -1611,7 +1640,9 @@ export default function AIInterview() {
     else toast.success(summary);
     setBulkRunning(false);
     setBulkConfirm(null);
-    resolve(true);
+    // The table clears its ticks only when something went through — if every
+    // item failed, the selection stays so the user can retry.
+    resolve(done > 0);
   };
 
   const handlePublishConfig = async (config: AIInterviewResponse) => {
@@ -2764,6 +2795,14 @@ export default function AIInterview() {
                 <Radar className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-brand-cyan' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Track{hasBeenShared ? ` (${invitations})` : ''}</span>
               </button>
+              {/* View Progress — this version's invite sends (Resume Scoring's View Progress). */}
+              <button
+                onClick={() => { setProgressFor(config); setOpenMenuId(null); }}
+                className={VERSION_MENU_ITEM_CLASS}
+              >
+                <TrendingUp className="w-4 h-4 flex-shrink-0 text-brand-blue" />
+                <span className={MENU_ITEM_SCALE_CLASS}>View Progress</span>
+              </button>
               <button
                 onClick={() => { if (!hasCompletedSessions) return; router.push(interviewDetailsHref(config.id, 'results')); setOpenMenuId(null); }}
                 disabled={!hasCompletedSessions}
@@ -2926,6 +2965,29 @@ export default function AIInterview() {
 
   const isConfigListTab = ['all', 'published', 'draft', 'completed', 'archived'].includes(activeTab);
 
+  /* Config-list toolbar's filter tags — one per filter `aiFilterCount`
+     counts, so the More Filters badge and the tags always agree. Values read
+     as the More Filters dropdowns show them. */
+  const AI_DATE_FILTER_LABELS: Record<DateFilterKey, string> = {
+    all: 'Any date', today: 'Today', yesterday: 'Yesterday', last_week: 'Last week', last_month: 'Last month', custom: 'Custom range…',
+  };
+  const aiFilterChips: FilterChip[] = ([
+    modeFilter !== 'all' && { key: 'mode', label: 'Mode', value: modeFilter === 'timed' ? 'Timed' : 'Conversational', onRemove: () => setModeFilter('all') },
+    creatorFilter !== 'all' && { key: 'creator', label: 'Created by', value: creatorFilter, onRemove: () => setCreatorFilter('all') },
+    dateFilter !== 'all' && {
+      key: 'created', label: 'Created',
+      value: dateFilter === 'custom' && (customDateFrom || customDateTo)
+        ? formatChipDateRange(customDateFrom, customDateTo)
+        : AI_DATE_FILTER_LABELS[dateFilter],
+      onRemove: () => setDateFilter('all'),
+    },
+    statusFilter !== 'all' && {
+      key: 'status', label: 'Status',
+      value: statusFilter === 'published' ? 'Active' : statusFilter === 'draft' ? 'Draft' : 'Archived',
+      onRemove: () => setStatusFilter('all'),
+    },
+  ] as (FilterChip | false)[]).filter(Boolean) as FilterChip[];
+
   /* Ticked rows a fresh link can be sent to — the Track Invites popup's bulk
      resend rule: Expired, and never once the candidate started or finished.
      Under ANY status bucket (it used to be offered only under the Expired
@@ -2939,16 +3001,17 @@ export default function AIInterview() {
      job, mode resend) that carries on when this page closes and shows in
      the round progress icon. Shared by the Invitation Status tab's and the
      Track popup's bulk Resend. */
-  const resendInvitesInBulk = async (targets: { id: string }[]) => {
-    await resendInBackground(targets);
-  };
+  const resendInvitesInBulk = async (targets: { id: string }[]) =>
+    resendInBackground(targets);
 
   const handleStatusBulkResend = async () => {
     const targets = statusResendableSelectedRows;
     if (targets.length === 0) { setStatusBulkResendOpen(false); return; }
     setIsStatusBulkResending(true);
-    await resendInvitesInBulk(targets);
-    setSelectedStatusInviteIds(new Set());
+    const { failedCount } = await resendInvitesInBulk(targets);
+    // Clear the ticks (hides the Actions bar) only once the send started — on
+    // failure the selection stays so the user can retry.
+    if (failedCount === 0) setSelectedStatusInviteIds(new Set());
     setStatusBulkResendOpen(false);
     setIsStatusBulkResending(false);
     await loadAllInviteStatuses();
@@ -2973,6 +3036,9 @@ export default function AIInterview() {
       } else if (skipped > 0) {
         toast.success(`Downloaded ${downloaded} report${downloaded === 1 ? '' : 's'}. ${skipped} candidate${skipped === 1 ? ' has' : 's have'} no report yet.`);
       }
+      // Download went through — clear the ticks (hides the Actions bar). Kept
+      // when nothing downloaded or some reports failed, so the user can retry.
+      if (downloaded > 0 && failed === 0) setSelectedStatusInviteIds(new Set());
     } catch (err) {
       console.error('[AIInterview] Invitation Status bulk PDF download failed:', err);
       toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');
@@ -3167,8 +3233,10 @@ export default function AIInterview() {
               </p>
             </div>
           </div>
-          {/* Phones: the buttons stack full width, as the Job Openings header's. From sm unchanged. */}
-          <div className="flex max-sm:flex-col max-sm:items-stretch sm:items-center gap-2 sm:gap-3 sm:flex-wrap xl:flex-nowrap">
+          {/* Phones: a 2×2 grid — Units Left | HR Question Bank over Send Invite |
+              Create — instead of four full-width rows; labels shorten to fit a
+              half-width box. From sm unchanged. */}
+          <div className="max-sm:grid max-sm:grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3 sm:flex-wrap xl:flex-nowrap">
             {/* AI Interview Quota Card */}
             {totalUnits > 0 && (
               <QuotaBadge
@@ -3187,14 +3255,15 @@ export default function AIInterview() {
               }}
               aria-disabled={!canAccessHRQuestionBank}
               title={!canAccessHRQuestionBank ? 'You do not have permission to access the HR Question Bank' : ''}
-              className={`inline-flex items-center justify-center gap-1.5 h-10 border px-4 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
+              className={`inline-flex items-center justify-center gap-1.5 h-10 min-w-0 border px-3 sm:px-4 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
                 canAccessHRQuestionBank
                   ? 'border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5'
                   : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
               }`}
             >
               <ClipboardList className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>HR Question Bank</span>
+              <span className="truncate sm:hidden">Question Bank</span>
+              <span className="hidden sm:inline">HR Question Bank</span>
             </button>
             <Button
               variant="secondary"
@@ -3204,7 +3273,7 @@ export default function AIInterview() {
                 openInterviewInvite();
               }}
               aria-disabled={!canShareAIInterviews}
-              className={`${(!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
+              className={`max-sm:px-3 ${(!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
               // Inline so it beats the secondary variant's border-[var(--border)];
               // matches the HR Question Bank button's border-brand-blue/30.
               style={{ borderColor: 'color-mix(in srgb, var(--brand-blue) 30%, transparent)' }}
@@ -3221,11 +3290,13 @@ export default function AIInterview() {
                 router.push('/recruitment/ai-interviews/jd-selection');
               }}
               aria-disabled={!canCreateAIInterviews}
-              className={`${(!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
+              /* No quota badge (3 items): Create takes the full second row on phones. */
+              className={`max-sm:px-3 ${totalUnits > 0 ? '' : 'max-sm:col-span-2'} ${(!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
               title={!canCreateAIInterviews ? 'You do not have permission to create AI interviews' : ''}
               icon={<Plus className="w-3.5 h-3.5" />}
             >
-              Create AI Interview
+              <span className="sm:hidden">Create Interview</span>
+              <span className="hidden sm:inline">Create AI Interview</span>
             </Button>
           </div>
         </div>
@@ -3376,12 +3447,14 @@ export default function AIInterview() {
               searchValue={searchQuery}
               searchDebounceMs={0}
               onSearchChange={setSearchQuery}
-              searchPlaceholder="Search by job title, ID or skill..."
+              searchPlaceholder={isPhone ? 'Search jobs' : 'Search by job title, ID or skill...'}
               onToggleFilters={() => setShowAIFilters((open) => !open)}
               filtersOpen={showAIFilters}
               activeFilterCount={aiFilterCount}
               filtersApplied={aiFiltersActive}
               onClearFilters={clearAIInterviewFilters}
+              /* Active filter tags: hover popup on More Filters (lg+). */
+              filterChips={aiFilterChips}
               trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
             />
             {showAIFilters && (
@@ -3389,7 +3462,7 @@ export default function AIInterview() {
                    panel needs no Done. Four controls = the panel's one
                    4-column row from lg; the custom date range, when picked,
                    takes the row below. */
-                <ListFilterPanel>
+                <ListFilterPanel chips={aiFilterChips}>
                     <div>
                       <label htmlFor="ai-interview-mode" className="block tf-caption mb-1.5">
                         Mode
@@ -3493,8 +3566,10 @@ export default function AIInterview() {
             Descriptions page's status-pill row (no "Show:" label). */}
         <div className="tf-jobs-contents flex items-start justify-between gap-2 flex-wrap">
         <div className="tf-jobs-contents flex items-center gap-1.5 flex-wrap w-full">
-          {/* `contents` from sm (the row as before); on phones one underlined strip. */}
-          <div className="tf-jobs-status-tabs contents">
+          {/* `contents` from sm (the row as before). Phones (--line): an underlined
+              strip of the VIEW tabs across the card's top; Active / Draft /
+              Archived move into the status menu on the search line below. */}
+          <div className="tf-jobs-status-tabs tf-jobs-status-tabs--line contents" role="tablist" aria-label="AI interview views">
           {(() => {
             // Server counts (/configs/stats, the same shared WHERE the lists
             // page with), as on Assessments. `configs` now holds only the
@@ -3508,11 +3583,18 @@ export default function AIInterview() {
             ];
           })().map(tab => {
             const isActive = activeTab === tab.key;
+            const isStatusTab = PHONE_STATUS_TABS.includes(tab.key as TabKey);
             return (
               <button
                 key={tab.key}
                 onClick={() => openListView(tab.key as TabKey)}
+                role="tab"
+                aria-selected={isActive}
                 aria-current={isActive ? 'page' : undefined}
+                /* Phones: the status tabs live in the status menu instead, and
+                   Configured Jobs stays underlined while one of them is picked. */
+                data-phone-hide={isStatusTab || undefined}
+                data-phone-active={(tab.key === 'all' && PHONE_STATUS_TABS.includes(activeTab)) || undefined}
                 className={`px-2.5 h-9 inline-flex items-center rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                   isActive
                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
@@ -3530,7 +3612,7 @@ export default function AIInterview() {
           })}
           {/* Candidates and invitations — their own group, divided off from
               the interview lists the way Activity Logs / Settings are. */}
-          <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
+          <div className="max-md:contents flex items-center gap-1.5 flex-wrap md:ml-1 md:border-l-2 md:border-gray-400 dark:md:border-slate-500 md:pl-2">
             {([
               // Candidate sessions across every interview — the Assessments
               // page's tab of the same name, for AI interviews.
@@ -3544,6 +3626,8 @@ export default function AIInterview() {
                 <button
                   key={tab.key}
                   onClick={() => openListView(tab.key as TabKey)}
+                  role="tab"
+                  aria-selected={isActive}
                   aria-current={isActive ? 'page' : undefined}
                   className={`px-2.5 h-9 inline-flex items-center rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     isActive
@@ -3563,7 +3647,7 @@ export default function AIInterview() {
               );
             })}
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
+          <div className="max-md:contents flex items-center gap-1.5 flex-wrap md:ml-1 md:border-l-2 md:border-gray-400 dark:md:border-slate-500 md:pl-2">
             {([
               { key: 'audit', label: 'Activity Logs' },
               { key: 'settings', label: 'Settings' },
@@ -3573,6 +3657,8 @@ export default function AIInterview() {
                 <button
                   key={tab.key}
                   onClick={() => openListView(tab.key as TabKey)}
+                  role="tab"
+                  aria-selected={isActive}
                   aria-current={isActive ? 'page' : undefined}
                   className={`px-2.5 h-9 inline-flex items-center rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     isActive
@@ -3586,6 +3672,46 @@ export default function AIInterview() {
             })}
           </div>
           </div>
+          {/* Phones: the status menu on the search line — ( search ) [● Active 231 ▾] [⚙]
+              — standing in for the Active / Draft / Archived tabs the underlined
+              strip drops. Only on the job lists it filters. */}
+          {isConfigListTab && !showUngroupedList && (() => {
+            const statusOptions = [
+              { key: 'all' as const, label: 'All jobs', count: stats?.total_jobs ?? 0, dot: 'bg-brand-blue' },
+              { key: 'published' as const, label: 'Active', count: stats?.published_configs ?? 0, dot: 'bg-success' },
+              { key: 'draft' as const, label: 'Draft', count: stats?.draft_configs ?? 0, dot: 'bg-brand-orange' },
+              { key: 'archived' as const, label: 'Archived', count: stats?.archived_configs ?? 0, dot: 'bg-gray-400' },
+            ];
+            const current = statusOptions.find((o) => o.key === activeTab) ?? statusOptions[0];
+            return (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="tf-ai-statusmenu sm:hidden inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900 hover:border-brand-blue/40 data-[state=open]:border-brand-blue/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    aria-label={`Status: ${current.label}, ${current.count}`}
+                  >
+                    <span className={`h-2 w-2 rounded-full flex-shrink-0 ${current.dot}`} aria-hidden="true" />
+                    {current.label}
+                    <span className="font-medium text-gray-500 dark:text-slate-400 tabular-nums">{current.count.toLocaleString()}</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52 bg-white dark:bg-slate-900">
+                  <DropdownMenuLabel className="text-xs text-gray-500">Status</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={current.key} onValueChange={(v) => openListView(v as TabKey)}>
+                    {statusOptions.map((o) => (
+                      <DropdownMenuRadioItem key={o.key} value={o.key}>
+                        <span className={`h-2 w-2 rounded-full flex-shrink-0 ${o.dot}`} aria-hidden="true" />
+                        <span className="flex-1">{o.label}</span>
+                        <span className="text-xs font-semibold text-gray-500 tabular-nums">{o.count.toLocaleString()}</span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          })()}
           {/* Phones: Clear Sort, the Sort menu and Refresh on a line of their own, right. */}
           <div className="tf-jobs-tools contents">
           {/* Clear Sort (portalled in by All Interviews) and Sort by — in the
@@ -3651,7 +3777,7 @@ export default function AIInterview() {
             icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
             className="tf-jobs-refresh flex-shrink-0 !h-9 sm:ml-auto"
           >
-            <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
+            <span className="hidden max-sm:inline 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
           )}
           </div>
@@ -3667,14 +3793,11 @@ export default function AIInterview() {
             wrapper kept for that box, so the rows line up with the toolbar
             card above. Settings is a form, not a list, so it alone keeps the
             card.
-            The min-height keeps a short list (a few Archived rows, an empty
-            result) at least a screen tall: a tab click scrolls the toolbar card
-            to the top, and when the loaded list came in shorter than the
-            loading skeleton the page shrank under that scroll and the browser
-            snapped back up to the stat cards. */}
+            No min-height: the list is as tall as its rows, like Job Openings,
+            so a short list doesn't leave a screen of empty space below. */}
         <div className={activeTab === 'settings'
           ? 'tf-card-soft'
-          : '[&>div]:p-0 min-h-[calc(100dvh-11rem)]'}>
+          : '[&>div]:p-0'}>
           {/* All Interviews — flat, one row per interview config/version,
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
@@ -3715,25 +3838,15 @@ export default function AIInterview() {
                   {configRowsSkeleton}
                 </div>
               ) : (serverTotalJobs ? (totalJobsWaiting ? false : groupedListTotal === 0) : collapsedConfigs.length === 0) ? (
-                <div className="text-center py-16 sm:py-20">
-                  <div className="relative inline-flex items-center justify-center mb-5">
-                    <div className="absolute inset-0 rounded-full bg-brand-blue/10 blur-xl scale-150" aria-hidden />
-                    <div className="relative w-20 h-20 rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 flex items-center justify-center">
-                      {searchQuery ? (
-                        <Search className="w-9 h-9 text-brand-blue" strokeWidth={1.5} />
-                      ) : (
-                        <Video className="w-9 h-9 text-brand-blue" strokeWidth={1.5} />
-                      )}
-                    </div>
-                  </div>
-                  <h3 className="tf-section-title mb-1.5 tracking-tight">
-                    {searchQuery ? 'No matches found' : 'No AI interviews yet'}
-                  </h3>
-                  <p className="tf-body-muted mb-6 max-w-sm mx-auto">
-                    {searchQuery
-                      ? `We couldn't find anything matching "${searchQuery}". Try a different search.`
-                      : 'Set up your first AI interview to start evaluating candidates with multi-round, AI-driven assessments.'}
-                  </p>
+                <IllustratedEmptyState
+                  bordered={false}
+                  className="sm:py-14"
+                  illustration={searchQuery ? <IconTileIllustration icon={Search} /> : <FolderIconIllustration icon={Video} />}
+                  title={searchQuery ? 'No matches found' : 'No AI interviews yet'}
+                  description={searchQuery
+                    ? `We couldn't find anything matching "${searchQuery}". Try a different search.`
+                    : 'Set up your first AI interview to start evaluating candidates with multi-round, AI-driven assessments.'}
+                >
                   {!searchQuery && (
                     <Button
                       variant="primary"
@@ -3755,7 +3868,7 @@ export default function AIInterview() {
                       Clear search
                     </Button>
                   )}
-                </div>
+                </IllustratedEmptyState>
               ) : (
                 <>
                 {/* List: one full-width card per job. Card: the same cards in a
@@ -3853,11 +3966,16 @@ export default function AIInterview() {
                         }`}
                       >
                         <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
+                          {/* Header — identity left, status pill top-right on the
+                              same line (phones / tablets). From @4xl the wrapper
+                              is `contents`, so both fall back into the desktop
+                              row as separate columns, unchanged. */}
+                          <div className="flex items-start justify-between gap-2 @4xl/ai-row:contents">
                           {/* Identity — icon, Job ID, title. As on the Job Openings
                               card (JobOpeningSummary): ID + name keep one line and
                               truncate, and the job badge wraps under them on a phone
                               rather than squeezing the name; one line again from @4xl. */}
-                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 min-w-0 @4xl/ai-row:flex-nowrap @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
+                          <div className="flex-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 min-w-0 @4xl/ai-row:flex-none @4xl/ai-row:flex-nowrap @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
                             <div className={`${JOB_HEADLINE_ROW} gap-2.5`}>
                               <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
                                 <Briefcase className="h-4 w-4 text-brand-blue" />
@@ -3881,7 +3999,8 @@ export default function AIInterview() {
 
                           {/* Status of the job's representative interview —
                               boxed to a fixed width so the metric columns line up. */}
-                          <div className="flex-shrink-0 @4xl/ai-row:w-[104px] flex flex-wrap items-center gap-1">
+                          {/* mt-1.5 centres the pill on the 36px job icon beside it. */}
+                          <div className="flex-shrink-0 mt-1.5 @4xl/ai-row:mt-0 @4xl/ai-row:w-[104px] flex flex-wrap items-center justify-end @4xl/ai-row:justify-start gap-1">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${statusPill}`}>
                               <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
                               {statusPillLabel}
@@ -3889,18 +4008,15 @@ export default function AIInterview() {
                             {/* Live, with saved edits waiting for Publish. */}
                             {hasUnpublishedChanges(config) && <UnpublishedChangesChip />}
                           </div>
+                          </div>
 
-                          {/* Totals for the job. Two columns on a phone, four in a
-                              divided row once there is width for them. */}
-                          <div className={listDisplayMode === 'grid' && openVersionsFor !== config.id
-                            ? 'grid grid-cols-2 gap-x-2 gap-y-3'
-                            : 'tf-grid-stats @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0'}>
+                          {/* Totals for the job. Phones / tablets: a 2×2 grid of soft
+                              tiles. From @4xl: four columns in one divided row. */}
+                          <div className="grid grid-cols-2 gap-2 @4xl/ai-row:grid-cols-4 @4xl/ai-row:gap-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
                             {rowMetrics.map(({ key, icon: MetricIcon, iconClass, value, label }) => (
                               <div
                                 key={key}
-                                className={listDisplayMode === 'grid' && openVersionsFor !== config.id
-                                  ? 'min-w-0'
-                                  : 'min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0'}
+                                className="min-w-0 rounded-lg bg-slate-50 ring-1 ring-inset ring-gray-100 px-3 py-2 dark:bg-slate-800/50 dark:ring-slate-700/60 @4xl/ai-row:rounded-none @4xl/ai-row:!bg-transparent @4xl/ai-row:ring-0 @4xl/ai-row:py-0 @4xl/ai-row:border-l @4xl/ai-row:border-gray-100 dark:@4xl/ai-row:border-slate-700/60 @4xl/ai-row:first:border-l-0 @4xl/ai-row:first:pl-0"
                               >
                                 <div className="flex items-center gap-1.5">
                                   <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
@@ -3911,12 +4027,12 @@ export default function AIInterview() {
                             ))}
                           </div>
 
-                          {/* Actions — View Versions, Track, Result. flex-wrap so
-                              three buttons never overflow a narrow phone card;
-                              their own labels also collapse to icon-only below
-                              sm: for the same reason. */}
+                          {/* Actions — View Versions, Track, Result. Phones /
+                              tablets: a full-width footer row under a hairline,
+                              each button an equal share (*:flex-1) with its label.
+                              From @4xl: right-aligned, natural widths. */}
                           <div
-                            className="flex items-center flex-wrap gap-2 flex-shrink-0 self-start @4xl/ai-row:self-auto @4xl/ai-row:ml-auto"
+                            className="flex items-center gap-2 flex-shrink-0 w-full pt-3 border-t border-gray-100 dark:border-slate-700/60 *:flex-1 *:justify-center @4xl/ai-row:w-auto @4xl/ai-row:pt-0 @4xl/ai-row:border-t-0 @4xl/ai-row:*:flex-none @4xl/ai-row:ml-auto"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {hasVersionHistory && (
@@ -3971,7 +4087,7 @@ export default function AIInterview() {
                                 title={trackReason}
                               >
                                 <Radar className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Track</span>
+                                <span>Track</span>
                               </button>
                             )}
 
@@ -3993,7 +4109,7 @@ export default function AIInterview() {
                               title={resultReason}
                             >
                               <BarChart2 className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Result</span>
+                              <span>Result</span>
                             </button>
                           </div>
                         </div>
@@ -4310,15 +4426,13 @@ export default function AIInterview() {
                   </Button>
                 </div>
               ) : inviteStatusRows.length === 0 ? (
-                <div className="text-center py-16 sm:py-20">
-                  <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-                    <Mail className="w-7 h-7 text-brand-blue" />
-                  </div>
-                  <h3 className="tf-section-title mb-1">No invitations sent yet</h3>
-                  <p className="tf-body-muted max-w-md mx-auto">
-                    Invite candidates to an AI interview and their status appears here.
-                  </p>
-                </div>
+                <IllustratedEmptyState
+                  bordered={false}
+                  className="sm:py-14"
+                  illustration={<FolderIconIllustration icon={Mail} badge="send" />}
+                  title="No invitations sent yet"
+                  description="Invite candidates to an AI interview and their status appears here."
+                />
               ) : null;
                 const totalInvites = inviteStatusRows.length;
                 const bucketCount = (predicate: (inv: any) => boolean) => inviteStatusRows.filter(predicate).length;
@@ -4594,6 +4708,8 @@ export default function AIInterview() {
                   });
                   toast.success(`Exported ${rows.length} records to ${statusExportFormat === 'csv' ? 'CSV' : 'Excel'}`);
                   setShowStatusExportModal(false);
+                  // Export done — clear the ticks, which also hides the Actions bar.
+                  setSelectedStatusInviteIds(new Set());
                 };
 
                 /* What More Filters reports: status off 'all' is one, and the
@@ -4606,6 +4722,30 @@ export default function AIInterview() {
                   setInviteStatusFilters({ ...inviteStatusFilters, ...patch });
                   setInviteStatusPage(1);
                 };
+
+                /* One tag per filter `inviteStatusFilterCount` counts (the
+                   Invited date range is one tag), valued as the panel's
+                   dropdowns show them. */
+                const optionLabel = (options: { value: string; label: string }[], value: string) =>
+                  options.find((o) => o.value === value)?.label ?? value;
+                const colFilters = inviteStatusColumnFilters;
+                const inviteStatusFilterChips: FilterChip[] = ([
+                  colFilters.job && { key: 'job', label: 'Job', value: optionLabel(jobOptions, colFilters.job), onRemove: () => updateColumnFilter('job', '') },
+                  colFilters.jobVersion && { key: 'jobVersion', label: 'Job Version', value: optionLabel(jobVersionOptions, colFilters.jobVersion), onRemove: () => updateColumnFilter('jobVersion', '') },
+                  colFilters.interviewVersion && { key: 'interviewVersion', label: 'Interview Version', value: optionLabel(interviewVersionOptions, colFilters.interviewVersion), onRemove: () => updateColumnFilter('interviewVersion', '') },
+                  colFilters.inviteSource && { key: 'inviteSource', label: 'Invite Source', value: optionLabel(INVITE_SOURCE_FILTER_OPTIONS, colFilters.inviteSource), onRemove: () => updateColumnFilter('inviteSource', '') },
+                  colFilters.result && { key: 'result', label: 'Result', value: optionLabel(RESULT_FILTER_OPTIONS, colFilters.result), onRemove: () => updateColumnFilter('result', '') },
+                  inviteStatusFilters.status !== 'all' && {
+                    key: 'status', label: 'Status',
+                    value: optionLabel(INVITATION_STATUS_TAB_OPTIONS, inviteStatusFilters.status),
+                    onRemove: () => updateInviteStatusFilters({ status: 'all' }),
+                  },
+                  (inviteStatusFilters.dateFrom || inviteStatusFilters.dateTo) && {
+                    key: 'invited', label: 'Invited',
+                    value: formatChipDateRange(inviteStatusFilters.dateFrom, inviteStatusFilters.dateTo),
+                    onRemove: () => updateInviteStatusFilters({ dateFrom: '', dateTo: '' }),
+                  },
+                ] as (FilterChip | false | '')[]).filter(Boolean) as FilterChip[];
 
                 /* This tab's search/filter row, in the shared slot ABOVE the
                    tab pills where every other tab's sits — the Assessments
@@ -4627,6 +4767,8 @@ export default function AIInterview() {
                         setInviteStatusColumnFilters(EMPTY_INVITE_COLUMN_FILTERS);
                         setInviteStatusPage(1);
                       }}
+                      /* Active filter tags: hover popup on More Filters (lg+). */
+                      filterChips={inviteStatusFilterChips}
                       className="mb-0"
                       afterFiltersActions={statusBulkActions}
                       trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
@@ -4703,11 +4845,8 @@ export default function AIInterview() {
                               />
                             </div>
                           </div>
-                          <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
-                            <Button variant="secondary" size="sm" onClick={() => setShowInviteStatusFilters(false)}>
-                              Done
-                            </Button>
-                          </div>
+                          {/* Active filter tags — the panel's last line (phones / tablets). */}
+                          <FilterChipsPanelLine chips={inviteStatusFilterChips} />
                         </div>
                       }
                     />
@@ -4862,7 +5001,8 @@ export default function AIInterview() {
                           const failed = results.length - succeeded;
                           if (succeeded > 0) toast.success(`Revoked ${succeeded} invitation${succeeded === 1 ? '' : 's'}.`);
                           if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
-                          setSelectedStatusInviteIds(new Set());
+                          // Keep only the ones that failed ticked, so a retry acts on them.
+                          setSelectedStatusInviteIds(new Set(targets.filter((_, i) => results[i].status === 'rejected').map((inv) => inv.id)));
                           await loadAllInviteStatuses();
                           setRefreshSignal((n) => n + 1);
                         } finally {
@@ -4915,7 +5055,7 @@ export default function AIInterview() {
           {activeTab === 'settings' && (
             <div className="p-3 sm:p-6">
               {/* Settings Sub-tabs */}
-              <div className="flex gap-3 sm:gap-4 mb-4 sm:mb-6 border-b border-gray-100 dark:border-slate-700/60">
+              <div role="tablist" aria-label="Settings sections" className="flex gap-3 sm:gap-4 mb-4 sm:mb-6 border-b border-gray-100 dark:border-slate-700/60">
                 {[
                   { key: 'general', label: 'General' },
                   // Proctoring settings are a staging-only testing menu — hidden in
@@ -4925,6 +5065,8 @@ export default function AIInterview() {
                   <button
                     key={sub.key}
                     onClick={() => setSettingsSubTab(sub.key as 'general' | 'proctoring')}
+                    role="tab"
+                    aria-selected={settingsSubTab === sub.key}
                     className={`tf-tab-line ${
                       settingsSubTab === sub.key
                         ? 'tf-tab-line-active'
@@ -5189,6 +5331,18 @@ export default function AIInterview() {
 
       {/* Invite Status Tracking — the shared tracker popup (the one Job Details
           opens): one interview, or every interview of a job from its job row. */}
+      {progressFor?.jd_id && (
+        <InviteProgressDialog
+          kind="interview"
+          jdId={progressFor.jd_id}
+          versionId={progressFor.id}
+          jdCode={(progressFor as { jd_short_id?: string }).jd_short_id}
+          jdTitle={progressFor.jd_title || progressFor.position}
+          versionLabel={`${progressFor.jd_version ? `Job V${progressFor.jd_version} · ` : ''}AI Interview V${progressFor.interview_version ?? 1}`}
+          onClose={() => setProgressFor(null)}
+        />
+      )}
+
       {viewInvitationsConfig && (() => {
         const config = viewInvitationsConfig;
         const jdLockReason = jdActionLockReason(config.jd_status);
@@ -5419,7 +5573,8 @@ export default function AIInterview() {
             if (failed > 0) {
               toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
             }
-            setSelectedInviteIds(new Set());
+            // Keep only the ones that failed ticked, so a retry acts on them.
+            setSelectedInviteIds(new Set(targets.filter((_, i) => results[i].status === 'rejected').map((inv) => inv.id)));
             if (viewInvitationsConfig) {
               await refreshInvitationsView(viewInvitationsConfig.id);
             }

@@ -50,6 +50,7 @@ import { DateField } from '@/components/ui/date-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips from '@/components/ui/filter-chips';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -1365,29 +1366,12 @@ export default function AuditTrailPage() {
                   />
                 </div>
               )}
+              {/* Shared filter tags. Clear all kept: it is this toolbar's only reset. */}
               {filterChips.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {filterChips.map((c) => (
-                    <button
-                      key={c.key}
-                      type="button"
-                      onClick={c.clear}
-                      aria-label={`Remove filter ${c.name}: ${c.value}`}
-                      className="inline-flex max-w-full items-center gap-1 rounded-full bg-brand-blue/[0.06] px-2.5 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15 hover:bg-brand-blue/10 transition-colors"
-                    >
-                      <span className="text-gray-500 dark:text-slate-400">{c.name}:</span>
-                      <span className="truncate max-w-[12rem]">{c.value}</span>
-                      <X className="h-3 w-3 shrink-0" />
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={clearAllFilters}
-                    className="px-1 text-xs font-medium text-gray-600 dark:text-slate-400 underline underline-offset-2 hover:text-brand-blue"
-                  >
-                    Clear all
-                  </button>
-                </div>
+                <FilterChips
+                  chips={filterChips.map((c) => ({ key: c.key, label: c.name, value: c.value, onRemove: c.clear }))}
+                  onClearAll={clearAllFilters}
+                />
               )}
             </div>
           </div>

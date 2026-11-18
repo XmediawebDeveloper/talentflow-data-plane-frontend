@@ -41,6 +41,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { DateField } from '@/components/ui/date-field';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
 /* The toolbar pill/segment style helpers now live in a shared module so other
@@ -998,6 +999,12 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     ]);
 
     await exportRows(format, JOBS_EXPORT_HEADERS, rows, `jobs-export-${new Date().toISOString().split('T')[0]}`, { sheetName: 'Job Openings' });
+    // Like every other bulk action: once the file is written, the selection and
+    // the actions bar clear. Only on success — if exportRows throws, this line is
+    // skipped and ExportFormatModal stays open with its error toast, so the user
+    // can retry with the same selection. No list refresh: export changes no data.
+    clearSelection();
+    setShowBulkActions(false);
   };
 
   // Close dropdown when clicking outside
@@ -1083,6 +1090,43 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   // the empty state's own version used to miss creation method, industry and
   // the applied flag, leaving the list filtered after a "clear".
   const clearAllFilters = search.reset;
+
+  /* One removable tag per active filter — the status tab, All / AI / Manual,
+     the toolbar dropdowns and the More Filters panel — so the filter button's
+     count reads as named filters. */
+  const EXPERIENCE_LABELS: Record<string, string> = {
+    entry: 'Entry Level (0-2 years)',
+    junior: 'Junior Level (2-4 years)',
+    mid: 'Mid Level (5-7 years)',
+    senior: 'Senior Level (8-10 years)',
+    architect: 'Architect Level (10+ years)',
+    management: 'Management Level (10+ years)',
+  };
+  const formatChipDate = (v: string) => {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const titleCase = (v: string) => v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
+  // One tag per filter `countFilters` counts, so the More Filters badge and the
+  // tags always agree.
+  const activeFilterChips: FilterChip[] = [
+    statusFilter !== 'all' && { key: 'status', label: 'Status', value: titleCase(String(statusFilter)), onRemove: () => search.setFilter('status', 'all') },
+    creationMethodFilter !== null && { key: 'creationMethod', label: 'Created via', value: creationMethodFilter === 'ai' ? 'AI Generated' : 'Manual', onRemove: () => search.setFilter('creationMethod', null) },
+    locationFilter !== 'all' && { key: 'location', label: 'Location', value: String(locationFilter), onRemove: () => search.setFilter('location', 'all') },
+    industryFilter !== 'all' && { key: 'industry', label: 'Industry', value: formatIndustryType(industryFilter), onRemove: () => search.setFilter('industry', 'all') },
+    createdByFilter !== 'all' && { key: 'createdBy', label: 'Created by', value: String(createdByFilter), onRemove: () => search.setFilter('createdBy', 'all') },
+    workModeFilter !== 'all' && { key: 'workMode', label: 'Work Mode', value: formatEmploymentType(workModeFilter), onRemove: () => search.setFilter('workMode', 'all') },
+    employmentTypeFilter !== 'all' && { key: 'employmentType', label: 'Job Type', value: formatEmploymentType(employmentTypeFilter), onRemove: () => search.setFilter('employmentType', 'all') },
+    experienceFilter !== 'all' && { key: 'experience', label: 'Experience', value: EXPERIENCE_LABELS[experienceFilter] ?? String(experienceFilter), onRemove: () => search.setFilter('experience', 'all') },
+    datePostedFromFilter !== '' && { key: 'datePostedFrom', label: 'Posted From', value: formatChipDate(datePostedFromFilter), onRemove: () => search.setFilter('datePostedFrom', '') },
+    datePostedToFilter !== '' && { key: 'datePostedTo', label: 'Posted To', value: formatChipDate(datePostedToFilter), onRemove: () => search.setFilter('datePostedTo', '') },
+    // No control on this page sets these, but a restored saved view can — and they count.
+    departmentFilter !== 'all' && { key: 'department', label: 'Department', value: String(departmentFilter), onRemove: () => search.setFilter('department', 'all') },
+    applicantsFilter !== 'all' && { key: 'applicants', label: 'Applicants', value: String(applicantsFilter), onRemove: () => search.setFilter('applicants', 'all') },
+    salaryRangeFilter !== 'all' && { key: 'salaryRange', label: 'Salary', value: String(salaryRangeFilter), onRemove: () => search.setFilter('salaryRange', 'all') },
+  ].filter(Boolean) as FilterChip[];
 
   // Create New Job. Before navigating away, drop this list's saved view-state so
   // returning from the Create Job page starts clean (no stale More Filters).
@@ -1405,6 +1449,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
             controlsFollowSearch
             compactOnMobile
             onToggleFilters={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+            filterChips={activeFilterChips}
             filtersOpen={showAdvancedFilters}
             activeFilterCount={activeFiltersCount}
             filtersApplied={filtersActive}
@@ -1525,6 +1571,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 </div>
               </div>
 
+              {/* Active filter tags as the panel's last line — phones / tablets only. */}
+              <FilterChipsPanelLine chips={activeFilterChips} />
             </div>
           )}
 
@@ -1914,6 +1962,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
               </Button>
             )}
           </div>
+          {/* Active filter tags: not shown in the card. Laptop / desktop see them by
+              hovering More Filters; phones / tablets inside the More Filters panel. */}
         </div>
 
         {/* Jobs Grid/List — `jobsListRef` is the phone scroll target. */}
@@ -1969,7 +2019,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                    (the phone/tablet card and the desktop row), so the two can
                    never drift apart. Only one layout is visible at a time. */
                 const rowActions = (
-                  <div className={`order-last ml-auto flex flex-nowrap items-center gap-2 ${hasVersionHistory ? 'lg:ml-0' : ''}`}>
+                  <div className={`order-last ml-auto flex flex-nowrap items-center gap-2 ${hasVersionHistory ? 'md:ml-0' : ''}`}>
                     {/* Edit Button - icon only. Shown on every row except
                         Archived/Disabled ones — those are already retired,
                         so there is nothing on them to edit in place.
@@ -2242,14 +2292,14 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     {/* flex-wrap: checkbox + job info (+ the counts column from
                         md) share the first row, so the checkbox sits on the Job
                         ID / Job Name line; the footer wraps under at full width. */}
-                    {/* ── Phones and tablets (below lg): the JD card ─────────────────────
+                    {/* ── Phones (below md): the JD card ─────────────────────
                         Dense flow, no column gaps:
                         1. checkbox · JD ID · source · status
                         2. job name (one line, "…") · version · Edit / View / ⋮ on the right
                         3. experience · industry · type · work mode (flowing)
                         4. Created | Posted / By | Last Updated — two aligned columns
                         5. divider, then Scored / Assessed / Interviewed — three tiles */}
-                    <div className="lg:hidden">
+                    <div className="md:hidden">
                       <div className="tf-jd-card-top">
                         {job.job_id && <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.job_id}>{job.job_id}</JobIdBadge>}
                         {(() => {
@@ -2348,7 +2398,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     </div>
 
                     {/* ── Laptop / desktop (lg and up): the row layout, unchanged ── */}
-                    <div className="hidden lg:flex flex-wrap items-start gap-3 md:gap-x-4">
+                    <div className="hidden md:flex flex-wrap items-start gap-3 md:gap-x-4">
                       {/* Individual Select — just the checkbox (the Briefcase
                           job icon that used to sit beside it was removed).
                           h-5 / sm:h-6 give the checkbox the title row's own
@@ -2452,7 +2502,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                               toggleVersions(versionKey, job.id);
                             }}
                             aria-expanded={versionsExpanded}
-                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all duration-200 lg:order-[9998] lg:ml-auto ${
+                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all duration-200 md:order-[9998] md:ml-auto ${
                               versionsExpanded
                                 ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50 dark:ring-brand-blue/30 dark:shadow-black/20 dark:hover:bg-slate-700'
                                 : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2 dark:bg-brand-blue dark:text-white dark:border-brand-blue dark:hover:bg-brand-blue-2'

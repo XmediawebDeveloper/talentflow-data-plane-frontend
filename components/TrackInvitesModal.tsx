@@ -8,7 +8,7 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
 import { assessmentInviteSource, InviteSourceValue } from '@/components/AIInterviewInviteTable';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
 import api from '@/lib/services/api';
@@ -52,6 +52,7 @@ import { StatusLegend, UpdatedAgo } from '@/components/ui/guided-tracker';
 import ListPagination from '@/components/ListPagination';
 import { TrackerCheckbox, TrackerSelectAll, TrackerStatusTabs, TrackerTabHint, TrackerTimeline, TrackerScorePill, trackerSelection, TRACKER_LOOK_PANEL_CLASS, TRACKER_LOOK_BODY_CLASS, TrackerBulkBar, type TrackerTab, type TrackerSelectGroup } from '@/components/ui/tracker-look';
 import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import { loadJobAssessmentVersions } from '@/components/talent-match-invite/inviteVersions';
 import { useAuth } from '@/components/providers/AuthProvider';
 
 /* Per-row actions: Resend / Copy Link always, plus Revoke (while an invite is
@@ -67,7 +68,7 @@ interface TrackInvitesModalProps {
   jdId: string;
   jdTitle: string;
   /** The JD's short id and job version — shown as `JD-xxx · title · V1`. The
-   *  tracker is one job version's, so there is no Job Version filter. */
+   *  tracker can span job versions; the JD Version filter narrows it. */
   jdShortId?: string;
   jobVersion?: number | null;
   /** Lets the host open a candidate's result without leaving its page (Job
@@ -190,7 +191,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
   };
   const [isLoading, setIsLoading] = useState(true);
   const [invitations, setInvitations] = useState<any[]>([]);
-  const [stats, setStats] = useState({
+  /* Every assessment the tracker loaded (the opened scope + its job's other versions). */
+  const [loadedAssessments, setLoadedAssessments] = useState<{ version?: number; jd_version?: number }[]>([]);
+  const [, setStats] = useState({
     total: 0,
     invited: 0,
     expired: 0,
@@ -201,6 +204,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     revoked: 0,
   });
   /* The AI tracker's extra filters (no Job Version — this is one job version). */
+  /* Opened on one job version (an assessment's Track): the rest of the job's
+     versions are loaded too, and the filter starts on the opened one. */
+  const [jdVersionFilter, setJdVersionFilter] = useState('');
+  /* Set once, on the first load that adds other versions: the filter then
+     starts on the opened version, so the first view is what it always was. */
+  const jdFilterSeeded = useRef(false);
   const [assessmentVersionFilter, setAssessmentVersionFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [resultFilter, setResultFilter] = useState('');
@@ -280,9 +289,31 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     if (!silent) setIsLoading(true);
     try {
       // The host's assessments, or every assessment for this JD
-      const assessmentItems: any[] = scopedAssessments ?? (await api.get('/assessments', {
+      const baseItems: any[] = scopedAssessments ?? (await api.get('/assessments', {
         params: { jd_id: jdId, page_size: 100 }
       })).data?.items ?? [];
+      /* One job version in scope: add the job's other versions' assessments,
+         so the JD Version filter can switch to them. */
+      const baseJdIds = new Set(baseItems.map((a: any) => a.jd_id).filter(Boolean));
+      let siblingItems: any[] = [];
+      let openedItems: any[] = baseItems;
+      if (baseJdIds.size === 1) {
+        const [scopeJdId] = [...baseJdIds] as string[];
+        const known = new Set(baseItems.map((a: any) => a.id));
+        const jobWideList = await loadJobAssessmentVersions(scopeJdId).catch(() => []);
+        siblingItems = jobWideList
+          .filter((v) => v.raw && !known.has(v.id) && v.jdId !== scopeJdId)
+          .map((v) => ({ ...v.raw, jd_version: v.jobVersion ?? v.raw?.jd_version }));
+        const openedVersion = baseItems[0]?.jd_version ?? jobVersion ?? jobWideList.find((v) => v.jdId === scopeJdId)?.jobVersion;
+        // The opened version's rows need their number for the filter to match them.
+        if (openedVersion != null) openedItems = baseItems.map((a: any) => (a.jd_version == null ? { ...a, jd_version: openedVersion } : a));
+        if (siblingItems.length > 0 && openedVersion != null && !jdFilterSeeded.current) {
+          jdFilterSeeded.current = true;
+          setJdVersionFilter(String(openedVersion));
+        }
+      }
+      const assessmentItems: any[] = [...openedItems, ...siblingItems];
+      setLoadedAssessments(assessmentItems);
 
       if (assessmentItems.length === 0) {
         setInvitations([]);
@@ -419,9 +450,40 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     revokingId: revokeTarget?.id,
   };
 
-  const filtersActive = hasActiveInviteFilters(filters) || !!(assessmentVersionFilter || sourceFilter || resultFilter);
-  const assessmentVersions = [...new Set(invitations.map((inv: any) => inv.assessment_version).filter((v: any) => v != null))]
-    .sort((a: any, b: any) => Number(b) - Number(a));
+  const filtersActive = hasActiveInviteFilters(filters) || !!(jdVersionFilter || assessmentVersionFilter || sourceFilter || resultFilter);
+  /* The JD versions that hold an assessment — the Assessments page's Job
+     Versions list (a draft JD version with no assessment is left out) — not
+     only the ones that already have invites. */
+  const scopeAssessmentList: any[] = loadedAssessments.length ? loadedAssessments : (scopedAssessments ?? []);
+  const numSort = (a: number, b: number) => b - a;
+  const jdVersions = [...new Set<number>([
+    ...scopeAssessmentList.map((a) => a.jd_version),
+    ...invitations.map((inv: any) => inv._jd_version),
+  ].filter((v): v is number => typeof v === 'number'))].sort(numSort);
+  /* Assessment versions offered: the picked JD version's own, else every one. */
+  const assessmentVersions = [...new Set<number>([
+    ...scopeAssessmentList
+      .filter((a) => !jdVersionFilter || String(a.jd_version ?? '') === jdVersionFilter)
+      .map((a) => a.version),
+    ...invitations
+      .filter((inv: any) => !jdVersionFilter || String(inv._jd_version ?? '') === jdVersionFilter)
+      .map((inv: any) => inv.assessment_version),
+  ].filter((v): v is number => typeof v === 'number'))].sort(numSort);
+  /* The counts follow the JD Version filter, so a tab counts what it lists. */
+  const stats = useMemo(() => {
+    const rows = jdVersionFilter ? invitations.filter((inv: any) => String(inv._jd_version ?? '') === jdVersionFilter) : invitations;
+    const count = (b: CardBucket) => rows.filter((inv: any) => cardBucketOf(inv) === b).length;
+    return {
+      total: rows.length,
+      invited: count('invited'),
+      started: count('in_progress'),
+      completed: count('completed'),
+      expired: count('expired'),
+      terminated: count('terminated'),
+      revoked: count('revoked'),
+      failed: count('failed'),
+    };
+  }, [invitations, jdVersionFilter]);
   const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
   /* guided: the count cards as status tabs — same keys and counts. */
   const statusTabs: TrackerTab[] = [
@@ -464,6 +526,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
           if (cardBucketOf(inv) !== filters.status) return false;
         } else if (getEffectiveStatus(inv) !== filters.status) return false;
       }
+      if (jdVersionFilter && String(inv._jd_version ?? '') !== jdVersionFilter) return false;
       if (assessmentVersionFilter && String(inv.assessment_version ?? '') !== assessmentVersionFilter) return false;
       if (sourceFilter && inv.invite_source !== sourceFilter) return false;
       if (resultFilter) {
@@ -482,7 +545,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
 
       return true;
     });
-  }, [invitations, filters, assessmentVersionFilter, sourceFilter, resultFilter]);
+  }, [invitations, filters, jdVersionFilter, assessmentVersionFilter, sourceFilter, resultFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredInvitations.length / pageSize));
   // Clamped rather than stored: the list refreshes every 15s and a filter can
@@ -580,6 +643,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     setIsBulkResending(true);
     let sent = 0;
     let failedCount = 0;
+    const failedIds = new Set<string>();
     for (const inv of targets) {
       try {
         await assessmentService.resendInvitation(inv.assessment_id, inv.id);
@@ -587,14 +651,20 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       } catch (error) {
         console.error(`Failed to resend invitation ${inv.id}:`, error);
         failedCount++;
+        failedIds.add(inv.id);
       }
     }
     if (sent > 0) toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
     if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
-    setSelectedIds(new Set());
     setShowBulkResendConfirm(false);
     setIsBulkResending(false);
-    await handleInvitesChanged();
+    /* Any success: reload (clears the selection), then keep only the failed
+       rows ticked for a retry. All failed: nothing changed — keep the
+       selection as is. */
+    if (sent > 0) {
+      await handleInvitesChanged();
+      setSelectedIds(failedIds);
+    }
   };
 
   // Bulk revoke — offered whenever the selection is revocable, mirroring the
@@ -608,6 +678,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     setIsBulkRevoking(true);
     let revoked = 0;
     let failedCount = 0;
+    const failedIds = new Set<string>();
     for (const inv of targets) {
       try {
         await assessmentService.revokeInvitation(inv.assessment_id, inv.id);
@@ -615,14 +686,19 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       } catch (error) {
         console.error(`Failed to revoke invitation ${inv.id}:`, error);
         failedCount++;
+        failedIds.add(inv.id);
       }
     }
     if (revoked > 0) toast.success(`Revoked ${revoked} invitation${revoked === 1 ? '' : 's'}.`);
     if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
-    setSelectedIds(new Set());
     setShowBulkRevokeConfirm(false);
     setIsBulkRevoking(false);
-    await handleInvitesChanged();
+    /* Any success: reload (clears the selection), then keep only the failed
+       rows ticked for a retry. All failed: keep the selection as is. */
+    if (revoked > 0) {
+      await handleInvitesChanged();
+      setSelectedIds(failedIds);
+    }
   };
 
   // "Go to page" input for the footer — buffered locally so a partial edit
@@ -818,6 +894,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
           ) : undefined}
           extraSelects={[
             {
+              key: 'jd-version', ariaLabel: 'JD Version', anyLabel: 'All JD Versions', value: jdVersionFilter,
+              options: jdVersions.map((v: any) => ({ value: String(v), label: `JD V${v}` })),
+              // The assessment versions narrow to the JD version's: a pick from another one is dropped.
+              onChange: (value) => { setJdVersionFilter(value); setAssessmentVersionFilter(''); setPage(1); },
+            },
+            {
               key: 'assessment-version', ariaLabel: 'Assessment Version', anyLabel: 'All Assessment Versions', value: assessmentVersionFilter,
               options: assessmentVersions.map((v: any) => ({ value: String(v), label: `Assessment V${v}` })),
               onChange: (value) => { setAssessmentVersionFilter(value); setPage(1); },
@@ -833,7 +915,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               onChange: (value) => { setResultFilter(value); setPage(1); },
             },
           ]}
-          onClearExtras={() => { setAssessmentVersionFilter(''); setSourceFilter(''); setResultFilter(''); }}
+          onClearExtras={() => { setJdVersionFilter(''); setAssessmentVersionFilter(''); setSourceFilter(''); setResultFilter(''); }}
         />
 
         {/* Select All — same control, wording and placement as the
@@ -930,7 +1012,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   : "No invitations found for this job's assessments."}
               </p>
               {guided && (filtersActive ? (
-                <Button variant="secondary" size="sm" className="mt-3" onClick={() => { setFilters(EMPTY_INVITE_FILTERS); setAssessmentVersionFilter(''); setSourceFilter(''); setResultFilter(''); setPage(1); }}>
+                <Button variant="secondary" size="sm" className="mt-3" onClick={() => { setFilters(EMPTY_INVITE_FILTERS); setJdVersionFilter(''); setAssessmentVersionFilter(''); setSourceFilter(''); setResultFilter(''); setPage(1); }}>
                   Clear filters
                 </Button>
               ) : onInviteMore && !jdDisabled ? (

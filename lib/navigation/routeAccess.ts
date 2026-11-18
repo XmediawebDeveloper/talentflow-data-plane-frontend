@@ -81,7 +81,11 @@ export const ROUTE_RULES: RouteRule[] = [
   // ORGANIZATION
   { prefix: '/organization/team-chat', allowAll: true },
   { prefix: '/organization/internal-tickets', allowAll: true },
-  { prefix: '/organization/team-management', permissions: ['canViewTeams', 'canCreateTeams'] },
+  // Teams opens with View Teams only — the backend's /teams list and stats
+  // allow just the owner or can_view_teams, so anything wider (User
+  // Management, Create Teams) opened a page that failed to load. Everyone
+  // else is sent to Chat (RouteGuard), and the Teams tab is greyed out.
+  { prefix: '/organization/team-management', permissions: ['canViewTeams'] },
   { prefix: '/organization/user-management', permissions: ['canManageUsers'] },
   { prefix: '/organization/company-profile', permissions: ['canManageSettings'] },
   // Owner only; the tab (OrganizationTabs.tsx) and page (UsageHistory.tsx) say the same.

@@ -82,9 +82,27 @@ function AssessmentStatusBadge({ status }: { status: string }) {
   }
 }
 
+/* Each row names both versions it used: the resume version (blue) and the
+   job version (grey) — a candidate's v1 and v2 can be scored against a job's
+   v1 and v2 independently, so a bare "v2" would not say which. */
 const VersionTag = ({ version }: { version: number | null | undefined }) =>
   version ? (
-    <span className="px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue text-2xs font-medium ring-1 ring-brand-blue/15">v{version}</span>
+    <span
+      className="px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue text-2xs font-medium ring-1 ring-brand-blue/15 whitespace-nowrap"
+      title={`Resume version ${version}`}
+    >
+      Resume v{version}
+    </span>
+  ) : null;
+
+const JobVersionTag = ({ version, jobId }: { version: number | null | undefined; jobId?: string | null }) =>
+  version ? (
+    <span
+      className="px-1.5 py-0.5 rounded bg-slate-100 text-gray-700 text-2xs font-medium ring-1 ring-gray-200 whitespace-nowrap"
+      title={`Job version ${version}${jobId ? ` of ${jobId}` : ''}`}
+    >
+      Job v{version}
+    </span>
   ) : null;
 
 const ViaEmailTag = () => (
@@ -190,11 +208,14 @@ export default function CandidateActivityCard({
   resumeId,
   trail,
   headerAction,
+  onTotalChange,
 }: {
   resumeId: string;
   trail: TrailCrumb[];
   /** The host's own control at the right end of the card's header. */
   headerAction?: ReactNode;
+  /** How many records the card lists (null until loaded) — for a tab title. */
+  onTotalChange?: (total: number | null) => void;
 }) {
   const router = useRouter();
   /* Every View goes through here: the destination shows THIS page's trail
@@ -221,7 +242,9 @@ export default function CandidateActivityCard({
     let cancelled = false;
     setLoading(true);
     setFailed(false);
-    resumeService.getActivity(resumeId)
+    // log_view=true: opening this card is the candidate-timeline view audited
+    // as CANDIDATE_TIMELINE_VIEWED (other getActivity callers don't log).
+    resumeService.getActivity(resumeId, true)
       .then(d => { if (!cancelled) setData(d); })
       .catch(() => { if (!cancelled) setFailed(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -249,6 +272,11 @@ export default function CandidateActivityCard({
   const noModules = !loading && !failed && allowedTabs.length === 0;
 
   const total = data ? allowedTabs.reduce((n, t) => n + (isPlanLocked(t.plan) ? 0 : data[t.key].items.length), 0) : 0;
+  const totalKnown = data && !loading ? total : null;
+  useEffect(() => {
+    onTotalChange?.(totalKnown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalKnown]);
 
   const renderRows = () => {
     if (!data || !active) return null;
@@ -281,6 +309,7 @@ export default function CandidateActivityCard({
             title={<>
               <span className="truncate">{s.jd_title || 'Untitled job'}</span>
               {s.jd_job_id && <span className="text-xs font-normal text-gray-500">{s.jd_job_id}</span>}
+              <JobVersionTag version={s.jd_version} jobId={s.jd_job_id} />
               <VersionTag version={s.resume_version} />
             </>}
             meta={<>
@@ -306,6 +335,7 @@ export default function CandidateActivityCard({
             title={<>
               <span className="truncate">{m.jd_title || 'Custom search'}</span>
               {m.jd_job_id && <span className="text-xs font-normal text-gray-500">{m.jd_job_id}</span>}
+              <JobVersionTag version={m.jd_version} jobId={m.jd_job_id} />
               <VersionTag version={m.resume_version} />
             </>}
             meta={<>
@@ -338,6 +368,7 @@ export default function CandidateActivityCard({
               title={<>
                 <span className="truncate">{a.assessment_title || 'Assessment'}</span>
                 {a.assessment_deleted && <span className="text-2xs text-destructive">(assessment deleted)</span>}
+                <JobVersionTag version={a.jd_version} jobId={a.jd_job_id} />
                 {a.linked_by === 'email' ? <ViaEmailTag /> : <VersionTag version={a.resume_version} />}
               </>}
               meta={<>
@@ -368,6 +399,7 @@ export default function CandidateActivityCard({
               title={<>
                 <span className="truncate">{i.title || 'AI Interview'}</span>
                 {i.config_display_id && <span className="text-xs font-normal text-gray-500">{i.config_display_id}</span>}
+                <JobVersionTag version={i.jd_version} jobId={i.jd_job_id} />
                 {i.linked_by === 'email' ? <ViaEmailTag /> : <VersionTag version={i.resume_version} />}
               </>}
               meta={<>

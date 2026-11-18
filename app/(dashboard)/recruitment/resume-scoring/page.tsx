@@ -14,6 +14,7 @@ import FeatureGate from '@/components/shared/FeatureGate';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { clearScoringOrigin, FROM_RESUME_DATABASE } from '@/lib/utils/resumeActivityTrail';
 
 interface ScoredResumeData {
   id: string;
@@ -67,6 +68,15 @@ interface Job {
 export default function ResumeScoringRoute() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  /* Entered any way but Resume Database's Score Resume (`from=resume-database`):
+     Resume Database's trail does not apply. Cleared while this first renders,
+     before the scoring view reads it. */
+  const enteredFromResumeDatabase = searchParams.get('from') === FROM_RESUME_DATABASE;
+  useState(() => {
+    if (typeof window !== 'undefined' && !enteredFromResumeDatabase) clearScoringOrigin();
+    return null;
+  });
+  const fromQuery = enteredFromResumeDatabase ? `&from=${FROM_RESUME_DATABASE}` : '';
   const [jobs, setJobs] = useState<Job[]>([]);
   const [resumes, setResumes] = useState<any[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
@@ -113,6 +123,8 @@ export default function ResumeScoringRoute() {
   } | null>(null);
   const [pendingBatchId, setPendingBatchId] = useState<string | null>(null);
   const [batchProgress, setBatchProgress] = useState<{
+    /** The Celery batch — the progress popup's Cancel / Retry act on it. */
+    batchId?: string;
     jobId: string;
     jobTitle: string;
     total: number;
@@ -123,7 +135,7 @@ export default function ResumeScoringRoute() {
     items?: {
       resumeId: string;
       candidateName: string;
-      status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
+      status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'already_scored';
       score?: number;
       overallRating10?: number;
       matchStatus?: string;
@@ -197,7 +209,7 @@ export default function ResumeScoringRoute() {
         try {
           const status = await scoringService.getBatchStatus(batchIdParam);
 
-          let batchItems: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored'; score?: number; overallRating10?: number; matchStatus?: string; errorMessage?: string }[];
+          let batchItems: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'already_scored'; score?: number; overallRating10?: number; matchStatus?: string; errorMessage?: string }[];
 
           if (status.items && status.items.length > 0) {
             batchItems = status.items.map((item: any) => ({
@@ -222,6 +234,7 @@ export default function ResumeScoringRoute() {
           const allItems = [...alreadyScoredProgressItems, ...batchItems];
 
           setBatchProgress({
+            batchId: status.batch_id,
             jobId: status.jd_id,
             jobTitle: status.jd_title,
             total: (status.total || storedResumeItems.length) + alreadyScoredItems.length,
@@ -245,6 +258,7 @@ export default function ResumeScoringRoute() {
                 }));
                 const allItems = [...alreadyScoredProgressItems, ...batchItems];
                 setBatchProgress({
+                  batchId: batchIdParam,
                   jobId: data.jobId,
                   jobTitle: data.jobTitle,
                   total: data.totalResumes,
@@ -334,7 +348,7 @@ export default function ResumeScoringRoute() {
 
     // Accumulate items across poll cycles so completed items are never dropped
     // from the UI when the API stops returning them.
-    type BatchItem = { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored'; score?: number; overallRating10?: number; matchStatus?: string; errorMessage?: string };
+    type BatchItem = { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'already_scored'; score?: number; overallRating10?: number; matchStatus?: string; errorMessage?: string };
     const accumulatedItems = new Map<string, BatchItem>();
 
     // Seed the map from sessionStorage so all candidates are shown immediately
@@ -366,7 +380,7 @@ export default function ResumeScoringRoute() {
             accumulatedItems.set(item.resume_id, {
               resumeId: item.resume_id,
               candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
-              status: normalizeScoringStatus(item.status),
+              status: item.status === 'cancelled' ? 'cancelled' as const : normalizeScoringStatus(item.status),
               score: item.overall_score,
               overallRating10: item.overall_rating_10,
               matchStatus: item.match_status,
@@ -379,6 +393,7 @@ export default function ResumeScoringRoute() {
         const allItems = [...alreadyScoredProgressItems, ...Array.from(accumulatedItems.values())];
 
         setBatchProgress({
+          batchId: status.batch_id,
           jobId: status.jd_id,
           jobTitle: status.jd_title,
           total: (status.total || storedResumeItems.length) + alreadyScoredItems.length,
@@ -415,7 +430,7 @@ export default function ResumeScoringRoute() {
               console.error('[ResumeScoringRoute] Error clearing pendingScoringBatch:', e);
             }
             // Update URL without full page reload to preserve state
-            router.push(`/recruitment/resume-scoring?jd_id=${status.jd_id}`);
+            router.push(`/recruitment/resume-scoring?jd_id=${status.jd_id}${fromQuery}`);
           }, 2000);
         }
       } catch (e) {
@@ -666,7 +681,7 @@ export default function ResumeScoringRoute() {
     toast.success('Scoring completed! Refreshing data...');
 
     // Update URL to persist the view across refreshes
-    router.push(`/recruitment/resume-scoring?jd_id=${data.jobId}`);
+    router.push(`/recruitment/resume-scoring?jd_id=${data.jobId}${fromQuery}`);
 
     // Refresh data from API to get the latest scores
     await loadScoredHistory();

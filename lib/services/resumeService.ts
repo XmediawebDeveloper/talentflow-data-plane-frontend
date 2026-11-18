@@ -83,6 +83,8 @@ export interface ResumeActivityScore {
   jd_title: string | null;
   jd_job_id: string | null;
   jd_status: string | null;
+  /** Job version (the JD row's version_number). */
+  jd_version: number;
   resume_id: string;
   resume_version: number;
   overall_score: number;
@@ -99,6 +101,8 @@ export interface ResumeActivityTalentMatch {
   jd_id: string | null;
   jd_title: string | null;
   jd_job_id: string | null;
+  /** Job version (the JD row's version_number) — null when the job is gone. */
+  jd_version: number | null;
   resume_id: string;
   resume_version: number;
   final_score: number | null;
@@ -114,6 +118,9 @@ export interface ResumeActivityAssessment {
   assessment_id: string | null;
   assessment_title: string | null;
   assessment_deleted: boolean;
+  jd_job_id: string | null;
+  /** Job version (the JD row's version_number) — null when the job is gone. */
+  jd_version: number | null;
   attempt_id: string | null;
   candidate_display_id: string | null;
   resume_version: number | null;
@@ -138,6 +145,9 @@ export interface ResumeActivityInterview {
   config_display_id: string | null;
   title: string | null;
   display_id: string | null;
+  jd_job_id: string | null;
+  /** Job version (the JD row's version_number) — null when the job is gone. */
+  jd_version: number | null;
   resume_version: number | null;
   linked_by: 'resume' | 'email';
   status: string;
@@ -504,10 +514,11 @@ export const resumeService = {
   /**
    * Get single resume by ID.
    *
-   * `logView` is a no-op now — viewing a resume is no longer recorded in the
-   * Audit Log at all, by any caller. The parameter (and the `log_view` query
-   * param it sends) is kept only so existing call sites — Resume Details, the
-   * scoring detail page's "View Resume" — don't need to change.
+   * `logView` opts in to audit logging: when true the backend records a
+   * RESUME_VIEWED row in the Audit Log. Pass true only where the user
+   * explicitly opens a resume to read it (the Resume View page, "View Resume"
+   * / version viewers); incidental lookups and prefetches leave it false so
+   * they don't log a view.
    */
   async get(id: string, logView: boolean = false): Promise<Resume> {
     try {
@@ -817,9 +828,12 @@ export const resumeService = {
   /**
    * Delete resume
    */
-  async delete(id: string): Promise<void> {
+  async delete(id: string, opts?: { onlyThisVersion?: boolean }): Promise<void> {
     try {
-      await api.delete(`/resumes/${id}`);
+      // onlyThisVersion: just this version, even the latest (the newest
+      // remaining one becomes the latest). Without it, deleting the latest
+      // version removes every version of the candidate.
+      await api.delete(`/resumes/${id}`, opts?.onlyThisVersion ? { params: { only_this_version: true } } : undefined);
       dispatchUnitsConsumed();
       dispatchResumesChanged();
     } catch (error) {
@@ -843,10 +857,15 @@ export const resumeService = {
    * Candidate Activity for the Resume View page: scores, AI Talent Match,
    * AI Assessment and AI Interview invites across all the candidate's
    * versions. Sections the user may not read come back `allowed: false`.
+   *
+   * `logView` opts in to a CANDIDATE_TIMELINE_VIEWED audit row — only the
+   * Candidate Activity card passes true; other lookups leave it false.
    */
-  async getActivity(resumeId: string): Promise<ResumeActivity> {
+  async getActivity(resumeId: string, logView: boolean = false): Promise<ResumeActivity> {
     try {
-      const response = await api.get<ResumeActivity>(`/resumes/${resumeId}/activity`);
+      const response = await api.get<ResumeActivity>(`/resumes/${resumeId}/activity`, {
+        params: logView ? { log_view: true } : undefined,
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -1112,6 +1131,38 @@ export async function archiveResumeToArchivedFolder(
   await resumeService.archive(resumeId, true);
   await resumeService.move(resumeId, folderId, true);
   return folderId;
+}
+
+/**
+ * Unarchive resumes the same way as My Resumes: clear the flag and put each one
+ * back in the folder it was archived from (remembered by
+ * archiveResumeToArchivedFolder), else in Root. Each resume is done on its own
+ * so one failure doesn't stop the rest. Returns which ids succeeded / failed and
+ * how many went back to their original folder (the rest went to Root).
+ */
+export async function unarchiveResumesToPreviousFolder(
+  resumeIds: string[],
+  opts: { rootFolderId: string; archivedFolderId?: string; validFolderIds: Set<string> },
+): Promise<{ succeeded: string[]; failed: string[]; restoredToOriginal: number }> {
+  let stash: Record<string, string> = {};
+  try { stash = JSON.parse(localStorage.getItem(ARCHIVED_PREV_FOLDER_KEY) || '{}'); } catch { stash = {}; }
+  const targetFor = (id: string) => {
+    const prev = stash[id];
+    return prev && opts.validFolderIds.has(prev) && prev !== opts.archivedFolderId ? prev : opts.rootFolderId;
+  };
+  const results = await Promise.allSettled(resumeIds.map(async (id) => {
+    // skipAudit on the move: the archive call itself logs "Resume unarchived".
+    await resumeService.archive(id, false);
+    await resumeService.move(id, targetFor(id), true);
+  }));
+  const succeeded = resumeIds.filter((_, i) => results[i].status === 'fulfilled');
+  const failed = resumeIds.filter((_, i) => results[i].status === 'rejected');
+  const restoredToOriginal = succeeded.filter((id) => targetFor(id) !== opts.rootFolderId).length;
+  try {
+    succeeded.forEach((id) => { delete stash[id]; });
+    localStorage.setItem(ARCHIVED_PREV_FOLDER_KEY, JSON.stringify(stash));
+  } catch { /* best-effort cleanup */ }
+  return { succeeded, failed, restoredToOriginal };
 }
 
 export default resumeService;

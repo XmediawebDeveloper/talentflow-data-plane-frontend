@@ -18,6 +18,8 @@ import notificationService, { Notification } from '@/lib/services/notificationSe
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -33,6 +35,8 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
 
   // Persist scroll + filter state so returning to this page restores it exactly.
   const rootRef = useScrollRestoration<HTMLElement>('notifications', !loading);
@@ -130,6 +134,38 @@ export default function NotificationsPage() {
     }
   };
 
+  // Clears everything the current filter shows (All/Unread + category).
+  const handleClearAll = async () => {
+    setConfirmClearAll(false);
+    setClearingAll(true);
+    try {
+      await notificationService.deleteAllNotifications({
+        unreadOnly: filter === 'unread',
+        category: categoryFilter,
+      });
+      window.dispatchEvent(new CustomEvent('notificationTrigger'));
+      if (filter === 'all' && !categoryFilter) {
+        // Everything is gone — no need to refetch.
+        ++fetchSeqRef.current;
+        setNotifications([]);
+        setHasMore(false);
+        setUnreadCount(0);
+        setTotal(0);
+      } else {
+        // Only a subset was removed; refetch for accurate counts.
+        await fetchNotifications(true);
+        if (filter !== 'all') {
+          const all = await notificationService.getNotifications(1, 0);
+          setTotal(all.total);
+        }
+      }
+    } catch (error) {
+      console.error('Error clearing notifications:', error);
+    } finally {
+      setClearingAll(false);
+    }
+  };
+
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.is_read) {
       await handleMarkAsRead(notification.id);
@@ -182,6 +218,17 @@ export default function NotificationsPage() {
     { value: 'billing', label: 'Billing' },
   ];
 
+  // One removable tag per active filter. The All/Unread switch is the page's
+  // main view toggle (always visible, always has a value), so it isn't one.
+  const activeFilterChips: FilterChip[] = [
+    !!categoryFilter && {
+      key: 'category',
+      label: 'Category',
+      value: categories.find(cat => cat.value === categoryFilter)?.label ?? categoryFilter,
+      onRemove: () => setCategoryFilter(undefined),
+    },
+  ].filter(Boolean) as FilterChip[];
+
   return (
     <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
@@ -219,13 +266,25 @@ export default function NotificationsPage() {
               Mark All Read
             </button>
           )}
+          {notifications.length > 0 && (
+            <button
+              onClick={() => setConfirmClearAll(true)}
+              disabled={clearingAll}
+              className="tf-btn px-4 py-2 text-sm text-red-600 bg-white border border-red-200 hover:bg-red-50 hover:border-red-300 transition-colors flex gap-1.5 items-center disabled:opacity-50"
+            >
+              {clearingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Clear All
+            </button>
+          )}
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-5">
-        <div className="flex bg-gray-100 rounded-lg p-1">
+        <div role="tablist" aria-label="Notification filter" className="flex bg-gray-100 rounded-lg p-1">
           <button
+            role="tab"
+            aria-selected={filter === 'all'}
             onClick={() => setFilter('all')}
             className={`flex-1 sm:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
               filter === 'all'
@@ -236,6 +295,8 @@ export default function NotificationsPage() {
             All
           </button>
           <button
+            role="tab"
+            aria-selected={filter === 'unread'}
             onClick={() => setFilter('unread')}
             className={`flex-1 sm:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
               filter === 'unread'
@@ -257,6 +318,11 @@ export default function NotificationsPage() {
           />
         </div>
       </div>
+      {/* Active filter tags — the filter row's mb-5 is pulled back so they sit
+          12px under it, keeping the same gap to the list. */}
+      {activeFilterChips.length > 0 && (
+        <FilterChips className="-mt-2 mb-5" chips={activeFilterChips} />
+      )}
 
       {/* Notifications List */}
       <div className="tf-card-soft overflow-hidden">
@@ -371,6 +437,21 @@ export default function NotificationsPage() {
       </div>
       </div>
       </div>
+      <ConfirmationDialog
+        isOpen={confirmClearAll}
+        onClose={() => setConfirmClearAll(false)}
+        onConfirm={handleClearAll}
+        title="Clear notifications?"
+        description={
+          filter === 'all' && !categoryFilter
+            ? 'This will permanently delete all your notifications. This cannot be undone.'
+            : `This will permanently delete all ${filter === 'unread' ? 'unread ' : ''}${
+                categoryFilter ? `${categories.find(c => c.value === categoryFilter)?.label ?? categoryFilter} ` : ''
+              }notifications matching the current filter. This cannot be undone.`
+        }
+        confirmText="Delete"
+        variant="danger"
+      />
     </main>
   );
 }

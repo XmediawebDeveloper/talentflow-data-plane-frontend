@@ -33,6 +33,7 @@ import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 import { JobLockBadge, JobLockBanner, JobVersionsLockBanner, splitJobVersions } from '@/components/jobs/JobLockNotice';
 import { jdService, type JDLineageVersion } from '@/lib/services/jdService';
 import { jobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
+import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
 import AIInterviewInviteTable, {
   isExpiredForActions,
   isRevocableInvite,
@@ -410,6 +411,7 @@ export default function AIInterviewTrackInvitesModal({
     setIsBulkResending(true);
     let sent = 0;
     let failedCount = 0;
+    const failedIds = new Set<string>();
     for (const inv of targets) {
       try {
         await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
@@ -417,6 +419,7 @@ export default function AIInterviewTrackInvitesModal({
       } catch (error) {
         console.error(`Failed to resend AI interview invitation ${inv.id}:`, error);
         failedCount++;
+        failedIds.add(inv.id);
       }
     }
     if (sent > 0) {
@@ -425,7 +428,10 @@ export default function AIInterviewTrackInvitesModal({
     if (failedCount > 0) {
       toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
     }
-    setSelectedIds(new Set());
+    // Keep only the ones that failed ticked, so a retry acts on them; once
+    // anything changed, the cached "Select all pages" rows are stale — drop them.
+    setSelectedIds(failedIds);
+    if (sent > 0) setAllPages(null);
     setShowBulkResendConfirm(false);
     setIsBulkResending(false);
     await loadInvitations(true);
@@ -622,7 +628,10 @@ export default function AIInterviewTrackInvitesModal({
       const failed = results.length - succeeded;
       if (succeeded > 0) toast.success(`Revoked ${succeeded} invitation${succeeded === 1 ? '' : 's'}.`);
       if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
-      setSelectedIds(new Set());
+      // Keep only the ones that failed ticked, so a retry acts on them; once
+      // anything changed, the cached "Select all pages" rows are stale — drop them.
+      setSelectedIds(new Set(targets.filter((_: any, i: number) => results[i].status === 'rejected').map((inv: any) => inv.id)));
+      if (succeeded > 0) setAllPages(null);
       await loadInvitations(true);
       await onChanged?.();
     } finally {
@@ -768,6 +777,7 @@ export default function AIInterviewTrackInvitesModal({
           <div className="px-2.5 sm:px-6 py-2.5 sm:py-4">
             <TabEmptyState
               icon={Mail}
+              illustration={<FolderIconIllustration icon={Mail} badge="send" />}
               title="No Invitations Sent Yet"
               description="Invite candidates to this interview and their status appears here."
             />

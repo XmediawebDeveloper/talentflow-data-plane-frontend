@@ -1,7 +1,7 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
+import { Mail, Briefcase, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, History, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useJobActionLock } from '@/components/jobs/JobActionLock';
@@ -12,6 +12,7 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import ScoredResumesExportModal from './ScoredResumesExportModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
@@ -29,6 +30,8 @@ import ListPagination from './ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { MobileRecordCard, MobileStatChip, type MobileStatTone } from '@/components/ui/mobile-record-card';
+import SkillsList from '@/components/ui/SkillsList';
+import VersionEyeBadge from '@/components/ui/version-eye-badge';
 import FilterSelect from '@/components/ui/filter-select';
 import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -450,7 +453,11 @@ interface ScoredResumesTableProps {
    * the ticked candidates, instead of this table's own invite flow. The popup
    * handles a job with no version yet (pick one, or create the next).
    */
-  onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[]) => void;
+  /** `fromSelection` is true when opened from the selection's Actions menu, so
+   *  the host can clear its selection once the invite is sent. `clearSelection`
+   *  (set only then) unticks this table's own rows — hosts that don't hold the
+   *  selection call it from their dialog's onSent. */
+  onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[], fromSelection?: boolean, clearSelection?: () => void) => void;
   /**
    * Job Details → Resume Scoring: a row's ⋮ menu lists the two invite entries
    * (Create / Send Assessment | AI Interview) directly, instead of under an
@@ -996,6 +1003,32 @@ Best regards`);
     jobVersion: filterJobVersion,
   } = search.filters;
 
+  // Active filter tags — one per filter `countFilters` counts (Score range is
+  // one tag, as it counts once), so the More Filters badge and the tags always
+  // agree. Each X clears only its own filter.
+  const formatChipDate = (v: string) => {
+    const d = new Date(`${v}T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const activeFilterChips: FilterChip[] = [
+    !hideMatchStatusFilter && filterMatchStatus !== 'all' && { key: 'matchStatus', label: 'Match Status', value: String(filterMatchStatus), onRemove: () => search.setFilter('matchStatus', 'all' as typeof filterMatchStatus) },
+    (filterScoreMin > 0 || filterScoreMax < 10) && {
+      key: 'score',
+      label: 'Score',
+      value: `${filterScoreMin.toFixed(1)} – ${filterScoreMax.toFixed(1)}`,
+      onRemove: () => { search.setFilter('scoreMin', 0); search.setFilter('scoreMax', 10); },
+    },
+    Boolean(filterDateFrom) && { key: 'dateFrom', label: 'Scored From', value: formatChipDate(String(filterDateFrom)), onRemove: () => search.setFilter('dateFrom', '' as typeof filterDateFrom) },
+    Boolean(filterDateTo) && { key: 'dateTo', label: 'Scored To', value: formatChipDate(String(filterDateTo)), onRemove: () => search.setFilter('dateTo', '' as typeof filterDateTo) },
+    filterRecruiter !== 'all' && { key: 'recruiter', label: embedded ? 'Scored By' : 'Recruiter', value: String(filterRecruiter), onRemove: () => search.setFilter('recruiter', 'all') },
+    filterJdId !== 'all' && { key: 'jdId', label: 'Job ID', value: String(filterJdId), onRemove: () => search.setFilter('jdId', 'all') },
+    // No control sets this one, but it counts, so it gets a tag.
+    filterJobTitle !== 'all' && { key: 'jobTitle', label: 'Job Title', value: String(filterJobTitle), onRemove: () => search.setFilter('jobTitle', 'all') },
+    filterJobVersion !== 'all' && { key: 'jobVersion', label: 'Job Version', value: `v${filterJobVersion}`, onRemove: () => search.setFilter('jobVersion', 'all') },
+  ].filter(Boolean) as FilterChip[];
+
   // The parent can preselect a match status (e.g. "Strong" from a stat card).
   useEffect(() => {
     search.setFilter('matchStatus', initialMatchStatus);
@@ -1275,7 +1308,7 @@ Best regards`);
    * none) on the popup's own picker of every published one. A candidate
    * ticked on several jobs is listed once.
    */
-  const openRowsInvite = (kind: 'assessment' | 'interview', rows: ScoredResume[]) => {
+  const openRowsInvite = (kind: 'assessment' | 'interview', rows: ScoredResume[], fromSelection = false) => {
     const seen = new Set<string>();
     const people = rows.filter((r) => {
       const k = String(r.email || r.resumeId || r.id).toLowerCase();
@@ -1284,7 +1317,7 @@ Best regards`);
       return true;
     });
     if (onOpenInviteDialog) {
-      onOpenInviteDialog(kind, people.map(toInvitee));
+      onOpenInviteDialog(kind, people.map(toInvitee), fromSelection, fromSelection ? () => clearSelection() : undefined);
       return;
     }
     const ownJobId = jobId && jobId !== 'global' && jobId !== 'jd-1' ? jobId : '';
@@ -1302,8 +1335,9 @@ Best regards`);
         : undefined,
       candidates: people.map((r) => ({ ...toInvitee(r), source: 'score-resume', inviteSource: 'Resume Scoring' })),
       openOn: 'score-resume',
-      // A bulk send clears the ticks, as the old bulk invite did.
-      onSent: rows.length > 1 ? () => clearSelection() : undefined,
+      // A bulk send (from the selection's Actions menu, even with one row
+      // ticked) clears the ticks, as the old bulk invite did.
+      onSent: fromSelection || rows.length > 1 ? () => clearSelection() : undefined,
     });
   };
 
@@ -1564,9 +1598,10 @@ Best regards`);
     return `${dd}-${mm}-${date.getFullYear()}`;
   };
 
-  const handleDownloadScorecard = async (resumeId: string) => {
+  /** Resolves true once the PDF is handed to the browser (false on failure). */
+  const handleDownloadScorecard = async (resumeId: string): Promise<boolean> => {
     const resume = resumes.find(r => r.id === resumeId);
-    if (!resume) return;
+    if (!resume) return false;
 
     setDownloadingId(resumeId);
     try {
@@ -1583,9 +1618,11 @@ Best regards`);
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
       toast.success('Scorecard downloaded successfully');
+      return true;
     } catch (error) {
       console.error('Error downloading scorecard:', error);
       toast.error('Failed to download scorecard');
+      return false;
     } finally {
       setDownloadingId(null);
     }
@@ -1593,14 +1630,14 @@ Best regards`);
 
   // "Download as ZIP" confirmation — asked before a multi-candidate download.
 
-  const handleDownloadBulkScorecards = async (rows: ScoredResume[]) => {
-    if (rows.length === 0) return;
+  /** Resolves true when the download succeeded, so the caller can clear the selection. */
+  const handleDownloadBulkScorecards = async (rows: ScoredResume[]): Promise<boolean> => {
+    if (rows.length === 0) return false;
 
     // One candidate needs no ZIP wrapper — download that single PDF
     // directly, via the exact same path the per-row action uses.
     if (rows.length === 1) {
-      await handleDownloadScorecard(rows[0].id);
-      return;
+      return handleDownloadScorecard(rows[0].id);
     }
 
     setBulkDownloading(true);
@@ -1608,9 +1645,11 @@ Best regards`);
       const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_') || 'Scorecards';
       await downloadScorecardsZip(rows, `${safeName}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
       toast.success(`${rows.length} scorecards downloaded`);
+      return true;
     } catch (error) {
       console.error('Error downloading bulk scorecards:', error);
       toast.error('Failed to download scorecards');
+      return false;
     } finally {
       setBulkDownloading(false);
     }
@@ -1734,11 +1773,13 @@ Best regards`);
     }
     if (col.id === 'version') {
       const ver = resume.version || resume.resumeVersion || 1;
+      // The resume version with View Resume joined to it (when there is a file to show).
       return (
-        <td key={col.id} className="tf-td whitespace-nowrap text-center">
-          <span className="tf-badge border bg-blue-50 text-blue-700 border-blue-200">
-            v{ver}
-          </span>
+        <td key={col.id} className="tf-td whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
+          <VersionEyeBadge
+            label={`v${ver}`}
+            onView={resume.resumeId ? () => setViewResumeCandidate(resume) : undefined}
+          />
         </td>
       );
     }
@@ -2196,7 +2237,7 @@ Best regards`);
                   e.preventDefault();
                   return;
                 }
-                openRowsInvite('assessment', effectiveSelectedRows);
+                openRowsInvite('assessment', effectiveSelectedRows, true);
               },
             })}
             {renderInviteTargetItems({
@@ -2211,7 +2252,7 @@ Best regards`);
                   e.preventDefault();
                   return;
                 }
-                openRowsInvite('interview', effectiveSelectedRows);
+                openRowsInvite('interview', effectiveSelectedRows, true);
               },
             })}
           </>
@@ -2282,6 +2323,38 @@ Best regards`);
   // No padded outer card, embedded or standalone: standalone it sat inside the
   // page panel and framed the already-bordered rows a second time (a card
   // inside a card). Resume Scoring's View by Job dropped the same shell.
+  /* Standalone (Resume Scoring): Select All, search, filters, Sort and List /
+     Grid on ONE toolbar line (2026-11-17). Phones keep it leading row 2. */
+  const standaloneSelectAll = !embedded && filteredResumes.length > 0 ? (() => {
+    const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
+    const selectedCount = isGrouped
+      ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
+      : effectiveSelectedRows.length;
+    return (
+      <SelectAllMenu
+        selectedCount={selectedCount}
+        pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
+        totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
+        noun={isGrouped ? 'candidates' : 'resumes'}
+        allSelected={allVisibleSelected}
+        pageSelected={pageRows.length > 0 && pageRows.every((r) => effectiveSelectedIds.has(r.id))}
+        onSelectPage={() => {
+          const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
+          selectExactly(ids);
+        }}
+        onDeselectPage={() => {
+          const pageIds = new Set(pageRows.map((r) => r.id));
+          selectExactly(effectiveSelectedRows.map((r) => r.id).filter((id) => !pageIds.has(id)));
+        }}
+        onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
+        onClear={clearSelection}
+      />
+    );
+  })() : null;
+  /* Row 2 on laptop / desktop only when it still has something besides the
+     phone-only Select All and Sort menu. */
+  const row2OnDesktop = !!viewPillsSlot || (isGrouped && paginatedGroups.length > 0);
+
   return (
     <div>
       {/* Header — title and the one page-level action. Everything that acts on
@@ -2330,7 +2403,7 @@ Best regards`);
         /* Standalone (Resume Scoring's View by Candidates and job page): the Job
            Openings list's toolbar card below lg, and its phone line layout
            (globals.css, `.tf-jobs-toolbar`) — the same toolbar as View by Job. */
-        <div className={toolbarPortal ? undefined : embedded ? 'mb-4 space-y-3' : 'tf-jobs-toolbar tf-toolbar-card mb-4 space-y-3'}>
+        <div className={toolbarPortal ? undefined : embedded ? 'mb-4 space-y-3' : 'tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card mb-4 space-y-3'}>
         {/* Canonical search + filters row (same component as job-openings). The
             previous hand-rolled version used grey focus rings, rounded-md and a
             `palaceholder-gray-500` typo, so it matched no other list in the app. */}
@@ -2387,9 +2460,13 @@ Best regards`);
                   })()}
                 </>
               )
-              : undefined
+              : standaloneSelectAll
+                ? <div className="max-sm:hidden">{standaloneSelectAll}</div>
+                : undefined
           }
           onToggleFilters={() => setShowFilters(!showFilters)}
+          // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+          filterChips={activeFilterChips}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
           filtersApplied={search.filtersApplied}
@@ -2631,6 +2708,9 @@ Best regards`);
               )}
 
             </div>
+
+            {/* Active filter tags as the panel's last line — phones / tablets only. */}
+            <FilterChipsPanelLine chips={activeFilterChips} />
           </div>
         )}
 
@@ -2638,42 +2718,12 @@ Best regards`);
             rides the toolbar row above (beforeSearch), matching the AI Talent
             Match reference; this row renders only when it still has content. */}
         {(viewPillsSlot || (isGrouped && paginatedGroups.length > 0) || (!embedded && filteredResumes.length > 0)) && (
-        <div className={`${embedded ? '' : 'tf-jobs-row2 '}mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2`}>
-          {/* Standalone: Select All leads this row, then a divider and the
-              verdict pills — exactly View by Job's row 2. */}
-          {!embedded && filteredResumes.length > 0 && (() => {
-            const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
-            const selectedCount = isGrouped
-              ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
-              : effectiveSelectedRows.length;
-            return (
-              <>
-                <div className="tf-jobs-select">
-                <SelectAllMenu
-                  selectedCount={selectedCount}
-                  pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
-                  totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
-                  noun={isGrouped ? 'candidates' : 'resumes'}
-                  allSelected={allVisibleSelected}
-                  pageSelected={pageRows.length > 0 && pageRows.every((r) => effectiveSelectedIds.has(r.id))}
-                  onSelectPage={() => {
-                    const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
-                    selectExactly(ids);
-                  }}
-                  onDeselectPage={() => {
-                    const pageIds = new Set(pageRows.map((r) => r.id));
-                    selectExactly(effectiveSelectedRows.map((r) => r.id).filter((id) => !pageIds.has(id)));
-                  }}
-                  onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
-                  onClear={clearSelection}
-                />
-                </div>
-                {viewPillsSlot && (
-                  <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
-                )}
-              </>
-            );
-          })()}
+        <div className={`${embedded ? '' : 'tf-jobs-row2 '}${!embedded && !row2OnDesktop ? 'sm:hidden ' : ''}mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2`}>
+          {/* Standalone: Select All leads this row on phones only — laptop /
+              desktop carry it on the toolbar line above. */}
+          {standaloneSelectAll && (
+            <div className="tf-jobs-select sm:!hidden">{standaloneSelectAll}</div>
+          )}
           {viewPillsSlot}
           {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
           {!embedded && filteredResumes.length > 0 && (
@@ -2784,9 +2834,9 @@ Best regards`);
                     const titles = Array.from(new Set(groupRows.map((r) => r.jobTitle).filter(Boolean))) as string[];
                     return (
                       <>
-                        {/* pr-7 leaves room for the corner checkbox; pl-6 keeps the
+                        {/* pr-7 leaves room for the corner checkbox; pl-7 keeps the
                             top-left select seal (touch, hover, any selection) off the name. */}
-                        <div className="min-w-0 pr-7 pl-6">
+                        <div className="min-w-0 pr-7 pl-7">
                           <div className="flex items-center gap-2 min-w-0">
                             {onViewCandidate ? (
                               <button
@@ -2828,9 +2878,9 @@ Best regards`);
                   })() : (
                   <>
                   {/* No initials avatar — there is no profile photo behind it.
-                      pl-6 keeps the top-left select seal (touch, hover, any
+                      pl-7 keeps the top-left select seal (touch, hover, any
                       selection) off the name. */}
-                  <div className="flex items-start gap-2.5 pl-6">
+                  <div className="flex items-start gap-2.5 pl-7">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <p className="font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
@@ -2873,7 +2923,10 @@ Best regards`);
                       )}
                       <span className="inline-flex items-center gap-1">
                         Resume
-                        <span className="tf-badge text-2xs border bg-gray-50 text-gray-700 border-gray-200">v{resume.version || resume.resumeVersion || 1}</span>
+                        <VersionEyeBadge
+                          label={`v${resume.version || resume.resumeVersion || 1}`}
+                          onView={resume.resumeId ? () => setViewResumeCandidate(resume) : undefined}
+                        />
                       </span>
                     </div>
                   )}
@@ -3320,7 +3373,7 @@ Best regards`);
                   title={onViewCandidate ? (
                     <button
                       onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
-                      className="text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors [overflow-wrap:anywhere]"
+                      className="text-left hover:text-brand-blue hover:underline transition-colors [overflow-wrap:anywhere]"
                     >
                       {primary.candidateName || 'Candidate'}
                     </button>
@@ -3328,23 +3381,16 @@ Best regards`);
                     <span className="[overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</span>
                   )}
                   badges={primary.isArchived ? <ResumeArchivedBadge /> : undefined}
-                  meta={[{ icon: <Mail className="w-3.5 h-3.5" />, label: primary.email }]}
-                  fields={[
+                  /* Card: name with ⋮ on its line · email and scored date on one
+                     line · the three verdict tiles side by side · the job history
+                     toggle (with how many job versions it holds) at the bottom. */
+                  meta={[
+                    { icon: <Mail className="w-3.5 h-3.5" />, label: primary.email },
                     {
-                      label: 'Scored',
-                      value: <>{formatISTDate(primary.scoredDate)} <span className="text-gray-400">{formatISTTime(primary.scoredDate)}</span></>,
+                      icon: <Calendar className="w-3.5 h-3.5" />,
+                      label: <>Scored {formatISTDate(primary.scoredDate)} <span className="text-gray-400">{formatISTTime(primary.scoredDate)}</span></>,
                     },
                   ]}
-                  footer={
-                    <>
-                      <MobileStatChip tone={verdictTone('exact', t.exact)}>Exact Match {t.exact}</MobileStatChip>
-                      <MobileStatChip tone={verdictTone('partial', t.partial)}>Partial Match {t.partial}</MobileStatChip>
-                      <MobileStatChip tone={verdictTone('none', t.none)}>No Match {t.none}</MobileStatChip>
-                      <MobileStatChip tone="info">
-                        {rows.length} Job {rows.length === 1 ? 'Version' : 'Versions'}
-                      </MobileStatChip>
-                    </>
-                  }
                   actions={
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -3362,77 +3408,86 @@ Best regards`);
                     </DropdownMenu>
                   }
                   expanded={isExpanded && (
-                    <div className="mt-2 space-y-2">
+                    /* Job history — joined to the toggle above as one panel. A
+                       row per job: the score in a verdict-coloured box, the job
+                       title with "verdict · scored date" under it, then Open
+                       Match (eye) and ⋮ side by side, all on one line. */
+                    <div className="-mt-3 rounded-b-lg border border-t-0 border-brand-blue/40 divide-y divide-gray-200 dark:divide-slate-700 overflow-hidden">
                       {rows.map((row) => (
                         <div
                           key={row.id}
                           // Opens this job's results, like the list's expanded row.
                           onClick={(e) => handleRowClick(row.id, e)}
-                          className="rounded-lg border border-gray-200 bg-gray-50/60 p-3 cursor-pointer"
+                          className="flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800/60 cursor-pointer transition-colors"
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="tf-label truncate" title={row.jobTitle || undefined}>
-                                {truncateJobTitle(row.jobTitle) || 'Untitled role'}
-                              </div>
-                              <div className="mt-1 flex items-center gap-2 flex-wrap">
-                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(row.matchStatus)}`}>
-                                  {row.matchStatus}
-                                </span>
-                                <span className={`text-sm font-semibold ${MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}`}>
-                                  {formatOverallScore(row.overallRating10, row.scorePercentage)}
-                                </span>
-                              </div>
-                              <div className="mt-1 flex items-center gap-1 tf-meta">
-                                <Calendar className="w-3 h-3" />
-                                <span>{formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span></span>
-                              </div>
+                          <span className={`flex-shrink-0 inline-flex items-center justify-center w-16 h-10 rounded-md border text-sm font-bold tabular-nums ${matchBadgeClass(row.matchStatus)}`}>
+                            {formatOverallScore(row.overallRating10, row.scorePercentage)}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate" title={row.jobTitle || undefined}>
+                              {truncateJobTitle(row.jobTitle) || 'Untitled role'}
                             </div>
-                            <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button
-                                    aria-label="Actions"
-                                    title="Actions"
-                                    className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
-                                  >
-                                    <MoreVertical className="w-4 h-4 text-gray-600" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                                  {renderActionsMenuItems(row)}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                            <div className="mt-0.5 tf-meta truncate">
+                              <span className={MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}>{row.matchStatus}</span>
+                              <span className="mx-1.5 text-gray-300">·</span>
+                              {formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span>
                             </div>
                           </div>
-                          {onViewCandidate && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={(e) => { e.stopPropagation(); onViewCandidate(row); }}
-                              icon={<Eye className="w-3.5 h-3.5" />}
-                              className="mt-2 w-full"
-                            >
-                              Open Match
-                            </Button>
-                          )}
+                          <div className="flex-shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {onViewCandidate && (
+                              <button
+                                type="button"
+                                onClick={() => onViewCandidate(row)}
+                                aria-label="Open Match"
+                                title="Open Match"
+                                className="h-8 w-8 inline-flex items-center justify-center rounded-md text-brand-blue bg-brand-blue/5 border border-brand-blue/20 hover:bg-brand-blue/10 transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  aria-label="Actions"
+                                  title="Actions"
+                                  className="h-8 w-8 inline-flex items-center justify-center rounded-md bg-gray-100 border border-gray-200 hover:bg-gray-200 data-[state=open]:bg-gray-200 transition-colors dark:bg-slate-800 dark:border-slate-700"
+                                >
+                                  <MoreVertical className="w-4 h-4 text-gray-600 dark:text-slate-300" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                                {renderActionsMenuItems(row)}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 >
+                  <div className="tf-jdv-footer" onClick={(e) => e.stopPropagation()}>
+                    <MobileStatChip className="tf-verdict-chip" tone={verdictTone('exact', t.exact)}>Exact Match {t.exact}</MobileStatChip>
+                    <MobileStatChip className="tf-verdict-chip" tone={verdictTone('partial', t.partial)}>Partial Match {t.partial}</MobileStatChip>
+                    <MobileStatChip className="tf-verdict-chip" tone={verdictTone('none', t.none)}>No Match {t.none}</MobileStatChip>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => toggleGroupExpanded(key)}
+                    onClick={(e) => { e.stopPropagation(); toggleGroupExpanded(key); }}
                     aria-label={isExpanded ? 'Collapse job history' : 'Expand job history'}
-                    className={`mt-3 w-full flex items-center justify-between px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    className={`mt-3 w-full flex items-center justify-between gap-2 px-3 h-9 rounded-lg border text-sm font-medium transition-colors ${
                       isExpanded
-                        ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
-                        : 'border-gray-200 text-gray-600 hover:border-brand-blue/30 hover:text-brand-blue'
+                        ? 'rounded-b-none border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
+                        : 'border-gray-200 text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue dark:border-slate-700 dark:text-slate-300'
                     }`}
                   >
-                    <span>{isExpanded ? 'Hide job history' : 'View job history'}</span>
-                    <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                    <span className="inline-flex items-center gap-2 min-w-0">
+                      <History className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">{isExpanded ? 'Hide job history' : 'View job history'}</span>
+                      <span className="px-1.5 py-0.5 rounded-md text-xs font-semibold bg-brand-blue/10 text-brand-blue">
+                        {rows.length} {rows.length === 1 ? 'version' : 'versions'}
+                      </span>
+                    </span>
+                    <ChevronRight className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
                   </button>
 
                 </MobileRecordCard>
@@ -3603,8 +3658,11 @@ Best regards`);
             idBadge={showJdId && cardJobCode
               ? <JobIdBadge className="min-w-0 truncate" title={cardJobCode}>{cardJobCode}</JobIdBadge>
               : undefined}
+            /* Role sits tight under the name (meta's default mt-2 → mt-1), as on
+               the AI Talent Match cards. */
+            className="[&_.tf-record-meta]:mt-1"
             title={<span className="[overflow-wrap:anywhere]">{showName(resume.candidateName)}</span>}
-            badges={(resume.isArchived || !hiddenColumnIds?.includes('matchStatus')) ? (
+            badges={(resume.isArchived || !hiddenColumnIds?.includes('matchStatus') || !hiddenColumnIds?.includes('scorePercentage')) ? (
               <>
                 {resume.isArchived && <ResumeArchivedBadge />}
                 {!hiddenColumnIds?.includes('matchStatus') && (
@@ -3612,14 +3670,27 @@ Best regards`);
                     {resume.matchStatus}
                   </span>
                 )}
+                {/* Score: a compact badge beside the match status (was a footer
+                    chip). Same three colours as the Match Status badge - see
+                    lib/utils/matchStatus.ts; not a threshold on the number. */}
+                {!hiddenColumnIds?.includes('scorePercentage') && (
+                  <span className={`tf-badge tabular-nums ${
+                    scoreVerdict === 'Exact Match' ? 'bg-success-subtle text-success'
+                    : scoreVerdict === 'Partial Match' ? 'bg-warning-subtle text-warning-strong'
+                    : 'bg-destructive-subtle text-destructive'
+                  }`}>
+                    <Award className="w-3 h-3" />Score {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
+                  </span>
+                )}
               </>
             ) : undefined}
-            meta={[{ icon: <Mail className="w-3.5 h-3.5" />, label: resume.email }]}
+            meta={[{ icon: <Briefcase className="w-3.5 h-3.5 shrink-0" />, label: resume.title }]}
             /* The table's columns as Label: value (phone, experience and
                education are export-only; see ScoredResumesExportModal). Each
                hides with its column (hiddenColumnIds). Job Title reads
                "Applied for" in the cross-job (global) list. */
             fields={[
+              { label: 'Email', value: resume.email || '-' },
               ...(showJdId && !cardJobCode ? [{ label: 'JD ID', value: '-' }] : []),
               ...(!hiddenColumnIds?.includes('jobTitle') ? [{
                 label: isGlobalView ? 'Applied for' : 'Job Title',
@@ -3632,16 +3703,6 @@ Best regards`);
                 { label: 'Date', value: <>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></> },
               ] : []),
             ]}
-            /* Same three colours as the Match Status badge, from the one palette in
-               lib/utils/matchStatus.ts - green / brand orange / red. Not a score
-               threshold: Exact and Partial share the 60-100 range and are told
-               apart by the Required average, so any cut-off on the number would
-               contradict the badge beside it. */
-            footer={!hiddenColumnIds?.includes('scorePercentage') ? (
-              <MobileStatChip tone={scoreVerdict === 'Exact Match' ? 'success' : scoreVerdict === 'Partial Match' ? 'warning' : 'danger'}>
-                Score {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
-              </MobileStatChip>
-            ) : undefined}
             /* Invite / Share, then the table row's ⋮ menu (renderRowMenuItems),
                so phones reach the same per-row actions (Create / Send AI
                Interview etc.). Download Scorecard and View Resume live in the
@@ -3730,7 +3791,24 @@ Best regards`);
               </DropdownMenu>
               </>
             }
-          />
+          >
+            {/* Skills: one chip, then "+N more" (expands in place) — as on the
+                AI Talent Match cards. */}
+            {(() => {
+              const cardSkills = resume.skills?.length ? resume.skills : resume.technicalSkills;
+              return cardSkills && cardSkills.length > 0 ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1">
+                  <SkillsList
+                    skills={cardSkills}
+                    max={1}
+                    expandInline
+                    chipClassName="max-w-full px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 [overflow-wrap:anywhere]"
+                    moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap"
+                  />
+                </div>
+              ) : null;
+            })()}
+          </MobileRecordCard>
           );
         })}
 
@@ -3790,7 +3868,8 @@ Best regards`);
             const action = bulkAction;
             setBulkAction(null);
             if (action === 'download') {
-              await handleDownloadBulkScorecards(rows);
+              // Download is read-only: on success just untick (hides the Actions bar), no refresh.
+              if (await handleDownloadBulkScorecards(rows)) clearSelection();
             }
           }}
         />
@@ -4059,6 +4138,7 @@ Best regards`);
           }}
           rowJobCode={rowJobCode}
           auditJdId={jobId}
+          onExported={clearSelection}
           onClose={() => setShowExportModal(false)}
         />
       )}

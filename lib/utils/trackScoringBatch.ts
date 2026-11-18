@@ -1,6 +1,6 @@
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
-import type { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import type { useScoringProgress, ScoringJobMeta } from '@/contexts/ScoringProgressContext';
 
 type ScoringProgressApi = Pick<ReturnType<typeof useScoringProgress>, 'startScoringJob' | 'updateItemStatus'>;
 
@@ -29,23 +29,29 @@ export function trackScoringBatch(
     batchId: string;
     jobId: string;
     jobTitle: string;
-    items: Array<{ resumeId: string; candidateName: string }>;
+    items: Array<{ resumeId: string; candidateName: string; resumeVersion?: number }>;
     returnUrl?: string;
+    /** Which pool the resumes came from, as the popup labels it. */
+    source?: 'Internal DB' | 'My Resumes';
+    /** JD ID, version and whether to announce the finish (corner widget / toast). */
+    meta?: ScoringJobMeta;
   },
 ): void {
-  const { batchId, jobId, jobTitle, items, returnUrl } = batch;
+  const { batchId, jobId, jobTitle, items, returnUrl, source = 'Internal DB', meta } = batch;
   progress.startScoringJob(
     batchId,
     jobTitle,
     items.map(item => ({
       id: `${batchId}-${item.resumeId}`,
       resumeId: item.resumeId,
+      resumeVersion: item.resumeVersion,
       candidateName: item.candidateName,
       jobTitle,
       jobId,
-      source: 'Internal DB' as const,
+      source,
     })),
     returnUrl,
+    { ...meta, batchId },
   );
 
   const poll = setInterval(async () => {
@@ -54,7 +60,11 @@ export function trackScoringBatch(
       (status.items || []).forEach(item => {
         const itemId = `${batchId}-${item.resume_id}`;
         const itemStatus = normalizeScoringStatus(item.status);
-        if (itemStatus === 'completed') {
+        if (item.status === 'cancelled') {
+          progress.updateItemStatus(batchId, itemId, 'Cancelled', {
+            errorReason: item.error_message || 'Cancelled before scoring started',
+          });
+        } else if (itemStatus === 'completed') {
           // Verdict + 0-10 rating too, so the popup shows Match Status and
           // Score as Resume Scoring's does (it read "Pending" without them).
           progress.updateItemStatus(batchId, itemId, 'Scored successfully', {

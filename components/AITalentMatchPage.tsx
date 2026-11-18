@@ -77,9 +77,9 @@ import { useQuota } from '@/contexts/QuotaContext';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { PageHeader } from '@/components/ui/page-header';
-import { EmptyState } from '@/components/ui/empty-state';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DateField } from '@/components/ui/date-field';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
@@ -88,6 +88,8 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import { usePagedList } from '@/lib/hooks/usePagedList';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
+import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import VersionEyeBadge from '@/components/ui/version-eye-badge';
 
 /* Shared row for both candidate tables' ⋮ Actions menu (Preview Resume /
    Score Resume / Invite Assessment / Invite AI Interview). */
@@ -195,6 +197,14 @@ const titleCaseValue = (v: string | undefined): string =>
 const WORK_MODE_LABELS: Record<string, string> = { onsite: 'On-site', on_site: 'On-site', hybrid: 'Hybrid', remote: 'Remote' };
 const formatWorkMode = (mode: string | undefined): string =>
   !mode ? '-' : WORK_MODE_LABELS[mode.toLowerCase()] ?? titleCaseValue(mode);
+
+/* Active-filter tag dates: 'YYYY-MM-DD' read as a local day → "01 Nov 2026". */
+const formatChipDate = (v: string): string => {
+  const d = new Date(`${v}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? v
+    : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
 
 /** One matched candidate an invite / a "Create …" acts on. */
 interface MatchInviteRow {
@@ -647,6 +657,11 @@ export default function AITalentMatchPage({
   const isMatchingInProgress = useRef(false);
   // Track if user manually changed view (to prevent useEffect from resetting)
   const userChangedView = useRef(false);
+  /* The `jdId|view` address the URL effect last acted on. It acts on an
+     address once: a stale `?jdId=…&view=results` left in the bar after the
+     recruiter went back to the list must not pull them into that job's
+     results again when the effect re-runs (job list / lookup settling). */
+  const handledUrlKeyRef = useRef<string>('');
 
   // Helper function to format uploaded by name (avoid showing UUIDs)
   const formatUploadedBy = (name?: string, id?: string) => {
@@ -998,6 +1013,8 @@ export default function AITalentMatchPage({
   };
   // The rows the Actions › Export dialog is open for (either view).
   const [exportRows, setExportRows] = useState<MatchInviteRow[] | null>(null);
+  // The opening view's Clear — run after the export succeeds.
+  const exportClearRef = useRef<(() => void) | null>(null);
 
   // "Match by Candidate" roll-up: every matched candidate across all jobs, with
   // the jobs they matched. Built in-page — no navigation away.
@@ -1140,6 +1157,28 @@ export default function AITalentMatchPage({
   });
   const matchStats = jobsList.stats;
   const facets = matchStats?.facets;
+
+  /* The four stat cards stay standard: always the unfiltered totals. Search,
+     the filters and More Filters narrow the list and the rating pills (they
+     read `matchStats`, which carries the same filters), never the cards.
+     An unfiltered load keeps the snapshot current (new matches, deletes);
+     landing already filtered (restored state) reads it once without filters. */
+  const [cardStats, setCardStats] = useState<AIMatchStats | null>(null);
+  const jobsQueryNarrowed = useMemo(() => {
+    const { page: _p, page_size: _ps, sort_by: _sb, sort_dir: _sd, band: _b, ...rest } = jobsQuery;
+    return Object.values(rest).some((v) => v !== undefined && v !== '');
+  }, [jobsQuery]);
+  useEffect(() => {
+    if (matchStats && !jobsQueryNarrowed) setCardStats(matchStats);
+  }, [matchStats, jobsQueryNarrowed]);
+  useEffect(() => {
+    if (!jobsQueryNarrowed || cardStats) return;
+    let cancelled = false;
+    aiMatchService.getStats({})
+      .then((s) => { if (!cancelled) setCardStats((prev) => prev ?? s); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [jobsQueryNarrowed, cardStats]);
 
   /** This page of matched jobs (latest session per job), as the rows render them. */
   const matchHistory: MatchHistory[] = useMemo(() => jobsList.items.map(toHistoryItem), [jobsList.items]);
@@ -1368,6 +1407,21 @@ export default function AITalentMatchPage({
     } finally {
       setSelectingAll(false);
     }
+  };
+
+  /* Breadcrumb "AI Talent Match" from a job's results / matching screen.
+     Switching the view alone left `?jdId=…&view=results` in the address bar,
+     so the URL effect read it again on its next run (the job list or a lookup
+     settling) and threw the recruiter back into that job's results — the
+     redirect after card → row → breadcrumb. Drop the job from the URL too
+     (push, so Back still returns to the results). */
+  const backToMatchList = () => {
+    userChangedView.current = true;
+    isMatchingInProgress.current = false;
+    setShowMatchingPanel(false);
+    setMatchError(null);
+    setViewMode('history');
+    updateUrlParams({});
   };
 
   const openCandidateMatch = (historyId: string) => {
@@ -1715,6 +1769,8 @@ export default function AITalentMatchPage({
     jobId: string;
     jobTitle: string;
     candidates: MatchedCandidateWithVersions[];
+    /** Bulk callers: clears their selection once the batch actually started. */
+    onStarted?: () => void;
   } | null>(null);
   // App-wide scoring progress popup — scoring started here is tracked there.
   const scoringProgress = useScoringProgress();
@@ -1888,7 +1944,7 @@ export default function AITalentMatchPage({
         jobCode={jobs.find(j => j.id === jdId)?.jobId}
         enableInternalAIInterviewInvite
         /* Row Invite -> Create / Send for this job — Job Details' popup. */
-        onOpenInviteDialog={(kind, candidates) => openCreateSend(kind, jdId, candidates, jobTitle)}
+        onOpenInviteDialog={(kind, candidates, _fromSelection, clearSelection) => openCreateSend(kind, jdId, candidates, jobTitle, clearSelection)}
         onViewCandidate={(r: any) => openScoreDetail(jdId, jobTitle, r.id, nav)}
         // The row above already names the candidate and the job.
         hiddenColumnIds={['candidateName', 'jdId', 'jobTitle', 'jobVersion']}
@@ -2174,7 +2230,9 @@ export default function AITalentMatchPage({
 
     const preselectedJobId = urlJdId || sessionJobId;
 
-    if (!preselectedJobId) return;
+    if (!preselectedJobId) { handledUrlKeyRef.current = ''; return; }
+    const urlKey = `${urlJdId ?? ''}|${urlView ?? ''}`;
+    if (!sessionJobId && urlJdId && handledUrlKeyRef.current === urlKey) return;
     // Wait for the route's JD list (loaded on demand — the landing doesn't need it).
     if (!jobsLoaded) {
       onRequestJobs?.();
@@ -2194,6 +2252,7 @@ export default function AITalentMatchPage({
     }
 
     // Set the selected job
+    handledUrlKeyRef.current = urlKey;
     setSelectedJob(preselectedJobId);
 
     // Determine view based on URL param or sessionStorage flag. `view=details`
@@ -2374,6 +2433,7 @@ export default function AITalentMatchPage({
   const handleSubmitToScoring = async (
     candidateIds?: string[],
     ctx?: { candidates: MatchedCandidateWithVersions[]; jobId: string; jobTitle: string },
+    onStarted?: () => void,
   ) => {
     const idsToScore = candidateIds ?? selectedCandidates;
     if (idsToScore.length === 0) {
@@ -2398,7 +2458,7 @@ export default function AITalentMatchPage({
       return;
     }
 
-    setScoringReview({ jobId, jobTitle, candidates: selected });
+    setScoringReview({ jobId, jobTitle, candidates: selected, onStarted });
   };
 
   /**
@@ -2406,7 +2466,7 @@ export default function AITalentMatchPage({
    * batch the rest, and hand off to Resume Scoring's common bulk-progress
    * popup (`?batch_id=`). Each item's `resumeId` is the exact version to score.
    */
-  const startBatchScoring = async (selected: Array<{ resumeId: string; name?: string }>, jobId: string, jobTitle: string) => {
+  const startBatchScoring = async (selected: Array<{ resumeId: string; name?: string }>, jobId: string, jobTitle: string): Promise<boolean> => {
     const resumeIds = selected.map(c => c.resumeId);
 
     try {
@@ -2449,7 +2509,7 @@ export default function AITalentMatchPage({
         toast.info(
           `${alreadyScoredItems.length === 1 ? 'This resume is' : `All ${alreadyScoredItems.length} resumes are`} already scored for "${jobTitle}".`,
         );
-        return;
+        return false;
       }
 
       // Start async bulk scoring via Celery for new resumes only
@@ -2467,9 +2527,11 @@ export default function AITalentMatchPage({
         `Scoring started for ${newResumeIds.length} resume${newResumeIds.length === 1 ? '' : 's'}` +
         (alreadyScoredItems.length > 0 ? ` (${alreadyScoredItems.length} already scored)` : '') + '.',
       );
+      return true;
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
       toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
+      return false;
     }
   };
 
@@ -2517,7 +2579,7 @@ export default function AITalentMatchPage({
   /* Create / Send Assessment | AI Interview — Job Details' popup, for ONE job
      per opening (a selection spanning jobs stays greyed: "one job at a time").
      null = closed; rendered with aiInviteDialog in every view. */
-  const [createSendRequest, setCreateSendRequest] = useState<InviteDialogRequest | null>(null);
+  const [createSendRequest, setCreateSendRequest] = useState<(InviteDialogRequest & { onSent?: () => void }) | null>(null);
   /** Recorded on the invitation as "AI Talent Match" (a caller's own source wins). */
   const withMatchSource = (c: InviteCandidate): InviteCandidate =>
     ({ source: 'talent-match', inviteSource: 'AI Talent Match', ...c });
@@ -2535,12 +2597,14 @@ export default function AITalentMatchPage({
       status: job?.status,
     };
   };
-  const openCreateSend = (kind: InviteHandoffKind, jdId: string, candidates: InviteCandidate[], title?: string) =>
-    setCreateSendRequest({ kind, job: inviteDialogJobOf(jdId, title), candidates: candidates.map(withMatchSource) });
+  const openCreateSend = (kind: InviteHandoffKind, jdId: string, candidates: InviteCandidate[], title?: string, onSent?: () => void) =>
+    setCreateSendRequest({ kind, job: inviteDialogJobOf(jdId, title), candidates: candidates.map(withMatchSource), onSent });
   const createSendDialogEl = (
     <JobInviteDialogHost
       request={createSendRequest}
       onClose={() => setCreateSendRequest(null)}
+      // Bulk opener's hook: invitations went out, so clear its selection.
+      onSent={() => createSendRequest?.onSent?.()}
       inviteGate={inviteGateFor}
       openOn="talent-match"
     />
@@ -2561,7 +2625,7 @@ export default function AITalentMatchPage({
   });
   /** Open Create / Send for `rows` (one job) — Job Details' popup, with the
    *  candidates who have an email (one per address). */
-  const openInviteForRows = (kind: InviteHandoffKind, jdId: string, rows: MatchInviteRow[]) => {
+  const openInviteForRows = (kind: InviteHandoffKind, jdId: string, rows: MatchInviteRow[], onSent?: () => void) => {
     const seen = new Set<string>();
     const candidates: InviteCandidate[] = rows
       .filter(r => r.email)
@@ -2576,7 +2640,7 @@ export default function AITalentMatchPage({
       toast.error('Selected candidates must have email addresses');
       return;
     }
-    openCreateSend(kind, jdId, candidates);
+    openCreateSend(kind, jdId, candidates, undefined, onSent);
   };
 
   /** A candidate's invite items for its ⋮ menu — greyed with "＋ Create …"
@@ -2704,7 +2768,7 @@ export default function AITalentMatchPage({
       }
       const n = peopleIn(rows);
       toast.success(`${what} is live for ${jobName} — now invite your ${n} candidate${n === 1 ? '' : 's'}.`);
-      openInviteForRows(h.kind, h.jdId, rows);
+      openInviteForRows(h.kind, h.jdId, rows, clearJobSelection);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handoffReturn, jobsList.loading]);
@@ -2841,6 +2905,22 @@ export default function AITalentMatchPage({
 
   // Search sits outside the panel, so — like job-openings — it is not counted.
   const activeFiltersCount = historySearch.activeFilterCount;
+  // One tag per filter the hook counts (each key on its own), so the More
+  // Filters badge and the tags always agree.
+  const historyFilterChips: FilterChip[] = [
+    historyJobLocation !== '' && { key: 'jobLocation', label: 'Location', value: historyJobLocation, onRemove: () => historySearch.setFilter('jobLocation', '') },
+    historyIndustry !== '' && { key: 'industry', label: 'Industry', value: titleCaseValue(historyIndustry), onRemove: () => historySearch.setFilter('industry', '') },
+    historyMatchedBy !== '' && { key: 'matchedBy', label: 'Matched By', value: historyMatchedBy, onRemove: () => historySearch.setFilter('matchedBy', '') },
+    historyDateFrom !== '' && { key: 'dateFrom', label: 'Matched From', value: formatChipDate(historyDateFrom), onRemove: () => historySearch.setFilter('dateFrom', '') },
+    historyDateTo !== '' && { key: 'dateTo', label: 'Matched To', value: formatChipDate(historyDateTo), onRemove: () => historySearch.setFilter('dateTo', '') },
+    historyWorkMode !== '' && { key: 'workMode', label: 'Work Mode', value: formatWorkMode(historyWorkMode), onRemove: () => historySearch.setFilter('workMode', '') },
+    historyJobType !== '' && { key: 'jobType', label: 'Job Type', value: titleCaseValue(historyJobType), onRemove: () => historySearch.setFilter('jobType', '') },
+    historyFilterMinMatches !== '' && { key: 'minMatches', label: 'Matched Candidates', value: `At least ${historyFilterMinMatches}`, onRemove: () => historySearch.setFilter('minMatches', '') },
+    historyFilterLocation !== '' && { key: 'location', label: 'Candidate Location', value: historyFilterLocation, onRemove: () => historySearch.setFilter('location', '') },
+    historyFilterPhone !== '' && { key: 'phone', label: 'Candidate Mobile', value: historyFilterPhone, onRemove: () => historySearch.setFilter('phone', '') },
+    historyFilterExpMin !== '' && { key: 'expMin', label: 'Min Experience', value: `${historyFilterExpMin} yrs`, onRemove: () => historySearch.setFilter('expMin', '') },
+    historyFilterExpMax !== '' && { key: 'expMax', label: 'Max Experience', value: `${historyFilterExpMax} yrs`, onRemove: () => historySearch.setFilter('expMax', '') },
+  ].filter(Boolean) as FilterChip[];
 
   /* Invite to AI Interview — the shared dialog, scoped to this job. Rendered
      in EVERY view branch below that offers the action (history, results and
@@ -2887,7 +2967,10 @@ export default function AITalentMatchPage({
           resumeIds.map((resumeId, index) => ({ resumeId, name: nameFor(index) })),
           review.jobId,
           review.jobTitle,
-        );
+        ).then((started) => {
+          // Bulk Score succeeded: clear the originating selection (failure keeps it).
+          if (started) review.onStarted?.();
+        });
       }}
     />
   );
@@ -2936,6 +3019,8 @@ export default function AITalentMatchPage({
         jobId={scoreDetailView.jdId}
         /* Invite -> Create / Send for this score's job — Job Details' popup. */
         onOpenInviteDialog={(kind, candidates) => openCreateSend(kind, scoreDetailView.jdId, candidates, scoreDetailView.jobTitle)}
+        /* View Resume as an eye on the resume version badge. */
+        viewResumeOnVersionBadge
         onBack={close}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId) => {
@@ -2972,7 +3057,7 @@ export default function AITalentMatchPage({
               className="mb-4 md:mb-6"
               items={[
                 { label: 'Dashboard', href: '/dashboard' },
-                { label: 'AI Talent Match', onClick: () => setViewMode('history') },
+                { label: 'AI Talent Match', onClick: backToMatchList },
                 { label: selectedJobData?.title || 'Matching' },
               ]}
             />
@@ -3148,6 +3233,19 @@ export default function AITalentMatchPage({
 
     const candidateFiltersCount = candidateSearch.activeFilterCount;
     const candidateFiltersApplied = candidateSearch.isNarrowed;
+    // One tag per filter the hook counts — shared by View by Candidates and
+    // All Resumes, which use the same filter set.
+    const candidateFilterChips: FilterChip[] = [
+      candidateFilterJob !== 'all' && { key: 'job', label: 'Matched Job', value: candidateFilterJob, onRemove: () => candidateSearch.setFilter('job', 'all') },
+      candidateFilterMinScore !== 0 && { key: 'minScore', label: 'Minimum Match', value: `${candidateFilterMinScore} and above`, onRemove: () => candidateSearch.setFilter('minScore', 0) },
+      candidateFilterLocation !== 'all' && { key: 'location', label: 'Location', value: candidateFilterLocation, onRemove: () => candidateSearch.setFilter('location', 'all') },
+      candidateFilterMultiJob && { key: 'multiJob', label: 'Job Count', value: 'Matched 2+ jobs', onRemove: () => candidateSearch.setFilter('multiJob', false) },
+      candidateFilterPhone !== '' && { key: 'phone', label: 'Mobile No', value: candidateFilterPhone, onRemove: () => candidateSearch.setFilter('phone', '') },
+      candidateFilterDateFrom !== '' && { key: 'dateFrom', label: 'Last Matched From', value: formatChipDate(candidateFilterDateFrom), onRemove: () => candidateSearch.setFilter('dateFrom', '') },
+      candidateFilterDateTo !== '' && { key: 'dateTo', label: 'Last Matched To', value: formatChipDate(candidateFilterDateTo), onRemove: () => candidateSearch.setFilter('dateTo', '') },
+      candidateFilterExpMin !== '' && { key: 'expMin', label: 'Min Experience', value: `${candidateFilterExpMin} yrs`, onRemove: () => candidateSearch.setFilter('expMin', '') },
+      candidateFilterExpMax !== '' && { key: 'expMax', label: 'Max Experience', value: `${candidateFilterExpMax} yrs`, onRemove: () => candidateSearch.setFilter('expMax', '') },
+    ].filter(Boolean) as FilterChip[];
 
     // "All Resumes" table's own selection, resolved to the (row, job) pairs
     // it points at, then grouped by job — a resume matched against Job A
@@ -3170,6 +3268,8 @@ export default function AITalentMatchPage({
        pointing handleSubmitToScoring at that job. Sequential, since
        handleSubmitToScoring reads the job to score against off page-level
        state (selectedJob/selectedHistoryItem) rather than a parameter. */
+    // After a successful bulk action on the All Resumes selection.
+    const clearAllResumeSelection = () => setSelectedAllResumeKeys(new Set());
     const handleScoreSelectedAllResumes = async () => {
       if (selectedAllResumeEntries.length === 0) return;
       // Scoring is against one job, and the review shows that job — so, as
@@ -3188,7 +3288,7 @@ export default function AITalentMatchPage({
       if (ids.length === 0) return;
       setSelectedHistoryItem(item);
       setSelectedJob(item.jobId);
-      await handleSubmitToScoring(ids, { candidates, jobId: item.jobId, jobTitle: item.jobTitle });
+      await handleSubmitToScoring(ids, { candidates, jobId: item.jobId, jobTitle: item.jobTitle }, clearAllResumeSelection);
     };
 
     /* "Invite Assessment" / "Invite AI Interview" from the All Resumes
@@ -3230,6 +3330,8 @@ export default function AITalentMatchPage({
         candidates,
         inviteGate: inviteGateFor(kind),
         openOn: 'talent-match',
+        // Invitations went out: clear the All Resumes selection.
+        onSent: () => clearAllResumeSelection(),
       });
     };
 
@@ -3399,6 +3501,9 @@ export default function AITalentMatchPage({
         title: 'AI Talent Match - Matched Candidates',
       });
       toast.success(`Exported ${rows.length} candidate${rows.length !== 1 ? 's' : ''} to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+      // Export succeeded: clear the selection (hides the Actions bar). No refresh — nothing changed.
+      exportClearRef.current?.();
+      exportClearRef.current = null;
     };
 
     /* ---- View by Candidates selection (Resume Scoring's) ---- */
@@ -3683,6 +3788,7 @@ export default function AITalentMatchPage({
                     await handleSubmitToScoring(
                       toScore.map(r => r.key.split('::')[1]),
                       { candidates, jobId: item.jobId, jobTitle: item.jobTitle },
+                      onClear,
                     );
                   })();
                 }}
@@ -3704,6 +3810,7 @@ export default function AITalentMatchPage({
                     // Candidates view rows come from every session — make
                     // sure each is loaded before the file is written.
                     void ensureSessionsLoaded(rows.map(r => r.historyId));
+                    exportClearRef.current = onClear;
                     setExportRows(rows);
                   }
                 }}
@@ -3727,7 +3834,7 @@ export default function AITalentMatchPage({
                   }
                   if (!guard()) return;
                   const jdId = oneJob();
-                  if (jdId) openInviteForRows('assessment', jdId, rows);
+                  if (jdId) openInviteForRows('assessment', jdId, rows, onClear);
                 },
                     })}
               {renderInviteTargetItems({
@@ -3752,7 +3859,7 @@ export default function AITalentMatchPage({
                     setSelectedHistoryItem(item);
                     setSelectedJob(item.jobId);
                   }
-                  openInviteForRows('interview', jdId, rows);
+                  openInviteForRows('interview', jdId, rows, onClear);
                 },
                     })}
             </DropdownMenuContent>
@@ -3948,8 +4055,12 @@ export default function AITalentMatchPage({
           );
           // Distinct candidates holding a match in the band — only once the
           // candidate roll-up is in, so the chip never shows a false 0.
-          const rowsLoaded = matchStats !== null;
-          const peopleInBand = (band: RatingBand) => matchStats?.candidates_by_band?.[band] ?? 0;
+          const rowsLoaded = cardStats !== null;
+          const peopleInBand = (band: RatingBand) => cardStats?.candidates_by_band?.[band] ?? 0;
+          // Unfiltered card figures (see `cardStats`).
+          const cardCounts = { all: cardStats?.all_matches ?? null, exact: cardStats?.rating_exact ?? null, partial: cardStats?.rating_partial ?? null };
+          const cardPeopleReady = cardStats !== null;
+          const cardPeople = cardStats?.total_candidates ?? 0;
           return (
         <div className="mb-4 sm:mb-5">
         <StatsCardGrid className="mb-0">
@@ -3959,14 +4070,14 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={History}
             label="Matched Jobs"
-            value={matchStats ? matchStats.matched_jobs.toLocaleString() : statLoading}
+            value={cardStats ? cardStats.matched_jobs.toLocaleString() : statLoading}
             sparkline={false}
-            title={`${(matchStats?.matched_jobs ?? 0).toLocaleString()} jobs have AI Talent Match results`
-              + (totalMatchedCandidatesReady ? `, matching ${totalMatchedCandidates.toLocaleString()} different candidates` : '')
+            title={`${(cardStats?.matched_jobs ?? 0).toLocaleString()} jobs have AI Talent Match results`
+              + (cardPeopleReady ? `, matching ${cardPeople.toLocaleString()} different candidates` : '')
               + '. Click to view by job.'}
             onClick={() => openHistoryListView()}
           >
-            {totalMatchedCandidatesReady && <StatChip count={totalMatchedCandidates} unit="candidate" />}
+            {cardPeopleReady && <StatChip count={cardPeople} unit="candidate" />}
           </StatsCard>
           <StatsCard
             tone="neutral"
@@ -3974,15 +4085,15 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={User}
             label="All Matches"
-            value={pillCounts.all === null ? statLoading : pillCounts.all.toLocaleString()}
+            value={cardCounts.all === null ? statLoading : cardCounts.all.toLocaleString()}
             sparkline={false}
-            title={pillCounts.all === null ? undefined
-              : `${pillCounts.all.toLocaleString()} candidate–job matches`
-                + (totalMatchedCandidatesReady ? `, from ${totalMatchedCandidates.toLocaleString()} different candidates` : '')
+            title={cardCounts.all === null ? undefined
+              : `${cardCounts.all.toLocaleString()} candidate–job matches`
+                + (cardPeopleReady ? `, from ${cardPeople.toLocaleString()} different candidates` : '')
                 + ' (one candidate matched to 3 jobs counts as 3). Click to view by candidate.'}
             onClick={() => { void openCandidatesView(); }}
           >
-            {totalMatchedCandidatesReady && <StatChip count={totalMatchedCandidates} unit="candidate" />}
+            {cardPeopleReady && <StatChip count={cardPeople} unit="candidate" />}
           </StatsCard>
           <StatsCard
             tone="neutral"
@@ -3990,10 +4101,10 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={CheckCircle2}
             label="Match Rating (10)"
-            value={pillCounts.exact === null ? statLoading : pillCounts.exact.toLocaleString()}
+            value={cardCounts.exact === null ? statLoading : cardCounts.exact.toLocaleString()}
             sparkline={false}
-            title={pillCounts.exact === null ? undefined
-              : `${pillCounts.exact.toLocaleString()} matches rated 10`
+            title={cardCounts.exact === null ? undefined
+              : `${cardCounts.exact.toLocaleString()} matches rated 10`
                 + (rowsLoaded ? `, from ${peopleInBand('exact').toLocaleString()} different candidates` : '')
                 + '. Click to show only these; click again to clear.'}
             onClick={() => pickBand('exact')}
@@ -4006,10 +4117,10 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={PieChart}
             label="Match Rating (9-7)"
-            value={pillCounts.partial === null ? statLoading : pillCounts.partial.toLocaleString()}
+            value={cardCounts.partial === null ? statLoading : cardCounts.partial.toLocaleString()}
             sparkline={false}
-            title={pillCounts.partial === null ? undefined
-              : `${pillCounts.partial.toLocaleString()} matches rated 9 to 7`
+            title={cardCounts.partial === null ? undefined
+              : `${cardCounts.partial.toLocaleString()} matches rated 9 to 7`
                 + (rowsLoaded ? `, from ${peopleInBand('partial').toLocaleString()} different candidates` : '')
                 + '. Click to show only these; click again to clear.'}
             onClick={() => pickBand('partial')}
@@ -4031,7 +4142,7 @@ export default function AITalentMatchPage({
 
             {/* Phones / tablets: the Job Openings list's toolbar card and phone
                 line layout (globals.css, `.tf-jobs-toolbar`), as Resume Scoring. */}
-            <div className="tf-jobs-toolbar tf-toolbar-card mb-4">
+            <div className="tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card mb-4">
               <ListToolbar
                 searchValue={candidateSearchQuery}
                 onSearchChange={candidateSearch.setQuery}
@@ -4066,6 +4177,8 @@ export default function AITalentMatchPage({
                 onToggleFilters={() => {
                   setShowCandidateFilters(!showCandidateFilters);
                 }}
+                // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+                filterChips={candidateFilterChips}
                 filtersOpen={showCandidateFilters}
                 activeFilterCount={candidateFiltersCount}
                 filtersApplied={candidateFiltersApplied}
@@ -4179,18 +4292,8 @@ export default function AITalentMatchPage({
                     </div>
                   </div>
 
-                  {/* Panel footer: "Done" applies the selection and reveals the
-                      toolbar Clear — same flow as job-openings. */}
-                  <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                    <Button
-                      // The controls above commit as they change, so Done just closes.
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowCandidateFilters(false)}
-                    >
-                      Done
-                    </Button>
-                  </div>
+                  {/* Active filter tags as the panel's last line — phones / tablets only. */}
+                  <FilterChipsPanelLine chips={candidateFilterChips} />
                 </div>
               )}
 
@@ -4266,24 +4369,21 @@ export default function AITalentMatchPage({
                  Latest Matched, Actions. */
               <MatchTableSkeleton cols={['w-6', 'w-32', 'w-24', 'w-28', 'w-24', 'w-16']} />
             ) : filteredCandidateRows.length === 0 ? (
-              <div className="tf-panel p-8 sm:p-10 text-center">
-                <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
-                  <User className="w-5 h-5" />
-                </div>
-                <h3 className="tf-section-title sm:text-lg mb-2">
-                  {candidateFiltersApplied ? 'No candidates match your filters' : 'No matched candidates yet'}
-                </h3>
-                <p className="tf-body-secondary max-w-md mx-auto">
-                  {candidateFiltersApplied
-                    ? 'Try a different name, job, location, or lower the minimum match.'
-                    : 'Run AI Match on a job to see matched candidates here.'}
-                </p>
+              <IllustratedEmptyState
+                illustration={candidateFiltersApplied
+                  ? <FolderIconIllustration icon={Search} />
+                  : <FolderIconIllustration icon={Users} badge="search" />}
+                title={candidateFiltersApplied ? 'No candidates match your filters' : 'No matched candidates yet'}
+                description={candidateFiltersApplied
+                  ? 'Try a different name, job, location, or lower the minimum match.'
+                  : 'Run AI Match on a job to see matched candidates here.'}
+              >
                 {candidateFiltersApplied && (
-                  <Button variant="secondary" size="sm" onClick={clearCandidateFilters} className="mt-4">
+                  <Button variant="secondary" size="sm" onClick={clearCandidateFilters}>
                     Clear filters
                   </Button>
                 )}
-              </div>
+              </IllustratedEmptyState>
             ) : (
               /* Grouped table, matching Resume Scoring's grouped "View by
                  Candidates": one row per candidate (already email-deduped by
@@ -4845,12 +4945,21 @@ export default function AITalentMatchPage({
                         key={row.key}
                         onClick={() => toggleCandidateGroupExpanded(row.key)}
                         aria-expanded={isExpanded}
-                        className={`rounded-xl border bg-white dark:bg-slate-900 p-3 shadow-sm cursor-pointer min-w-0 ${
+                        className={`relative group rounded-xl border bg-white dark:bg-slate-900 p-3 shadow-sm cursor-pointer min-w-0 ${
                           selectedCandKeys.has(row.key) ? 'border-brand-blue/40 !bg-brand-blue/[0.04]' : 'border-gray-200 dark:border-slate-700'
-                        } ${matchDisplayMode === 'grid' && isExpanded ? 'md:col-span-2 xl:col-span-3' : ''}`}
+                        } ${matchDisplayMode === 'grid' && isExpanded ? 'md:col-span-2 xl:col-span-3' : ''} ${gridCardSelectedClass(selectedCandKeys.has(row.key))}`}
                       >
-                        <div className="flex items-start gap-3 mb-2">
-                          {selectBtn}
+                        {/* Grid card: the shared round select seal in place of
+                            the list's square toggle. */}
+                        <GridCardSelect
+                          selected={selectedCandKeys.has(row.key)}
+                          onToggle={() => handleSelectCand(row.key)}
+                          label={row.name || 'candidate'}
+                          selectionActive={selectedCandKeys.size > 0}
+                          partial={isCandPartly(row.key)}
+                          className="top-3 left-3"
+                        />
+                        <div className="flex items-start gap-3 mb-2 pl-7">
                           <div className="min-w-0 flex-1">
                             {/* max-w-full: a button sizes to its text, so without it `truncate`
                                 never engaged and a long name ran past the card on a phone. */}
@@ -4932,6 +5041,8 @@ export default function AITalentMatchPage({
                 onToggleFilters={() => {
                   setShowCandidateFilters(!showCandidateFilters);
                 }}
+                // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+                filterChips={candidateFilterChips}
                 filtersOpen={showCandidateFilters}
                 activeFilterCount={candidateFiltersCount}
                 filtersApplied={candidateFiltersApplied}
@@ -5216,11 +5327,8 @@ export default function AITalentMatchPage({
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => setShowCandidateFilters(false)}>
-                      Done
-                    </Button>
-                  </div>
+                  {/* Active filter tags as the panel's last line — phones / tablets only. */}
+                  <FilterChipsPanelLine chips={candidateFilterChips} />
                 </div>
               )}
             </div>
@@ -5278,7 +5386,7 @@ export default function AITalentMatchPage({
                         label={row.name || 'candidate'}
                         selectionActive={selectedAllResumeKeys.size > 0}
                       />
-                      <div className="flex items-start gap-2.5">
+                      <div className="flex items-start gap-2.5 pl-7">
                         <NameAvatar name={row.name} fallback={row.email} size="md" />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 min-w-0">
@@ -5357,7 +5465,7 @@ export default function AITalentMatchPage({
               </>
             ) : (
               <>
-                <div className="hidden lg:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
+                <div className="hidden lg:block max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
                   <table className="w-full min-w-[1600px] table-auto">
                     <thead className="sticky top-0 z-10">
                       <tr>
@@ -5678,7 +5786,7 @@ export default function AITalentMatchPage({
             List / Grid. No count badge — the pagination carries the totals.
             Phones / tablets: the Job Openings list's toolbar card and phone line
             layout (globals.css, `.tf-jobs-toolbar`), as Resume Scoring. */}
-        <div className="tf-jobs-toolbar tf-toolbar-card mb-4">
+        <div className="tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card mb-4">
           <ListToolbar
             searchValue={historySearchQuery}
             onSearchChange={historySearch.setQuery}
@@ -5687,6 +5795,8 @@ export default function AITalentMatchPage({
             searchPlaceholder="Search by job title or JD ID..."
             controlsFollowSearch
             onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
+            // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+            filterChips={historyFilterChips}
             filtersOpen={showHistoryFilters}
             activeFilterCount={activeFiltersCount}
             filtersApplied={historySearch.isNarrowed}
@@ -5741,8 +5851,8 @@ export default function AITalentMatchPage({
             />
           </ListToolbar>
 
-          {/* More Filters — Resume Scoring's boxed panel; Done rides the last
-              row of fields. The controls commit as they change. */}
+          {/* More Filters — Resume Scoring's boxed panel. The controls commit
+              as they change; the toolbar Reset clears them. */}
           {showHistoryFilters && (() => {
             const workModes = facets?.work_modes ?? [];
             const jobTypes = facets?.job_types ?? [];
@@ -5814,7 +5924,7 @@ export default function AITalentMatchPage({
                       value={historyFilterLocation}
                       onChange={(e) => historySearch.setFilter('location', e.target.value)}
                       placeholder="e.g. Chennai"
-                      className={`${selectCls} placeholder:text-gray-400`}
+                      className="tf-input"
                     />
                   </div>
                   <div>
@@ -5824,7 +5934,7 @@ export default function AITalentMatchPage({
                       value={historyFilterPhone}
                       onChange={(e) => historySearch.setFilter('phone', e.target.value)}
                       placeholder="Full or partial number"
-                      className={`${selectCls} placeholder:text-gray-400`}
+                      className="tf-input"
                     />
                   </div>
                   <div>
@@ -5837,7 +5947,7 @@ export default function AITalentMatchPage({
                         placeholder="Min"
                         min={0}
                         aria-label="Minimum candidate experience in years"
-                        className={`${selectCls} placeholder:text-gray-400`}
+                        className="tf-input"
                       />
                       <input
                         type="number"
@@ -5846,7 +5956,7 @@ export default function AITalentMatchPage({
                         placeholder="Max"
                         min={0}
                         aria-label="Maximum candidate experience in years"
-                        className={`${selectCls} placeholder:text-gray-400`}
+                        className="tf-input"
                       />
                     </div>
                   </div>
@@ -5855,16 +5965,11 @@ export default function AITalentMatchPage({
                       Candidate filters keep a job when any of its candidates matches.
                       {resolvingHistoryCandidates ? ' Loading candidates...' : ''}
                     </p>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => setShowHistoryFilters(false)}
-                      className="!h-9 !px-4 !text-sm"
-                    >
-                      Done
-                    </Button>
                   </div>
                 </div>
+
+                {/* Active filter tags as the panel's last line — phones / tablets only. */}
+                <FilterChipsPanelLine chips={historyFilterChips} />
               </div>
             );
           })()}
@@ -6214,20 +6319,18 @@ export default function AITalentMatchPage({
                                   key={c.id}
                                   onClick={() => { if (scoreId) toggleScoreSummary(item.jobId, item.jobTitle, scoreId); }}
                                   title={scored ? (summaryOpen ? 'Hide score' : 'Show score') : undefined}
-                                  className={`rounded-xl border p-3 flex flex-col gap-2.5 transition-colors ${scored ? 'cursor-pointer' : ''} ${
+                                  className={`relative group rounded-xl border p-3 flex flex-col gap-2.5 transition-colors ${scored ? 'cursor-pointer' : ''} ${
                                     summaryOpen ? 'md:col-span-2 xl:col-span-3' : ''
-                                  } ${ticked || summaryOpen ? 'border-brand-blue/40 bg-brand-blue/[0.04]' : 'border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:border-brand-blue/30'}`}
+                                  } ${ticked || summaryOpen ? 'border-brand-blue/40 bg-brand-blue/[0.04]' : 'border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:border-brand-blue/30'} ${gridCardSelectedClass(ticked)}`}
                                 >
-                                  <div className="flex items-start gap-2.5">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); toggleCandTick(c); }}
-                                      aria-pressed={ticked}
-                                      aria-label={ticked ? 'Deselect candidate' : 'Select candidate'}
-                                      className="inline-flex p-1 -ml-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
-                                    >
-                                      {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
-                                    </button>
+                                  <GridCardSelect
+                                    selected={ticked}
+                                    onToggle={() => toggleCandTick(c)}
+                                    label={c.name || 'candidate'}
+                                    selectionActive={tickedIds.length > 0}
+                                    className="top-3 left-3"
+                                  />
+                                  <div className="flex items-start gap-2.5 pl-7">
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-2 min-w-0">
                                         <button
@@ -6741,10 +6844,11 @@ export default function AITalentMatchPage({
                       )}
                     </>
                   }
-                >
-                  {inlineCandidatesPanel}
-                  {versionsPanel}
-                </MobileRecordCard>
+                  /* Candidates open at the bottom, under the rating tiles and the
+                     buttons — as Resume Scoring's View by Job card — instead of
+                     between the details and the tiles. */
+                  expanded={inlineCandidatesPanel || versionsPanel ? <>{inlineCandidatesPanel}{versionsPanel}</> : undefined}
+                />
               );
               return { key: item.id, mobileCard, card: (
                 <div
@@ -6755,23 +6859,30 @@ export default function AITalentMatchPage({
                     isJobExpanded || isSelected || isPartlySelected ? 'border-brand-blue/40 dark:border-brand-blue/40' : 'border-gray-300 dark:border-slate-700/60'
                   } ${isSelected ? '!bg-brand-blue/[0.06] dark:!bg-brand-blue/15' : ''} ${
                     jobListDisplayMode === 'grid' ? 'flex flex-col min-w-0' : ''
-                  } ${jobListDisplayMode === 'grid' && isJobExpanded ? 'md:col-span-2 xl:col-span-3' : ''}`}
+                  } ${jobListDisplayMode === 'grid' && isJobExpanded ? 'md:col-span-2 xl:col-span-3' : ''} relative group ${gridCardSelectedClass(isSelected)}`}
                   // The row opens its candidates in place; the job title (and
                   // the View Details button) still open the job's match results.
                   onClick={() => { if (hasMatches) toggleRow(); }}
                   aria-expanded={hasMatches ? isJobExpanded : undefined}
                 >
+                  {/* Grid card: the shared round select seal. No candidates
+                      matched → nothing to act on, so no seal (the list's
+                      greyed square stays in the phone record card). */}
+                  {hasMatches && (
+                    <GridCardSelect
+                      selected={isSelected}
+                      onToggle={() => handleSelectJob(jobKey)}
+                      label={item.jobTitle || 'job'}
+                      selectionActive={selectedJobKeys.size > 0}
+                      partial={isPartlySelected}
+                    />
+                  )}
                   <div className={`flex flex-col items-start gap-3 ${jobListDisplayMode === 'grid' && !isJobExpanded ? 'flex-1' : 'sm:flex-row'}`}>
                     <div className="flex-1 min-w-0 w-full">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        {/* Checkbox + Job ID + Job Name: one nowrap line at
-                            every width — see JOB_HEADLINE_ROW. */}
+                      <div className="flex flex-wrap items-center gap-2 mb-2 pl-7">
+                        {/* Select seal (above) + Job ID + Job Name: one nowrap
+                            line at every width — see JOB_HEADLINE_ROW. */}
                         <div className={JOB_HEADLINE_ROW}>
-                        {/* Tick the job. Stops the click so it doesn't also
-                            open / close the row. */}
-                        {/* No candidates matched: the box stays, greyed and
-                            not selectable — nothing to act on. */}
-                        {jobSelect}
                         {jobData?.jobId && (
                           <JobIdBadge className={`h-7 leading-6 ${JOB_ID_BADGE_FIT}`} title={jobData.jobId}>{jobData.jobId}</JobIdBadge>
                         )}
@@ -7074,33 +7185,36 @@ export default function AITalentMatchPage({
         })() : jobsList.loading ? (
           <MatchTableSkeleton cols={['w-24', 'w-48', 'w-24', 'w-32', 'w-24']} rows={5} />
         ) : (matchStats?.matched_jobs ?? 0) === 0 && !historySearch.isNarrowed && !candidateRatingBand ? (
-          <div className="tf-card">
-            <EmptyState
-              icon={Sparkles}
-              title="No Matching History Yet"
-              description="Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit."
-              action={{
-                label: 'Run AI Match Now',
-                onClick: () => {
-                  if (!canRunAiMatch) {
-                    return;
-                  }
-                  setViewMode('new');
-                  setSelectedJob('');
-                  router.push('/recruitment/ai-talent-match', { scroll: false });
-                },
+          <IllustratedEmptyState
+            illustration={<FolderIconIllustration icon={Sparkles} badge="search" />}
+            title="No Matching History Yet"
+            description="Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit."
+          >
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => {
+                if (!canRunAiMatch) {
+                  return;
+                }
+                setViewMode('new');
+                setSelectedJob('');
+                router.push('/recruitment/ai-talent-match', { scroll: false });
               }}
-            />
-          </div>
+            >
+              Run AI Match Now
+            </Button>
+          </IllustratedEmptyState>
         ) : (
-          <div className="tf-card">
-            <EmptyState
-              icon={Search}
-              title="No Results Found"
-              description="No matched jobs match your current filters. Try adjusting your search criteria."
-              action={{ label: 'Clear All Filters', onClick: clearHistoryFilters }}
-            />
-          </div>
+          <IllustratedEmptyState
+            illustration={<FolderIconIllustration icon={Search} />}
+            title="No Results Found"
+            description="No matched jobs match your current filters. Try adjusting your search criteria."
+          >
+            <Button variant="primary" size="md" onClick={clearHistoryFilters}>
+              Clear All Filters
+            </Button>
+          </IllustratedEmptyState>
         )}
         </div>
         )}
@@ -7845,6 +7959,24 @@ export default function AITalentMatchPage({
       (filterRatingBand !== 'all' ? 1 : 0) +
       (filterScored !== 'all' ? 1 : 0) +
       (filterExperienceMin !== '' || filterExperienceMax !== '' ? 1 : 0);
+    // One tag per counted filter — Experience counts once, so its min / max
+    // share one tag and the badge and tags still agree.
+    const RESULTS_RATING_LABELS: Record<string, string> = { exact: 'Rating 10', partial: 'Rating 9 – 7', no_match: 'Below 7' };
+    const RESULTS_SCORED_LABELS: Record<string, string> = { scored: 'Scored', not_scored: 'Not Scored' };
+    const resultsFilterChips: FilterChip[] = [
+      filterRatingBand !== 'all' && { key: 'ratingBand', label: 'Matched Rating', value: RESULTS_RATING_LABELS[filterRatingBand] ?? String(filterRatingBand), onRemove: () => setFilterRatingBand('all') },
+      filterScored !== 'all' && { key: 'scored', label: 'Scored Status', value: RESULTS_SCORED_LABELS[filterScored] ?? String(filterScored), onRemove: () => setFilterScored('all') },
+      (filterExperienceMin !== '' || filterExperienceMax !== '') && {
+        key: 'experience',
+        label: 'Experience',
+        value: filterExperienceMin !== '' && filterExperienceMax !== ''
+          ? `${filterExperienceMin} – ${filterExperienceMax} yrs`
+          : filterExperienceMin !== ''
+            ? `${filterExperienceMin}+ yrs`
+            : `Up to ${filterExperienceMax} yrs`,
+        onRemove: () => { setFilterExperienceMin(''); setFilterExperienceMax(''); },
+      },
+    ].filter(Boolean) as FilterChip[];
 
     // One Export for both states, same as ScoredResumesTable: exports the
     // selection when there is one, otherwise every currently filtered row.
@@ -7895,6 +8027,8 @@ export default function AITalentMatchPage({
         title: `${jobTitle} - AI Talent Match`,
       });
       toast.success(`Exported ${rows.length} candidate${rows.length !== 1 ? 's' : ''} to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+      // Export succeeded: clear the selection (hides the Actions bar). No refresh — nothing changed.
+      setSelectedCandidates([]);
     };
     const excellentCount = matchedCandidates.filter(c => c.matchScore >= 85).length;
     const goodCount = matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
@@ -7949,7 +8083,7 @@ export default function AITalentMatchPage({
               { label: `AI Talent Match: ${resultsJobTitle || 'Results'}` },
             ] : [
               { label: 'Dashboard', href: '/dashboard' },
-              { label: 'AI Talent Match', onClick: () => setViewMode('history') },
+              { label: 'AI Talent Match', onClick: backToMatchList },
               { label: resultsJobTitle || 'Results' },
             ]}
             // Previous / Next job rides inside the breadcrumb bar, as on the
@@ -8157,12 +8291,14 @@ export default function AITalentMatchPage({
           /* Phones / tablets: the Job Openings list's toolbar card; phones get its
              line layout (globals.css, `.tf-jobs-toolbar`): search · filter icon ·
              List / Grid, the panel under it, then Actions on a line of its own. */
-          <div className="tf-jobs-toolbar tf-toolbar-card mb-4 space-y-3">
+          <div className="tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card mb-4 space-y-3">
             <ListToolbar
               searchValue={searchQuery}
               onSearchChange={setSearchQuery}
               searchPlaceholder="Search by name, email, phone, location or skills..."
               onToggleFilters={() => setShowResultsFilters(open => !open)}
+              // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+              filterChips={resultsFilterChips}
               filtersOpen={showResultsFilters}
               activeFilterCount={resultsActiveFilterCount}
               filtersApplied={resultsActiveFilterCount > 0}
@@ -8248,13 +8384,8 @@ export default function AITalentMatchPage({
                       />
                     </div>
                   </div>
-                  {/* Controls commit as they change, so Done just closes —
-                      same flow as Resume Scoring. */}
-                  <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700 flex items-center justify-end gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => setShowResultsFilters(false)}>
-                      Done
-                    </Button>
-                  </div>
+                  {/* Active filter tags as the panel's last line — phones / tablets only. */}
+                  <FilterChipsPanelLine chips={resultsFilterChips} />
                 </div>
               }
             >
@@ -8308,7 +8439,8 @@ export default function AITalentMatchPage({
                           title={!canRunScoring ? 'You do not have permission to score resumes' : jobLock ? jobLock : unitsShort ? 'Insufficient units for this selection' : undefined}
                           onSelect={(e) => {
                             if (!canRunScoring || jobLock) { e.preventDefault(); return; }
-                            void handleSubmitToScoring();
+                            // Clear the ticks once the batch has started.
+                            void handleSubmitToScoring(undefined, undefined, () => setSelectedCandidates([]));
                           }}
                         >
                           <ClipboardList className="w-4 h-4 text-menu-icon-score" />
@@ -8342,7 +8474,7 @@ export default function AITalentMatchPage({
                                 title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : jobLock || undefined}
                                 onSelect={(e) => {
                                   if (asmtDisabled) { e.preventDefault(); return; }
-                                  openInviteForRows('assessment', selectedJob, rows);
+                                  openInviteForRows('assessment', selectedJob, rows, () => setSelectedCandidates([]));
                                 }}
                               >
                                 <ClipboardList className="w-4 h-4 text-menu-icon-view" />
@@ -8354,7 +8486,7 @@ export default function AITalentMatchPage({
                                 title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : jobLock || undefined}
                                 onSelect={(e) => {
                                   if (intvDisabled) { e.preventDefault(); return; }
-                                  openInviteForRows('interview', selectedJob, rows);
+                                  openInviteForRows('interview', selectedJob, rows, () => setSelectedCandidates([]));
                                 }}
                               >
                                 <Video className="w-4 h-4 text-menu-icon-ai" />
@@ -8426,7 +8558,7 @@ export default function AITalentMatchPage({
              as on the JD details AI Talent Match tab (no card inside a card). */
           <div className="tf-card-soft overflow-hidden max-lg:overflow-visible max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:shadow-none max-lg:ring-0 max-lg:dark:bg-transparent">
             {/* Bounded viewport so only the rows scroll — pagination below stays put. */}
-            <div className={`${resultsDisplayMode === 'grid' ? 'hidden' : 'hidden lg:block'} min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell`}>
+            <div className={`${resultsDisplayMode === 'grid' ? 'hidden' : 'hidden lg:block'} max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell`}>
             <table className="w-full" style={{ minWidth: 260 + visibleResultColumnCount * 110 }}>
               <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
@@ -8628,10 +8760,12 @@ export default function AITalentMatchPage({
                     </td>
                     )}
                     {isResultColumnVisible('resumeVersion') && (
-                    <td className="tf-td text-center">
-                      <span className="tf-badge border bg-blue-50 text-blue-700 border-blue-200">
-                        v{candidate.resumeVersion || 1}
-                      </span>
+                    <td className="tf-td text-center" onClick={(e) => e.stopPropagation()}>
+                      {/* The resume version with View Resume joined as an eye. */}
+                      <VersionEyeBadge
+                        label={`v${candidate.resumeVersion || 1}`}
+                        onView={candidate.resumeId ? () => setPreviewResume({ id: candidate.resumeId, name: candidate.name || 'Resume' }) : undefined}
+                      />
                     </td>
                     )}
                     {isResultColumnVisible('attachments') && (
@@ -8639,7 +8773,7 @@ export default function AITalentMatchPage({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedVersionsCandidate(candidate);
+                          handleAttachmentsClick(candidate);
                         }}
                         className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
                       >
@@ -8745,18 +8879,17 @@ export default function AITalentMatchPage({
                       isSelected
                         ? 'bg-brand-blue/[0.04] border-brand-blue/40 ring-1 ring-brand-blue/20'
                         : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30'
-                    }`}
+                    } ${gridCardSelectedClass(isSelected)}`}
                   >
-                    {/* Header: select · avatar · name/email · rating */}
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleSelectCandidate(candidate.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label={`Select ${candidate.name || 'candidate'}`}
-                        className="mt-3 rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0"
-                      />
+                    <GridCardSelect
+                      selected={isSelected}
+                      onToggle={() => handleSelectCandidate(candidate.id)}
+                      label={candidate.name || 'candidate'}
+                      selectionActive={selectedCandidates.length > 0}
+                      className="top-5 left-5"
+                    />
+                    {/* Header: select seal · avatar · name/email · rating */}
+                    <div className="flex items-start gap-3 pl-7">
                       <NameAvatar name={candidate.name} fallback={candidate.email} size="lg" />
                       <div className="min-w-0 flex-1 pt-0.5">
                         <p className="tf-row-title truncate" title={candidate.name || 'Unknown'}>
@@ -8844,7 +8977,7 @@ export default function AITalentMatchPage({
                         </button>
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); setSelectedVersionsCandidate(candidate); }}
+                          onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(candidate); }}
                           title="Attachments"
                           aria-label={`Attachments (${candidate.attachmentCount || 1})`}
                           className="tf-btn tf-btn-secondary gap-1 px-2.5 py-2 text-xs border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors whitespace-normal justify-start"
@@ -8939,7 +9072,7 @@ export default function AITalentMatchPage({
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedVersionsCandidate(candidate);
+                        handleAttachmentsClick(candidate);
                       }}
                       title="Attachments"
                       aria-label={`Attachments (${candidate.attachmentCount || 1})`}
@@ -8983,6 +9116,30 @@ export default function AITalentMatchPage({
         </div>
         </div>
       </main>
+      {/* Resume Versions Modal — the results table / cards' Attachments (📎)
+          button opens it. The results view returns before the page's other
+          copies of these popups, so it needs its own. */}
+      {selectedVersionsCandidate && (
+        <ResumeVersionsModal
+          candidate={selectedVersionsCandidate}
+          versions={realVersionsData}
+          loading={loadingVersions}
+          onClose={() => {
+            setSelectedVersionsCandidate(null);
+            setRealVersionsData([]);
+          }}
+        />
+      )}
+
+      {/* Preview — opened from a row's ⋮ menu. */}
+      {previewResume && (
+        <ResumeTextPreviewModal
+          resumeId={previewResume.id}
+          title={previewResume.name}
+          subtitle={previewResume.fileName}
+          onClose={() => setPreviewResume(null)}
+        />
+      )}
       </>
     );
   }

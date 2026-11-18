@@ -71,9 +71,28 @@ export function useCenteredMenuOnPhone(
  * The menu's positioned parent (`offsetParent`) is the anchor.
  */
 export function centerMenuOnPhoneRef(menu: HTMLElement | null) {
-  if (!menu || typeof window === 'undefined' || window.innerWidth >= PHONE_MAX_WIDTH) return;
+  if (!menu || typeof window === 'undefined') return;
   const anchor = menu.offsetParent as HTMLElement | null;
   if (!anchor) return;
+  flipUpIfClipped(menu, anchor);
+  if (window.innerWidth >= PHONE_MAX_WIDTH) return;
   menu.style.left = `${Math.round(phoneCentredLeft(anchor, menu.offsetWidth) - anchor.getBoundingClientRect().left)}px`;
   menu.style.right = 'auto';
+}
+
+/**
+ * At every width: a menu that would run past the bottom of the screen (a row near
+ * the end of the list) opens upward from its button instead, as the shared
+ * dropdown menus do — only when there is more room above than below.
+ */
+function flipUpIfClipped(menu: HTMLElement, anchor: HTMLElement) {
+  const menuRect = menu.getBoundingClientRect();
+  const anchorRect = anchor.getBoundingClientRect();
+  const spaceBelow = window.innerHeight - anchorRect.bottom;
+  const spaceAbove = anchorRect.top;
+  if (menuRect.bottom <= window.innerHeight - 8 || spaceAbove <= spaceBelow) return;
+  menu.style.top = 'auto';
+  menu.style.bottom = '100%';
+  menu.style.marginTop = '0';
+  menu.style.marginBottom = '0.25rem';
 }
