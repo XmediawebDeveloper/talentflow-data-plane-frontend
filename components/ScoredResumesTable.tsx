@@ -2313,6 +2313,38 @@ Best regards`);
   // No padded outer card, embedded or standalone: standalone it sat inside the
   // page panel and framed the already-bordered rows a second time (a card
   // inside a card). Resume Scoring's View by Job dropped the same shell.
+  /* Standalone (Resume Scoring): Select All, search, filters, Sort and List /
+     Grid on ONE toolbar line (2026-11-17). Phones keep it leading row 2. */
+  const standaloneSelectAll = !embedded && filteredResumes.length > 0 ? (() => {
+    const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
+    const selectedCount = isGrouped
+      ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
+      : effectiveSelectedRows.length;
+    return (
+      <SelectAllMenu
+        selectedCount={selectedCount}
+        pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
+        totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
+        noun={isGrouped ? 'candidates' : 'resumes'}
+        allSelected={allVisibleSelected}
+        pageSelected={pageRows.length > 0 && pageRows.every((r) => effectiveSelectedIds.has(r.id))}
+        onSelectPage={() => {
+          const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
+          selectExactly(ids);
+        }}
+        onDeselectPage={() => {
+          const pageIds = new Set(pageRows.map((r) => r.id));
+          selectExactly(effectiveSelectedRows.map((r) => r.id).filter((id) => !pageIds.has(id)));
+        }}
+        onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
+        onClear={clearSelection}
+      />
+    );
+  })() : null;
+  /* Row 2 on laptop / desktop only when it still has something besides the
+     phone-only Select All and Sort menu. */
+  const row2OnDesktop = !!viewPillsSlot || (isGrouped && paginatedGroups.length > 0);
+
   return (
     <div>
       {/* Header — title and the one page-level action. Everything that acts on
@@ -2418,7 +2450,9 @@ Best regards`);
                   })()}
                 </>
               )
-              : undefined
+              : standaloneSelectAll
+                ? <div className="max-sm:hidden">{standaloneSelectAll}</div>
+                : undefined
           }
           onToggleFilters={() => setShowFilters(!showFilters)}
           // Active filter tags: a popup on hovering More Filters (laptop / desktop).
@@ -2676,42 +2710,12 @@ Best regards`);
             rides the toolbar row above (beforeSearch), matching the AI Talent
             Match reference; this row renders only when it still has content. */}
         {(viewPillsSlot || (isGrouped && paginatedGroups.length > 0) || (!embedded && filteredResumes.length > 0)) && (
-        <div className={`${embedded ? '' : 'tf-jobs-row2 '}mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2`}>
-          {/* Standalone: Select All leads this row, then a divider and the
-              verdict pills — exactly View by Job's row 2. */}
-          {!embedded && filteredResumes.length > 0 && (() => {
-            const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
-            const selectedCount = isGrouped
-              ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
-              : effectiveSelectedRows.length;
-            return (
-              <>
-                <div className="tf-jobs-select">
-                <SelectAllMenu
-                  selectedCount={selectedCount}
-                  pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
-                  totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
-                  noun={isGrouped ? 'candidates' : 'resumes'}
-                  allSelected={allVisibleSelected}
-                  pageSelected={pageRows.length > 0 && pageRows.every((r) => effectiveSelectedIds.has(r.id))}
-                  onSelectPage={() => {
-                    const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
-                    selectExactly(ids);
-                  }}
-                  onDeselectPage={() => {
-                    const pageIds = new Set(pageRows.map((r) => r.id));
-                    selectExactly(effectiveSelectedRows.map((r) => r.id).filter((id) => !pageIds.has(id)));
-                  }}
-                  onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
-                  onClear={clearSelection}
-                />
-                </div>
-                {viewPillsSlot && (
-                  <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
-                )}
-              </>
-            );
-          })()}
+        <div className={`${embedded ? '' : 'tf-jobs-row2 '}${!embedded && !row2OnDesktop ? 'sm:hidden ' : ''}mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2`}>
+          {/* Standalone: Select All leads this row on phones only — laptop /
+              desktop carry it on the toolbar line above. */}
+          {standaloneSelectAll && (
+            <div className="tf-jobs-select sm:!hidden">{standaloneSelectAll}</div>
+          )}
           {viewPillsSlot}
           {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
           {!embedded && filteredResumes.length > 0 && (

@@ -6,6 +6,7 @@ import JobIdBadge from '@/components/jobs/JobIdBadge';
 import BulkInviteProgressPanel from '@/components/bulk-invite/BulkInviteProgressPanel';
 import { bulkInviteService, isBulkInviteActive, type BulkInviteJob, type BulkInviteKind } from '@/lib/services/bulkInviteService';
 import { formatIST } from '@/lib/utils/dateUtils';
+import FilterSelect from '@/components/ui/filter-select';
 
 /**
  * "View Progress" from an assessment / AI interview version's ⋯ menu — the
@@ -121,14 +122,13 @@ export default function InviteProgressDialog({
           {sends && sends.length > 1 && (
             <div className="flex-shrink-0 flex flex-wrap items-center gap-2 px-4 sm:px-6 py-2.5 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50/70 dark:bg-slate-800/40">
               <label htmlFor="invite-progress-send" className="text-sm text-gray-600 dark:text-slate-300">Send</label>
-              <select
+              <FilterSelect
                 id="invite-progress-send"
                 value={pickedId ?? ''}
-                onChange={(e) => setPickedId(e.target.value)}
-                className="tf-input h-9 max-w-full sm:max-w-md text-sm"
-              >
-                {sends.map((j) => <option key={j.job_id} value={j.job_id}>{sendLabel(j)}</option>)}
-              </select>
+                onChange={setPickedId}
+                options={sends.map((j) => ({ value: j.job_id, label: sendLabel(j) }))}
+                className="w-auto sm:w-auto max-w-full sm:max-w-md min-w-0 py-0 sm:py-0 data-[size=default]:h-9 sm:data-[size=default]:h-9 rounded-lg sm:rounded-lg"
+              />
               <span className="tf-meta">{sends.length} sends for this version</span>
             </div>
           )}

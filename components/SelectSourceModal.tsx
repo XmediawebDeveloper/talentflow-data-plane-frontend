@@ -1285,6 +1285,8 @@ export default function SelectSourceModal({
                      — taller than the space left under the header and tabs —
                      so its scrollbars ended up floating over the footer
                      buttons instead of staying in the table. */
+                  /* The Job Openings pager (2026-11-17). */
+                  paginationStyle="list"
                   containerClassName="flex flex-col md:flex-1 md:min-h-0"
                   tableShellClassName="tf-table-shell--fill flex-1 min-h-0"
                   emptyState={
