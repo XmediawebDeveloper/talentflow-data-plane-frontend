@@ -3333,8 +3333,8 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   .dark .tf-record-actions.tf-jdv-actions :is(button, a, [role="button"]):has(> svg:only-child):not([data-jdv-text]) { background-color: var(--color-slate-800) !important; color: var(--color-slate-300) !important; }
   /* Job Openings module, tab-card toolbars on phones (ListToolbar adds .tf-jdv-toolbar):
        ( search ................ ) ( ⚙ Filters ) [≡ ⊞]
-       [All matches ▾] [Sort  Rating ▾ ⇅]
-       [☐ Select all]                  [Score]              ← nothing ticked
+       [All matches ▾                              ]        ← only tabs with a filter pill
+       [Rating ▾ ⇅              ][☐ ▾][Run Match]           ← nothing ticked
        [☑ 1 selected           Clear [Actions ▾]]           ← rows ticked: tinted bar
      The view switch stays on line 1: beside the filter and Sort pills it needs ~386px,
      a 375px phone's toolbar has 311px. Lines are forced with zero-height full-width
@@ -3352,28 +3352,30 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     .dark .tf-jdv-toolbar > .tf-tb-controls > [data-tb-filters] { background: var(--color-slate-900) !important; border-color: var(--color-slate-700) !important; }
     .tf-jdv-toolbar > .tf-tb-trailing { order: 3 !important; margin-left: 0 !important; }
     .tf-jdv-toolbar::before { content: ''; order: 4; flex: 1 1 100%; height: 0; margin-bottom: -0.5rem; }
-    /* Line 2: status filter and Sort as compact gray pills, at their own width. */
-    /* The status filter takes what the Sort pill leaves (basis 0), so the two never wrap apart. */
+    /* Line 2 (tabs with one — All Matches, All Results): the filter pill, full width. */
     .tf-jdv-toolbar > .tf-tb-controls > [data-toolbar-filter] { order: 5 !important; flex: 1 1 0% !important; min-width: 0 !important; }
-    .tf-jdv-toolbar > .tf-tb-controls > [data-toolbar-sort] { order: 6 !important; flex: none !important; }
-    /* Sort pill: "Sort" (muted) + the field + the direction arrow, all in one gray pill. */
+    .tf-jdv-toolbar::after { content: ''; order: 5; flex: 1 1 100%; height: 0; margin-bottom: -0.5rem; }
+    .tf-jdv-toolbar:not(:has([data-toolbar-filter]))::after { display: none; }
+    /* Snapped line, every tab: Sort · Select All · the tab's action, packed edge to edge —
+         [Submitted ▾ ⇅][☐ ▾][Invite]
+       Sort takes what the other two leave. */
+    .tf-jdv-toolbar > .tf-tb-controls > [data-toolbar-sort] { order: 6 !important; flex: 1 1 0% !important; min-width: 0 !important; }
+    /* Sort pill: the field + the direction arrow in one gray pill (no "Sort" prefix — no room). */
     .tf-jdv-toolbar [data-toolbar-sort] > span { display: none !important; }
-    .tf-jdv-toolbar [data-toolbar-sort] > div { flex: none !important; }
-    .tf-jdv-toolbar [data-toolbar-sort] > div::before { content: 'Sort'; padding-left: 0.5rem; font-size: var(--text-sm); color: var(--color-gray-500); }
-    .tf-jdv-toolbar [data-toolbar-sort] > div > div:first-child { width: 6.25rem !important; }
+    .tf-jdv-toolbar [data-toolbar-sort] > div { flex: 1 1 auto !important; min-width: 0 !important; }
+    .tf-jdv-toolbar [data-toolbar-sort] > div > div:first-child { flex: 1 1 0% !important; min-width: 0 !important; width: auto !important; }
     .tf-jdv-toolbar [data-toolbar-sort] [data-slot="select-trigger"] { padding-left: 0.375rem !important; padding-right: 0.375rem !important; font-weight: 500; }
     .tf-jdv-toolbar [data-toolbar-sort] button { background: transparent !important; }
-    /* No status filter on line 2 (Scored Resumes): the tab's action ([data-tb-primary])
-       joins Sort there, the two splitting the line half and half. */
-    .tf-jdv-toolbar:not(:has([data-toolbar-filter])):has(> .tf-tb-controls > [data-tb-primary]) > .tf-tb-controls > [data-toolbar-sort] { flex: 1 1 0% !important; min-width: 0 !important; }
-    .tf-jdv-toolbar:not(:has([data-toolbar-filter])):has(> .tf-tb-controls > [data-tb-primary]) [data-toolbar-sort] > div { flex: 1 1 auto !important; min-width: 0 !important; }
-    .tf-jdv-toolbar:not(:has([data-toolbar-filter])):has(> .tf-tb-controls > [data-tb-primary]) [data-toolbar-sort] > div > div:first-child { flex: 1 1 0% !important; min-width: 0 !important; width: auto !important; }
-    .tf-jdv-toolbar:not(:has([data-toolbar-filter])) > .tf-tb-controls > [data-tb-primary] { order: 6 !important; flex: 1 1 0% !important; min-width: 0 !important; width: auto !important; height: 2.25rem !important; justify-content: center; }
-    .tf-jdv-toolbar::after { content: ''; order: 7; flex: 1 1 100%; height: 0; margin-bottom: -0.5rem; }
-    /* Line 3: Select all on the left, the tab's action (Score, Run Match, Invite) on the right. */
-    .tf-jdv-toolbar > .tf-tb-lead { order: 8 !important; flex: 1 1 auto !important; min-height: 2.25rem; }
+    .tf-jdv-toolbar > .tf-tb-lead { order: 7 !important; flex: none !important; min-height: 2.25rem; }
     .tf-jdv-toolbar > .tf-tb-controls > :not([data-tb-filters]):not([data-toolbar-filter]):not([data-toolbar-sort]) {
       order: 9 !important; flex: none !important; width: auto !important;
+    }
+    /* The tab's action (Score, Run Match, Invite) at the line's 36px, like Select All. */
+    .tf-jdv-toolbar > .tf-tb-controls > button:not([data-tb-filters]) { height: 2.25rem !important; }
+    /* Select All, nothing ticked: just its box and ▾ (label kept for screen readers). */
+    .tf-jdv-toolbar .tf-tb-selectall:not([aria-pressed="true"]) { padding: 0 0.5rem !important; gap: 0.25rem !important; }
+    .tf-jdv-toolbar .tf-tb-selectall:not([aria-pressed="true"]) > span {
+      position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
     }
     .tf-jdv-toolbar > .tf-tb-controls > :not([data-tb-filters]):not([data-toolbar-filter]):not([data-toolbar-sort]) :is(button, a) { width: auto !important; }
     /* Select all: plain checkbox + label / "N selected" in brand blue; no pill, no chevron

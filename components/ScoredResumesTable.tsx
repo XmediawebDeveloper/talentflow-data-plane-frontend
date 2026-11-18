@@ -2519,8 +2519,6 @@ Best regards`);
               variant="primary"
               size="sm"
               onClick={() => { if (scoreResumesDisabled) return; onScoreResumes(); }}
-              /* Phones: shares the Sort line, half and half (globals.css, data-tb-primary). */
-              data-tb-primary=""
               aria-disabled={!!scoreResumesDisabled}
               title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
               icon={<ClipboardList className="w-4 h-4" />}

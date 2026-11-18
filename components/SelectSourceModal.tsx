@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Database, FolderOpen, Search, Loader2, ClipboardList, Upload, ChevronDown } from 'lucide-react';
+import { X, Database, FolderOpen, Search, Loader2, ClipboardList, Upload, ChevronDown, ChevronRight, FolderInput, FolderRoot, Download, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { SelectAllMenu } from '@/components/ui/select-all-menu';
 import { RESUME_TAB_LABEL } from '@/lib/constants/resumePools';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -8,11 +8,11 @@ import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { lineageKey } from '@/lib/utils/jobOpeningDisplay';
 import type { Job } from '@/lib/types/types';
-import { useState, useEffect, useMemo, useId } from 'react';
+import { useState, useEffect, useMemo, useId, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { resumeService, folderService, archiveResumeToArchivedFolder, Resume, Folder as FolderType } from '@/lib/services/resumeService';
+import { resumeService, folderService, archiveResumeToArchivedFolder, unarchiveResumesToPreviousFolder, Resume, Folder as FolderType } from '@/lib/services/resumeService';
 import type { Folder as TableFolder } from '@/lib/types/types';
 import ResumeTable from './ResumeTable';
 import DeleteResumeDialog, { type DeleteResumeVersionTarget } from '@/components/resumes/DeleteResumeDialog';
@@ -33,7 +33,8 @@ import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProg
 import { useResumeUploadFlow } from './resumes/useResumeUploadFlow';
 import { useScoringProgress, toMatchResult } from '@/contexts/ScoringProgressContext';
 import { Skeleton } from '@/components/ui/skeleton';
-import { canDownloadResume } from '@/lib/permissions/resumeDownload';
+import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
+import ResumeBulkConfirmModal, { type ResumeBulkConfirmKind } from '@/components/resumes/ResumeBulkConfirmModal';
 
 // Folder-tree pane sizing. Kept in step with FolderTree's own clamp
 // (200–400px) so a width restored from storage is one the tree will honour.
@@ -190,6 +191,8 @@ export default function SelectSourceModal({
   const canDownloadMine = canDownloadResume({ isTenantAdmin, hasPermissionCode, own: true });
   const canDownloadShared = canDownloadResume({ isTenantAdmin, hasPermissionCode, own: false });
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
+  // Same rule as My Resumes' "Move to Folder".
+  const canMoveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
 
   // State
   // Default to whichever source the Owner actually left enabled — falls
@@ -208,6 +211,19 @@ export default function SelectSourceModal({
   const [showScoreReview, setShowScoreReview] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  /* Ticks made inside Archived Resumes — kept apart from `selectedResumes`
+     (the scoring set): archived resumes can't be scored, only unarchived.
+     Same permission the other pickers use for Unarchive. */
+  const [archivedPicks, setArchivedPicks] = useState<string[]>([]);
+  const [unarchiving, setUnarchiving] = useState(false);
+  const canUnarchiveMyResumes = canArchiveMyResumes;
+  const viewingArchivedFolder =
+    activeTab === 'my-resumes' &&
+    (folders.find(f => f.id === selectedFolder)?.name?.toLowerCase().includes('archived') || false);
+  // Archived ticks belong to that folder: leaving it (or the tab) drops them.
+  useEffect(() => {
+    if (!viewingArchivedFolder) setArchivedPicks([]);
+  }, [viewingArchivedFolder]);
 
   /* Totals behind each tab's badge. Both are fetched up front so the inactive
      tab shows a real number instead of a placeholder, and each is refreshed
@@ -514,13 +530,17 @@ export default function SelectSourceModal({
      guard and the "keep picks made in other folders" rule are the modal's own
      and are preserved exactly as the previous list had them. */
   const handleTableSelectAll = (selected: boolean) => {
-    const selectedFolderData = folders.find(f => f.id === selectedFolder);
-    const isArchivedFolder = selectedFolderData?.name?.toLowerCase().includes('archived') || false;
-    if (isArchivedFolder) {
-      toast.error('Archived resumes cannot be scored. Please select an active resume.');
+    // Inside Archived Resumes, ticks pick resumes to unarchive (not to score).
+    if (viewingArchivedFolder) {
+      const ids = filteredResumes.map(r => r.id);
+      setArchivedPicks(prev =>
+        selected ? Array.from(new Set([...prev, ...ids])) : prev.filter(id => !ids.includes(id)),
+      );
       return;
     }
-    const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
+    const visibleIds = filteredResumes
+      .filter(r => !r.is_archived && !(r.is_tenant_user_email || r.isTenantUserEmail))
+      .map(r => r.id);
     if (visibleIds.length === 0) return;
     setSelectedResumes(prev =>
       selected
@@ -534,7 +554,8 @@ export default function SelectSourceModal({
      confirmation of its own here — the table calls `onDelete` straight away.
      Both refresh the list and drop the row from the current selection so the
      scoring set can never point at something that no longer exists. */
-  const [deleteResumeTarget, setDeleteResumeTarget] = useState<{ id: string; name: string } | null>(null);
+  // One row (⋮ → Delete) or the ticked rows (actions bar → Delete).
+  const [deleteResumeTarget, setDeleteResumeTarget] = useState<{ ids: string[]; names: string[] } | null>(null);
   /* Preview — same in-app document viewer My Resumes uses, replacing the old
      new-tab `/recruitment/resume-view/[id]` behaviour so Preview reads
      identically in both places. */
@@ -554,39 +575,268 @@ export default function SelectSourceModal({
     }
   };
 
-  const handleConfirmDeleteResume = async (version?: DeleteResumeVersionTarget) => {
-    if (!deleteResumeTarget) return;
-    const { id } = deleteResumeTarget;
-    setDeleteResumeTarget(null);
+  /* Unarchive — the ticked archived resumes (toolbar button) or one row (⋮).
+     Each goes back to the folder it was archived from, else Root, exactly as
+     My Resumes does. Succeeded ones are unticked; failed ones stay ticked for
+     a retry. The list and folder counts are read again. */
+  const handleUnarchiveResumes = async (ids: string[]) => {
+    if (!canUnarchiveMyResumes || ids.length === 0 || unarchiving) return;
+    const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parent_id);
+    if (!rootFolder) {
+      toast.error('Root folder not found');
+      return;
+    }
+    setUnarchiving(true);
     try {
-      if (version) {
-        // Just one version: the candidate stays, another version becomes the latest.
-        await resumeService.delete(version.id, { onlyThisVersion: true });
-        toast.success(`Version ${version.version} deleted`);
-      } else {
-        await resumeService.delete(id);
-        setSelectedResumes(prev => prev.filter(rid => rid !== id));
-        toast.success('Resume deleted');
+      const { succeeded, failed, restoredToOriginal } = await unarchiveResumesToPreviousFolder(ids, {
+        rootFolderId: rootFolder.id,
+        archivedFolderId: folders.find(f => f.name === 'Archived Resumes' && !f.parent_id)?.id,
+        validFolderIds: new Set(folders.map(f => f.id)),
+      });
+      if (succeeded.length) {
+        const n = succeeded.length;
+        toast.success(
+          restoredToOriginal === n
+            ? `${n} resume${n === 1 ? '' : 's'} unarchived and restored to ${n === 1 ? 'its' : 'their'} original folder`
+            : `${n} resume${n === 1 ? '' : 's'} unarchived${restoredToOriginal ? ` (${restoredToOriginal} restored, ${n - restoredToOriginal} to Root)` : ' (moved to Root)'}`,
+        );
+        setArchivedPicks(prev => prev.filter(id => !succeeded.includes(id)));
+        await fetchData();
+        refreshTabCounts();
       }
-      await fetchData();
-      refreshTabCounts();
-    } catch (error: any) {
-      toast.error(`Couldn't delete resume. ${friendlyErrorMessage(error, 'Please try again.')}`);
+      if (failed.length) {
+        toast.error(`Couldn't unarchive ${failed.length} resume${failed.length === 1 ? '' : 's'}. Please try again.`);
+      }
+    } finally {
+      setUnarchiving(false);
     }
   };
 
+  const handleConfirmDeleteResume = async (version?: DeleteResumeVersionTarget) => {
+    if (!deleteResumeTarget) return;
+    const { ids } = deleteResumeTarget;
+    setDeleteResumeTarget(null);
+    if (version) {
+      // Just one version: the candidate stays, another version becomes the latest.
+      try {
+        await resumeService.delete(version.id, { onlyThisVersion: true });
+        dropFromSelections(ids);
+        toast.success(`Version ${version.version} deleted`);
+        await fetchData();
+        refreshTabCounts();
+      } catch (error: any) {
+        toast.error(`Couldn't delete version. ${friendlyErrorMessage(error, 'Please try again.')}`);
+      }
+      return;
+    }
+    const results = await Promise.allSettled(ids.map(id => resumeService.delete(id)));
+    const done = ids.filter((_, i) => results[i].status === 'fulfilled');
+    const failedCount = ids.length - done.length;
+    if (done.length) {
+      dropFromSelections(done); // failed ones stay ticked for a retry
+      toast.success(done.length === 1 ? 'Resume deleted' : `${done.length} resumes deleted`);
+      await fetchData();
+      refreshTabCounts();
+    }
+    if (failedCount) {
+      const firstError = results.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
+      toast.error(`Couldn't delete ${failedCount === 1 ? 'resume' : `${failedCount} resumes`}. ${friendlyErrorMessage(firstError?.reason, 'Please try again.')}`);
+    }
+  };
+
+  /* ── Actions ▾ menu (the Job Openings selection toolbar) ─────────────────
+     Acts on what is ticked in the current view: the archived picks inside
+     Archived Resumes, else the scoring selection. Every action unticks the
+     rows it succeeded on and keeps failures ticked; data changes re-read the
+     list and counts. */
+  const actionIds = viewingArchivedFolder ? archivedPicks : selectedResumes;
+  const dropFromSelections = (ids: string[]) => {
+    setSelectedResumes(prev => prev.filter(id => !ids.includes(id)));
+    setArchivedPicks(prev => prev.filter(id => !ids.includes(id)));
+  };
+  const clearActionSelection = () => {
+    if (viewingArchivedFolder) setArchivedPicks([]);
+    else setSelectedResumes([]);
+  };
+  const resumeName = (id: string) => {
+    const r = resumes.find(x => x.id === id);
+    return r?.candidate_name || r?.file_name || 'this resume';
+  };
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const handleBulkMove = async (folderId: string) => {
+    const ids = [...actionIds];
+    if (!ids.length || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      const results = await Promise.allSettled(ids.map(id => resumeService.move(id, folderId)));
+      const done = ids.filter((_, i) => results[i].status === 'fulfilled');
+      const failedCount = ids.length - done.length;
+      if (done.length) {
+        const target = folders.find(f => f.id === folderId)?.name || 'folder';
+        toast.success(`${done.length} resume${done.length === 1 ? '' : 's'} moved to ${target}`);
+        dropFromSelections(done);
+        await fetchData();
+        refreshTabCounts();
+        /* Same flow as My Resumes: open the destination folder so the user sees
+           the resumes they just moved there (the list is filtered by folder
+           client-side, so the fresh fetch above already holds them). */
+        setSelectedFolder(folderId);
+      }
+      if (failedCount) toast.error(`Couldn't move ${failedCount === 1 ? 'resume' : `${failedCount} resumes`}. Please try again.`);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  /* Archive and multi-resume Download confirm in the My Resumes design
+     (ResumeBulkConfirmModal) before running. */
+  const [bulkConfirm, setBulkConfirm] = useState<ResumeBulkConfirmKind | null>(null);
+
+  const handleBulkArchive = async () => {
+    const ids = [...actionIds];
+    if (!ids.length || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      const results = await Promise.allSettled(
+        ids.map(id => archiveResumeToArchivedFolder(id, resumes.find(r => r.id === id)?.folder_id)),
+      );
+      const done = ids.filter((_, i) => results[i].status === 'fulfilled');
+      const failedCount = ids.length - done.length;
+      if (done.length) {
+        toast.success(`${done.length} resume${done.length === 1 ? '' : 's'} archived`);
+        dropFromSelections(done);
+        await fetchData();
+        refreshTabCounts();
+      }
+      if (failedCount) toast.error(`Couldn't archive ${failedCount === 1 ? 'resume' : `${failedCount} resumes`}. Please try again.`);
+    } finally {
+      setBulkBusy(false);
+      setBulkConfirm(null);
+    }
+  };
+
+  const saveBlob = (blob: Blob, name: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
+  /* One resume downloads as its own file; several ask first, then go out as
+     one ZIP — as on My Resumes. Download changes nothing, so no re-read. */
+  const handleBulkDownload = async () => {
+    const ids = [...actionIds];
+    if (!ids.length || bulkBusy) return;
+    if (ids.length === 1) {
+      const r = resumes.find(x => x.id === ids[0]);
+      try {
+        saveBlob(await resumeService.download(ids[0]), r?.file_name || `${r?.candidate_name || 'resume'}.${r?.file_type || 'pdf'}`);
+        toast.success('Resume downloaded');
+        clearActionSelection();
+      } catch {
+        toast.error('Failed to download resume');
+      }
+      return;
+    }
+    // Several: confirm first (Download as ZIP), then runZipDownload.
+    setBulkConfirm('zip');
+  };
+  const runZipDownload = async () => {
+    const ids = [...actionIds];
+    if (!ids.length || bulkBusy) return;
+    setBulkBusy(true);
+    const toastId = toast.loading(`Preparing ${ids.length} resumes for download...`);
+    try {
+      const { zipSync } = await import('fflate');
+      const files: Record<string, Uint8Array> = {};
+      let failed = 0;
+      for (let i = 0; i < ids.length; i++) {
+        const r = resumes.find(x => x.id === ids[i]);
+        let name = r?.file_name || `${r?.candidate_name || `resume_${i + 1}`}_resume`;
+        if (files[`resumes/${name}`]) name = `${i + 1}_${name}`;
+        try {
+          files[`resumes/${name}`] = new Uint8Array(await (await resumeService.download(ids[i])).arrayBuffer());
+        } catch {
+          failed += 1;
+        }
+      }
+      if (failed === ids.length) throw new Error('none downloaded');
+      saveBlob(new Blob([zipSync(files) as BlobPart], { type: 'application/zip' }), `resumes_${new Date().toISOString().split('T')[0]}.zip`);
+      if (failed) {
+        // Partial ZIP: keep the selection so the missing ones can be retried.
+        toast.warning(`${ids.length - failed} resumes downloaded · ${failed} failed`, { id: toastId });
+      } else {
+        toast.success(`${ids.length} resumes downloaded as ZIP`, { id: toastId });
+        clearActionSelection();
+      }
+    } catch {
+      toast.error('Failed to create ZIP file', { id: toastId });
+    } finally {
+      setBulkBusy(false);
+      setBulkConfirm(null);
+    }
+  };
+
+  /* The Actions ▾ menu (Job Openings pattern): open state, the Move to Folder
+     sub-list, and closing on an outside click. */
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showMoveList, setShowMoveList] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showActionsMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setShowActionsMenu(false);
+        setShowMoveList(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [showActionsMenu]);
+  // Nothing ticked → nothing to act on: close the menu.
+  useEffect(() => {
+    if (actionIds.length === 0) { setShowActionsMenu(false); setShowMoveList(false); }
+  }, [actionIds.length]);
+  const closeActionsMenu = () => { setShowActionsMenu(false); setShowMoveList(false); };
+  /* Move targets, depth-first with their depth for indenting: every folder
+     except the one on screen. Archived Resumes is left out — archiving goes
+     through Archive, which also remembers where the resume came from. */
+  const moveTargets = useMemo(() => {
+    const out: { id: string; name: string; depth: number; count: number; isRoot: boolean }[] = [];
+    const walk = (list: TableFolder[], depth: number) => list.forEach(f => {
+      if (f.id === 'all') return;
+      const isArchived = f.name === 'Archived Resumes' && !f.parentId;
+      const isRoot = !f.parentId && f.name.toLowerCase() === 'root';
+      if (!isArchived && f.id !== selectedFolder) out.push({ id: f.id, name: f.name, depth, count: f.count, isRoot });
+      if (f.children?.length) walk(f.children, depth + 1);
+    });
+    walk(folderTree, 0);
+    return out;
+  }, [folderTree, selectedFolder]);
+
   // Toggle resume selection
   const handleToggleResume = (resumeId: string) => {
-    // Check if resume is archived OR if we're in the Archived folder
+    // Inside Archived Resumes, a tick picks the resume to unarchive.
+    if (viewingArchivedFolder) {
+      setArchivedPicks(prev => (prev.includes(resumeId) ? prev.filter(id => id !== resumeId) : [...prev, resumeId]));
+      return;
+    }
+
+    // An archived resume shown anywhere else still can't be scored.
     const resume = resumes.find(r => r.id === resumeId);
-
-    // Check if currently viewing Archived folder
-    const selectedFolderData = folders.find(f => f.id === selectedFolder);
-    const isArchivedFolder = selectedFolderData?.name?.toLowerCase().includes('archived') || false;
-
-    // Block if resume is archived OR if viewing archived folder
-    if (resume?.is_archived || isArchivedFolder) {
+    if (resume?.is_archived) {
       toast.error('Archived resumes cannot be scored. Please select an active resume.');
+      return;
+    }
+
+    // Block if the resume's email belongs to an existing team member —
+    // same restriction the Resume Database module enforces.
+    if (resume && (resume.is_tenant_user_email || resume.isTenantUserEmail)) {
+      toast.error('This email belongs to an existing team member. It cannot be selected.');
       return;
     }
 
@@ -1114,18 +1364,46 @@ export default function SelectSourceModal({
           {/* Main Content */}
           <div className="flex-1 flex flex-col max-md:flex-none md:overflow-hidden">
             {/* Search and Bulk Actions */}
-            <div className="px-3 sm:px-6 py-3 sm:py-4 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
+            {/* Left padding lines the Select All ▾ square up vertically with the
+                list's row checkboxes (measured): the phone/tablet cards sit 16px
+                further in, the md+ table runs edge to edge, so the toolbar's
+                left inset follows each. */}
+            <div className="pl-[17px] pr-3 sm:pl-[20px] sm:pr-6 md:pl-0.5 py-3 sm:py-4 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
                 {/* Select All ▾ sits before the search box, on the same row
                     (phones included); Upload stays on the right. */}
-                <div className="flex flex-1 min-w-0 items-center gap-2 sm:gap-4">
+                <div className="flex flex-1 min-w-0 flex-wrap items-center gap-2 sm:gap-x-4">
                 <div className="shrink-0">
                   {(() => {
+                    /* Inside Archived Resumes the same menu ticks resumes to
+                       unarchive (archivedPicks), not to score. */
+                    if (viewingArchivedFolder) {
+                      const visibleIds = filteredResumes.map(r => r.id);
+                      const pageIds = pageResumeIds.filter(id => visibleIds.includes(id));
+                      return (
+                        <SelectAllMenu
+                          selectedCount={archivedPicks.length}
+                          pageCount={pageIds.length}
+                          totalCount={visibleIds.length}
+                          noun="resumes"
+                          allSelected={visibleIds.length > 0 && visibleIds.every(id => archivedPicks.includes(id))}
+                          pageSelected={pageIds.length > 0 && pageIds.every(id => archivedPicks.includes(id))}
+                          onSelectPage={() => setArchivedPicks(prev => Array.from(new Set([...prev, ...pageIds])))}
+                          onDeselectPage={() => setArchivedPicks(prev => prev.filter(id => !pageIds.includes(id)))}
+                          onSelectAll={() => handleTableSelectAll(true)}
+                          onClear={() => setArchivedPicks([])}
+                        />
+                      );
+                    }
                     /* The Job Openings "Select All ▾" menu (JD module):
                        this page / every resume in the folder / clear. Same
                        archived guard and "keep picks from other folders"
                        rule the old button had. */
-                    const selectable = new Set(filteredResumes.filter(r => !r.is_archived).map(r => r.id));
+                    const selectable = new Set(
+                      filteredResumes
+                        .filter(r => !r.is_archived && !(r.is_tenant_user_email || r.isTenantUserEmail))
+                        .map(r => r.id),
+                    );
                     const visibleIds = Array.from(selectable);
                     const pageIds = pageResumeIds.filter(id => selectable.has(id));
                     const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedResumes.includes(id));
@@ -1157,7 +1435,153 @@ export default function SelectSourceModal({
                     );
                   })()}
                 </div>
-                <div className="flex-1 min-w-0 relative">
+                {/* Actions ▾ + Clear — the Job Openings selection toolbar, shown
+                    once a resume is ticked (Select All or a single row). Acts on
+                    the archived picks inside Archived Resumes, else on the
+                    scoring selection. Shared Database is a shared list this
+                    popup only picks from, so it offers Download only. */}
+                {actionIds.length > 0 && (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <div className="relative" ref={actionsMenuRef}>
+                      <button
+                        type="button"
+                        onClick={() => { setShowActionsMenu(v => !v); setShowMoveList(false); }}
+                        aria-label={`Actions for ${actionIds.length} selected`}
+                        aria-expanded={showActionsMenu}
+                        className={`relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm animate-in fade-in zoom-in-95 duration-300 ${showActionsMenu ? 'bg-gray-200' : ''}`}
+                      >
+                        <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                          <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                          <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                        </span>
+                        {bulkBusy || unarchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                        Actions ({actionIds.length})
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+
+                      {showActionsMenu && (() => {
+                        const busy = bulkBusy || unarchiving;
+                        const item = (enabled: boolean, danger = false) =>
+                          `w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+                            !enabled
+                              ? 'text-gray-400 cursor-not-allowed opacity-60'
+                              : danger ? 'text-destructive hover:bg-destructive-subtle' : 'text-gray-700 hover:bg-gray-50'
+                          }`;
+                        const mine = activeTab === 'my-resumes';
+                        const canDl = mine ? canDownloadMine : canDownloadShared;
+                        return (
+                          <div className="absolute top-full left-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-2 z-50">
+                            {mine && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => { if (!canMoveMyResumes || busy) return; setShowMoveList(v => !v); }}
+                                  aria-disabled={!canMoveMyResumes || busy}
+                                  aria-expanded={showMoveList}
+                                  title={!canMoveMyResumes ? 'You do not have permission to move resumes to a folder' : ''}
+                                  className={item(canMoveMyResumes && !busy)}
+                                >
+                                  {/* Icon colours: My Resumes' folder picker / row ⋮ menu. */}
+                                  <FolderInput className={`w-4 h-4 ${canMoveMyResumes && !busy ? 'text-brand-orange' : ''}`} />
+                                  <span className="flex-1">Move to Folder</span>
+                                  <ChevronRight className={`w-4 h-4 transition-transform ${showMoveList ? 'rotate-90' : ''}`} />
+                                </button>
+                                {showMoveList && (
+                                  <div className="max-h-56 overflow-y-auto border-y border-gray-100 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-800/40 py-1">
+                                    {moveTargets.length === 0 ? (
+                                      <p className="px-3 py-2 tf-meta">No other folders</p>
+                                    ) : moveTargets.map(f => (
+                                      <button
+                                        key={f.id}
+                                        type="button"
+                                        onClick={() => { closeActionsMenu(); void handleBulkMove(f.id); }}
+                                        className="w-full py-1.5 pr-3 text-left text-sm text-foreground hover:bg-accent/50 transition-colors flex items-center gap-2"
+                                        style={{ paddingLeft: `${1.75 + Math.min(f.depth, 3) * 0.75}rem` }}
+                                        title={f.name}
+                                      >
+                                        {/* Same as My Resumes' Move to Folder list: Root cyan, folders orange, count muted. */}
+                                        {f.isRoot
+                                          ? <FolderRoot className="w-4 h-4 shrink-0 text-brand-cyan" />
+                                          : <FolderInput className="w-4 h-4 shrink-0 text-brand-orange" />}
+                                        <span className="truncate flex-1">{f.name}</span>
+                                        <span className="shrink-0 text-xs text-muted-foreground">({f.count})</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => { if (!canDl || busy) return; closeActionsMenu(); void handleBulkDownload(); }}
+                              aria-disabled={!canDl || busy}
+                              title={!canDl ? DOWNLOAD_BLOCKED_MESSAGE : ''}
+                              className={item(canDl && !busy)}
+                            >
+                              <Download className={`w-4 h-4 ${canDl && !busy ? 'text-menu-icon-download' : ''}`} />
+                              Download Selected
+                            </button>
+                            {mine && (viewingArchivedFolder ? (
+                              <button
+                                type="button"
+                                onClick={() => { if (!canUnarchiveMyResumes || busy) return; closeActionsMenu(); void handleUnarchiveResumes(archivedPicks); }}
+                                aria-disabled={!canUnarchiveMyResumes || busy}
+                                title={!canUnarchiveMyResumes ? 'You do not have permission to unarchive resumes' : ''}
+                                className={item(canUnarchiveMyResumes && !busy)}
+                              >
+                                <ArchiveRestore className={`w-4 h-4 ${canUnarchiveMyResumes && !busy ? 'text-menu-icon-archive' : ''}`} />
+                                Unarchive Selected
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => { if (!canArchiveMyResumes || busy) return; closeActionsMenu(); setBulkConfirm('archive'); }}
+                                aria-disabled={!canArchiveMyResumes || busy}
+                                title={!canArchiveMyResumes ? 'You do not have permission to archive resumes' : ''}
+                                className={item(canArchiveMyResumes && !busy)}
+                              >
+                                <Archive className={`w-4 h-4 ${canArchiveMyResumes && !busy ? 'text-menu-icon-archive' : ''}`} />
+                                Archive Selected
+                              </button>
+                            ))}
+                            {mine && (
+                              <>
+                                <div className="border-t border-gray-200 dark:border-slate-700 my-2" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!canDeleteMyResumes || busy) return;
+                                    closeActionsMenu();
+                                    setDeleteResumeTarget({ ids: [...actionIds], names: actionIds.map(resumeName) });
+                                  }}
+                                  aria-disabled={!canDeleteMyResumes || busy}
+                                  title={!canDeleteMyResumes ? 'You do not have permission to delete resumes' : ''}
+                                  className={item(canDeleteMyResumes && !busy, true)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete Selected
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    {/* Clear — a standalone button beside Actions, as on Job Openings. */}
+                    <button
+                      type="button"
+                      onClick={clearActionSelection}
+                      title="Clear the selection"
+                      className="h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm"
+                    >
+                      <X className="w-4 h-4" />
+                      Clear
+                    </button>
+                  </div>
+                )}
+                {/* min width so, beside Actions + Clear on a phone, the search
+                    wraps to its own line instead of squeezing to nothing. */}
+                <div className="flex-1 min-w-[12rem] relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
                   <input
                     type="text"
@@ -1168,8 +1592,9 @@ export default function SelectSourceModal({
                   />
                 </div>
                 </div>
-                {/* Upload Resume button - only for My Resumes tab + canUploadResumes RBAC */}
-                {activeTab === 'my-resumes' && (
+                {/* Upload Resume button - only for My Resumes tab + canUploadResumes RBAC.
+                    Not inside Archived Resumes — nothing is uploaded there. */}
+                {activeTab === 'my-resumes' && !viewingArchivedFolder && (
                   <div className="flex items-center justify-end">
                     <button
                       onClick={() => { if (!canUploadResumes) return; openUploadToFolder(); }}
@@ -1228,10 +1653,15 @@ export default function SelectSourceModal({
               ) : (
                 <ResumeTable
                   resumes={tableRows}
-                  selectedResumes={selectedResumes}
+                  selectedResumes={viewingArchivedFolder ? archivedPicks : selectedResumes}
                   onSelectResume={handleToggleResume}
                   onSelectAll={handleTableSelectAll}
                   hideHeaderSelectAll
+                  /* A resume whose email belongs to an existing team member
+                     is greyed out and locked out of selection/actions, same
+                     as the Resume Database module's My Resumes / Internal DB
+                     views. */
+                  showTeamMemberBadge
                   /* Tablets get the desktop table, not the phone cards. */
                   tableFrom="md"
                   onPageItemsChange={setPageResumeIds}
@@ -1256,6 +1686,10 @@ export default function SelectSourceModal({
                      actions carry over onto it. */
                   canDownload={activeTab === 'my-resumes' ? canDownloadMine : canDownloadShared}
                   onArchive={activeTab === 'my-resumes' ? handleArchiveResume : undefined}
+                  /* ⋮ → Unarchive on an archived row, as on My Resumes. */
+                  onUnarchive={activeTab === 'my-resumes' ? (id) => void handleUnarchiveResumes([id]) : undefined}
+                  onUnarchiveDisabled={!canUnarchiveMyResumes}
+                  onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
                   onArchiveDisabled={!canArchiveMyResumes}
                   onArchiveDisabledReason="You do not have permission to archive resumes"
                   onDeleteDisabled={!canDeleteMyResumes}
@@ -1263,11 +1697,7 @@ export default function SelectSourceModal({
                   onDelete={
                     activeTab === 'my-resumes'
                       ? (id) => {
-                          const row = resumes.find(r => r.id === id);
-                          setDeleteResumeTarget({
-                            id,
-                            name: row?.candidate_name || row?.file_name || 'this resume',
-                          });
+                          setDeleteResumeTarget({ ids: [id], names: [resumeName(id)] });
                         }
                       : undefined
                   }
@@ -1337,7 +1767,15 @@ export default function SelectSourceModal({
         <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-3 flex-shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
             <div className="tf-body-secondary">
-              {selectedResumes.length > 0 ? (
+              {viewingArchivedFolder ? (
+                archivedPicks.length > 0 ? (
+                  <span>
+                    <span className="font-medium text-gray-900 dark:text-slate-50">{archivedPicks.length}</span> archived resume{archivedPicks.length === 1 ? '' : 's'} selected to unarchive
+                  </span>
+                ) : (
+                  <span>Archived resumes can&apos;t be scored — select them to unarchive</span>
+                )
+              ) : selectedResumes.length > 0 ? (
                 <span>
                   <span className="font-medium text-gray-900 dark:text-slate-50">{selectedResumes.length}</span> resume{selectedResumes.length === 1 ? '' : 's'} selected
                 </span>
@@ -1453,10 +1891,21 @@ export default function SelectSourceModal({
           `onDelete` immediately (unlike Archive, which it confirms itself),
           so the guard has to live here. Shared with My Resumes (DeleteResumeDialog),
           just scoped to always exactly one resume. */}
+      {/* Archive / Download-as-ZIP confirms — the My Resumes design, above this z-50 popup. */}
+      <ResumeBulkConfirmModal
+        kind={bulkConfirm ?? 'archive'}
+        open={!!bulkConfirm}
+        count={actionIds.length}
+        busy={bulkBusy}
+        onCancel={() => setBulkConfirm(null)}
+        onConfirm={() => void (bulkConfirm === 'zip' ? runZipDownload() : handleBulkArchive())}
+        zIndexClass="z-[70]"
+      />
+
       <DeleteResumeDialog
         open={!!deleteResumeTarget}
-        names={deleteResumeTarget ? [deleteResumeTarget.name] : []}
-        resumeId={deleteResumeTarget?.id}
+        names={deleteResumeTarget?.names ?? []}
+        resumeId={deleteResumeTarget?.ids.length === 1 ? deleteResumeTarget.ids[0] : undefined}
         onCancel={() => setDeleteResumeTarget(null)}
         onConfirm={handleConfirmDeleteResume}
       />
