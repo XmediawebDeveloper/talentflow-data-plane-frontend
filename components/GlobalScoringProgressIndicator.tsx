@@ -114,6 +114,9 @@ export default function GlobalScoringProgressIndicator() {
      it has running work. */
   const [groupOpen, setGroupOpen] = useState<Partial<Record<ActivityKind, boolean>>>({});
   const [confirmScoringCancel, setConfirmScoringCancel] = useState<ScoringJob[] | null>(null);
+  /* Settles the promise cancelOverviewRows returned for a scoring cancel:
+     failed row keys ([] = all cancelled), or null for "Keep scoring". */
+  const scoringCancelOutcomeRef = useRef<((failedKeys: string[] | null) => void) | null>(null);
   const [scoringBusy, setScoringBusy] = useState(false);
 
   /* A batch status from the server → this run's rows (only rows that changed). */
@@ -506,9 +509,12 @@ export default function GlobalScoringProgressIndicator() {
     if (inv) invite?.dismiss(inv.job_id);
   };
   /* Send again / Re-score every failed + cancelled row of the chosen jobs. */
-  const retryOverviewRows = async (rows: ActivityRow[]) => {
+  /* Returns the keys of the rows that could not be restarted, so the overview
+     keeps only those ticked for another try. */
+  const retryOverviewRows = async (rows: ActivityRow[]): Promise<string[]> => {
     let requeued = 0;
     let failedCalls = 0;
+    const failedKeys: string[] = [];
     await Promise.all(rows.map(async row => {
       try {
         const job = scoringJobOf(row);
@@ -527,18 +533,36 @@ export default function GlobalScoringProgressIndicator() {
         }
       } catch {
         failedCalls += 1;
+        failedKeys.push(row.key);
       }
     }));
     const word = rows[0]?.kind === 'scoring' ? 'Re-scoring' : 'Sending again to';
     if (requeued) toast.success(`${word} ${n(requeued)} across ${rows.length - failedCalls} job${rows.length - failedCalls === 1 ? '' : 's'}`);
     if (failedCalls) toast.error(`${failedCalls} job${failedCalls === 1 ? '' : 's'} could not be restarted. Please try again.`);
+    return failedKeys;
   };
-  /* Cancel running jobs: invites use their own confirm; scoring asks here. */
-  const cancelOverviewRows = (rows: ActivityRow[]) => {
+  const settleScoringCancel = (failedKeys: string[] | null) => {
+    scoringCancelOutcomeRef.current?.(failedKeys);
+    scoringCancelOutcomeRef.current = null;
+  };
+  /* Cancel running jobs: invites use their own confirm; scoring asks here.
+     Resolves once the confirm is answered — the keys of rows whose cancel
+     failed ([] = all cancelled), or null when nothing was cancelled (the user
+     chose Keep sending / Keep scoring, or no row was cancellable) — so the
+     overview only unticks rows that really were cancelled. */
+  const cancelOverviewRows = async (rows: ActivityRow[]): Promise<string[] | null> => {
     const invites = rows.map(inviteJobOf).filter((j): j is TrackedBulkInvite => !!j);
-    if (invites.length) { inviteActions.askCancel(invites); return; }
+    if (invites.length) {
+      const failedJobIds = await inviteActions.askCancel(invites);
+      return failedJobIds === null ? null : failedJobIds.map(id => `invite:${id}`);
+    }
     const runs = rows.map(scoringJobOf).filter((j): j is ScoringJob => !!j?.batchId);
-    if (runs.length) setConfirmScoringCancel(runs);
+    if (!runs.length) return null;
+    return new Promise<string[] | null>(resolve => {
+      settleScoringCancel(null); // a superseded confirm counts as dismissed
+      scoringCancelOutcomeRef.current = resolve;
+      setConfirmScoringCancel(runs);
+    });
   };
   const doCancelScoring = async () => {
     const runs = confirmScoringCancel ?? [];
@@ -555,6 +579,7 @@ export default function GlobalScoringProgressIndicator() {
     else toast.success(`${n(stopped)} waiting resume${stopped === 1 ? '' : 's'} cancelled — finished scores stay`);
     setScoringBusy(false);
     setConfirmScoringCancel(null);
+    settleScoringCancel(runs.filter((_, i) => results[i].status === 'rejected').map(job => `score:${job.jobId}`));
   };
 
   /* ── Grouped list ── */
@@ -785,7 +810,7 @@ export default function GlobalScoringProgressIndicator() {
 
       <AppModal
         open={!!confirmScoringCancel}
-        onCancel={() => { if (!scoringBusy) setConfirmScoringCancel(null); }}
+        onCancel={() => { if (!scoringBusy) { setConfirmScoringCancel(null); settleScoringCancel(null); } }}
         cancelLabel="Keep scoring"
         size="sm"
         tone="warning"

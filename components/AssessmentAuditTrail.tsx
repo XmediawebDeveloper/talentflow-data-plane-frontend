@@ -318,6 +318,8 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
           tab: 'audit',
           ids: picked.map((activity) => String(activity.id ?? '')).filter(Boolean),
         });
+        // Export done — clear the ticked rows; nothing changed, so no reload.
+        setSelectedKeys(new Set());
       } catch (error) {
         console.error('Failed to export selected audit logs:', error);
         toast.error('Failed to export activity logs. Please try again.');

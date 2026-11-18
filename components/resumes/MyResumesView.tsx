@@ -1856,6 +1856,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     if (version) {
       try {
         await resumeService.delete(version.id, { onlyThisVersion: true });
+        // Clear the acted-on row from the selection (hides the bulk bar when it
+        // was the only pick); RESUMES_CHANGED refetches the list.
+        setSelectedResumes(prev => prev.filter(id => !ids.includes(id)));
         toast.success(`Version ${version.version} deleted`);
       } catch {
         toast.error(`Couldn't delete version ${version.version}. Please try again.`);
@@ -1916,19 +1919,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     const movedFrom = resumeIds
       .map(id => resumes.find(r => r.id === id)?.folderId)
       .filter((id): id is string => !!id);
-    /* Which folder this move might empty, and what it held before the move.
-       Read here, off the pre-move state: `setFolders` below queues a patch, it
-       does not update `folders` in this closure.
-
-       The folder on screen, deliberately — not "wherever the rows came from".
-       A selection can span folders (handleSelectAll keeps picks made in other
-       folders), and the rule is about the view the user would otherwise be
-       left staring at. */
-    const sourceFolderId = getViewedFolderId();
-    const sourceCountBefore =
-      sourceFolderId && sourceFolderId !== folderId
-        ? getFolderById(sourceFolderId)?.count
-        : undefined;
+    // The folder on screen before the move (null for an aggregate view).
+    const viewedBefore = getViewedFolderId();
     try {
       await Promise.all(resumeIds.map(id => resumeService.move(id, folderId)));
       setResumes(prev => prev.map(r =>
@@ -1963,38 +1955,18 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       setSelectedResumes([]);
       toast.success(`${resumeIds.length} resume(s) moved`);
 
-      /* Where the user ends up. Driven by what the SOURCE folder has left, not
-         by which folder was the destination — so it reads the same for the
-         root folder, Archived Resumes, or any folder a customer made.
-
-         Emptied it: follow the resumes into the destination rather than leave
-         the user on a folder with nothing in it. Setting the folder is enough
-         to load it — the params effect refetches on `selectedFolder`, which is
-         what puts the moved rows on screen.
-
-         Still holds resumes: hold position and refresh, so the moved rows drop
-         out of the list. The refresh is not optional in list view — it renders
-         the server page as-is, so a moved row keeps its seat until the next
-         fetch. (Card view filters by `folderId` and drops it immediately, but
-         it still needs the fetch for the page count.)
-
-         `undefined` count means the source folder isn't known here — an
-         aggregate view, a move back into the same folder, or a folder missing
-         from state. Nothing to empty, so nothing to do. */
-      const sourceRemaining =
-        sourceCountBefore === undefined
-          ? undefined
-          : Math.max(0, sourceCountBefore - (leaving.get(sourceFolderId!) || 0));
-
-      if (sourceRemaining === 0) {
-        if (viewMode === 'card') {
-          navigateToFolder(folderId);
-        } else {
-          setSelectedFolder(folderId);
-          setCurrentPage(1);
-        }
-      } else if (sourceRemaining !== undefined) {
+      /* Where the user ends up: always the destination folder, opened on its
+         first page, so the user sees the resumes they just moved there.
+         Setting the folder is enough to load it — the params effect refetches
+         on `selectedFolder`. Already looking at the destination (a move into
+         the folder on screen): stay and refresh so the list shows them. */
+      if (viewedBefore === folderId) {
         fetchData(appliedSearchQuery, filters, selectedFolder, true);
+      } else if (viewMode === 'card') {
+        navigateToFolder(folderId);
+      } else {
+        setSelectedFolder(folderId);
+        setCurrentPage(1);
       }
     } catch (error) {
       toast.error('Failed to move resumes');

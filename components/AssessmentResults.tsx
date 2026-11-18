@@ -329,8 +329,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Round-based filtering with dropdown options (HR removed - only Tech and Coding)
   const [roundFilters, setRoundFilters] = useState<{
-    technical?: 'all' | '50-70' | '70-90' | '90+';
-    coding?: 'all' | '50-70' | '70-90' | '90+';
+    technical?: 'all' | 'pass' | 'fail' | '50-70' | '70-90' | '90+';
+    coding?: 'all' | 'pass' | 'fail' | '50-70' | '70-90' | '90+';
   }>({});
 
   // Pass/Fail filter
@@ -1450,6 +1450,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
       }
+      // Download done — clear the selection (hides the bulk bar); no reload.
+      setSelectedRows([]);
     } catch (error) {
       console.error('Failed to download bulk PDFs:', error);
       toast.error('Failed to download PDF reports. Please try again.');
@@ -1545,6 +1547,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
       toast.success(`All filtered results exported to ${formatName} successfully! (${filteredCandidates.length} results including in-progress)`, { id: _toastId });
       setShowExportModal(false);
+      // Export done — clear any selection (hides the bulk bar); no reload.
+      setSelectedRows([]);
     } catch (error) {
       console.error('Failed to export all results:', error);
       const msg = error instanceof Error ? error.message : '';
@@ -1720,7 +1724,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           meetsAllFilters = false;
         } else {
           const range = roundFilters.technical;
-          if (range === '50-70' && !(techScore > 50 && techScore < 70)) {
+          if (range === 'pass' && techScore < passingThreshold) {
+            meetsAllFilters = false;
+          } else if (range === 'fail' && techScore >= passingThreshold) {
+            meetsAllFilters = false;
+          } else if (range === '50-70' && !(techScore > 50 && techScore < 70)) {
             meetsAllFilters = false;
           } else if (range === '70-90' && !(techScore >= 70 && techScore < 90)) {
             meetsAllFilters = false;
@@ -1737,7 +1745,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           meetsAllFilters = false;
         } else {
           const range = roundFilters.coding;
-          if (range === '50-70' && !(codingScore > 50 && codingScore < 70)) {
+          if (range === 'pass' && codingScore < passingThreshold) {
+            meetsAllFilters = false;
+          } else if (range === 'fail' && codingScore >= passingThreshold) {
+            meetsAllFilters = false;
+          } else if (range === '50-70' && !(codingScore > 50 && codingScore < 70)) {
             meetsAllFilters = false;
           } else if (range === '70-90' && !(codingScore >= 70 && codingScore < 90)) {
             meetsAllFilters = false;
@@ -2118,7 +2130,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             )}
           </div>
         );
+        /* Each round's filter: Pass / Fail against `passingThreshold`, or a
+           percentage band. */
         const scoreBands = [
+          { value: 'pass', label: 'Pass' },
+          { value: 'fail', label: 'Fail' },
           { value: '50-70', label: '50-70%' },
           { value: '70-90', label: '70-90%' },
           { value: '90+', label: '90%+' },
@@ -2187,23 +2203,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             allLabel: 'All Assessment Versions',
             disabled: !jobVersionsLoaded,
           }),
-          portaled && filterSelect({
-            id: 'assessment-results-pass-fail-filter',
-            label: 'Result',
-            value: passFailFilter,
-            onChange: (v) => {
-              setPassFailFilter(v as 'all' | 'pass' | 'fail');
-              setCurrentPage(1);
-            },
-            options: [{ value: 'pass', label: 'Pass' }, { value: 'fail', label: 'Fail' }],
-            allLabel: 'All Results',
-          }),
           !!assessmentDetails?.technical_enabled && filterSelect({
             id: 'assessment-results-tech-filter',
-            label: 'Tech Score',
+            label: 'Technical Score',
             value: roundFilters.technical || 'all',
             onChange: (v) => {
-              const value = v as 'all' | '50-70' | '70-90' | '90+';
+              const value = v as NonNullable<typeof roundFilters.technical>;
               setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
               setCurrentPage(1);
             },
@@ -2215,7 +2220,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             label: 'Coding Score',
             value: roundFilters.coding || 'all',
             onChange: (v) => {
-              const value = v as 'all' | '50-70' | '70-90' | '90+';
+              const value = v as NonNullable<typeof roundFilters.coding>;
               setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
               setCurrentPage(1);
             },
@@ -2314,7 +2319,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           },
           !!roundFilters.technical && {
             key: 'techScore',
-            label: 'Tech Score',
+            label: 'Technical Score',
             value: roundFilters.technical === 'all' ? 'All Scores' : scoreBandLabel(roundFilters.technical),
             onRemove: () => {
               setRoundFilters(prev => ({ ...prev, technical: undefined }));

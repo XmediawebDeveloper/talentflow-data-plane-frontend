@@ -92,10 +92,13 @@ export default function ActivitiesOverviewModal({
   /** That job's own progress popup. */
   onOpenRow: (row: ActivityRow) => void;
   onRemoveRow: (row: ActivityRow) => void;
-  /** Send again / Re-score every failed + cancelled row of these jobs. */
-  onRetry: (rows: ActivityRow[]) => Promise<void>;
-  /** Stop these running jobs (what is done stays done). */
-  onCancel: (rows: ActivityRow[]) => void;
+  /** Send again / Re-score every failed + cancelled row of these jobs.
+   *  Resolves with the keys of rows that could not be restarted (kept ticked). */
+  onRetry: (rows: ActivityRow[]) => Promise<string[] | void>;
+  /** Stop these running jobs (what is done stays done). Resolves once the
+   *  host's confirm is answered: keys of rows whose cancel failed ([] = all
+   *  cancelled), or null when nothing was cancelled ("Keep …" chosen). */
+  onCancel: (rows: ActivityRow[]) => Promise<string[] | null> | void;
   /** Hide the popup; everything keeps running in My Activities. */
   onMinimize: () => void;
 }) {
@@ -315,7 +318,14 @@ export default function ActivitiesOverviewModal({
                   </Button>
                 )}
                 {cancelRows.length > 0 && (
-                  <Button variant="secondary" size="sm" icon={<Square className="h-3.5 w-3.5" />} onClick={() => { onCancel(cancelRows); setPicked(new Set()); }}>
+                  <Button variant="secondary" size="sm" icon={<Square className="h-3.5 w-3.5" />} onClick={async () => {
+                    // Untick only once the cancel is confirmed and done; "Keep
+                    // scoring/sending" keeps the ticks, failed rows stay ticked.
+                    const acted = cancelRows.map(r => r.key);
+                    const failed = await onCancel(cancelRows);
+                    if (!failed) return;
+                    setPicked(prev => new Set([...prev].filter(k => !acted.includes(k) || failed.includes(k))));
+                  }}>
                     Cancel running ({cancelRows.length})
                   </Button>
                 )}
@@ -510,8 +520,13 @@ export default function ActivitiesOverviewModal({
           onClick: async () => {
             if (!confirmRetry) return;
             setBusy(true);
-            try { await onRetry(confirmRetry); } finally {
-              setBusy(false); setConfirmRetry(null); setPicked(new Set());
+            try {
+              const failed = ((await onRetry(confirmRetry)) as string[] | undefined) ?? [];
+              // Untick the rows that restarted; rows that could not be
+              // restarted stay ticked for another try (a throw keeps them all).
+              setPicked(new Set(failed));
+            } finally {
+              setBusy(false); setConfirmRetry(null);
             }
           },
         }]}

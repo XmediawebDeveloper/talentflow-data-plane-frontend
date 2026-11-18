@@ -643,6 +643,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     setIsBulkResending(true);
     let sent = 0;
     let failedCount = 0;
+    const failedIds = new Set<string>();
     for (const inv of targets) {
       try {
         await assessmentService.resendInvitation(inv.assessment_id, inv.id);
@@ -650,14 +651,20 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       } catch (error) {
         console.error(`Failed to resend invitation ${inv.id}:`, error);
         failedCount++;
+        failedIds.add(inv.id);
       }
     }
     if (sent > 0) toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
     if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
-    setSelectedIds(new Set());
     setShowBulkResendConfirm(false);
     setIsBulkResending(false);
-    await handleInvitesChanged();
+    /* Any success: reload (clears the selection), then keep only the failed
+       rows ticked for a retry. All failed: nothing changed — keep the
+       selection as is. */
+    if (sent > 0) {
+      await handleInvitesChanged();
+      setSelectedIds(failedIds);
+    }
   };
 
   // Bulk revoke — offered whenever the selection is revocable, mirroring the
@@ -671,6 +678,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     setIsBulkRevoking(true);
     let revoked = 0;
     let failedCount = 0;
+    const failedIds = new Set<string>();
     for (const inv of targets) {
       try {
         await assessmentService.revokeInvitation(inv.assessment_id, inv.id);
@@ -678,14 +686,19 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       } catch (error) {
         console.error(`Failed to revoke invitation ${inv.id}:`, error);
         failedCount++;
+        failedIds.add(inv.id);
       }
     }
     if (revoked > 0) toast.success(`Revoked ${revoked} invitation${revoked === 1 ? '' : 's'}.`);
     if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
-    setSelectedIds(new Set());
     setShowBulkRevokeConfirm(false);
     setIsBulkRevoking(false);
-    await handleInvitesChanged();
+    /* Any success: reload (clears the selection), then keep only the failed
+       rows ticked for a retry. All failed: keep the selection as is. */
+    if (revoked > 0) {
+      await handleInvitesChanged();
+      setSelectedIds(failedIds);
+    }
   };
 
   // "Go to page" input for the footer — buffered locally so a partial edit
