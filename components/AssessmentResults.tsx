@@ -1450,6 +1450,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
       }
+      // Download done — clear the selection (hides the bulk bar); no reload.
+      setSelectedRows([]);
     } catch (error) {
       console.error('Failed to download bulk PDFs:', error);
       toast.error('Failed to download PDF reports. Please try again.');
@@ -1545,6 +1547,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
       toast.success(`All filtered results exported to ${formatName} successfully! (${filteredCandidates.length} results including in-progress)`, { id: _toastId });
       setShowExportModal(false);
+      // Export done — clear any selection (hides the bulk bar); no reload.
+      setSelectedRows([]);
     } catch (error) {
       console.error('Failed to export all results:', error);
       const msg = error instanceof Error ? error.message : '';

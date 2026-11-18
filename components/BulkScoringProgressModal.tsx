@@ -243,16 +243,19 @@ export default function BulkScoringProgressModal({
       setConfirmCancelAll(false);
     }
   };
-  const retryBatchRows = async (resumeIds?: string[]) => {
-    if (!batchId) return;
+  /** Resolves true on success, so "Retry selected" keeps its ticks on failure. */
+  const retryBatchRows = async (resumeIds?: string[]): Promise<boolean> => {
+    if (!batchId) return false;
     const key = resumeIds?.length === 1 ? `retry:${resumeIds[0]}` : 'retry:all';
     setBatchBusy(key);
     try {
       const s = await scoringService.retryBatch(batchId, resumeIds);
       applyBatch(s);
       toast.success(`Scoring ${s.requeued} resume${s.requeued === 1 ? '' : 's'} again`);
+      return true;
     } catch (err) {
       toast.error((err as Error)?.message || 'Could not retry. Please try again.');
+      return false;
     } finally {
       setBatchBusy(null);
     }
@@ -1874,10 +1877,14 @@ export default function BulkScoringProgressModal({
               disabled: short,
               loading: batchBusy === 'retry:all' || (n === 1 && batchBusy === `retry:${ids[0]}`),
               onClick: async () => {
-                await retryBatchRows(ids);
+                const ok = await retryBatchRows(ids);
                 setConfirmRetryIds(null);
-                setSelected(new Set());
-                if (statusFilter === 'selected') setStatusFilter('all');
+                // Clear the ticks only on success (applyBatch already refreshed
+                // the rows); a failed retry keeps them so the user can try again.
+                if (ok) {
+                  setSelected(new Set());
+                  if (statusFilter === 'selected') setStatusFilter('all');
+                }
               },
             }]}
           >

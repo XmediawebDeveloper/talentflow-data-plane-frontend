@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import AppModal from '@/components/ui/app-modal';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
@@ -18,6 +18,14 @@ export function useBulkInviteActions(onChange?: (job: BulkInviteJob) => void) {
      card (same job + version sent more than once) is cancelled at once. */
   const [confirmCancel, setConfirmCancel] = useState<BulkInviteJob[] | null>(null);
   const cancelKey = confirmCancel ? `cancel:${confirmCancel.map((j) => j.job_id).join(',')}` : null;
+  /* Settles the promise askCancel returned: the job_ids whose cancel failed
+     ([] = all cancelled), or null when the user chose "Keep sending". Lets a
+     caller with a row selection know whether — and which — rows to untick. */
+  const cancelOutcomeRef = useRef<((failedJobIds: string[] | null) => void) | null>(null);
+  const settleCancel = useCallback((failedJobIds: string[] | null) => {
+    cancelOutcomeRef.current?.(failedJobIds);
+    cancelOutcomeRef.current = null;
+  }, []);
 
   const apply = useCallback((job: BulkInviteJob) => {
     tracker?.sync(job);
@@ -76,22 +84,24 @@ export function useBulkInviteActions(onChange?: (job: BulkInviteJob) => void) {
     setBusy(cancelKey);
     const results = await Promise.allSettled(jobs.map((j) => bulkInviteService.cancel(j.job_id)));
     let failed: unknown = null;
-    for (const r of results) {
+    const failedJobIds: string[] = [];
+    results.forEach((r, i) => {
       if (r.status === 'fulfilled') apply(r.value);
-      else failed = failed ?? r.reason;
-    }
+      else { failed = failed ?? r.reason; failedJobIds.push(jobs[i].job_id); }
+    });
     if (failed) toast.error((failed as Error)?.message || 'Could not cancel the send.');
     else toast.success('Batch cancelled — nothing more goes out');
     setBusy(null);
     setConfirmCancel(null);
-  }, [confirmCancel, cancelKey, apply]);
+    settleCancel(failedJobIds);
+  }, [confirmCancel, cancelKey, apply, settleCancel]);
   const pendingSent = (confirmCancel ?? []).reduce((n, j) => n + j.sent, 0);
   const pendingLeft = (confirmCancel ?? []).reduce((n, j) => n + j.remaining, 0);
 
   const cancelDialog = (
     <AppModal
       open={!!confirmCancel}
-      onCancel={() => { if (!busy) setConfirmCancel(null); }}
+      onCancel={() => { if (!busy) { setConfirmCancel(null); settleCancel(null); } }}
       cancelLabel="Keep sending"
       size="sm"
       tone="warning"
@@ -115,8 +125,14 @@ export function useBulkInviteActions(onChange?: (job: BulkInviteJob) => void) {
     retry,
     cancelItem,
     resume,
-    /** One send, or every send of a merged card. */
-    askCancel: (job: BulkInviteJob | BulkInviteJob[]) => setConfirmCancel(Array.isArray(job) ? job : [job]),
+    /** One send, or every send of a merged card. Resolves once the confirm is
+     *  answered: failed job_ids ([] = all cancelled), or null for "Keep sending".
+     *  Callers that don't need the outcome can ignore the promise. */
+    askCancel: (job: BulkInviteJob | BulkInviteJob[]) => new Promise<string[] | null>((resolve) => {
+      settleCancel(null); // a confirm superseded by a new one counts as dismissed
+      cancelOutcomeRef.current = resolve;
+      setConfirmCancel(Array.isArray(job) ? job : [job]);
+    }),
     cancelOpen: !!confirmCancel,
     cancelDialog,
   };
