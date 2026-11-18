@@ -90,10 +90,11 @@ function SegmentedBar({
 }
 
 /** "● 2 Missing  ● 4 Demonstrated" legend for a SegmentedBar. */
-function BarLegend({ nonDemonstrated, demonstrated, unit }: { nonDemonstrated: number; demonstrated: number; unit?: string }) {
+/** `inline`: one tight unbroken line, for sitting inside another single line. */
+function BarLegend({ nonDemonstrated, demonstrated, unit, inline = false }: { nonDemonstrated: number; demonstrated: number; unit?: string; inline?: boolean }) {
   const suffix = unit ? ` ${unit}` : '';
   return (
-    <div className="flex items-center gap-x-3 gap-y-1 flex-wrap tf-meta">
+    <div className={inline ? 'flex items-center gap-2 flex-nowrap shrink-0 text-xs max-2xs:text-2xs text-gray-500 dark:text-slate-400 [&>span]:gap-1' : 'flex items-center gap-x-3 gap-y-1 flex-wrap tf-meta'}>
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
         <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
         <span className="font-semibold text-gray-900 dark:text-slate-100 tabular-nums">{nonDemonstrated}</span>
@@ -268,9 +269,13 @@ function SkillListTable({
                       {tag} · {c.priority} Priority
                     </span>
                   </div>
-                  <div className="ml-auto flex items-center gap-2">
-                    <span className="tf-caption whitespace-nowrap">{covered}/{total} covered</span>
-                    <div className="w-24">
+                  {/* One unbroken line: covered · Missing · Demonstrated · bar · %.
+                      The bar takes what is left (down to nothing on a narrow
+                      phone); the text never wraps. */}
+                  <div className="ml-auto flex flex-nowrap items-center gap-2 max-sm:basis-full min-w-0">
+                    <span className="text-xs max-2xs:text-2xs text-gray-500 dark:text-slate-400 whitespace-nowrap shrink-0">{covered}/{total} covered</span>
+                    <BarLegend inline nonDemonstrated={covered - demonstrated} demonstrated={demonstrated} />
+                    <div className="flex-1 min-w-0 sm:w-24 sm:flex-none">
                       <SegmentedBar
                         total={total}
                         demonstrated={demonstrated}
@@ -278,13 +283,10 @@ function SkillListTable({
                         label={`${c.name} coverage`}
                       />
                     </div>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap tabular-nums ${chip.bg} ${chip.text}`}>
+                    <span className={`text-xs max-2xs:text-2xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap tabular-nums shrink-0 ${chip.bg} ${chip.text}`}>
                       {pct}%
                     </span>
                   </div>
-                </div>
-                <div className="mt-1 pl-8">
-                  <BarLegend nonDemonstrated={covered - demonstrated} demonstrated={demonstrated} />
                 </div>
               </div>
               {/* Skill rows */}

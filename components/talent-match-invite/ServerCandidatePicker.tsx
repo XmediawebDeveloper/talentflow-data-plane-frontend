@@ -1022,11 +1022,12 @@ export default function ServerCandidatePicker({
       toast.success(restored === ids.length
         ? `${plural(ids.length, 'resume')} unarchived and restored to ${ids.length === 1 ? 'its' : 'their'} original folder`
         : `${plural(ids.length, 'resume')} unarchived${restored ? ` (${restored} restored, ${ids.length - restored} to root)` : ' (moved to root)'}`);
+      // Succeeded: drop these from the archived-tab ticks (a failure keeps them for a retry).
+      setArchivedPicks((s) => { const next = new Set(s); ids.forEach((id) => next.delete(id)); return next; });
     } catch (err) {
       toast.error((err as Error)?.message || 'Failed to unarchive resumes');
     } finally {
       setUnarchiving((s) => { const next = new Set(s); ids.forEach((id) => next.delete(id)); return next; });
-      setArchivedPicks((s) => { const next = new Set(s); ids.forEach((id) => next.delete(id)); return next; });
       // Folder counts and the archived list read again.
       setFolders(null);
       setArchivedReload((n) => n + 1);

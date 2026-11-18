@@ -307,6 +307,14 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener(UNITS_CONSUMED_EVENT, handleUnitsConsumed);
   }, [fetchQuotaData]);
 
+  // A plan bought directly from the company was activated (websocket 'plan_updated'):
+  // refresh quotas and plan features without waiting for the cache or a reload.
+  useEffect(() => {
+    const handlePlanUpdated = () => fetchQuotaData(true);
+    window.addEventListener('plan-updated', handlePlanUpdated);
+    return () => window.removeEventListener('plan-updated', handlePlanUpdated);
+  }, [fetchQuotaData]);
+
   const refetch = useCallback(async () => {
     await fetchQuotaData(true);
     return quotaDataRef.current;

@@ -2373,11 +2373,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     setIsBulkResending(true);
-    await resendInvitationsSequentially(targets);
-    setSelectedInviteIds(new Set());
+    const { sent } = await resendInvitationsSequentially(targets);
     setShowInviteBulkResendConfirm(false);
     setIsBulkResending(false);
-    await loadAllInviteStatuses();
+    /* Queued → clear the selection and reload. Nothing queued (the send
+       failed) → keep the selection so the recruiter can retry. */
+    if (sent > 0) {
+      setSelectedInviteIds(new Set());
+      await loadAllInviteStatuses();
+    }
   };
 
   const handleInviteBulkRevoke = async () => {
@@ -2389,11 +2393,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     setIsBulkRevoking(true);
-    await revokeInvitationsSequentially(targets);
-    setSelectedInviteIds(new Set());
+    const { revoked, failedIds } = await revokeInvitationsSequentially(targets);
     setShowInviteBulkRevokeConfirm(false);
     setIsBulkRevoking(false);
-    await loadAllInviteStatuses();
+    /* Any success: reload (it clears the selection), then keep only the
+       failed rows ticked for a retry. All failed: keep the selection. */
+    if (revoked > 0) {
+      await loadAllInviteStatuses();
+      setSelectedInviteIds(failedIds);
+    }
   };
 
   /* Which row's report is being fetched, so its menu item can show progress
@@ -2506,6 +2514,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         `Downloaded ${eligible.length} report${eligible.length === 1 ? '' : 's'}`
         + (skipped > 0 ? `. ${skipped} invitation${skipped === 1 ? ' has' : 's have'} no report yet.` : '.'),
       );
+      // Download done — clear the selection (hides the Actions bar); no reload.
+      setSelectedInviteIds(new Set());
     } catch (error) {
       console.error('Failed to download invitation report PDFs:', error);
       toast.error('Could not download the reports. Please try again.');
@@ -2717,6 +2727,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       ids: rows.map((row) => String(row.id ?? '')).filter(Boolean),
     });
     setShowResultsExportModal(false);
+    // Export done — clear the selection (hides the Actions bar); no reload.
+    setSelectedResultKeys(new Set());
   };
 
   /* The per-result report PDF the assessment Results page downloads
@@ -2769,6 +2781,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         `Downloaded ${eligible.length} report${eligible.length === 1 ? '' : 's'}`
         + (skipped > 0 ? `. ${skipped} result${skipped === 1 ? ' has' : 's have'} no report yet.` : '.'),
       );
+      // Download done — clear the selection (hides the Actions bar); no reload.
+      setSelectedResultKeys(new Set());
     } catch (error) {
       console.error('Failed to download result PDFs:', error);
       toast.error('Could not download the reports. Please try again.');
@@ -4560,14 +4574,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      carries no send-rate concern, but it stays sequential anyway so a
      mid-batch failure is attributable to one row rather than lost in a
      Promise.allSettled fan-out. */
-  const revokeInvitationsSequentially = async (targets: any[]): Promise<{ revoked: number; failedCount: number }> => {
+  const revokeInvitationsSequentially = async (targets: any[]): Promise<{ revoked: number; failedCount: number; failedIds: Set<string> }> => {
     let revoked = 0;
     let failedCount = 0;
+    // The rows that failed, so the callers can leave just those ticked.
+    const failedIds = new Set<string>();
     for (const inv of targets) {
       const assessmentId = getInviteAssessmentId(inv);
       if (!assessmentId) {
         console.error(`No assessment for invitation ${inv.id}; skipped.`);
         failedCount++;
+        failedIds.add(inv.id);
         continue;
       }
       try {
@@ -4576,6 +4593,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       } catch (error) {
         console.error(`Failed to revoke invitation ${inv.id}:`, error);
         failedCount++;
+        failedIds.add(inv.id);
       }
     }
     if (revoked > 0) {
@@ -4584,7 +4602,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (failedCount > 0) {
       toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
     }
-    return { revoked, failedCount };
+    return { revoked, failedCount, failedIds };
   };
 
   // Bulk resend for the selected Invited/Expired candidates — same endpoint as
@@ -4613,11 +4631,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     setIsBulkResending(true);
-    await resendInvitationsSequentially(targets);
-    setTrackingSelectedIds(new Set());
+    const { sent } = await resendInvitationsSequentially(targets);
     setShowBulkResendConfirm(false);
     setIsBulkResending(false);
-    await refreshInviteSurfaces();
+    /* Queued → clear the selection and refresh. Nothing queued → keep the
+       selection so the recruiter can retry. */
+    if (sent > 0) {
+      setTrackingSelectedIds(new Set());
+      await refreshInviteSurfaces();
+    }
   };
 
   // Bulk revoke for the Track Invites popup — mirrors handleBulkResend, only
@@ -4632,11 +4654,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     setIsBulkRevoking(true);
-    await revokeInvitationsSequentially(targets);
-    setTrackingSelectedIds(new Set());
+    const { revoked, failedIds } = await revokeInvitationsSequentially(targets);
     setShowTrackingBulkRevokeConfirm(false);
     setIsBulkRevoking(false);
-    await refreshInviteSurfaces();
+    /* Any success: keep only the failed rows ticked (retry) and refresh.
+       All failed: keep the selection as is. */
+    if (revoked > 0) {
+      setTrackingSelectedIds(failedIds);
+      await refreshInviteSurfaces();
+    }
   };
 
   // Change email and resend for bounced invitations
@@ -9433,6 +9459,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               tab: `invitation-status:${inviteStatusFilters.status}`,
                               ids: selectedInviteRows.map((inv: any) => String(inv.id ?? '')).filter(Boolean),
                             });
+                            // Export done — clear the selection (hides the Actions bar); no reload.
+                            setSelectedInviteIds(new Set());
                           }}
                           onClose={() => setShowInviteExportModal(false)}
                         />

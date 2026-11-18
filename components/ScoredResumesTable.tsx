@@ -453,7 +453,11 @@ interface ScoredResumesTableProps {
    * the ticked candidates, instead of this table's own invite flow. The popup
    * handles a job with no version yet (pick one, or create the next).
    */
-  onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[]) => void;
+  /** `fromSelection` is true when opened from the selection's Actions menu, so
+   *  the host can clear its selection once the invite is sent. `clearSelection`
+   *  (set only then) unticks this table's own rows — hosts that don't hold the
+   *  selection call it from their dialog's onSent. */
+  onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[], fromSelection?: boolean, clearSelection?: () => void) => void;
   /**
    * Job Details → Resume Scoring: a row's ⋮ menu lists the two invite entries
    * (Create / Send Assessment | AI Interview) directly, instead of under an
@@ -1304,7 +1308,7 @@ Best regards`);
    * none) on the popup's own picker of every published one. A candidate
    * ticked on several jobs is listed once.
    */
-  const openRowsInvite = (kind: 'assessment' | 'interview', rows: ScoredResume[]) => {
+  const openRowsInvite = (kind: 'assessment' | 'interview', rows: ScoredResume[], fromSelection = false) => {
     const seen = new Set<string>();
     const people = rows.filter((r) => {
       const k = String(r.email || r.resumeId || r.id).toLowerCase();
@@ -1313,7 +1317,7 @@ Best regards`);
       return true;
     });
     if (onOpenInviteDialog) {
-      onOpenInviteDialog(kind, people.map(toInvitee));
+      onOpenInviteDialog(kind, people.map(toInvitee), fromSelection, fromSelection ? () => clearSelection() : undefined);
       return;
     }
     const ownJobId = jobId && jobId !== 'global' && jobId !== 'jd-1' ? jobId : '';
@@ -1331,8 +1335,9 @@ Best regards`);
         : undefined,
       candidates: people.map((r) => ({ ...toInvitee(r), source: 'score-resume', inviteSource: 'Resume Scoring' })),
       openOn: 'score-resume',
-      // A bulk send clears the ticks, as the old bulk invite did.
-      onSent: rows.length > 1 ? () => clearSelection() : undefined,
+      // A bulk send (from the selection's Actions menu, even with one row
+      // ticked) clears the ticks, as the old bulk invite did.
+      onSent: fromSelection || rows.length > 1 ? () => clearSelection() : undefined,
     });
   };
 
@@ -1593,9 +1598,10 @@ Best regards`);
     return `${dd}-${mm}-${date.getFullYear()}`;
   };
 
-  const handleDownloadScorecard = async (resumeId: string) => {
+  /** Resolves true once the PDF is handed to the browser (false on failure). */
+  const handleDownloadScorecard = async (resumeId: string): Promise<boolean> => {
     const resume = resumes.find(r => r.id === resumeId);
-    if (!resume) return;
+    if (!resume) return false;
 
     setDownloadingId(resumeId);
     try {
@@ -1612,9 +1618,11 @@ Best regards`);
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
       toast.success('Scorecard downloaded successfully');
+      return true;
     } catch (error) {
       console.error('Error downloading scorecard:', error);
       toast.error('Failed to download scorecard');
+      return false;
     } finally {
       setDownloadingId(null);
     }
@@ -1622,14 +1630,14 @@ Best regards`);
 
   // "Download as ZIP" confirmation — asked before a multi-candidate download.
 
-  const handleDownloadBulkScorecards = async (rows: ScoredResume[]) => {
-    if (rows.length === 0) return;
+  /** Resolves true when the download succeeded, so the caller can clear the selection. */
+  const handleDownloadBulkScorecards = async (rows: ScoredResume[]): Promise<boolean> => {
+    if (rows.length === 0) return false;
 
     // One candidate needs no ZIP wrapper — download that single PDF
     // directly, via the exact same path the per-row action uses.
     if (rows.length === 1) {
-      await handleDownloadScorecard(rows[0].id);
-      return;
+      return handleDownloadScorecard(rows[0].id);
     }
 
     setBulkDownloading(true);
@@ -1637,9 +1645,11 @@ Best regards`);
       const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_') || 'Scorecards';
       await downloadScorecardsZip(rows, `${safeName}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
       toast.success(`${rows.length} scorecards downloaded`);
+      return true;
     } catch (error) {
       console.error('Error downloading bulk scorecards:', error);
       toast.error('Failed to download scorecards');
+      return false;
     } finally {
       setBulkDownloading(false);
     }
@@ -2227,7 +2237,7 @@ Best regards`);
                   e.preventDefault();
                   return;
                 }
-                openRowsInvite('assessment', effectiveSelectedRows);
+                openRowsInvite('assessment', effectiveSelectedRows, true);
               },
             })}
             {renderInviteTargetItems({
@@ -2242,7 +2252,7 @@ Best regards`);
                   e.preventDefault();
                   return;
                 }
-                openRowsInvite('interview', effectiveSelectedRows);
+                openRowsInvite('interview', effectiveSelectedRows, true);
               },
             })}
           </>
@@ -2509,8 +2519,6 @@ Best regards`);
               variant="primary"
               size="sm"
               onClick={() => { if (scoreResumesDisabled) return; onScoreResumes(); }}
-              /* Phones: shares the Sort line, half and half (globals.css, data-tb-primary). */
-              data-tb-primary=""
               aria-disabled={!!scoreResumesDisabled}
               title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
               icon={<ClipboardList className="w-4 h-4" />}
@@ -3860,7 +3868,8 @@ Best regards`);
             const action = bulkAction;
             setBulkAction(null);
             if (action === 'download') {
-              await handleDownloadBulkScorecards(rows);
+              // Download is read-only: on success just untick (hides the Actions bar), no refresh.
+              if (await handleDownloadBulkScorecards(rows)) clearSelection();
             }
           }}
         />
@@ -4129,6 +4138,7 @@ Best regards`);
           }}
           rowJobCode={rowJobCode}
           auditJdId={jobId}
+          onExported={clearSelection}
           onClose={() => setShowExportModal(false)}
         />
       )}

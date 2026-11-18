@@ -934,8 +934,10 @@ function SkillTable({ title, rows, wide = false }: {
   title: string; rows: FlatSkill[]; wide?: boolean;
 }) {
   return (
-  <div className="rounded-xl border border-gray-200 dark:border-slate-600/70 overflow-hidden min-w-0">
-    <div className="px-4 py-3 tf-row-title">{title}</div>
+  /* Below lg (cards, not the table) no inner box: the cards sit straight in
+     the section, so the title and cards line up with its edges. */
+  <div className="min-w-0 lg:rounded-xl lg:border lg:border-gray-200 lg:dark:border-slate-600/70 lg:overflow-hidden">
+    <div className="pb-2 lg:px-4 lg:py-3 tf-row-title">{title}</div>
     <div className={`overflow-x-auto ${DESKTOP_TABLE_ONLY}`}>
       <table className="w-full text-sm">
         <thead>
@@ -974,7 +976,7 @@ function SkillTable({ title, rows, wide = false }: {
         </tbody>
       </table>
     </div>
-    <MobileRecordList className="px-3 pb-3">
+    <MobileRecordList>
       {rows.map((s, i) => {
         const st = skillStatus(s.score, isNotAssessed(s));
         return (
@@ -982,14 +984,19 @@ function SkillTable({ title, rows, wide = false }: {
             key={i}
             badges={wide ? <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ring-1 ${st.cls}`}>{st.label}</span> : undefined}
             title={s.name}
-            footer={
-              <span className={`font-bold tabular-nums ${isNotAssessed(s) ? 'text-gray-400' : scoreColor(s.score).text}`}>
-                {isNotAssessed(s) ? '—' : formatSkillScore(s.score)}
-              </span>
-            }
+            /* Score on the Weight line, not a footer row of its own — one
+               line shorter per skill. */
             fields={[
               ...(wide ? [{ label: 'Cluster', value: s.cluster || '—' }] : []),
               { label: 'Weight', value: <span className="tabular-nums">{s.weight}</span> },
+              {
+                label: 'Score',
+                value: (
+                  <span className={`font-bold tabular-nums ${isNotAssessed(s) ? 'text-gray-400' : scoreColor(s.score).text}`}>
+                    {isNotAssessed(s) ? '—' : formatSkillScore(s.score)}
+                  </span>
+                ),
+              },
             ]}
           >
             {wide && (
@@ -1086,8 +1093,9 @@ export function EvalReportCombined({
       ? { tile: 'bg-success-subtle/60 border-success-line', icon: 'bg-success text-white', text: 'text-success', pill: 'bg-success-subtle text-success-strong ring-success-line' }
       : { tile: 'bg-destructive-subtle/60 border-destructive-line', icon: 'bg-destructive text-white', text: 'text-destructive', pill: 'bg-destructive-subtle text-destructive ring-destructive-line' };
   const card = 'rounded-2xl border border-gray-300 dark:border-slate-600/70 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5';
-  const cardHeader = 'flex items-center gap-3 px-4 sm:px-5 py-4 border-b border-gray-200 dark:border-slate-600/70';
-  const headerIcon = 'w-9 h-9 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0';
+  // Phones: tighter header and icon (compact); sm and up as before.
+  const cardHeader = 'flex items-center gap-2.5 sm:gap-3 px-3 sm:px-5 py-3 sm:py-4 border-b border-gray-200 dark:border-slate-600/70';
+  const headerIcon = 'w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0';
   const cardTitle = 'text-base font-semibold text-gray-900 dark:text-slate-50';
 
   const statTiles = [
@@ -1100,7 +1108,7 @@ export function EvalReportCombined({
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3 sm:space-y-5">
       {/* 1. Verdict — result, the Must-Have vs threshold line, and the key
           stats + Match Score. (The candidate photo now lives only in the page
           header; Download Report too. The report title was removed — the tab
@@ -1168,7 +1176,7 @@ export function EvalReportCombined({
           <div className={cardTitle}>Executive Summary</div>
         </div>
         {/* The original summary wording, one sentence per point, each with a tick. */}
-        <ul className="p-4 sm:p-5 space-y-2.5 tf-body leading-relaxed">
+        <ul className="p-3 sm:p-5 space-y-2.5 tf-body leading-relaxed">
           {[
             <>{candidate.name} completed an AI-powered technical interview for the <strong>{candidate.role}</strong> position on {interview.date || 'the scheduled date'}.</>,
             <>The evaluation consisted of <strong>{totalQuestions} question{totalQuestions !== 1 ? 's' : ''}</strong> covering <strong>{totalSkills} skill{totalSkills !== 1 ? 's' : ''}</strong> across multiple priority levels.</>,
@@ -1240,13 +1248,13 @@ export function EvalReportCombined({
       </div>
 
       {/* 5. Cluster coverage (the Skill Assessment Radar was removed) */}
-      <div className="grid grid-cols-1 gap-5" style={{ pageBreakInside: 'avoid' }}>
+      <div className="grid grid-cols-1 gap-3 sm:gap-5" style={{ pageBreakInside: 'avoid' }}>
         <div className={card}>
           <div className={cardHeader}>
             <div className={headerIcon}><Layers className="w-4 h-4" /></div>
             <div className={cardTitle}>Cluster Coverage Overview</div>
           </div>
-          <div className="p-4 sm:p-5">
+          <div className="p-3 sm:p-5">
             <div className="divide-y divide-gray-200 dark:divide-slate-700">
               {sectionsPresent.mustHave && (
                 <CoverageBlock label="Must-Have Section" cov={mhCov} Icon={Target}
@@ -1280,7 +1288,7 @@ export function EvalReportCombined({
         ) : (
           // Two side-by-side tables when both sections exist; a single
           // full-width table (with Cluster / score bar / Status) otherwise.
-          <div className={`p-4 sm:p-5 grid grid-cols-1 gap-4 items-start ${singleSkillTable ? '' : 'xl:grid-cols-2'}`}>
+          <div className={`p-3 sm:p-5 grid grid-cols-1 gap-3 sm:gap-4 items-start ${singleSkillTable ? '' : 'xl:grid-cols-2'}`}>
             {showMustHaveTable && (
               <SkillTable
                 title={`Must-Have Skills (${flatMustHave.length} skill${flatMustHave.length !== 1 ? 's' : ''} evaluated)`}
@@ -1418,7 +1426,7 @@ export function EvalReportCombined({
           <div className={cardTitle}>Hiring Verdict</div>
         </div>
         {/* AI Analysis — why pass / fail, plus the AI narrative */}
-          <div className="p-4 sm:p-5">
+          <div className="p-3 sm:p-5">
             <div className={`flex items-center gap-2 mb-3 font-semibold text-sm ${verdictTone.text}`}>
               {isPartialEvaluation || !isPassed ? <AlertTriangle className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
               {isPartialEvaluation ? 'AI Analysis — Partial Interview Review' : `AI Analysis — Why this candidate ${isPassed ? 'Passed' : 'Failed'}`}
@@ -1461,7 +1469,7 @@ export function EvalReportCombined({
         </div>
         <div className="tf-grid-split divide-y lg:divide-y-0 lg:divide-x divide-gray-200 dark:divide-slate-600/70">
           {/* Key Strengths */}
-          <div className="p-4 sm:p-5">
+          <div className="p-3 sm:p-5">
             <div className="flex items-center gap-2 mb-3 font-semibold text-sm text-success-strong">
               <CheckCircle className="w-4 h-4" />
               Key Strengths
@@ -1478,7 +1486,7 @@ export function EvalReportCombined({
           </div>
 
           {/* Areas of Concern */}
-          <div className="p-4 sm:p-5">
+          <div className="p-3 sm:p-5">
             <div className="flex items-center gap-2 mb-3 font-semibold text-sm text-destructive">
               <XCircle className="w-4 h-4" />
               Areas of Concern
@@ -1502,7 +1510,7 @@ export function EvalReportCombined({
           <div className={headerIcon}><Lightbulb className="w-4 h-4" /></div>
           <div className={cardTitle}>Recommendations &amp; Next Steps</div>
         </div>
-        <div className="p-4 sm:p-5">
+        <div className="p-3 sm:p-5">
             <ul className="space-y-2 tf-body leading-relaxed list-disc pl-5">
               {isPassed ? (
                 <>

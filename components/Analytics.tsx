@@ -248,9 +248,9 @@ export default function Analytics() {
           </div>
           
           {/* Mock Line Chart with trend */}
-          <div className="h-64 flex items-end justify-between gap-2">
+          <div className="h-64 flex items-end justify-between gap-1 sm:gap-2">
             {[12, 18, 15, 24, 28, 32, 29, 35, 42, 38, 45, 48].map((value, idx) => (
-              <div key={idx} className="flex-1 flex flex-col items-center gap-2">
+              <div key={idx} className="flex-1 min-w-0 flex flex-col items-center gap-2">
                 <div className="relative w-full flex items-end justify-center" style={{ height: '100%' }}>
                   <div 
                     className="w-full bg-gradient-to-t from-gray-800 to-gray-800 rounded-t-lg hover:from-gray-700 hover:to-gray-900 transition-all cursor-pointer group relative"
@@ -261,7 +261,8 @@ export default function Analytics() {
                     </div>
                   </div>
                 </div>
-                <div className="tf-meta">
+                {/* On narrow screens 12 labels don't fit — show every other week */}
+                <div className={`tf-meta whitespace-nowrap ${idx % 2 === 1 ? 'invisible sm:visible' : ''}`}>
                   {['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10', 'W11', 'W12'][idx]}
                 </div>
               </div>

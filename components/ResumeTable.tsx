@@ -1254,7 +1254,9 @@ export default function ResumeTable({
       </div>
 
       {!disablePagination && paginationStyle === 'list' && totalItems > 5 && (
-        <div className="mt-3 flex-shrink-0">
+        <div className="mt-2 flex-shrink-0">
+          {/* compact: 'list' is only used inside the Select Applicants to Score
+              popup, where the full-size bar took too much of the dialog. */}
           <ListPagination
             currentPage={currentPage}
             itemsPerPage={itemsPerPage}
@@ -1263,6 +1265,7 @@ export default function ResumeTable({
             onItemsPerPageChange={changeItemsPerPage}
             itemLabel="resumes"
             alwaysShow
+            compact
           />
         </div>
       )}
