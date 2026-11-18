@@ -452,6 +452,8 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
     });
     toast.success(`Exported ${exportRows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
     setShowExportModal(false);
+    // Export done — clear the ticks, which also hides the Actions bar.
+    setSelectedKeys(new Set());
   };
 
   /* Download PDF Reports — an item in the Actions menu (as on the per-interview
@@ -474,6 +476,9 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
       } else if (skipped > 0) {
         toast.success(`Downloaded ${downloaded} report${downloaded === 1 ? '' : 's'}. ${skipped} candidate${skipped === 1 ? ' has' : 's have'} no report yet.`);
       }
+      // Download went through — clear the ticks (hides the Actions bar). Kept
+      // when nothing downloaded or some reports failed, so the user can retry.
+      if (downloaded > 0 && failed === 0) setSelectedKeys(new Set());
     } catch (err) {
       console.error('[AIInterviewCandidateResults] Bulk PDF download failed:', err);
       toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');

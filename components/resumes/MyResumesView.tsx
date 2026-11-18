@@ -1856,6 +1856,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     if (version) {
       try {
         await resumeService.delete(version.id, { onlyThisVersion: true });
+        // Clear the acted-on row from the selection (hides the bulk bar when it
+        // was the only pick); RESUMES_CHANGED refetches the list.
+        setSelectedResumes(prev => prev.filter(id => !ids.includes(id)));
         toast.success(`Version ${version.version} deleted`);
       } catch {
         toast.error(`Couldn't delete version ${version.version}. Please try again.`);

@@ -1633,7 +1633,9 @@ export default function AIInterview() {
     else toast.success(summary);
     setBulkRunning(false);
     setBulkConfirm(null);
-    resolve(true);
+    // The table clears its ticks only when something went through — if every
+    // item failed, the selection stays so the user can retry.
+    resolve(done > 0);
   };
 
   const handlePublishConfig = async (config: AIInterviewResponse) => {
@@ -2992,16 +2994,17 @@ export default function AIInterview() {
      job, mode resend) that carries on when this page closes and shows in
      the round progress icon. Shared by the Invitation Status tab's and the
      Track popup's bulk Resend. */
-  const resendInvitesInBulk = async (targets: { id: string }[]) => {
-    await resendInBackground(targets);
-  };
+  const resendInvitesInBulk = async (targets: { id: string }[]) =>
+    resendInBackground(targets);
 
   const handleStatusBulkResend = async () => {
     const targets = statusResendableSelectedRows;
     if (targets.length === 0) { setStatusBulkResendOpen(false); return; }
     setIsStatusBulkResending(true);
-    await resendInvitesInBulk(targets);
-    setSelectedStatusInviteIds(new Set());
+    const { failedCount } = await resendInvitesInBulk(targets);
+    // Clear the ticks (hides the Actions bar) only once the send started — on
+    // failure the selection stays so the user can retry.
+    if (failedCount === 0) setSelectedStatusInviteIds(new Set());
     setStatusBulkResendOpen(false);
     setIsStatusBulkResending(false);
     await loadAllInviteStatuses();
@@ -3026,6 +3029,9 @@ export default function AIInterview() {
       } else if (skipped > 0) {
         toast.success(`Downloaded ${downloaded} report${downloaded === 1 ? '' : 's'}. ${skipped} candidate${skipped === 1 ? ' has' : 's have'} no report yet.`);
       }
+      // Download went through — clear the ticks (hides the Actions bar). Kept
+      // when nothing downloaded or some reports failed, so the user can retry.
+      if (downloaded > 0 && failed === 0) setSelectedStatusInviteIds(new Set());
     } catch (err) {
       console.error('[AIInterview] Invitation Status bulk PDF download failed:', err);
       toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');
@@ -4640,6 +4646,8 @@ export default function AIInterview() {
                   });
                   toast.success(`Exported ${rows.length} records to ${statusExportFormat === 'csv' ? 'CSV' : 'Excel'}`);
                   setShowStatusExportModal(false);
+                  // Export done — clear the ticks, which also hides the Actions bar.
+                  setSelectedStatusInviteIds(new Set());
                 };
 
                 /* What More Filters reports: status off 'all' is one, and the
@@ -4931,7 +4939,8 @@ export default function AIInterview() {
                           const failed = results.length - succeeded;
                           if (succeeded > 0) toast.success(`Revoked ${succeeded} invitation${succeeded === 1 ? '' : 's'}.`);
                           if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
-                          setSelectedStatusInviteIds(new Set());
+                          // Keep only the ones that failed ticked, so a retry acts on them.
+                          setSelectedStatusInviteIds(new Set(targets.filter((_, i) => results[i].status === 'rejected').map((inv) => inv.id)));
                           await loadAllInviteStatuses();
                           setRefreshSignal((n) => n + 1);
                         } finally {
@@ -5502,7 +5511,8 @@ export default function AIInterview() {
             if (failed > 0) {
               toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
             }
-            setSelectedInviteIds(new Set());
+            // Keep only the ones that failed ticked, so a retry acts on them.
+            setSelectedInviteIds(new Set(targets.filter((_, i) => results[i].status === 'rejected').map((inv) => inv.id)));
             if (viewInvitationsConfig) {
               await refreshInvitationsView(viewInvitationsConfig.id);
             }

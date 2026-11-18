@@ -1013,6 +1013,8 @@ export default function AITalentMatchPage({
   };
   // The rows the Actions › Export dialog is open for (either view).
   const [exportRows, setExportRows] = useState<MatchInviteRow[] | null>(null);
+  // The opening view's Clear — run after the export succeeds.
+  const exportClearRef = useRef<(() => void) | null>(null);
 
   // "Match by Candidate" roll-up: every matched candidate across all jobs, with
   // the jobs they matched. Built in-page — no navigation away.
@@ -1767,6 +1769,8 @@ export default function AITalentMatchPage({
     jobId: string;
     jobTitle: string;
     candidates: MatchedCandidateWithVersions[];
+    /** Bulk callers: clears their selection once the batch actually started. */
+    onStarted?: () => void;
   } | null>(null);
   // App-wide scoring progress popup — scoring started here is tracked there.
   const scoringProgress = useScoringProgress();
@@ -1940,7 +1944,7 @@ export default function AITalentMatchPage({
         jobCode={jobs.find(j => j.id === jdId)?.jobId}
         enableInternalAIInterviewInvite
         /* Row Invite -> Create / Send for this job — Job Details' popup. */
-        onOpenInviteDialog={(kind, candidates) => openCreateSend(kind, jdId, candidates, jobTitle)}
+        onOpenInviteDialog={(kind, candidates, _fromSelection, clearSelection) => openCreateSend(kind, jdId, candidates, jobTitle, clearSelection)}
         onViewCandidate={(r: any) => openScoreDetail(jdId, jobTitle, r.id, nav)}
         // The row above already names the candidate and the job.
         hiddenColumnIds={['candidateName', 'jdId', 'jobTitle', 'jobVersion']}
@@ -2429,6 +2433,7 @@ export default function AITalentMatchPage({
   const handleSubmitToScoring = async (
     candidateIds?: string[],
     ctx?: { candidates: MatchedCandidateWithVersions[]; jobId: string; jobTitle: string },
+    onStarted?: () => void,
   ) => {
     const idsToScore = candidateIds ?? selectedCandidates;
     if (idsToScore.length === 0) {
@@ -2453,7 +2458,7 @@ export default function AITalentMatchPage({
       return;
     }
 
-    setScoringReview({ jobId, jobTitle, candidates: selected });
+    setScoringReview({ jobId, jobTitle, candidates: selected, onStarted });
   };
 
   /**
@@ -2461,7 +2466,7 @@ export default function AITalentMatchPage({
    * batch the rest, and hand off to Resume Scoring's common bulk-progress
    * popup (`?batch_id=`). Each item's `resumeId` is the exact version to score.
    */
-  const startBatchScoring = async (selected: Array<{ resumeId: string; name?: string }>, jobId: string, jobTitle: string) => {
+  const startBatchScoring = async (selected: Array<{ resumeId: string; name?: string }>, jobId: string, jobTitle: string): Promise<boolean> => {
     const resumeIds = selected.map(c => c.resumeId);
 
     try {
@@ -2504,7 +2509,7 @@ export default function AITalentMatchPage({
         toast.info(
           `${alreadyScoredItems.length === 1 ? 'This resume is' : `All ${alreadyScoredItems.length} resumes are`} already scored for "${jobTitle}".`,
         );
-        return;
+        return false;
       }
 
       // Start async bulk scoring via Celery for new resumes only
@@ -2522,9 +2527,11 @@ export default function AITalentMatchPage({
         `Scoring started for ${newResumeIds.length} resume${newResumeIds.length === 1 ? '' : 's'}` +
         (alreadyScoredItems.length > 0 ? ` (${alreadyScoredItems.length} already scored)` : '') + '.',
       );
+      return true;
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
       toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
+      return false;
     }
   };
 
@@ -2572,7 +2579,7 @@ export default function AITalentMatchPage({
   /* Create / Send Assessment | AI Interview — Job Details' popup, for ONE job
      per opening (a selection spanning jobs stays greyed: "one job at a time").
      null = closed; rendered with aiInviteDialog in every view. */
-  const [createSendRequest, setCreateSendRequest] = useState<InviteDialogRequest | null>(null);
+  const [createSendRequest, setCreateSendRequest] = useState<(InviteDialogRequest & { onSent?: () => void }) | null>(null);
   /** Recorded on the invitation as "AI Talent Match" (a caller's own source wins). */
   const withMatchSource = (c: InviteCandidate): InviteCandidate =>
     ({ source: 'talent-match', inviteSource: 'AI Talent Match', ...c });
@@ -2590,12 +2597,14 @@ export default function AITalentMatchPage({
       status: job?.status,
     };
   };
-  const openCreateSend = (kind: InviteHandoffKind, jdId: string, candidates: InviteCandidate[], title?: string) =>
-    setCreateSendRequest({ kind, job: inviteDialogJobOf(jdId, title), candidates: candidates.map(withMatchSource) });
+  const openCreateSend = (kind: InviteHandoffKind, jdId: string, candidates: InviteCandidate[], title?: string, onSent?: () => void) =>
+    setCreateSendRequest({ kind, job: inviteDialogJobOf(jdId, title), candidates: candidates.map(withMatchSource), onSent });
   const createSendDialogEl = (
     <JobInviteDialogHost
       request={createSendRequest}
       onClose={() => setCreateSendRequest(null)}
+      // Bulk opener's hook: invitations went out, so clear its selection.
+      onSent={() => createSendRequest?.onSent?.()}
       inviteGate={inviteGateFor}
       openOn="talent-match"
     />
@@ -2616,7 +2625,7 @@ export default function AITalentMatchPage({
   });
   /** Open Create / Send for `rows` (one job) — Job Details' popup, with the
    *  candidates who have an email (one per address). */
-  const openInviteForRows = (kind: InviteHandoffKind, jdId: string, rows: MatchInviteRow[]) => {
+  const openInviteForRows = (kind: InviteHandoffKind, jdId: string, rows: MatchInviteRow[], onSent?: () => void) => {
     const seen = new Set<string>();
     const candidates: InviteCandidate[] = rows
       .filter(r => r.email)
@@ -2631,7 +2640,7 @@ export default function AITalentMatchPage({
       toast.error('Selected candidates must have email addresses');
       return;
     }
-    openCreateSend(kind, jdId, candidates);
+    openCreateSend(kind, jdId, candidates, undefined, onSent);
   };
 
   /** A candidate's invite items for its ⋮ menu — greyed with "＋ Create …"
@@ -2759,7 +2768,7 @@ export default function AITalentMatchPage({
       }
       const n = peopleIn(rows);
       toast.success(`${what} is live for ${jobName} — now invite your ${n} candidate${n === 1 ? '' : 's'}.`);
-      openInviteForRows(h.kind, h.jdId, rows);
+      openInviteForRows(h.kind, h.jdId, rows, clearJobSelection);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handoffReturn, jobsList.loading]);
@@ -2958,7 +2967,10 @@ export default function AITalentMatchPage({
           resumeIds.map((resumeId, index) => ({ resumeId, name: nameFor(index) })),
           review.jobId,
           review.jobTitle,
-        );
+        ).then((started) => {
+          // Bulk Score succeeded: clear the originating selection (failure keeps it).
+          if (started) review.onStarted?.();
+        });
       }}
     />
   );
@@ -3256,6 +3268,8 @@ export default function AITalentMatchPage({
        pointing handleSubmitToScoring at that job. Sequential, since
        handleSubmitToScoring reads the job to score against off page-level
        state (selectedJob/selectedHistoryItem) rather than a parameter. */
+    // After a successful bulk action on the All Resumes selection.
+    const clearAllResumeSelection = () => setSelectedAllResumeKeys(new Set());
     const handleScoreSelectedAllResumes = async () => {
       if (selectedAllResumeEntries.length === 0) return;
       // Scoring is against one job, and the review shows that job — so, as
@@ -3274,7 +3288,7 @@ export default function AITalentMatchPage({
       if (ids.length === 0) return;
       setSelectedHistoryItem(item);
       setSelectedJob(item.jobId);
-      await handleSubmitToScoring(ids, { candidates, jobId: item.jobId, jobTitle: item.jobTitle });
+      await handleSubmitToScoring(ids, { candidates, jobId: item.jobId, jobTitle: item.jobTitle }, clearAllResumeSelection);
     };
 
     /* "Invite Assessment" / "Invite AI Interview" from the All Resumes
@@ -3316,6 +3330,8 @@ export default function AITalentMatchPage({
         candidates,
         inviteGate: inviteGateFor(kind),
         openOn: 'talent-match',
+        // Invitations went out: clear the All Resumes selection.
+        onSent: () => clearAllResumeSelection(),
       });
     };
 
@@ -3485,6 +3501,9 @@ export default function AITalentMatchPage({
         title: 'AI Talent Match - Matched Candidates',
       });
       toast.success(`Exported ${rows.length} candidate${rows.length !== 1 ? 's' : ''} to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+      // Export succeeded: clear the selection (hides the Actions bar). No refresh — nothing changed.
+      exportClearRef.current?.();
+      exportClearRef.current = null;
     };
 
     /* ---- View by Candidates selection (Resume Scoring's) ---- */
@@ -3769,6 +3788,7 @@ export default function AITalentMatchPage({
                     await handleSubmitToScoring(
                       toScore.map(r => r.key.split('::')[1]),
                       { candidates, jobId: item.jobId, jobTitle: item.jobTitle },
+                      onClear,
                     );
                   })();
                 }}
@@ -3790,6 +3810,7 @@ export default function AITalentMatchPage({
                     // Candidates view rows come from every session — make
                     // sure each is loaded before the file is written.
                     void ensureSessionsLoaded(rows.map(r => r.historyId));
+                    exportClearRef.current = onClear;
                     setExportRows(rows);
                   }
                 }}
@@ -3813,7 +3834,7 @@ export default function AITalentMatchPage({
                   }
                   if (!guard()) return;
                   const jdId = oneJob();
-                  if (jdId) openInviteForRows('assessment', jdId, rows);
+                  if (jdId) openInviteForRows('assessment', jdId, rows, onClear);
                 },
                     })}
               {renderInviteTargetItems({
@@ -3838,7 +3859,7 @@ export default function AITalentMatchPage({
                     setSelectedHistoryItem(item);
                     setSelectedJob(item.jobId);
                   }
-                  openInviteForRows('interview', jdId, rows);
+                  openInviteForRows('interview', jdId, rows, onClear);
                 },
                     })}
             </DropdownMenuContent>
@@ -8006,6 +8027,8 @@ export default function AITalentMatchPage({
         title: `${jobTitle} - AI Talent Match`,
       });
       toast.success(`Exported ${rows.length} candidate${rows.length !== 1 ? 's' : ''} to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+      // Export succeeded: clear the selection (hides the Actions bar). No refresh — nothing changed.
+      setSelectedCandidates([]);
     };
     const excellentCount = matchedCandidates.filter(c => c.matchScore >= 85).length;
     const goodCount = matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
@@ -8416,7 +8439,8 @@ export default function AITalentMatchPage({
                           title={!canRunScoring ? 'You do not have permission to score resumes' : jobLock ? jobLock : unitsShort ? 'Insufficient units for this selection' : undefined}
                           onSelect={(e) => {
                             if (!canRunScoring || jobLock) { e.preventDefault(); return; }
-                            void handleSubmitToScoring();
+                            // Clear the ticks once the batch has started.
+                            void handleSubmitToScoring(undefined, undefined, () => setSelectedCandidates([]));
                           }}
                         >
                           <ClipboardList className="w-4 h-4 text-menu-icon-score" />
@@ -8450,7 +8474,7 @@ export default function AITalentMatchPage({
                                 title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : jobLock || undefined}
                                 onSelect={(e) => {
                                   if (asmtDisabled) { e.preventDefault(); return; }
-                                  openInviteForRows('assessment', selectedJob, rows);
+                                  openInviteForRows('assessment', selectedJob, rows, () => setSelectedCandidates([]));
                                 }}
                               >
                                 <ClipboardList className="w-4 h-4 text-menu-icon-view" />
@@ -8462,7 +8486,7 @@ export default function AITalentMatchPage({
                                 title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : jobLock || undefined}
                                 onSelect={(e) => {
                                   if (intvDisabled) { e.preventDefault(); return; }
-                                  openInviteForRows('interview', selectedJob, rows);
+                                  openInviteForRows('interview', selectedJob, rows, () => setSelectedCandidates([]));
                                 }}
                               >
                                 <Video className="w-4 h-4 text-menu-icon-ai" />

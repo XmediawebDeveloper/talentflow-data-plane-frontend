@@ -405,6 +405,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     if (version) {
       try {
         await resumeService.delete(version.id, { onlyThisVersion: true });
+        // Clear the acted-on row from the selection (hides the bulk bar when it
+        // was the only pick); the list refreshes via usePagedList's invalidation.
+        setSelectedResumes(prev => prev.filter(r => !ids.includes(r)));
         toast.success(`Version ${version.version} deleted`);
       } catch {
         toast.error(`Couldn't delete version ${version.version}. Please try again.`);
