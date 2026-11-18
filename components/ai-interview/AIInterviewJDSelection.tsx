@@ -1,6 +1,6 @@
 'use client';
 
-import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, ChevronRight, CheckCircle2, RefreshCw, Info } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -16,7 +16,7 @@ import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import ListPagination from '@/components/ListPagination';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { lineageKey, isSelectableVersion, mapJDToJob, jobSearchMatcher, sortJobs, buildAssessmentJobList, needsVersionPicker, groupByLineage } from '@/lib/utils/jobOpeningDisplay';
+import { lineageKey, isSelectableVersion, mapJDToJob, jobSearchMatcher, sortJobs, buildAssessmentJobList, needsVersionPicker, newerVersionsNote, groupByLineage } from '@/lib/utils/jobOpeningDisplay';
 import type { Job } from '@/lib/types/types';
 import { publishedJdToJob } from '@/lib/utils/publishedJdToJob';
 import { jdService } from '@/lib/services';
@@ -24,6 +24,7 @@ import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
 import JobEligibilityNote from '@/components/jobs/JobEligibilityNote';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 const JD_RADIO_GROUP = 'ai-interview-jd-version-selection';
 const ADD_BUTTON_DISABLED = 'bg-slate-200 text-slate-400 ring-slate-300/60 shadow-none cursor-not-allowed';
@@ -162,10 +163,10 @@ export default function AIInterviewJDSelection() {
 
   /* ONE CARD PER JOB, on the Assessments picker's own rule and through its
      own helper, so the two lists cannot drift: each job is listed on its
-     newest Published version, even when that version already has an AI
-     interview (the card is then unselectable and View Versions offers the
-     free one). A job with no published version free of an interview gets no
-     card. Newest job first. */
+     newest Published / Republished version that does not already have an AI
+     interview (v4 taken → the card shows v3, with a note saying why). A job
+     with no published version free of an interview gets no card. Newest job
+     first. */
   const buildableJobs = buildAssessmentJobList(selectableJds.map(toJob), version => versionHasInterview(version.id));
   /* Disabled and Archived jobs stay visible exactly as before the status
      changed — one card per job, on its newest non-draft version, read-only
@@ -181,7 +182,11 @@ export default function AIInterviewJDSelection() {
   groupByLineage(fullJobsById.size > 0 ? [...fullJobsById.values()] : jds.map(toJob)).forEach((bucket, key) => {
     if (buildableLineages.has(key)) return;
     const latestNonDraft = bucket.find(job => job.status !== 'Draft');
-    if (latestNonDraft && (isJobDisabled(latestNonDraft) || isJobArchived(latestNonDraft))) {
+    /* A single-version job whose only version already has an AI interview has
+       nothing left to show — hidden. With more versions the grey card stays,
+       taken or not. */
+    const onlyVersionTaken = bucket.length === 1 && !!latestNonDraft && versionHasInterview(latestNonDraft.id);
+    if (latestNonDraft && !onlyVersionTaken && (isJobDisabled(latestNonDraft) || isJobArchived(latestNonDraft))) {
       inactiveJobs.set(key, latestNonDraft);
     }
   });
@@ -395,6 +400,15 @@ export default function AIInterviewJDSelection() {
                          card version is its one available version is picked
                          straight from the card. */
                       const showVersionPicker = needsVersionPicker(job, allVersions, version => versionHasInterview(version.id));
+                      /* Why the card is not on the job's newest version (taken,
+                         Disabled, Archived…). The full rows carry every status;
+                         until they land, the slim interview rows stand in. */
+                      const skippedNote = newerVersionsNote(
+                        job,
+                        allVersions.length > 0 ? allVersions : jds.map(toJob),
+                        version => versionHasInterview(version.id),
+                        'an AI interview',
+                      );
                       /* The card's + builds against this job's picked version
                          when one is ticked, otherwise the latest. */
                       const cardTarget = lineageSelected ? jdPick!.job : job;
@@ -421,11 +435,11 @@ export default function AIInterviewJDSelection() {
                             blockedByOtherPick
                               ? otherPickReason
                               : jobDisabled
-                                ? `${JD_DISABLED_ACTION_MESSAGE} View Versions still shows this job's version history.`
+                                ? `${JD_DISABLED_ACTION_MESSAGE}${showVersionPicker ? " View Versions still shows this job's version history." : ''}`
                               : jobArchived
-                                ? `${JD_ARCHIVED_ACTION_MESSAGE} View Versions still shows this job's version history.`
+                                ? `${JD_ARCHIVED_ACTION_MESSAGE}${showVersionPicker ? " View Versions still shows this job's version history." : ''}`
                               : !latestSelectableStatus
-                                ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
+                                ? (showVersionPicker ? `${latestUnpublishedReason}. View Versions opens this job's full version history.` : `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()}`)
                                 : showVersionPicker
                                   ? 'View Versions opens this job’s version history — every version of this job, and the one to build the AI interview against.'
                                   : `v${job.versionNumber ?? 1} is this job’s only available version — select it to build the AI interview against it.`
@@ -455,7 +469,7 @@ export default function AIInterviewJDSelection() {
                                     ? `v${job.versionNumber ?? 1} already has an AI interview — open View Versions to build against another version`
                                     : !latestSelectableStatus
                                       ? latestUnpublishedReason
-                                      : `Select the latest version (v${job.versionNumber ?? 1})`
+                                      : `Select v${job.versionNumber ?? 1}`
                               }
                             >
                               <input
@@ -467,7 +481,7 @@ export default function AIInterviewJDSelection() {
                                 onClick={() => isPicked && pickJdVersion(job, versionKey)}
                                 className="tf-radio focus:ring-brand-blue/40"
                               />
-                              <span className="sr-only">Select the latest version of {job.title}</span>
+                              <span className="sr-only">Select v{job.versionNumber ?? 1} of {job.title}</span>
                             </label>
 
                             <div className={`flex-1 min-w-0 ${jobArchived && !blockedByOtherPick ? 'opacity-60' : ''}`}>
@@ -508,9 +522,54 @@ export default function AIInterviewJDSelection() {
                                   v{pickedVersionOfThisJob.versionNumber ?? 1} selected, chosen from Version History
                                 </p>
                               )}
+                              {skippedNote && (
+                                <p className="mt-2 flex items-start gap-1.5 tf-meta">
+                                  <Info className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+                                  <span>{skippedNote}</span>
+                                </p>
+                              )}
                             </div>
 
-                            <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto sm:flex-shrink-0">
+                            {/* View (eye) — its original place, the card's top-right,
+                                at every width. */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setVersionHistoryVersion(null);
+                                setVersionHistoryFor({ id: job.id, title: job.title });
+                              }}
+                              className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                              aria-label="View version history"
+                              title="View version history"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Card actions — one right-aligned row at the card's foot:
+                              View Versions (only when this job has another version to
+                              pick, needsVersionPicker) | Create Config. */}
+                          <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                              {showVersionPicker && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    jdLineage.toggle(versionKey, job.id);
+                                  }}
+                                  aria-expanded={versionsExpanded}
+                                  className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
+                                    versionsExpanded
+                                      ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10'
+                                      : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                                  }`}
+                                  title={versionsExpanded ? 'Hide version history' : 'View version history — every version of this job, and the one to build the AI interview against'}
+                                >
+                                  {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 /* Permission lock: aria-disabled (not native) so the
@@ -518,7 +577,10 @@ export default function AIInterviewJDSelection() {
                                 disabled={!cardAddEnabled && canCreateAIInterviews}
                                 aria-disabled={!cardAddEnabled}
                                 onClick={() => cardAddEnabled && handleCreateForVersion(cardTarget.id)}
-                                className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all flex-shrink-0 ${
+                                /* "Create ›" rather than a bare "+": a per-job action
+                                   (starts an AI interview for this JD), so not
+                                   "Next", which reads as wizard navigation. */
+                                className={`h-7 px-2.5 inline-flex items-center justify-center gap-1 rounded-md ring-1 text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
                                   cardAddEnabled
                                     ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-white/10'
                                     : ADD_BUTTON_DISABLED
@@ -526,47 +588,11 @@ export default function AIInterviewJDSelection() {
                                 aria-label={cardAddLabel}
                                 title={cardAddLabel}
                               >
-                                <Plus className="w-3.5 h-3.5" />
+                                <span className="sm:hidden">Create</span>
+                                <span className="hidden sm:inline">Create Config</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
                               </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setVersionHistoryVersion(null);
-                                  setVersionHistoryFor({ id: job.id, title: job.title });
-                                }}
-                                className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                                aria-label="View version history"
-                                title="View version history"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
                           </div>
-
-                          {/* View Versions — bottom-right, only when this job has
-                              another version to pick (needsVersionPicker). */}
-                          {showVersionPicker && (
-                            <div className="mt-3 flex items-center justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  jdLineage.toggle(versionKey, job.id);
-                                }}
-                                aria-expanded={versionsExpanded}
-                                className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
-                                  versionsExpanded
-                                    ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10'
-                                    : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
-                                }`}
-                                title={versionsExpanded ? 'Hide version history' : 'View version history — every version of this job, and the one to build the AI interview against'}
-                              >
-                                {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                              </button>
-                            </div>
-                          )}
 
                           {showVersionPicker && versionsExpanded && (
                             <JobVersionHistoryPanel
@@ -630,7 +656,7 @@ export default function AIInterviewJDSelection() {
                                       type="button"
                                       disabled={!enabled}
                                       onClick={() => enabled && handleCreateForVersion(versionJob.id)}
-                                      className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all ${
+                                      className={`h-7 px-2.5 inline-flex items-center justify-center gap-1 rounded-md ring-1 text-xs font-medium whitespace-nowrap transition-all ${
                                         enabled
                                           ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-white/10'
                                           : ADD_BUTTON_DISABLED
@@ -638,7 +664,9 @@ export default function AIInterviewJDSelection() {
                                       aria-label={label}
                                       title={label}
                                     >
-                                      <Plus className="w-3.5 h-3.5" />
+                                      <span className="sm:hidden">Create</span>
+                                      <span className="hidden sm:inline">Create Config</span>
+                                      <ChevronRight className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                       type="button"
@@ -663,22 +691,22 @@ export default function AIInterviewJDSelection() {
                     })}
 
                     {lineageJobs.length === 0 && !(loadError === 'jobs' && jds.length === 0) && (
-                      <div className="text-center py-8 sm:py-12 text-gray-500">
-                        <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
-                        <p className="text-sm sm:text-base">
-                          {availableJobs.length > 0
-                            ? 'No matching job descriptions found'
-                            : allConfigured
-                              ? 'No jobs available for a new AI interview'
-                              : 'No published jobs available'}
-                        </p>
-                        <p className="text-sm mt-1">
-                          {availableJobs.length > 0
-                            ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
-                            : allConfigured
-                              ? 'Every published job already has an AI interview. Publish a new job to create another one.'
-                              : 'Create and publish a Job first to create AI interviews'}
-                        </p>
+                      <IllustratedEmptyState
+                        bordered={false}
+                        illustration={availableJobs.length > 0
+                          ? <IconTileIllustration icon={Search} />
+                          : <FolderIconIllustration icon={Briefcase} badge={allConfigured ? undefined : 'plus'} />}
+                        title={availableJobs.length > 0
+                          ? 'No matching job descriptions found'
+                          : allConfigured
+                            ? 'No jobs available for a new AI interview'
+                            : 'No published jobs available'}
+                        description={availableJobs.length > 0
+                          ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
+                          : allConfigured
+                            ? 'Every published job already has an AI interview. Publish a new job to create another one.'
+                            : 'Create and publish a Job first to create AI interviews.'}
+                      >
                         {availableJobs.length === 0 && (
                           <Button
                             variant="primary"
@@ -695,7 +723,7 @@ export default function AIInterviewJDSelection() {
                             Create New Job
                           </Button>
                         )}
-                      </div>
+                      </IllustratedEmptyState>
                     )}
 
                     {lineageJobs.length > 0 && (

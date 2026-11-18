@@ -1,6 +1,6 @@
 'use client'
 
-import { FolderInput, FolderRoot, ChevronRight, Download, Trash2, ClipboardList, Archive, ArchiveRestore, Sparkles, Video } from 'lucide-react';
+import { FolderInput, FolderRoot, ChevronRight, Download, Trash2, ClipboardList, Archive, ArchiveRestore, Video } from 'lucide-react';
 import { Folder } from '@/lib/types/types';
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -50,9 +50,6 @@ interface BulkActionsBarProps {
   onUnarchive?: () => void;
   onUnarchiveDisabled?: boolean;
   onUnarchiveDisabledReason?: string;
-  onAITalentMatch?: () => void;
-  onAITalentMatchDisabled?: boolean;
-  onAITalentMatchDisabledReason?: string;
   /** Invites the selected candidates to a published AI interview. */
   onAIInterview?: () => void;
   onAIInterviewDisabled?: boolean;
@@ -83,9 +80,6 @@ export default function BulkActionsBar({
   onUnarchive,
   onUnarchiveDisabled,
   onUnarchiveDisabledReason,
-  onAITalentMatch,
-  onAITalentMatchDisabled,
-  onAITalentMatchDisabledReason,
   onAIInterview,
   onAIInterviewDisabled,
   onAIInterviewDisabledReason,
@@ -501,21 +495,6 @@ export default function BulkActionsBar({
             </button>
           )}
 
-          {onAITalentMatch && (
-            <button
-              onClick={() => {
-                if (onAITalentMatchDisabled) return;
-                onAITalentMatch();
-              }}
-              aria-disabled={!!onAITalentMatchDisabled}
-              className={`${actionBtn} ${onAITalentMatchDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-              aria-label="AI Talent Match" title={onAITalentMatchDisabled ? (onAITalentMatchDisabledReason || 'You do not have permission to run AI talent match') : 'AI Talent Match'}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">AI Talent Match</span>
-              <span className="lg:hidden">AI Match</span>
-            </button>
-          )}
 
           {onDownload && (
             <button

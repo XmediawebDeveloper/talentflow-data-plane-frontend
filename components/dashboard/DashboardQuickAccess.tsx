@@ -257,8 +257,8 @@ export default function DashboardQuickAccess() {
      Management). Chat is open to everyone, so the tile is never locked: it
      opens Teams when the plan and permissions allow it, otherwise Chat. */
   const teamsTile: NavItem = useMemo(() => {
-    // Same rule as the Teams page itself (view, create, or manage users).
-    const canUseTeams = hasPlanFeature('teams') && (hasPerm('canViewTeams') || hasPerm('canCreateTeams') || hasPerm('canManageUsers'));
+    // Same rule as the Teams page and the backend: View Teams (owner always).
+    const canUseTeams = hasPlanFeature('teams') && hasPerm('canViewTeams');
     return {
       id: 'teams',
       label: 'Teams',

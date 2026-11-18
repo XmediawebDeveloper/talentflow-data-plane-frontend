@@ -4,6 +4,77 @@ import { Search, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2,
 import { useState, useEffect, useRef } from 'react';
 import { DateField } from '@/components/ui/date-field';
 import FilterSelect from '@/components/ui/filter-select';
+import { ToolbarResetButton } from '@/components/ui/list-toolbar';
+import { FilterChipsHover, FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
+
+// Labels the filter panel shows for each stored value — shared by the panel
+// and the active-filter tags so a tag reads exactly like the option picked.
+const EDUCATION_CODE_LABELS: Record<string, string> = {
+  bachelors: "Bachelor's Degree",
+  masters: "Master's Degree",
+  doctorate: 'Doctorate (PhD)',
+  associate: 'Associate Degree',
+  diploma: 'High School',
+  certification: 'Professional Certification',
+};
+const SOURCE_TYPE_LABELS: Record<string, string> = {
+  manual_upload: 'Manual Upload',
+  bulk_upload: 'Bulk Upload',
+  api_import: 'API Import',
+  ai_match: 'AI Match',
+};
+const FILTER_KEY_LABELS: Record<string, string> = {
+  experienceRange: 'Experience',
+  education: 'Education',
+  location: 'Location',
+  currentCompany: 'Company',
+  noticePeriod: 'Notice Period',
+  sourceType: 'Source',
+  uploadedBy: 'Uploaded By',
+  uploadDateRange: 'Upload Date',
+};
+const formatChipDate = (v: string) => {
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+  return Number.isNaN(d.getTime())
+    ? v
+    : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+/**
+ * One tag per filter the Filter button's badge counts (same rule as
+ * `activeFilterCount` below), so the badge and the tags always agree. Exported
+ * so a page that adds tags of its own can pass the full list as `filterChips`.
+ */
+export function getResumeFilterChips(filters: any, onFiltersChange: (filters: any) => void): FilterChip[] {
+  const chips: FilterChip[] = [];
+  Object.entries(filters || {}).forEach(([key, value]: [string, any]) => {
+    if (key === 'skills') return;
+    const onRemove = () => onFiltersChange({ ...filters, [key]: null });
+    const label = FILTER_KEY_LABELS[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+    if (key === 'experienceRange') {
+      if (!value || (value.min === undefined && value.max === undefined)) return;
+      const min = value.min ?? 0;
+      const max = value.max ?? '∞';
+      chips.push({ key, label, value: `${min}-${max} years`, onRemove });
+      return;
+    }
+    if (key === 'uploadDateRange') {
+      if (!value || !(value.start || value.end)) return;
+      const start = value.start ? formatChipDate(value.start) : '';
+      const end = value.end ? formatChipDate(value.end) : '';
+      chips.push({ key, label, value: start && end ? `${start} – ${end}` : start ? `From ${start}` : `Until ${end}`, onRemove });
+      return;
+    }
+    if (value === null || value === undefined || value === '') return;
+    let display: string;
+    if (key === 'education') display = EDUCATION_CODE_LABELS[value] ?? String(value);
+    else if (key === 'sourceType') display = SOURCE_TYPE_LABELS[value] ?? String(value);
+    else if (typeof value === 'object') display = Array.isArray(value) ? value.join(', ') : JSON.stringify(value);
+    else display = String(value);
+    chips.push({ key, label, value: display, onRemove });
+  });
+  return chips;
+}
 
 interface SearchFilterBarProps {
   searchQuery: string;
@@ -15,6 +86,12 @@ interface SearchFilterBarProps {
   hideSearch?: boolean;
   inline?: boolean;
   showClearAllFilters?: boolean;
+  /** The active filter tags (hover popup on the Filter button at lg+, last line
+   *  of the filter panel below lg). Defaults to `getResumeFilterChips`; a page
+   *  with extra filters of its own passes the full list. */
+  filterChips?: FilterChip[];
+  /** Rendered right after the search box (e.g. the Resume Database's Versions dropdown). */
+  afterSearch?: React.ReactNode;
 }
 
 export default function SearchFilterBarCompact({
@@ -25,12 +102,13 @@ export default function SearchFilterBarCompact({
   sortBy,
   onSortChange,
   hideSearch = false,
+  afterSearch,
   inline = false,
   showClearAllFilters = true,
+  filterChips,
 }: SearchFilterBarProps) {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
-  const [tempFilters, setTempFilters] = useState(filters);
   const filterPanelRef = useRef<HTMLDivElement>(null);
   /* From sm up the panel hangs off the Filter button's right edge. Where that
      button sits at the LEFT of its toolbar (My Resumes) a 500–700px panel ran
@@ -53,10 +131,6 @@ export default function SearchFilterBarCompact({
   // No local copy and no debounce here any more: the owning page runs the search
   // through `useListSearch`, which holds the typed value and hands the settled
   // one to the fetch. Debouncing in both places just stacked the delays.
-
-  useEffect(() => {
-    setTempFilters(filters);
-  }, [filters]);
 
   // Close filter panel on outside click
   useEffect(() => {
@@ -90,15 +164,8 @@ export default function SearchFilterBarCompact({
     return value !== null && value !== undefined && value !== '';
   }).length;
 
-  const handleApplyFilters = () => {
-    onFiltersChange(tempFilters);
-    setShowAdvancedFilters(false);
-  };
-
   const handleClearFilters = () => {
-    const emptyFilters = {};
-    setTempFilters(emptyFilters);
-    onFiltersChange(emptyFilters);
+    onFiltersChange({});
     // Reset the search box too. job-openings' clearAllFilters() clears the search
     // as well; leaving it set here meant "Clear all" appeared to do nothing when
     // the results were actually still narrowed by the search text.
@@ -180,81 +247,11 @@ export default function SearchFilterBarCompact({
     { value: 'Other', label: 'Other' }
   ];
 
-  // Active filter chips
-  const getActiveFilterChips = () => {
-    const chips: Array<{ label: string; key: string; onRemove: () => void }> = [];
-
-    if (filters.experienceRange?.min !== undefined || filters.experienceRange?.max !== undefined) {
-      const min = filters.experienceRange.min ?? 0;
-      const max = filters.experienceRange.max ?? '∞';
-      chips.push({
-        label: `${min}-${max} years`,
-        key: 'experience',
-        onRemove: () => onFiltersChange({ ...filters, experienceRange: null })
-      });
-    }
-
-    if (filters.education && filters.education !== 'Any') {
-      chips.push({
-        label: mapBackendCodeToDisplay(filters.education),
-        key: 'education',
-        onRemove: () => onFiltersChange({ ...filters, education: null })
-      });
-    }
-
-    if (filters.location) {
-      chips.push({
-        label: filters.location,
-        key: 'location',
-        onRemove: () => onFiltersChange({ ...filters, location: null })
-      });
-    }
-
-    if (filters.currentCompany) {
-      chips.push({
-        label: `Company: ${filters.currentCompany}`,
-        key: 'currentCompany',
-        onRemove: () => onFiltersChange({ ...filters, currentCompany: null })
-      });
-    }
-
-    if (filters.noticePeriod && filters.noticePeriod !== 'Any') {
-      chips.push({
-        label: `Notice: ${filters.noticePeriod}`,
-        key: 'noticePeriod',
-        onRemove: () => onFiltersChange({ ...filters, noticePeriod: null })
-      });
-    }
-
-    if (filters.sourceType) {
-      const sourceLabel = sourceTypes.find(s => s.value === filters.sourceType)?.label || filters.sourceType;
-      chips.push({
-        label: sourceLabel,
-        key: 'sourceType',
-        onRemove: () => onFiltersChange({ ...filters, sourceType: null })
-      });
-    }
-
-    if (filters.uploadedBy) {
-      chips.push({
-        label: `By: ${filters.uploadedBy}`,
-        key: 'uploadedBy',
-        onRemove: () => onFiltersChange({ ...filters, uploadedBy: null })
-      });
-    }
-
-    if (filters.uploadDateRange?.start || filters.uploadDateRange?.end) {
-      const start = filters.uploadDateRange?.start || '';
-      const end = filters.uploadDateRange?.end || '';
-      chips.push({
-        label: `Date: ${start}${start && end ? ' - ' : ''}${end}`,
-        key: 'uploadDateRange',
-        onRemove: () => onFiltersChange({ ...filters, uploadDateRange: null })
-      });
-    }
-
-    return chips;
-  };
+  // Active filter tags — one per counted filter (see getResumeFilterChips).
+  const activeFilterChips = filterChips ?? getResumeFilterChips(filters, onFiltersChange);
+  // The Filter button's number = the tags it shows (incl. a page's own extra tags,
+  // e.g. My Resumes' Folder), so the badge and the tags always agree.
+  const filterBadgeCount = activeFilterChips.length;
 
   return (
     <div className={inline ? "relative" : "bg-white border-b border-gray-200"}>
@@ -285,28 +282,44 @@ export default function SearchFilterBarCompact({
         ) : !inline ? (
           <div className="hidden sm:block flex-1" />
         ) : null}
+        {afterSearch}
 
         {/* Filter Button */}
-        <div className="relative" ref={filterPanelRef}>
+        <div className="relative flex items-center gap-2" ref={filterPanelRef}>
+          {/* Active filter tags: a popup on hovering Filter (laptop / desktop). */}
+          <FilterChipsHover chips={activeFilterChips}>
           <button
             onClick={() => {
               if (!showAdvancedFilters) placeFilterPanel();
               setShowAdvancedFilters(!showAdvancedFilters);
             }}
             className={`flex items-center gap-1.5 ${inline ? 'h-10' : 'h-9'} px-3 rounded-lg font-medium text-sm transition-all ${
-              activeFilterCount > 0
+              filterBadgeCount > 0
                 ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                 : 'bg-slate-100 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue border border-gray-200'
             }`}
           >
             <SlidersHorizontal className="w-4 h-4" />
             <span className="hidden sm:inline">{inline ? 'Filter' : 'Filters'}</span>
-            {activeFilterCount > 0 && (
+            {filterBadgeCount > 0 && (
               <span className="bg-white text-brand-blue text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                {activeFilterCount}
+                {filterBadgeCount}
               </span>
             )}
           </button>
+          </FilterChipsHover>
+          {/* Reset — beside Filter, as on Job Openings: the search, every panel filter
+              and any extra tag the page adds (e.g. My Resumes' Folder). */}
+          {(filterBadgeCount > 0 || !!searchQuery) && (
+            <ToolbarResetButton
+              onClick={() => {
+                const own = new Set(getResumeFilterChips(filters, () => {}).map((c) => c.key));
+                const extras = activeFilterChips.filter((c) => !own.has(c.key));
+                handleClearFilters();
+                extras.forEach((c) => c.onRemove());
+              }}
+            />
+          )}
 
           {/* Filter Panel - Matching Screenshot Layout */}
           {showAdvancedFilters && (
@@ -331,12 +344,12 @@ export default function SearchFilterBarCompact({
                         ].map(range => (
                           <button
                             key={range.label}
-                            onClick={() => setTempFilters({
-                              ...tempFilters,
+                            onClick={() => onFiltersChange({
+                              ...filters,
                               experienceRange: { min: range.min, max: range.max }
                             })}
                             className={`px-3 py-2 text-sm rounded-lg border transition-all ${
-                              tempFilters.experienceRange?.min === range.min && tempFilters.experienceRange?.max === range.max
+                              filters.experienceRange?.min === range.min && filters.experienceRange?.max === range.max
                                 ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                                 : 'bg-white text-gray-700 border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/[0.02]'
                             }`}
@@ -358,7 +371,7 @@ export default function SearchFilterBarCompact({
                     <div className="flex items-center gap-2 tf-row-title">
                       <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Location & Education</span>
-                      {(tempFilters.location || (tempFilters.education && tempFilters.education !== 'Any')) && (
+                      {(filters.location || (filters.education && filters.education !== 'Any')) && (
                         <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">Active</span>
                       )}
                     </div>
@@ -372,18 +385,18 @@ export default function SearchFilterBarCompact({
                           <input
                             type="text"
                             placeholder="e.g., San Francisco"
-                            value={tempFilters.location || ''}
-                            onChange={(e) => setTempFilters({ ...tempFilters, location: e.target.value || null })}
+                            value={filters.location || ''}
+                            onChange={(e) => onFiltersChange({ ...filters, location: e.target.value || null })}
                             className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
                           />
                         </div>
                         <div>
                           <label className="block tf-meta mb-1 sm:mb-1.5">Education</label>
                           <FilterSelect
-                            value={mapBackendCodeToDisplay(tempFilters.education)}
+                            value={mapBackendCodeToDisplay(filters.education)}
                             onChange={(v) => {
                               const backendCode = mapEducationToBackendCode(v);
-                              setTempFilters({ ...tempFilters, education: backendCode });
+                              onFiltersChange({ ...filters, education: backendCode });
                             }}
                             ariaLabel="Education"
                             options={educationLevels.map(level => ({ value: level, label: level }))}
@@ -404,7 +417,7 @@ export default function SearchFilterBarCompact({
                     <div className="flex items-center gap-2 tf-row-title">
                       <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Company & Notice Period</span>
-                      {(tempFilters.currentCompany || (tempFilters.noticePeriod && tempFilters.noticePeriod !== 'Any')) && (
+                      {(filters.currentCompany || (filters.noticePeriod && filters.noticePeriod !== 'Any')) && (
                         <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">Active</span>
                       )}
                     </div>
@@ -418,16 +431,16 @@ export default function SearchFilterBarCompact({
                           <input
                             type="text"
                             placeholder="e.g., Google"
-                            value={tempFilters.currentCompany || ''}
-                            onChange={(e) => setTempFilters({ ...tempFilters, currentCompany: e.target.value || null })}
+                            value={filters.currentCompany || ''}
+                            onChange={(e) => onFiltersChange({ ...filters, currentCompany: e.target.value || null })}
                             className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
                           />
                         </div>
                         <div>
                           <label className="block tf-meta mb-1 sm:mb-1.5">Notice Period</label>
                           <FilterSelect
-                            value={tempFilters.noticePeriod || 'Any'}
-                            onChange={(v) => setTempFilters({ ...tempFilters, noticePeriod: v === 'Any' ? null : v })}
+                            value={filters.noticePeriod || 'Any'}
+                            onChange={(v) => onFiltersChange({ ...filters, noticePeriod: v === 'Any' ? null : v })}
                             ariaLabel="Notice Period"
                             options={noticePeriods.map(period => ({ value: period, label: period }))}
                             className="w-full sm:w-full py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg border-gray-300 bg-gray-50 text-sm text-black"
@@ -447,7 +460,7 @@ export default function SearchFilterBarCompact({
                     <div className="flex items-center gap-2 tf-row-title">
                       <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Date Filters</span>
-                      {(tempFilters.uploadDateRange?.start || tempFilters.uploadDateRange?.end) && (
+                      {(filters.uploadDateRange?.start || filters.uploadDateRange?.end) && (
                         <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">Active</span>
                       )}
                     </div>
@@ -459,18 +472,18 @@ export default function SearchFilterBarCompact({
                       <div className="tf-grid-2">
                         <DateField
                           aria-label="Upload date from"
-                          value={tempFilters.uploadDateRange?.start || ''}
-                          onChange={(v) => setTempFilters({
-                            ...tempFilters,
-                            uploadDateRange: { ...tempFilters.uploadDateRange, start: v || null }
+                          value={filters.uploadDateRange?.start || ''}
+                          onChange={(v) => onFiltersChange({
+                            ...filters,
+                            uploadDateRange: { ...filters.uploadDateRange, start: v || null }
                           })}
                         />
                         <DateField
                           aria-label="Upload date to"
-                          value={tempFilters.uploadDateRange?.end || ''}
-                          onChange={(v) => setTempFilters({
-                            ...tempFilters,
-                            uploadDateRange: { ...tempFilters.uploadDateRange, end: v || null }
+                          value={filters.uploadDateRange?.end || ''}
+                          onChange={(v) => onFiltersChange({
+                            ...filters,
+                            uploadDateRange: { ...filters.uploadDateRange, end: v || null }
                           })}
                         />
                       </div>
@@ -487,7 +500,7 @@ export default function SearchFilterBarCompact({
                     <div className="flex items-center gap-2 tf-row-title">
                       <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Uploaded By & Source</span>
-                      {(tempFilters.uploadedBy || tempFilters.sourceType) && (
+                      {(filters.uploadedBy || filters.sourceType) && (
                         <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">Active</span>
                       )}
                     </div>
@@ -501,16 +514,16 @@ export default function SearchFilterBarCompact({
                           <input
                             type="text"
                             placeholder="Enter name..."
-                            value={tempFilters.uploadedBy || ''}
-                            onChange={(e) => setTempFilters({ ...tempFilters, uploadedBy: e.target.value || null })}
+                            value={filters.uploadedBy || ''}
+                            onChange={(e) => onFiltersChange({ ...filters, uploadedBy: e.target.value || null })}
                             className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
                           />
                         </div>
                         <div>
                           <label className="block tf-meta mb-1 sm:mb-1.5">Source Type</label>
                           <FilterSelect
-                            value={tempFilters.sourceType || ''}
-                            onChange={(v) => setTempFilters({ ...tempFilters, sourceType: v || null })}
+                            value={filters.sourceType || ''}
+                            onChange={(v) => onFiltersChange({ ...filters, sourceType: v || null })}
                             ariaLabel="Source Type"
                             options={sourceTypes}
                             className="w-full sm:w-full py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg border-gray-300 bg-gray-50 text-sm text-black"
@@ -520,6 +533,12 @@ export default function SearchFilterBarCompact({
                     </div>
                   )}
                 </div>
+
+                {/* Active filter tags as the panel's last line — phones / tablets only. */}
+                <FilterChipsPanelLine
+                  chips={activeFilterChips}
+                  className="mt-0 border-t-0 px-3 sm:px-5 pb-3 sm:pb-5"
+                />
               </div>
 
               {/* Footer */}
@@ -531,18 +550,9 @@ export default function SearchFilterBarCompact({
                     <span className="text-gray-500">No filters applied</span>
                   )}
                 </div>
-                {/* Commit button only — matches job-openings, where the panel
-                    confirms and the Clear control lives outside it. The second
-                    "Clear All" that used to sit here duplicated the "Clear all"
-                    in the active-filter chips row below. */}
-                <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-                  <button
-                    onClick={handleApplyFilters}
-                    className="tf-btn tf-btn-primary flex-1 sm:flex-none px-4 sm:px-6 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0"
-                  >
-                    Apply Filters
-                  </button>
-                </div>
+                {/* No Apply / Clear buttons — as on Job Openings, every control
+                    above commits as it changes and the Reset beside the Filter
+                    button clears them. */}
               </div>
             </div>
           )}
@@ -590,36 +600,6 @@ export default function SearchFilterBarCompact({
           )}
         </div>
       </div>
-
-      {/* Active Filter Chips */}
-      {activeFilterCount > 0 && (
-        <div className={inline ? "mt-2 flex flex-wrap gap-1.5 sm:gap-2 items-center" : "pb-3 sm:pb-4 flex flex-wrap gap-1.5 sm:gap-2 items-center"}>
-          <span className="tf-body-muted mr-1">Active filters:</span>
-          {getActiveFilterChips().map((chip) => (
-            <div
-              key={chip.key}
-              className="tf-badge bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20"
-            >
-              <span className="truncate max-w-[120px] sm:max-w-none">{chip.label}</span>
-              <button
-                onClick={chip.onRemove}
-                className="hover:bg-brand-blue/10 rounded-full p-0.5 transition-colors flex-shrink-0"
-               aria-label="Close">
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-          {showClearAllFilters && (
-            <button
-              onClick={handleClearFilters}
-              className="inline-flex items-center gap-1 px-2 py-0.5 text-red-600 hover:bg-red-50 rounded-full text-xs transition-colors ml-1 sm:ml-2"
-            >
-              <X className="w-3 h-3" />
-              Clear all
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -50,6 +50,7 @@ import ListPagination from '@/components/ListPagination';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import NameAvatar from '@/components/ui/name-avatar';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort, type SortDir } from '@/components/ui/sortable-header';
 import type { TeamListSortKey } from '@/components/teams/TeamListTable';
@@ -251,18 +252,12 @@ export default function TeamManagementPage() {
     let isMounted = true;
 
     const initializePage = async () => {
-      // Mirrors routeAccess.ts's rule for this prefix (canViewTeams OR
-      // canCreateTeams) — a create-only user must not be let in by the
-      // route guard/menu and then bounced back out by this re-check.
-      const hasAccess =
-        isTenantAdmin ||
-        hasPermission('canViewTeams') ||
-        hasPermission('canCreateTeams') ||
-        hasPermission('canManageUsers');
+      // Mirrors routeAccess.ts and the backend (/teams needs the owner or
+      // View Teams). No access → Chat, quietly; the Teams tab is greyed out.
+      const hasAccess = isTenantAdmin || hasPermission('canViewTeams');
 
       if (!hasAccess) {
-        toast.error('You do not have permission to access Teams');
-        router.push('/dashboard');
+        router.replace('/organization/team-chat');
         return;
       }
 
@@ -500,6 +495,29 @@ export default function TeamManagementPage() {
       .map((team) => team.team_lead!)
       .filter((lead, index, self) => self.findIndex((item) => item.id === lead.id) === index);
   }, [teams]);
+
+  // Active filter tags — one per filter the toolbar's `filtersApplied` counts
+  // for the current view, each removed with the same setter as its dropdown.
+  const activeFilterChips: FilterChip[] = [
+    isTeamsView && !!filterTeamLead && {
+      key: 'teamLead',
+      label: 'Team Lead',
+      value: teamLeads.find((lead) => lead.id === filterTeamLead)?.name ?? filterTeamLead,
+      onRemove: () => setFilterTeamLead(''),
+    },
+    isTeamsView && !!attentionFilter && {
+      key: 'attention',
+      label: 'Teams',
+      value: attentionFilter === 'no-lead' ? 'No lead' : 'No members',
+      onRemove: () => setAttentionFilter(''),
+    },
+    listView === 'members' && !!memberTeamFilter && {
+      key: 'memberTeam',
+      label: 'Team',
+      value: teams.find((team) => team.id === memberTeamFilter)?.name ?? memberTeamFilter,
+      onRemove: () => setMemberTeamFilter(''),
+    },
+  ].filter(Boolean) as FilterChip[];
 
   const fetchAvailableUsers = async () => {
     setIsLoadingUsers(true);
@@ -1027,6 +1045,10 @@ export default function TeamManagementPage() {
                       />
                     ) : null}
                   </ListToolbar>
+                )}
+                {/* Active filter tags, right under the toolbar row. */}
+                {(teams.length > 0 || listView === 'unassigned') && activeFilterChips.length > 0 && (
+                  <FilterChips className="-mt-1 mb-4" chips={activeFilterChips} />
                 )}
 
                 {isTeamsView && (

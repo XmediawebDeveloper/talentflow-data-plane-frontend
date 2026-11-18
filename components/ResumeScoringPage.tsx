@@ -1,6 +1,7 @@
 "use client";
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { scrollHandoffRef } from '@/lib/scrollHandoff';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
@@ -9,8 +10,9 @@ import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, Tr
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId, Fragment } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useResumeActivityTrail } from '@/lib/utils/resumeActivityTrail';
+import { useResumeActivityTrail, readScoringOrigin, clearScoringOrigin, type TrailCrumb } from '@/lib/utils/resumeActivityTrail';
 import ScoredResumesTable, { candidateGroupKey } from './ScoredResumesTable';
+import { VersionScopeStrip, VersionScopeSwitch } from '@/components/resume-scoring/VersionScope';
 import ListPagination from './ListPagination';
 import SelectSourceModal from './SelectSourceModal';
 import JobOpeningPickerList, { JobSelection } from './jobs/JobOpeningPickerList';
@@ -44,7 +46,9 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/empty-state';
 import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import ScoredResumesExportModal from './ScoredResumesExportModal';
 import { SelectAllMenu, SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import SearchableSelect from '@/components/ui/searchable-select';
@@ -399,7 +403,7 @@ interface PendingScoringData {
 interface BatchProgressItem {
   resumeId: string;
   candidateName: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'already_scored';
   score?: number;
   /** 0-10 Overall Rating — what the progress table's Score column prints. */
   overallRating10?: number;
@@ -412,6 +416,8 @@ interface BatchProgressItem {
 }
 
 interface BatchProgress {
+  /** The Celery batch — the progress popup's Cancel / Retry act on it. */
+  batchId?: string;
   jobId: string;
   jobTitle: string;
   total: number;
@@ -526,6 +532,42 @@ export default function ResumeScoringPage({
   // View state
   const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'candidateView'>('history');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<ScoredResumeData | null>(null);
+  /* Scored from Resume Database (rememberScoringOrigin): that job keeps
+     Resume Database's trail — Dashboard › Resume Database ›
+     <job> — instead of Dashboard › Resume Scoring › <job>. Once the
+     recruiter goes back to the Resume Scoring overview it is dropped. */
+  const [originCrumbs, setOriginCrumbs] = useState<TrailCrumb[] | null>(null);
+  const originJobId = selectedHistoryItem?.jobId;
+  useEffect(() => {
+    // sessionStorage is browser-only, so it is read after render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOriginCrumbs(readScoringOrigin(originJobId));
+  }, [originJobId]);
+  // Dropped on a move BACK to the overview — not on the first render, which
+  // starts in 'history' before the batch's job is opened.
+  const originPrevViewModeRef = useRef(viewMode);
+  useEffect(() => {
+    const cameBack = viewMode === 'history' && originPrevViewModeRef.current !== 'history';
+    originPrevViewModeRef.current = viewMode;
+    if (cameBack) {
+      clearScoringOrigin();
+      setOriginCrumbs(null);
+    }
+  }, [viewMode]);
+  /* Opened from a run's View Results (`?run=<run id>`): the job's results show
+     that run's resumes only, until "Show all candidates". Kept in state, since
+     the page's own navigation (opening a candidate, Back) drops the parameter.
+     Applies only while the run's job is the one on screen. */
+  const runParam = useSearchParams().get('run');
+  const [runFilterId, setRunFilterId] = useState<string | null>(runParam);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (runParam) setRunFilterId(runParam);
+  }, [runParam]);
+  const runFilter = runFilterId ? getJobProgress(runFilterId) : undefined;
+  const runResumeIds = runFilter && selectedHistoryItem && runFilter.items.some(item => item.jobId === selectedHistoryItem.jobId)
+    ? new Set(runFilter.items.map(item => item.resumeId))
+    : null;
   const [isWaitingForInitialJd, setIsWaitingForInitialJd] = useState(false);
   // After scoring completes & history refreshes, auto-navigate to this JD's details
   const [pendingAutoSelectJdId, setPendingAutoSelectJdId] = useState<string | null>(null);
@@ -598,6 +640,10 @@ export default function ResumeScoringPage({
   const resolveHistoryGroupKey = (item: ScoredResumeData): string =>
     resolveHistoryLineageEntry(item)?.job_id || historyLineageKey(item);
   const [selectedJob, setSelectedJob] = useState('');
+  /* The job picker's reload trigger, and whether a run finished in the
+     current "Select Applicants to Score" popup. */
+  const [pickerReloadSignal, setPickerReloadSignal] = useState(0);
+  const scoredInPopupRef = useRef(false);
   const [resumeSource, setResumeSource] = useState<'my-resumes' | 'internal-database' | null>(null);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [showResults, setShowResults] = useState(false);
@@ -743,7 +789,20 @@ export default function ResumeScoringPage({
      job the drill-in or a candidate view is on. null = closed. Rendered in
      each of those views' returns via `inviteDialogEl`. */
   const [inviteRequest, setInviteRequest] = useState<InviteDialogRequest | null>(null);
-  const inviteDialogEl = <JobInviteDialogHost request={inviteRequest} onClose={() => setInviteRequest(null)} openOn="score-resume" />;
+  // True when the open request came from the drill-in table's selection
+  // Actions menu: a successful send then clears that selection (and its bar).
+  const inviteClearsScoredSelectionRef = useRef(false);
+  const inviteDialogEl = (
+    <JobInviteDialogHost
+      request={inviteRequest}
+      onClose={() => setInviteRequest(null)}
+      onSent={() => {
+        if (inviteClearsScoredSelectionRef.current) setSelectedScoredResumes([]);
+        inviteClearsScoredSelectionRef.current = false;
+      }}
+      openOn="score-resume"
+    />
+  );
   /* THE invite popup, global opener — for the lists that span jobs (View by
      Job's Actions, a create round trip's return). */
   const { open: openInvite } = useInviteDialog();
@@ -821,6 +880,8 @@ export default function ResumeScoringPage({
   // State for Progress Tables Modal
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressData, setProgressData] = useState<ScoringProgressItem[]>([]);
+  /* The scoring batch behind the progress popup (Cancel / Retry act on it). */
+  const [progressBatchId, setProgressBatchId] = useState<string | undefined>(undefined);
   const [filterByJobId, setFilterByJobId] = useState<string | undefined>(undefined);
   const [showJobTitleColumn, setShowJobTitleColumn] = useState(false);
   /* The "View Progress" popup on a job row in View by Job spans the job's
@@ -855,6 +916,8 @@ export default function ResumeScoringPage({
       // correctly instead of silently falling through to 'Queued' forever.
       status: item.status === 'already_scored'
         ? 'Already Scored - Skipped' as const
+        : item.status === 'cancelled'
+        ? 'Cancelled' as const
         : normalizeScoringStatus(item.status) === 'completed'
         ? 'Scored successfully' as const
         : normalizeScoringStatus(item.status) === 'failed'
@@ -969,6 +1032,24 @@ export default function ResumeScoringPage({
     industry: historyIndustry,
   } = historySearch.filters;
   const clearHistoryFilters = historySearch.reset;
+  // Active filter tags for the job list — one per filter `activeFilterCount`
+  // counts (every key that differs from its initial ''), so the More Filters
+  // badge and the tags always agree. Each X clears only its own filter.
+  const formatHistoryChipDate = (v: string) => {
+    const d = new Date(`${v}T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const historyFilterChips: FilterChip[] = [
+    historyLocation !== '' && { key: 'location', label: 'Location', value: String(historyLocation), onRemove: () => historySearch.setFilter('location', '') },
+    historyIndustry !== '' && { key: 'industry', label: 'Industry', value: formatIndustryType(historyIndustry), onRemove: () => historySearch.setFilter('industry', '') },
+    historyCreatedBy !== '' && { key: 'createdBy', label: 'Created By', value: String(historyCreatedBy), onRemove: () => historySearch.setFilter('createdBy', '') },
+    historyScoredFrom !== '' && { key: 'scoredFrom', label: 'Scored From', value: formatHistoryChipDate(historyScoredFrom), onRemove: () => historySearch.setFilter('scoredFrom', '') },
+    historyScoredTo !== '' && { key: 'scoredTo', label: 'Scored To', value: formatHistoryChipDate(historyScoredTo), onRemove: () => historySearch.setFilter('scoredTo', '') },
+    historyWorkMode !== '' && { key: 'workMode', label: 'Work Mode', value: formatWorkMode(historyWorkMode), onRemove: () => historySearch.setFilter('workMode', '') },
+    historyJobType !== '' && { key: 'jobType', label: 'Job Type', value: formatEmploymentType(historyJobType), onRemove: () => historySearch.setFilter('jobType', '') },
+  ].filter(Boolean) as FilterChip[];
 
   // Returning to the history list from a drill-in (role details / candidate view)
   // resets the filters to their default state, so Resume Scoring always opens on
@@ -987,6 +1068,19 @@ export default function ResumeScoringPage({
     prevViewModeRef.current = viewMode;
     if (viewMode === 'history' && (previous === 'details' || previous === 'candidateView')) {
       clearHistoryFilters();
+    }
+    /* URL follows the view: back on the list, the address is the list's own
+       (/recruitment/resume-scoring), never a job's `?jd_id=…` (or a
+       candidate's `&score_id=…`) left over from the drill-in — the breadcrumb
+       read "Resume Scoring" while the bar still named a job. One place for
+       every way back (breadcrumbs, Back, minimize, Score Resumes' crumb).
+       `replace`, so the list doesn't add a second history entry. */
+    if (viewMode === 'history' && previous !== 'history' && typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('jd_id') || url.searchParams.has('score_id') || url.searchParams.has('view') || url.searchParams.has('mode')) {
+        ['jd_id', 'score_id', 'view', 'mode'].forEach(k => url.searchParams.delete(k));
+        router.replace(url.pathname + url.search, { scroll: false });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode]);
@@ -1822,6 +1916,8 @@ export default function ResumeScoringPage({
         source: source,
         status: item.status === 'already_scored'
           ? 'Already Scored - Skipped' as const
+          : item.status === 'cancelled'
+          ? 'Cancelled' as const
           : normalizeScoringStatus(item.status) === 'completed'
           ? 'Scored successfully' as const
           : normalizeScoringStatus(item.status) === 'failed'
@@ -1864,12 +1960,11 @@ export default function ResumeScoringPage({
         );
         updateBulkProgress();
 
+        // Stay where the recruiter is (2026-11-17): refresh the data, leave
+        // the popup open showing the result — no page or view change.
         if (onRefreshHistory) {
           invalidateGlobalScoredResumes();
           await onRefreshHistory();
-          setShowProgressModal(false);
-          setPendingAutoSelectJdId(jobId);
-          router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
         }
         return;
       }
@@ -1878,6 +1973,7 @@ export default function ResumeScoringPage({
         console.log(`[ResumeScoringPage] Dispatching ${resumeIds.length} resume(s) to Celery`);
         const batch = await scoringService.startBulkScoringAsync(jobId, resumeIds);
         const batchId = batch.batch_id;
+        setProgressBatchId(batchId);
         console.log(`[ResumeScoringPage] Batch created: ${batchId}`);
 
         // Map resumeId → array index for O(1) status updates
@@ -1942,19 +2038,12 @@ export default function ResumeScoringPage({
               // before anyone could read the failed row's error message. Only
               // auto-advance on a clean run; on any failure, leave the modal
               // open so the user can read it and use Retry/Retry All.
-              if ((status.failed || 0) > 0) {
-                console.log(`[ResumeScoringPage] ${status.failed} item(s) failed — keeping progress modal open`);
-              } else if (onRefreshHistory) {
-                console.log('[ResumeScoringPage] Refreshing scored history...');
+              // Never navigate on completion (2026-11-17): the recruiter stays
+              // on this page and view; the popup stays open with the result,
+              // and only the data underneath is refreshed.
+              if (onRefreshHistory) {
                 invalidateGlobalScoredResumes();
                 await onRefreshHistory();
-                setShowProgressModal(false);
-                setPendingAutoSelectJdId(jobId);
-                router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
-              } else {
-                setTimeout(() => {
-                  window.location.href = `/recruitment/resume-scoring?jd_id=${jobId}`;
-                }, 2000);
               }
             }
           } catch (pollErr) {
@@ -1999,9 +2088,10 @@ export default function ResumeScoringPage({
     // Check if this update shows completion
     // already_scored items count toward total but not toward completed/failed from backend
     const alreadyScoredCount = (batchProgress.items || []).filter(i => i.status === 'already_scored').length;
+    const cancelledCount = (batchProgress.items || []).filter(i => i.status === 'cancelled').length;
     const isComplete = batchProgress.queued === 0 &&
                        batchProgress.processing === 0 &&
-                       (batchProgress.completed + batchProgress.failed + alreadyScoredCount) === batchProgress.total &&
+                       (batchProgress.completed + batchProgress.failed + cancelledCount + alreadyScoredCount) === batchProgress.total &&
                        batchProgress.total > 0;
 
     // Mark job as complete to prevent future updates
@@ -2036,6 +2126,8 @@ export default function ResumeScoringPage({
       source: batchSource,
       status: item.status === 'already_scored'
         ? 'Already Scored - Skipped' as const
+        : item.status === 'cancelled'
+        ? 'Cancelled' as const
         : normalizeScoringStatus(item.status) === 'completed'
         ? 'Scored successfully' as const
         : normalizeScoringStatus(item.status) === 'failed'
@@ -2121,21 +2213,13 @@ export default function ResumeScoringPage({
           })
           .catch(e => console.warn('[ResumeScoringPage] Could not update match statuses from scores:', e))
           .finally(() => {
-            // Step 2: Wait 3 seconds so user can read the correct match results,
-            // then refresh history and close modal
-            setTimeout(() => {
-              invalidateGlobalScoredResumes();
-              onRefreshHistory().then(() => {
-                setShowProgressModal(false);
-                // Trigger auto-navigation to the details view for this JD
-                setPendingAutoSelectJdId(jobId);
-                router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
-              }).catch((err) => {
-                console.error('[ResumeScoringPage] Failed to refresh history after batch:', err);
-                setShowProgressModal(false);
-                setViewMode('history');
-              });
-            }, 3000);
+            // Step 2: refresh the data underneath. The popup stays open and
+            // the page / view do not change (2026-11-17) — the recruiter
+            // leaves through "View Results" or by closing the popup.
+            invalidateGlobalScoredResumes();
+            onRefreshHistory().catch((err) => {
+              console.error('[ResumeScoringPage] Failed to refresh history after batch:', err);
+            });
           });
       }, 2000);
     }
@@ -2264,6 +2348,20 @@ export default function ResumeScoringPage({
 
   const selectedJobData = jobs.find(j => j.id === selectedJob) || (extraJobRecord?.id === selectedJob ? extraJobRecord : undefined);
 
+  /* The "Select Applicants to Score" popup keeps the job it was opened for,
+     so the picker's own selection can be let go of the moment a run finishes
+     (below) without closing the popup that shows its result. */
+  const [modalJobSnapshot, setModalJobSnapshot] = useState<typeof selectedJobData>(undefined);
+  useEffect(() => {
+    if (!showResumeSelectionModal) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setModalJobSnapshot(undefined);
+      return;
+    }
+    if (selectedJobData && !modalJobSnapshot) setModalJobSnapshot(selectedJobData);
+  }, [showResumeSelectionModal, selectedJobData, modalJobSnapshot]);
+  const modalJobData = showResumeSelectionModal ? (modalJobSnapshot ?? selectedJobData) : undefined;
+
   /**
    * A pick (or a cleared pick) from the static job picker below. This page's
    * own `jobs` list is one row per lineage's LATEST published version — a
@@ -2385,35 +2483,51 @@ export default function ResumeScoringPage({
      view's JSX, so moving the page to the results view mid-popup unmounted it
      — the finished popup vanished and the corner widget was left holding a
      "minimised" run nobody had minimised. */
-  const goToResultsFor = async (jobId: string) => {
+  /* Scoring finished / popup closed: refresh the scores only. The page and
+     the view stay as they are (2026-11-17) — no jump to the JD's results;
+     the recruiter goes there through View Results when they want to. */
+  /* After a job is scored and its popup closed (2026-11-17): the job is
+     unpicked and the job list reloads (fresh "Scored" counts) — the page
+     stays where it is. */
+  const clearPickAfterScoring = () => {
+    scoredInPopupRef.current = false;
+    handleJobPicked(null);
+    setPickerReloadSignal(n => n + 1);
+  };
+  const refreshScoresInPlace = async () => {
     invalidateGlobalScoredResumes();
     await onRefreshHistory?.();
-    // Once scoredHistory carries this job's fresh scores, the layout effect on
-    // pendingAutoSelectJdId opens its details view — behind the popup.
-    setPendingAutoSelectJdId(jobId);
-    router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
   };
-  const resumeSelectionModal = showResumeSelectionModal && selectedJobData ? (
+  const resumeSelectionModal = modalJobData ? (
     <SelectSourceModal
-      jobId={selectedJob}
-      jobTitle={selectedJobData.title}
-      jobShortId={selectedJobData.job_id}
-      jobVersion={selectedJobData.current_version && selectedJobData.current_version > 0 ? selectedJobData.current_version : null}
-      onClose={() => setShowResumeSelectionModal(false)}
-      onScoringFinished={() => goToResultsFor(selectedJob)}
-      onScoringComplete={async () => {
-        // The results view is normally already behind the popup; only a
-        // Close that beats that refresh still has to fetch it first.
-        if (!(viewMode === 'details' && selectedHistoryItem?.jobId === selectedJob)) {
-          await goToResultsFor(selectedJob);
-        }
+      jobId={modalJobData.id}
+      jobTitle={modalJobData.title}
+      jobShortId={modalJobData.job_id}
+      jobVersion={modalJobData.current_version && modalJobData.current_version > 0 ? modalJobData.current_version : null}
+      onClose={() => {
         setShowResumeSelectionModal(false);
+        if (scoredInPopupRef.current) clearPickAfterScoring();
+      }}
+      /* A run finished (2026-11-17): let go of the job and reload the job
+         list (fresh "Scored" counts) right away — whichever way the recruiter
+         leaves afterwards (Close, the toast's View, My Activities). The popup
+         stays open on the result; it renders from its own snapshot. */
+      onScoringFinished={() => {
+        scoredInPopupRef.current = true;
+        void refreshScoresInPlace();
+        clearPickAfterScoring();
+      }}
+      onScoringComplete={() => {
+        void refreshScoresInPlace();
+        setShowResumeSelectionModal(false);
+        clearPickAfterScoring();
       }}
       onViewResult={(item) => {
+        const jobIdForResult = modalJobData.id;
         setShowResumeSelectionModal(false);
-        setPendingViewResult({ jobId: selectedJob, resumeId: item.resumeId });
+        setPendingViewResult({ jobId: jobIdForResult, resumeId: item.resumeId });
         const known = scoredHistory
-          .find(h => h.jobId === selectedJob)?.scoredResumes
+          .find(h => h.jobId === jobIdForResult)?.scoredResumes
           ?.some((r: any) => r.resumeId === item.resumeId || r.resume_id === item.resumeId || r.id === item.resumeId);
         if (!known) {
           invalidateGlobalScoredResumes();
@@ -2456,8 +2570,10 @@ export default function ResumeScoringPage({
       {inviteDialogEl}
       <CandidateScoringDetailPage
         allowCreateInviteTarget
+        /* View Resume as an eye on the resume version badge. */
+        viewResumeOnVersionBadge
         /* Invite ▾ → Create / Send for this job, this candidate. */
-        onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem), candidates: asScoreCandidates(candidates) })}
+        onOpenInviteDialog={(kind, candidates) => { inviteClearsScoredSelectionRef.current = false; setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem), candidates: asScoreCandidates(candidates) }); }}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId, resumeVersion) => {
           const row = _scoredList.find((r: any) => r.id === scoreId);
@@ -2484,12 +2600,12 @@ export default function ResumeScoringPage({
           { label: selectedHistoryItem.jobTitle || 'Score' },
         ] : [
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Resume Scoring', onClick: () => {
+          ...(originCrumbs ?? [{ label: 'Resume Scoring', onClick: () => {
             setSelectedCandidateForView(null);
             setSelectedHistoryItem(null);
             setViewMode('history');
             router.push(`/recruitment/resume-scoring`, { scroll: false });
-          } },
+          } }]),
           { label: selectedHistoryItem.jobTitle, onClick: () => {
             setSelectedCandidateForView(null);
             setViewMode('details');
@@ -2574,10 +2690,12 @@ export default function ResumeScoringPage({
       {inviteDialogEl}
       <CandidateScoringDetailPage
         allowCreateInviteTarget
+        /* View Resume as an eye on the resume version badge. */
+        viewResumeOnVersionBadge
         /* Invite ▾ → Create / Send for this score's own job. A row with no
            job ('global'): the detail page opens THE popup itself, on its
            picker of every published one. */
-        onOpenInviteDialog={candidateJdId !== 'global' ? (kind, candidates) => setInviteRequest({
+        onOpenInviteDialog={candidateJdId !== 'global' ? (kind, candidates) => { inviteClearsScoredSelectionRef.current = false; setInviteRequest({
           kind,
           job: {
             jdId: candidateJdId,
@@ -2586,7 +2704,7 @@ export default function ResumeScoringPage({
             versionNumber: selectedCandidateForView.jobVersion,
           },
           candidates: asScoreCandidates(candidates),
-        }) : undefined}
+        }); } : undefined}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId, resumeVersion) => {
           const row = globalScoredResumesVersioned.find((r: any) => r.id === scoreId);
@@ -2723,7 +2841,7 @@ export default function ResumeScoringPage({
        at one version only, "Show All Versions" would re-render the same list. */
     const canShowAllVersions = detailsVersionRows.length > 1 || lineageScoredItems.length > 1;
     const lineageTotalScored = lineageScoredItems.reduce((sum, item) => sum + (item.totalScored || 0), 0);
-    const scoredResumesData = showingAllVersions
+    const allScoredResumesData = showingAllVersions
       /* Each row keeps its OWN version in the Job Version column here, the way
          the cross-job candidates list does — unlike the single-version list
          below, where every row shares the header's version. */
@@ -2732,6 +2850,11 @@ export default function ResumeScoringPage({
         )
       : convertToScoredResumesFormat(selectedHistoryItem)
           .map(r => ({ ...r, jobVersion: detailsVersionNumber }));
+    // Just the run it was opened from (View Results), until "Show all candidates".
+    const runOnly = !!runResumeIds && !showingAllVersions;
+    const scoredResumesData = runOnly
+      ? allScoredResumesData.filter(r => runResumeIds!.has(r.resumeId))
+      : allScoredResumesData;
     const goToVersion = (versionId: string, versionTitle: string) => {
       if (versionId === selectedHistoryItem.jobId) return;
       const stub: ScoredResumeData = {
@@ -2761,11 +2884,11 @@ export default function ResumeScoringPage({
           className="mb-4 md:mb-6"
           items={[
             { label: 'Dashboard', href: '/dashboard' },
-            { label: 'Resume Scoring', onClick: () => {
+            ...(originCrumbs ?? [{ label: 'Resume Scoring', onClick: () => {
               setViewMode('history');
               setSelectedHistoryItem(null);
               setSelectedStatusFilter('all');
-            } },
+            } }]),
             { label: selectedHistoryItem.jobTitle },
           ]}
           actions={(() => {
@@ -2815,7 +2938,7 @@ export default function ResumeScoringPage({
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     {/* JD ID before the title — the same badge the job rows use. */}
                     {jdCodeOf(selectedHistoryItem) && (
-                      <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0 max-w-[9rem] sm:max-w-none truncate" title={jdCodeOf(selectedHistoryItem)}>{jdCodeOf(selectedHistoryItem)}</JobIdBadge>
+                      <JobIdBadge className={JOB_ID_BADGE_FIT} title={jdCodeOf(selectedHistoryItem)}>{jdCodeOf(selectedHistoryItem)}</JobIdBadge>
                     )}
                     <h1 className="tf-page-title [overflow-wrap:anywhere] min-w-0">{selectedHistoryItem.jobTitle}</h1>
                     {/* Disabled / Archived — same badge as the job list row. */}
@@ -2828,106 +2951,43 @@ export default function ResumeScoringPage({
                         </span>
                       );
                     })()}
-                    {detailsVersionNumber && detailsVersionNumber >= 1 && (
-                      detailsVersionRows.length > 1 ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="Switch version"
-                              title="Switch version"
-                              className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue transition-colors flex-shrink-0 whitespace-nowrap"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
-                              v{detailsVersionNumber}
-                              <ChevronDown className="w-3 h-3" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="w-44">
-                            {detailsVersionRows.map(v => (
-                              <DropdownMenuItem
-                                key={v.id}
-                                className="group"
-                                disabled={v.id === selectedHistoryItem.jobId}
-                                onSelect={() => goToVersion(v.id, v.title || selectedHistoryItem.jobTitle)}
-                              >
-                                <span className={MENU_ITEM_SCALE_CLASS}>v{v.version_number}{v.isLatest ? ' · Latest' : ''}</span>
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : (
-                        <span className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full tf-meta bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 flex-shrink-0 whitespace-nowrap">
-                          <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
-                          v{detailsVersionNumber}
-                        </span>
-                      )
-                    )}
-                    {/* "Show All Versions" — every version's scored resumes
-                        for this job in one table, instead of only the version
-                        the page is scoped to. Sits beside the version badge
-                        because it answers the same question the badge asks:
-                        which version's candidates am I looking at. */}
-                    {canShowAllVersions && (
-                      <button
-                        type="button"
-                        aria-pressed={showingAllVersions}
-                        title={
-                          showingAllVersions
-                            ? 'Showing candidates from every version — switch back to this version only'
-                            : 'Show candidates from every version of this job'
-                        }
-                        onClick={() =>
-                          showingAllVersions
-                            ? setAllVersionsJobId(null)
-                            : showAllVersionsFor(selectedHistoryItem)
-                        }
-                        className={`inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors flex-shrink-0 whitespace-nowrap ${
-                          showingAllVersions
-                            ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/15'
-                            : 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue'
-                        }`}
-                      >
-                        {isLoadingAllVersions ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Layers className="w-3 h-3" />
-                        )}
-                        Show All Versions
-                      </button>
-                    )}
-                    {/* "View Job Detail" — the JD this page is scoring against,
-                        read-only. Sits with the version badge and Show All
-                        Versions because all three answer "which job, and which
-                        version, am I looking at"; this one answers it by
-                        showing the JD rather than by naming it.
-
-                        Always available: unlike Show All Versions there is no
-                        precondition — the page cannot be here without a JD to
-                        show. Styled as the group's neutral pill so it reads as
-                        a sibling of the badge, not as a second primary action
-                        competing with Score New Resumes. */}
-                    <button
-                      type="button"
-                      onClick={() => setShowJobDetailModal(true)}
-                      title="View this job description"
-                      className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors flex-shrink-0 whitespace-nowrap bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue"
-                    >
-                      <Eye className="w-3 h-3" />
-                      View Job Detail
-                    </button>
+                    {/* Which version's candidates the list shows: a small
+                        two-way switch (Version vN ▾ | All versions) right
+                        beside the job; the strip below says it and flashes
+                        when it changes. */}
+                    <VersionScopeSwitch
+                      versionNumber={detailsVersionNumber}
+                      versions={detailsVersionRows.map(v => ({
+                        id: v.id,
+                        versionNumber: v.version_number,
+                        isLatest: v.isLatest,
+                        title: v.title,
+                        scored: lineageScoredItems.find(h => h.jobId === v.id)?.totalScored,
+                      }))}
+                      currentId={selectedHistoryItem.jobId}
+                      onPickVersion={v => goToVersion(v.id, v.title || selectedHistoryItem.jobTitle)}
+                      canShowAll={canShowAllVersions}
+                      showingAll={showingAllVersions}
+                      loadingAll={isLoadingAllVersions}
+                      onShowAll={() => showAllVersionsFor(selectedHistoryItem)}
+                      onShowThis={() => setAllVersionsJobId(null)}
+                      onViewJob={() => setShowJobDetailModal(true)}
+                    />
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 tf-meta">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      {formatIST(selectedHistoryItem.scoredAt)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <FileText className="w-3.5 h-3.5" />
-                      {showingAllVersions
-                        ? `${lineageTotalScored} candidates scored across ${lineageScoredItems.length} versions`
-                        : `${selectedHistoryItem.totalScored} candidates scored`}
-                    </span>
+                  <div className="mt-1.5">
+                    <VersionScopeStrip
+                      scopeKey={`${selectedHistoryItem.jobId}:${showingAllVersions}`}
+                      showingAll={showingAllVersions}
+                      versionNumber={detailsVersionNumber}
+                      allVersionsLabel={lineageScoredItems
+                        .map(versionNumberOf)
+                        .filter((v): v is number => v != null)
+                        .sort((x, y) => x - y)
+                        .map(v => `v${v}`)
+                        .join(', ')}
+                      count={showingAllVersions ? lineageTotalScored : selectedHistoryItem.totalScored}
+                      scoredAtLabel={formatIST(selectedHistoryItem.scoredAt)}
+                    />
                   </div>
                 </div>
               </div>
@@ -2978,9 +3038,10 @@ export default function ResumeScoringPage({
                       ? `${detailsJobLockReason} — new resumes can't be scored against it`
                       : !canRunScoring ? 'You do not have permission to score resumes' : ''
                   }
-                  className={`w-full sm:w-auto ${!canRunScoring || detailsJobLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  size="sm"
+                  className={`w-full sm:w-auto whitespace-nowrap ${!canRunScoring || detailsJobLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <ClipboardList className="w-4 h-4" />
+                  <ClipboardList className="w-3.5 h-3.5" />
                   Score New Resumes
                 </Button>
               </div>
@@ -3007,7 +3068,10 @@ export default function ResumeScoringPage({
           onClose={() => setShowJobDetailModal(false)}
           jdId={selectedHistoryItem.jobId}
           jdTitle={selectedHistoryItem.jobTitle}
-          initialVersionNumber={detailsVersionNumber}
+          /* The eye follows the version switch: on one version, that
+             version's JD (with tabs to the others); under All versions,
+             the version list to compare. */
+          initialVersionNumber={showingAllVersions ? undefined : detailsVersionNumber}
           /* Go to JD, moved here from the header: opens the version on
              screen in the popup (this page's version unless another is
              being previewed). */
@@ -3016,12 +3080,34 @@ export default function ResumeScoringPage({
         />
 
         {inviteDialogEl}
+        {/* Opened from a run's View Results: say the list is that run only,
+            and offer the whole job's candidates. */}
+        {runOnly && (
+          <div role="status" className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-brand-blue/[0.06] px-3 py-2 text-sm text-brand-blue ring-1 ring-brand-blue/15">
+            <Info className="h-4 w-4 shrink-0" />
+            <span>
+              Showing the <b className="font-semibold">{scoredResumesData.length}</b> resume{scoredResumesData.length === 1 ? '' : 's'} from this scoring run
+            </span>
+            <button
+              type="button"
+              onClick={() => setRunFilterId(null)}
+              className="ml-auto font-medium underline-offset-2 hover:underline"
+            >
+              Show all candidates ({allScoredResumesData.length})
+            </button>
+          </div>
+        )}
         {/* Scored Resumes Table */}
         <ScoredResumesTable
           resumes={scoredResumesData}
+          /* No "Scored Resumes" heading: the job card above names the list. */
+          title=""
           /* Row Invite ▸ and the selection's Actions → Create / Send
              Assessment | AI Interview for this job — Job Details' popup. */
-          onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem, detailsVersionNumber), candidates: asScoreCandidates(candidates) })}
+          onOpenInviteDialog={(kind, candidates, fromSelection) => {
+            inviteClearsScoredSelectionRef.current = !!fromSelection;
+            setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem, detailsVersionNumber), candidates: asScoreCandidates(candidates) });
+          }}
           displayMode={jobResumesDisplayMode}
           onDisplayModeChange={setJobResumesDisplayMode}
           jobTitle={selectedHistoryItem.jobTitle}
@@ -3098,6 +3184,7 @@ export default function ResumeScoringPage({
         {showProgressModal && (
           <BulkScoringProgressModal
             progressData={progressData}
+            batchId={batchProgress?.batchId ?? progressBatchId}
             // View / a settled row: the scoring result in place, not a new tab.
             onViewResult={openProgressResult}
             onClose={() => {
@@ -3109,6 +3196,7 @@ export default function ResumeScoringPage({
               activeScoringJobs.forEach(job => clearJob(job.jobId));
             }}
             filterByJobId={filterByJobId}
+            headerJobVersion={activeScoringJobs.find(job => job.jobId === filterByJobId)?.jobVersion}
             showJobTitleColumn={showJobTitleColumn}
             showJobColumns={progressSpansJob}
             /* Not tied to `progressSpansJob` like the other two. Job ID / Job
@@ -3439,6 +3527,8 @@ export default function ResumeScoringPage({
           await downloadScorecardsZip(rows, `${base}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
           toast.success(`${rows.length} scorecards downloaded`);
         }
+        // Download is read-only: untick the jobs (hides the Actions bar), no refresh.
+        clearJobSelection();
       } catch (error) {
         console.error('Error downloading scorecards:', error);
         toast.error('Failed to download scorecards');
@@ -3760,7 +3850,7 @@ export default function ResumeScoringPage({
               View by [ Job | Candidates ]
               [☐ Select All ▾]          [⇅ Sort ▾] [⇕]
             From lg the toolbar is unchanged. */}
-        <div className="tf-jobs-toolbar tf-toolbar-card max-lg:mb-4">
+        <div className="tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card max-lg:mb-4">
         {/* Search and Filter Bar — only when there's a list to filter */}
         {scoredHistory.length > 0 && (
           <div className="tf-jobs-contents mb-3">
@@ -3783,6 +3873,8 @@ export default function ResumeScoringPage({
               fitToContainer
               containerBreakpoint="4xl"
               onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
+              // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+              filterChips={historyFilterChips}
               filtersOpen={showHistoryFilters}
               activeFilterCount={historySearch.activeFilterCount}
               filtersApplied={historySearch.filtersApplied}
@@ -3901,21 +3993,10 @@ export default function ResumeScoringPage({
                         ]}
                       />
                     </div>
-                    {/* Done rides the last row of fields, bottom-right, instead
-                        of a footer row of its own — same as View by Candidates.
-                        Clearing lives on the toolbar's Reset. The controls
-                        commit as they change, so Done just closes the panel. */}
-                    <div className="flex items-end justify-end">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => setShowHistoryFilters(false)}
-                        className="!h-[38px] !px-4 !text-sm"
-                      >
-                        Done
-                      </Button>
-                    </div>
                   </div>
+
+                  {/* Active filter tags as the panel's last line — phones / tablets only. */}
+                  <FilterChipsPanelLine chips={historyFilterChips} />
                 </div>
               );
             })()}
@@ -4153,6 +4234,7 @@ export default function ResumeScoringPage({
             )}
           </StickyBulkBar>
         )}
+
         </div>
 
         {/* History List or Empty State */}
@@ -4422,23 +4504,34 @@ export default function ResumeScoringPage({
                        a translating card under the pointer reads as jumpy. */
                     className={`bg-white dark:bg-slate-900 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all duration-150 cursor-pointer ${
                       isJobExpanded || isSelected || isPartlySelected ? 'border-brand-blue/40 dark:border-brand-blue/40' : 'border-gray-300 dark:border-slate-700/60'
-                    } ${isSelected ? '!bg-brand-blue/[0.06] dark:!bg-brand-blue/15' : ''} ${jobListDisplayMode === 'grid' ? 'flex flex-col min-w-0' : ''} ${jobListDisplayMode === 'grid' && isJobExpanded ? 'col-span-full' : ''}`}
+                    } ${isSelected ? '!bg-brand-blue/[0.06] dark:!bg-brand-blue/15' : ''} ${jobListDisplayMode === 'grid' ? `relative group flex flex-col min-w-0 ${gridCardSelectedClass(isSelected)}` : ''} ${jobListDisplayMode === 'grid' && isJobExpanded ? 'col-span-full' : ''}`}
                     // The row opens its candidates in place; the job title (and
                     // the View Details button) still go to the job's own page.
                     onClick={() => toggleJobExpanded(jobKey)}
                     aria-expanded={isJobExpanded}
                   >
+                    {/* Grid cards take the shared round select seal (list rows
+                        keep the square toggle below). */}
+                    {jobListDisplayMode === 'grid' && !item.isProcessing && (
+                      <GridCardSelect
+                        selected={isSelected}
+                        onToggle={() => handleSelectHistoryItem(jobKey)}
+                        label={item.jobTitle || 'job'}
+                        selectionActive={selectedHistoryItems.size > 0}
+                        partial={isPartlySelected}
+                      />
+                    )}
                     <div className={`flex flex-col items-start gap-3 ${jobListDisplayMode === 'grid' ? 'flex-1' : 'sm:flex-row'}`}>
                       {/* No leading icon — the row starts at its JD ID badge. */}
                       <div className="flex-1 min-w-0 w-full">
                         {/* Title row — matches JD list card */}
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <div className={`flex flex-wrap items-center gap-2 mb-2 ${jobListDisplayMode === 'grid' ? 'pl-7' : ''}`}>
                           {/* Checkbox + Job ID + Job Name: one nowrap line at
                               every width — see JOB_HEADLINE_ROW. */}
                           <div className={JOB_HEADLINE_ROW}>
                           {/* Tick the job for Export. Stops the click so it
                               doesn't also open / close the row. */}
-                          {!item.isProcessing && (
+                          {jobListDisplayMode !== 'grid' && !item.isProcessing && (
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); handleSelectHistoryItem(jobKey); }}
@@ -4459,7 +4552,7 @@ export default function ResumeScoringPage({
                           {/* The scoring record's own JD code, else the full JD
                               record's — some scores come back without it. */}
                           {jdCodeOf(item) && (
-                            <JobIdBadge className={`h-7 leading-6 ${JOB_ID_BADGE_FIT}`} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge>
+                            <JobIdBadge className={JOB_ID_BADGE_FIT} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge>
                           )}
                           <h3
                             className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
@@ -4849,7 +4942,7 @@ export default function ResumeScoringPage({
                         )}
                       </td>
                       <td className="tf-td hidden sm:table-cell">
-                        {jdCodeOf(item) ? <JobIdBadge className="inline-flex h-7 items-center">{jdCodeOf(item)}</JobIdBadge> : <span className="tf-hint">—</span>}
+                        {jdCodeOf(item) ? <JobIdBadge className={JOB_ID_BADGE_FIT} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge> : <span className="tf-hint">—</span>}
                       </td>
                       <td className="tf-td">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -4899,7 +4992,8 @@ export default function ResumeScoringPage({
                           {formatIST(item.scoredAt)}
                         </div>
                       </td>
-                      <td className="tf-td hidden md:table-cell">
+                      {/* Scored count centred, like the Exact / Partial / No Match counts beside it. */}
+                      <td className="tf-td hidden md:table-cell text-center">
                         <span className="tf-row-title tabular-nums">
                           {scoredCountValue(item.totalScored, verdictTally)}
                         </span>
@@ -5101,6 +5195,7 @@ export default function ResumeScoringPage({
               return `Scored_Resumes_${matchFilter ? matchFilter.replace(/\s+/g, '_') + '_' : ''}${date}.${ext}`;
             }}
             rowJobCode={(r) => r.jobCode || ''}
+            onExported={clearJobSelection}
             onClose={() => setShowJobExportModal(false)}
           />
         )}
@@ -5113,6 +5208,7 @@ export default function ResumeScoringPage({
         {showProgressModal && (
           <BulkScoringProgressModal
             progressData={progressData}
+            batchId={batchProgress?.batchId ?? progressBatchId}
             // View / a settled row: the scoring result in place, not a new tab.
             onViewResult={openProgressResult}
             onClose={() => {
@@ -5124,6 +5220,7 @@ export default function ResumeScoringPage({
               activeScoringJobs.forEach(job => clearJob(job.jobId));
             }}
             filterByJobId={filterByJobId}
+            headerJobVersion={activeScoringJobs.find(job => job.jobId === filterByJobId)?.jobVersion}
             showJobTitleColumn={showJobTitleColumn}
             showJobColumns={progressSpansJob}
             /* Not tied to `progressSpansJob` like the other two. Job ID / Job
@@ -5605,7 +5702,7 @@ export default function ResumeScoringPage({
                     {/* Phone: one card per session (same groups, same View
                         action); the 9-column table takes over from sm. */}
                     {/* No outer border or padding — just the cards, as the JD Version History. */}
-                    <div className="lg:hidden tf-record-list max-h-[320px] overflow-y-auto overscroll-contain">
+                    <div ref={scrollHandoffRef} className="lg:hidden tf-record-list max-h-[320px] overflow-y-auto">
                       {groups.map((g) => (
                         <MobileRecordCard
                           key={`${g.version}||${g.scoredBy}||${g.date}`}
@@ -5888,19 +5985,19 @@ export default function ResumeScoringPage({
           JobOpeningPickerList), just rendered inline instead of behind a
           popup. Everything after picking a job — Select Resumes, and the
           scoring flow beyond it — stays a popup, unchanged. */}
-      <div className="tf-card-soft p-3 sm:p-4 mb-5">
-        <label className="block tf-label mb-2">
-          Select Job Description
-        </label>
+      <section className="tf-card mb-5 overflow-hidden" aria-label="Select Job Description">
+        <div className="p-3 sm:p-4">
 
         {/* Every non-draft job is listed — Published, Disabled and Archived —
             by its latest non-draft version, with its non-draft versions under
             View Versions (excludeDraftsOnly). Only a Published version can be
             scored; the rest are shown greyed out and unselectable. */}
-        <JobEligibilityNote className="mb-3" />
+        <JobEligibilityNote className="mb-4" showLegend />
 
         <JobOpeningPickerList
           listAnchorRef={jobPickerListRef}
+          reloadSignal={pickerReloadSignal}
+          layout="page"
           selection={pickerSelection}
           onSelectionChange={handleJobPicked}
           onProceed={() => {
@@ -5921,8 +6018,8 @@ export default function ResumeScoringPage({
           /* No ✓ badge on the picked card — the radio + highlight mark it. */
           hideSelectedTick
         />
-
-      </div>
+        </div>
+      </section>
       </div>
 
       {/* Resume Selection Modal — the same self-contained "Select Applicants to
@@ -5967,6 +6064,7 @@ export default function ResumeScoringPage({
       {showProgressModal && (
         <BulkScoringProgressModal
           progressData={progressData}
+          batchId={batchProgress?.batchId ?? progressBatchId}
           // View / a settled row: the scoring result in place, not a new tab.
           onViewResult={openProgressResult}
           onClose={() => {
@@ -5978,6 +6076,7 @@ export default function ResumeScoringPage({
             activeScoringJobs.forEach(job => clearJob(job.jobId));
           }}
           filterByJobId={filterByJobId}
+          headerJobVersion={activeScoringJobs.find(job => job.jobId === filterByJobId)?.jobVersion}
           showJobTitleColumn={showJobTitleColumn}
           /* Re-pulls the scored history behind this popup and drops the cached
              global list, so a run that finished while it was minimised shows

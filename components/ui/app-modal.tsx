@@ -30,12 +30,14 @@ import { Button } from './button';
 
 export type AppModalTone = 'brand' | 'warning' | 'plain';
 
-export type AppModalSize = 'sm' | 'md' | 'lg';
+export type AppModalSize = 'sm' | 'md' | 'lg' | 'xl';
 
 export const APP_MODAL_WIDTH: Record<AppModalSize, string> = {
   sm: 'sm:max-w-md',
   md: 'sm:max-w-2xl',
   lg: 'sm:max-w-4xl',
+  /* Wide tables (bulk invite results: candidate, status, sent for, source, date, action). */
+  xl: 'sm:max-w-6xl',
 };
 
 /** Shared footer-button sizing: same height (Button size md), full-width on phones.
@@ -82,6 +84,8 @@ interface AppModalProps {
   title: ReactNode;
   subtitle?: ReactNode;
   icon?: ReactNode;
+  /** Content at the very start of the header, before the icon (e.g. a Back button). */
+  headerStart?: ReactNode;
   /** Extra content on the right of the header (badges, counters) — never a close button. */
   headerExtra?: ReactNode;
   children: ReactNode;
@@ -167,6 +171,7 @@ export default function AppModal({
   title,
   subtitle,
   icon,
+  headerStart,
   headerExtra,
   children,
   actions,
@@ -215,6 +220,7 @@ export default function AppModal({
           }`}
         >
           <div className="flex min-w-0 flex-1 items-center gap-3">
+            {headerStart}
             {icon && (
               <div
                 className={`flex h-10 w-10 shrink-0 items-center justify-center [&>svg]:h-5 [&>svg]:w-5 ${

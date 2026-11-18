@@ -452,9 +452,12 @@ export default function DashboardPage() {
     let cancelled = false;
 
     (async () => {
+      // Interview stats need AI Interviews access (ai_interview:read) — without
+      // it the call only 403s in the console, so don't make it.
+      const canSeeInterviews = isTenantAdmin || hasPermission('canViewAIInterviews') || hasPermission('canRunAiInterviews');
       const [dashboardRes, interviewRes] = await Promise.allSettled([
         dashboardService.getDashboard(),
-        aiInterviewService.getStats(),
+        canSeeInterviews ? aiInterviewService.getStats() : Promise.reject(new Error('no AI Interviews access')),
       ]);
 
       if (cancelled) return;
@@ -1234,8 +1237,8 @@ export default function DashboardPage() {
           </SectionShell>
         </div> */}
 
-        {/* ── JD ACTIVITY (only if backend returned any) ── */}
-        {jdActivity.length > 0 && (
+        {/* ── JD ACTIVITY ── hidden: the dashboard shows only the banner + Quick Access ── */}
+        {false && jdActivity.length > 0 && (
           <SectionShell
             eyebrow="Jobs"
             title="Recent JD updates"

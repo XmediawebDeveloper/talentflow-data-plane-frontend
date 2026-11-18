@@ -2,10 +2,11 @@
 
 import JobIdBadge, { JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { InviteSourceValue, assessmentInviteSource, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
-import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, ArchiveRestore, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, ArchiveRestore, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square, FileSearch } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { useBackgroundWorkRefresh } from '@/lib/backgroundWorkEvents';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
@@ -45,6 +46,7 @@ import AssessmentInviteTable, {
   isValidInviteEmail,
 } from '@/components/assessments/AssessmentInviteTable';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { type FilterChip } from '@/components/ui/filter-chips';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import { DateField } from '@/components/ui/date-field';
 /* The one position every tab's search row lands in. See the note on the
@@ -116,6 +118,7 @@ import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/se
 import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search, ChevronLeft, ArrowUpDown, Timer } from 'lucide-react';
 import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import TrackInvitesModal from '@/components/TrackInvitesModal';
+import InviteProgressDialog from '@/components/bulk-invite/InviteProgressDialog';
 import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
@@ -165,6 +168,7 @@ import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import InviteStatusChip from '@/components/ui/invite-status-chip';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { jobLineageKey, collapseByLineage as collapseJobLineages, orderTotalJobs } from '@/lib/utils/assessmentJobOrder';
+import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
 
 
 /** What the version-history helpers below read off an assessment row — the
@@ -636,6 +640,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [expandedJobVersionsByJob, setExpandedJobVersionsByJob] =
     useState<Record<string, number[]>>({});
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  /* ⋯ View Progress: the version whose invite sends are shown. */
+  const [progressFor, setProgressFor] = useState<any | null>(null);
   // The open ⋮ dropdown. Only one exists at a time (grid and list views never
   // render together), so a single ref covers both.
   const openMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2367,11 +2373,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     setIsBulkResending(true);
-    await resendInvitationsSequentially(targets);
-    setSelectedInviteIds(new Set());
+    const { sent } = await resendInvitationsSequentially(targets);
     setShowInviteBulkResendConfirm(false);
     setIsBulkResending(false);
-    await loadAllInviteStatuses();
+    /* Queued → clear the selection and reload. Nothing queued (the send
+       failed) → keep the selection so the recruiter can retry. */
+    if (sent > 0) {
+      setSelectedInviteIds(new Set());
+      await loadAllInviteStatuses();
+    }
   };
 
   const handleInviteBulkRevoke = async () => {
@@ -2383,11 +2393,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     setIsBulkRevoking(true);
-    await revokeInvitationsSequentially(targets);
-    setSelectedInviteIds(new Set());
+    const { revoked, failedIds } = await revokeInvitationsSequentially(targets);
     setShowInviteBulkRevokeConfirm(false);
     setIsBulkRevoking(false);
-    await loadAllInviteStatuses();
+    /* Any success: reload (it clears the selection), then keep only the
+       failed rows ticked for a retry. All failed: keep the selection. */
+    if (revoked > 0) {
+      await loadAllInviteStatuses();
+      setSelectedInviteIds(failedIds);
+    }
   };
 
   /* Which row's report is being fetched, so its menu item can show progress
@@ -2500,6 +2514,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         `Downloaded ${eligible.length} report${eligible.length === 1 ? '' : 's'}`
         + (skipped > 0 ? `. ${skipped} invitation${skipped === 1 ? ' has' : 's have'} no report yet.` : '.'),
       );
+      // Download done — clear the selection (hides the Actions bar); no reload.
+      setSelectedInviteIds(new Set());
     } catch (error) {
       console.error('Failed to download invitation report PDFs:', error);
       toast.error('Could not download the reports. Please try again.');
@@ -2711,6 +2727,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       ids: rows.map((row) => String(row.id ?? '')).filter(Boolean),
     });
     setShowResultsExportModal(false);
+    // Export done — clear the selection (hides the Actions bar); no reload.
+    setSelectedResultKeys(new Set());
   };
 
   /* The per-result report PDF the assessment Results page downloads
@@ -2763,6 +2781,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         `Downloaded ${eligible.length} report${eligible.length === 1 ? '' : 's'}`
         + (skipped > 0 ? `. ${skipped} result${skipped === 1 ? ' has' : 's have'} no report yet.` : '.'),
       );
+      // Download done — clear the selection (hides the Actions bar); no reload.
+      setSelectedResultKeys(new Set());
     } catch (error) {
       console.error('Failed to download result PDFs:', error);
       toast.error('Could not download the reports. Please try again.');
@@ -4554,14 +4574,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      carries no send-rate concern, but it stays sequential anyway so a
      mid-batch failure is attributable to one row rather than lost in a
      Promise.allSettled fan-out. */
-  const revokeInvitationsSequentially = async (targets: any[]): Promise<{ revoked: number; failedCount: number }> => {
+  const revokeInvitationsSequentially = async (targets: any[]): Promise<{ revoked: number; failedCount: number; failedIds: Set<string> }> => {
     let revoked = 0;
     let failedCount = 0;
+    // The rows that failed, so the callers can leave just those ticked.
+    const failedIds = new Set<string>();
     for (const inv of targets) {
       const assessmentId = getInviteAssessmentId(inv);
       if (!assessmentId) {
         console.error(`No assessment for invitation ${inv.id}; skipped.`);
         failedCount++;
+        failedIds.add(inv.id);
         continue;
       }
       try {
@@ -4570,6 +4593,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       } catch (error) {
         console.error(`Failed to revoke invitation ${inv.id}:`, error);
         failedCount++;
+        failedIds.add(inv.id);
       }
     }
     if (revoked > 0) {
@@ -4578,7 +4602,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (failedCount > 0) {
       toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
     }
-    return { revoked, failedCount };
+    return { revoked, failedCount, failedIds };
   };
 
   // Bulk resend for the selected Invited/Expired candidates — same endpoint as
@@ -4607,11 +4631,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     setIsBulkResending(true);
-    await resendInvitationsSequentially(targets);
-    setTrackingSelectedIds(new Set());
+    const { sent } = await resendInvitationsSequentially(targets);
     setShowBulkResendConfirm(false);
     setIsBulkResending(false);
-    await refreshInviteSurfaces();
+    /* Queued → clear the selection and refresh. Nothing queued → keep the
+       selection so the recruiter can retry. */
+    if (sent > 0) {
+      setTrackingSelectedIds(new Set());
+      await refreshInviteSurfaces();
+    }
   };
 
   // Bulk revoke for the Track Invites popup — mirrors handleBulkResend, only
@@ -4626,11 +4654,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     setIsBulkRevoking(true);
-    await revokeInvitationsSequentially(targets);
-    setTrackingSelectedIds(new Set());
+    const { revoked, failedIds } = await revokeInvitationsSequentially(targets);
     setShowTrackingBulkRevokeConfirm(false);
     setIsBulkRevoking(false);
-    await refreshInviteSurfaces();
+    /* Any success: keep only the failed rows ticked (retry) and refresh.
+       All failed: keep the selection as is. */
+    if (revoked > 0) {
+      setTrackingSelectedIds(failedIds);
+      await refreshInviteSurfaces();
+    }
   };
 
   // Change email and resend for bounced invitations
@@ -4689,6 +4721,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (!silent) pending.push(reloadAssessments());
     await Promise.all(pending);
   };
+  /* Invites go out in the background after onSent: re-read the counts as they
+     actually go out, and once more when the send finishes. */
+  useBackgroundWorkRefresh(() => {
+    void reloadAssessments();
+    void refreshInviteSurfaces(true);
+  }, ['invite']);
 
   /* The Total Jobs list's rows (filter → one row per job), computed ABOVE the
      early returns below so the focus effect that reads them is a hook called
@@ -4911,6 +4949,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const assessmentFiltersActive = assessmentListSearch.filtersApplied;
   const assessmentListNarrowed = assessmentListSearch.isNarrowed;
   const clearAssessmentFilters = assessmentListSearch.reset;
+
+  /* Active filter tags — dates read like '01 Nov 2026'. */
+  const formatChipDate = (v: string) => {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  /* A From / To pair that counts as ONE filter, as one tag. */
+  const formatChipDateRange = (from: string, to: string) =>
+    from && to
+      ? `${formatChipDate(from)} – ${formatChipDate(to)}`
+      : from ? `From ${formatChipDate(from)}` : `Until ${formatChipDate(to)}`;
+  /* One tag per filter `assessmentFilterCount` counts (each key off its
+     initial value), so the More Filters badge and the tags agree. */
+  const assessmentListChips: FilterChip[] = [
+    filterType !== 'all' && { key: 'type', label: 'Type', value: String(filterType), onRemove: () => assessmentListSearch.setFilter('type', 'all') },
+    filterCreatedBy !== 'all' && { key: 'createdBy', label: 'Created by', value: String(filterCreatedBy), onRemove: () => assessmentListSearch.setFilter('createdBy', 'all') },
+    filterCreatedFrom !== '' && { key: 'createdFrom', label: 'Created from', value: formatChipDate(filterCreatedFrom), onRemove: () => assessmentListSearch.setFilter('createdFrom', '') },
+    filterCreatedTo !== '' && { key: 'createdTo', label: 'Created to', value: formatChipDate(filterCreatedTo), onRemove: () => assessmentListSearch.setFilter('createdTo', '') },
+  ].filter(Boolean) as FilterChip[];
 
 
   const assessmentResultCount = serverTotalJobs ? totalJobsPaged.total : collapsedAssessments.length;
@@ -6302,6 +6361,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
               );
             })()}
+            {/* View Progress — this version's invite sends (Resume Scoring's View Progress). */}
+            <button
+              onClick={() => {
+                setOpenMenuId(null);
+                setProgressFor(assessment);
+              }}
+              className="group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
+            >
+              <TrendingUp className="w-4 h-4 flex-shrink-0 text-brand-blue" />
+              <span className={MENU_ITEM_SCALE_CLASS}>View Progress</span>
+            </button>
             <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
             {/* Draft assessments hide Activate/Archive — drafts
                 go through the configure-page Publish button,
@@ -7140,6 +7210,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 activeFilterCount={assessmentFilterCount}
                 filtersApplied={assessmentFiltersActive}
                 onClearFilters={clearAssessmentFilters}
+                /* Active filter tags: hover popup on More Filters (lg+). */
+                filterChips={assessmentListChips}
                 className="mb-0"
                 /* The page-wide List / Card switch, pinned far right. */
                 trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
@@ -7152,16 +7224,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                    the assessment tabs can open the same object rather than a
                    copy of it. */
                 <ListFilterPanel
-                  footer={
-                    <Button
-                      // The controls above commit as they change, so Done just closes.
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowAssessmentFilters(false)}
-                    >
-                      Done
-                    </Button>
-                  }
+                  chips={assessmentListChips}
                 >
                     <div>
                       <label htmlFor="assessment-type" className="block tf-caption mb-1.5">
@@ -7340,6 +7403,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                    switch tab AND scroll the list section to the top. A bare
                    setActiveTab left the page parked on the stat cards. */
                 onClick={() => openAssessmentsList(tab.key)}
+                role="tab"
+                aria-selected={isActive}
                 aria-current={isActive ? 'page' : undefined}
                 className={`${TAB_PILL_CLASS} ${
                   isActive
@@ -7382,12 +7447,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           return (
             <div className="tf-jobs-contents flex items-center gap-1.5 flex-wrap">
               {/* `contents` from sm (the row as before); on phones one underlined strip. */}
-              <div className="tf-jobs-status-tabs contents">
+              <div className="tf-jobs-status-tabs contents" role="tablist" aria-label="Assessment views">
               {visibleTabs.filter((tab) => !AFTER_DIVIDER.includes(tab.key) && !CANDIDATE_GROUP.includes(tab.key)).map(renderTabPill)}
-              <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
+              <div className="max-md:contents flex items-center gap-1.5 flex-wrap md:ml-1 md:border-l-2 md:border-gray-400 dark:md:border-slate-500 md:pl-2">
                 {visibleTabs.filter((tab) => CANDIDATE_GROUP.includes(tab.key)).map(renderTabPill)}
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
+              <div className="max-md:contents flex items-center gap-1.5 flex-wrap md:ml-1 md:border-l-2 md:border-gray-400 dark:md:border-slate-500 md:pl-2">
                 {visibleTabs.filter((tab) => AFTER_DIVIDER.includes(tab.key)).map(renderTabPill)}
                 {/* Clear Sort — All / Active / Draft / Archived, right after
                     Settings, in Settings' own pill styling. Shown only while
@@ -7464,7 +7529,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
                 className="tf-jobs-refresh flex-shrink-0 !h-9"
               >
-                <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
+                <span className="hidden max-sm:inline 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
               </Button>
               </div>
             </div>
@@ -7478,11 +7543,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             tables sit straight on the page with their own borders — no outer
             box around them. Settings is a form, not a list, so it alone keeps
             the card. */}
-        {/* min-height: keeps a short list (a few rows, an empty result) at
-            least a screen tall. A tab click scrolls the toolbar card to the
-            top; a list that loaded shorter than its skeleton shrank the page
-            under that scroll and the browser snapped back to the stat cards. */}
-        <div className={activeTab === 'settings' ? 'tf-card-soft' : 'min-h-[calc(100dvh-11rem)]'}>
+        {/* No min-height: the list is as tall as its rows, like Job Openings,
+            so one or two rows don't leave a screen of empty space below. */}
+        <div className={activeTab === 'settings' ? 'tf-card-soft' : ''}>
           {/* Assessment List */}
           <div className={activeTab === 'settings' ? 'p-3 sm:p-6' : ''}>
 
@@ -7540,6 +7603,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 completedFrom: filterResultFrom,
                 completedTo: filterResultTo,
               } = completedCandidatesSearch.filters;
+              /* One tag per filter the More Filters badge counts. */
+              const completedCandidateChips: FilterChip[] = [
+                filterResultJob !== '' && { key: 'job', label: 'Job', value: String(filterResultJob), onRemove: () => completedCandidatesSearch.setFilter('job', '') },
+                filterResultOutcome !== 'all' && { key: 'outcome', label: 'Outcome', value: filterResultOutcome === 'pass' ? 'Passed' : 'Failed', onRemove: () => completedCandidatesSearch.setFilter('outcome', 'all') },
+                filterResultFrom !== '' && { key: 'completedFrom', label: 'Completed from', value: formatChipDate(filterResultFrom), onRemove: () => completedCandidatesSearch.setFilter('completedFrom', '') },
+                filterResultTo !== '' && { key: 'completedTo', label: 'Completed to', value: formatChipDate(filterResultTo), onRemove: () => completedCandidatesSearch.setFilter('completedTo', '') },
+              ].filter(Boolean) as FilterChip[];
               /* No results anywhere (not narrowed by this tab's own search or
                  filters) — the tab empty state rather than "no matches". */
               const noResultsAnywhere = completedResultsPaged.total === 0 && !completedCandidatesSearch.isNarrowed;
@@ -7582,6 +7652,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         activeFilterCount={completedCandidatesSearch.activeFilterCount}
                         filtersApplied={completedCandidatesSearch.filtersApplied}
                         onClearFilters={completedCandidatesSearch.reset}
+                        filterChips={completedCandidateChips}
                         className="mb-0"
                         /* The page-wide List / Card switch, pinned far right. */
                         trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
@@ -7666,18 +7737,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </ListToolbar>
 
                       {showCompletedCandidateFilters && (
-                        /* Controls commit as they change, so Done just closes —
-                           the same panel contract the Total Jobs tab uses. */
+                        /* Controls commit as they change; the panel has no
+                           footer — Reset beside More Filters clears it. */
                         <ListFilterPanel
-                          footer={
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setShowCompletedCandidateFilters(false)}
-                            >
-                              Done
-                            </Button>
-                          }
+                          chips={completedCandidateChips}
                         >
                           <SearchableSelect
                             label="Job"
@@ -7747,7 +7810,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {/* No title-strip skeleton either — the loaded card has
                           no title strip to stand in for. */}
                       <div className="tf-card overflow-hidden">
-                        <div className="min-h-[320px] overflow-auto tf-table-shell">
+                        <div className="overflow-auto tf-table-shell">
                           {/* Same floor as the loaded table below, so the rows
                               do not shift sideways when the skeleton swaps
                               out. */}
@@ -7810,6 +7873,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                        search. */
                     <TabEmptyState
                       icon={Users}
+                      illustration={<FolderIconIllustration icon={Users} />}
                       title="No Candidate Results Yet"
                       description="Results appear here once candidates complete an assessment."
                     />
@@ -7824,6 +7888,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       entityLabel="result"
                       emptyTitle="No Candidate Results Yet"
                       onReset={completedCandidatesSearch.reset}
+                      narrowedIllustration={<FolderIconIllustration icon={FileSearch} />}
                     />
                   ) : (
                     <>
@@ -7872,6 +7937,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               selection={{
                                 checked: selectedResultKeys.has(resultRowKey(result)),
                                 onChange: () => toggleResultSelected(result),
+                                active: selectedResultKeys.size > 0,
                               }}
                             />
                           ))}
@@ -7880,7 +7946,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       ) : (
                       <>
                       <div className={`${DESKTOP_TABLE_ONLY} tf-card overflow-hidden`}>
-                        <div className="min-h-[320px] max-h-[calc(100dvh-24rem)] overflow-auto tf-table-shell">
+                        <div className="max-h-[calc(100dvh-24rem)] overflow-auto tf-table-shell">
                         {/* 1500 -> 1720 for the two version columns, then
                             1720 -> 1830 for Assessment Version, then
                             1830 -> 1930 for Job ID. The shell
@@ -8419,6 +8485,28 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 setInviteStatusFilters(EMPTY_INVITE_FILTERS);
                 setInviteStatusPage(1);
               };
+              /* One tag per filter `inviteStatusFilterCount` counts — the date
+                 range is one filter, so one tag. */
+              const inviteStatusChips: FilterChip[] = [
+                inviteStatusFilters.status !== 'all' && {
+                  key: 'status',
+                  label: 'Status',
+                  value: INVITATION_STATUS_TAB_OPTIONS.find((o) => o.value === inviteStatusFilters.status)?.label ?? String(inviteStatusFilters.status),
+                  onRemove: () => {
+                    setInviteStatusFilters({ ...inviteStatusFilters, status: 'all' });
+                    setInviteStatusPage(1);
+                  },
+                },
+                (inviteStatusFilters.dateFrom || inviteStatusFilters.dateTo) && {
+                  key: 'invited',
+                  label: 'Invited',
+                  value: formatChipDateRange(inviteStatusFilters.dateFrom, inviteStatusFilters.dateTo),
+                  onRemove: () => {
+                    setInviteStatusFilters({ ...inviteStatusFilters, dateFrom: '', dateTo: '' });
+                    setInviteStatusPage(1);
+                  },
+                },
+              ].filter(Boolean) as FilterChip[];
 
               /* The row's kebab — the table's Action cell and each card. */
               const renderInviteRowActions = (inv: any) => {
@@ -8518,6 +8606,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         activeFilterCount={inviteStatusFilterCount}
                         filtersApplied={inviteStatusFilterCount > 0}
                         onClearFilters={clearInviteStatusFilters}
+                        filterChips={inviteStatusChips}
                         className="mb-0"
                         /* Shown only while rows are ticked ("N selected"): the
                            tab pills already carry the totals. */
@@ -8606,19 +8695,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </ListToolbar>
 
                       {showInviteStatusFilters && (
-                        /* Commit-as-you-change, Done just closes — the Total
-                           Jobs panel's contract, and the behaviour the filter
-                           bar already had. */
+                        /* Commit-as-you-change, no footer — Reset beside
+                           More Filters clears it. */
                         <ListFilterPanel
-                          footer={
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setShowInviteStatusFilters(false)}
-                            >
-                              Done
-                            </Button>
-                          }
+                          chips={inviteStatusChips}
                         >
                           <div>
                             <label htmlFor="invite-status-filter" className="block tf-caption mb-1.5">
@@ -8697,7 +8777,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
                       {/* Invitations card */}
                       <div className="tf-card overflow-hidden">
-                        <div className="min-h-[320px] overflow-auto tf-table-shell">
+                        <div className="overflow-auto tf-table-shell">
                           <table className="w-full table-auto">
                             <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
@@ -8754,6 +8834,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                        inside the table. */
                     <TabEmptyState
                       icon={Mail}
+                      illustration={<FolderIconIllustration icon={Mail} />}
                       title="No Invitations Sent Yet"
                       description="Invite candidates to an assessment and their status appears here."
                     />
@@ -8955,7 +9036,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       onToggle={() => toggleSelectInvite(inv.id)}
                                       label={inv.candidate_name || inv.candidate_email || 'candidate'}
                                       selectionActive={selectedInviteRows.length > 0}
-                                      inline
                                     />
                                   )}
                                   {/* Select seal and name on one line when the seal is shown; pl-7 clears it. */}
@@ -9016,7 +9096,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           )
                         ) : (
                         <>
-                        <div className={`${DESKTOP_TABLE_ONLY} min-h-[320px] max-h-[calc(100dvh-28rem)] overflow-auto tf-table-shell`}>
+                        <div className={`${DESKTOP_TABLE_ONLY} max-h-[calc(100dvh-28rem)] overflow-auto tf-table-shell`}>
                           {/* 1200 -> 1400 for the two score columns. The shell
                               already scrolls sideways, so this only moves where
                               that scroll starts; leaving it at 1200 would have
@@ -9379,6 +9459,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               tab: `invitation-status:${inviteStatusFilters.status}`,
                               ids: selectedInviteRows.map((inv: any) => String(inv.id ?? '')).filter(Boolean),
                             });
+                            // Export done — clear the selection (hides the Actions bar); no reload.
+                            setSelectedInviteIds(new Set());
                           }}
                           onClose={() => setShowInviteExportModal(false)}
                         />
@@ -9398,11 +9480,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               /* Settings Tab with Sub-tabs */
               <div className="space-y-4 sm:space-y-6">
                 {/* Settings Sub-tabs */}
-                <div className="flex gap-2 sm:gap-4 border-b border-gray-200 dark:border-slate-700 overflow-x-auto scrollbar-hide">
+                <div role="tablist" aria-label="Settings sections" className="flex gap-2 sm:gap-4 border-b border-gray-200 dark:border-slate-700 overflow-x-auto scrollbar-hide">
                   {/* Proctoring & Security — staging-only testing menu; hidden in production. */}
                   {!IS_PRODUCTION_ENV && (
                   <button
                     onClick={() => setSettingsSubTab('proctoring')}
+                    role="tab"
+                    aria-selected={settingsSubTab === 'proctoring'}
                     className={`tf-tab-line shrink-0 ${
                       settingsSubTab === 'proctoring'
                         ? 'tf-tab-line-active'
@@ -9416,6 +9500,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   )}
                   <button
                     onClick={() => setSettingsSubTab('topics')}
+                    role="tab"
+                    aria-selected={settingsSubTab === 'topics'}
                     className={`tf-tab-line shrink-0 ${
                       settingsSubTab === 'topics'
                         ? 'tf-tab-line-active'
@@ -9430,6 +9516,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   {isTenantAdmin && (
                   <button
                     onClick={() => setSettingsSubTab('consent')}
+                    role="tab"
+                    aria-selected={settingsSubTab === 'consent'}
                     className={`tf-tab-line shrink-0 ${
                       settingsSubTab === 'consent'
                         ? 'tf-tab-line-active'
@@ -10105,6 +10193,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   emptyTitle={copy.title}
                   emptyDescription={copy.description}
                   onReset={clearAssessmentFilters}
+                  illustration={<FolderIconIllustration icon={ClipboardList} />}
+                  narrowedIllustration={<FolderIconIllustration icon={FileSearch} />}
                   action={copy.canCreate ? (
                     /* The page's own Create action, permission handling and
                        all, in the shared empty-state button class. */
@@ -10265,6 +10355,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           />
         );
       })()}
+
+      {progressFor?.jd_id && (
+        <InviteProgressDialog
+          kind="assessment"
+          jdId={progressFor.jd_id}
+          versionId={progressFor.id}
+          jdCode={progressFor.jd_short_id}
+          jdTitle={progressFor.jd_title || progressFor.job?.title || stripVersionFromTitle(progressFor.title || '')}
+          versionLabel={`${progressFor.jd_version ? `Job V${progressFor.jd_version} · ` : ''}Assessment V${progressFor.version ?? 1}`}
+          onClose={() => setProgressFor(null)}
+        />
+      )}
 
       {/* Resend confirmation — regenerates token, invalidates old link */}
       <ResendLinkModal

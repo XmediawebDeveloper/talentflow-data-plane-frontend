@@ -67,6 +67,10 @@ export default function InvoicePage() {
         const match = invoices.find((inv) => inv.invoice_number === invoiceNumber) ?? null;
         setInvoice(match);
         setStatus(match ? 'ready' : 'not-found');
+        // Audit trail: invoice opened (fire-and-forget, never blocks the page).
+        if (match) {
+          api.post('/billing/log-view', { kind: 'invoice_viewed', invoice_number: invoiceNumber }).catch(() => {});
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -99,6 +103,8 @@ export default function InvoicePage() {
     setDownloading(true);
     try {
       await generateBillingInvoicePDF(inv, billTo);
+      // Audit trail: invoice PDF downloaded (built in the browser, so report it).
+      api.post('/billing/log-view', { kind: 'invoice_downloaded', invoice_number: inv.invoice_number }).catch(() => {});
     } catch (error) {
       console.error('PDF generation failed:', error);
       toast.error('Failed to generate PDF. Please try again.');

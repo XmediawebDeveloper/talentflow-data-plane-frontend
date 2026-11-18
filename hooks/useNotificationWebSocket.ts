@@ -12,7 +12,7 @@ import { dispatchAccessRestrictedEvent } from '@/lib/services/api';
 const WS_CLOSE_ACCOUNT_INACTIVE = 4403;
 
 interface WebSocketMessage {
-  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated' | 'plan_change_pending' | 'company_profile_updated' | 'access_restricted';
+  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated' | 'plan_change_pending' | 'company_profile_updated' | 'access_restricted' | 'plan_updated';
   data?: any;
 }
 
@@ -66,6 +66,8 @@ export function useNotificationWebSocket({
   const reconnectAttemptsRef = useRef(0);
   const isConnectingRef = useRef(false);
   const isCleaningUpRef = useRef(false);
+  // Notification ids already handled (see the new_notification case).
+  const seenNotificationIdsRef = useRef<Set<string>>(new Set());
 
   // Store callbacks in refs to avoid dependency issues
   const onNewNotificationRef = useRef(onNewNotification);
@@ -181,11 +183,25 @@ export function useNotificationWebSocket({
             console.log('[WebSocket] Received:', message.type);
 
             switch (message.type) {
-              case 'new_notification':
+              case 'new_notification': {
+                /* The server sends each notification straight to this socket
+                   when it holds it AND relays it over Redis for the other
+                   workers — so the same one can arrive twice. Act on it once
+                   (two toasts, badge +2 otherwise). */
+                const id = message.data?.id ? String(message.data.id) : null;
+                if (id) {
+                  if (seenNotificationIdsRef.current.has(id)) break;
+                  seenNotificationIdsRef.current.add(id);
+                  if (seenNotificationIdsRef.current.size > 200) {
+                    const oldest = seenNotificationIdsRef.current.values().next().value;
+                    if (oldest !== undefined) seenNotificationIdsRef.current.delete(oldest);
+                  }
+                }
                 if (onNewNotificationRef.current && message.data) {
                   onNewNotificationRef.current(message.data);
                 }
                 break;
+              }
 
               case 'notification_count':
                 if (onCountUpdateRef.current && message.data?.unread_count !== undefined) {
@@ -217,6 +233,12 @@ export function useNotificationWebSocket({
               case 'plan_change_pending':
                 console.log('[WebSocket] Plan change pending - dispatching event');
                 window.dispatchEvent(new CustomEvent('plan-change-pending', { detail: message.data }));
+                break;
+
+              case 'plan_updated':
+                // A plan bought directly from the company was activated by the Control Plane.
+                console.log('[WebSocket] Plan updated - dispatching event');
+                window.dispatchEvent(new CustomEvent('plan-updated', { detail: message.data }));
                 break;
 
               case 'company_profile_updated':

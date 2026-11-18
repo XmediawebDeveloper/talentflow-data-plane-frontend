@@ -1120,10 +1120,15 @@ export const assessmentService = {
     } catch { /* best-effort audit */ }
   },
 
-  async getResultDetails(assessmentId: string, resultId: string): Promise<DetailedResultResponse> {
+  async getResultDetails(
+    assessmentId: string,
+    resultId: string,
+    options?: { logView?: boolean },
+  ): Promise<DetailedResultResponse> {
     try {
       const response = await api.get<DetailedResultResponse>(
-        `/assessments/${assessmentId}/results/${resultId}`
+        `/assessments/${assessmentId}/results/${resultId}`,
+        options?.logView ? { params: { log_view: true } } : undefined,
       );
       return response.data;
     } catch (error) {

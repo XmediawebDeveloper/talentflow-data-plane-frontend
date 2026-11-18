@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Book,
@@ -24,11 +25,46 @@ import {
   ArrowRight,
   Zap,
   LifeBuoy,
+  Sparkles,
+  Bot,
+  ListChecks,
+  Send,
+  ShieldCheck,
+  X,
+  type LucideIcon,
 } from 'lucide-react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
-// Step component for instructions
+/* ─────────────────────────────────────────────────────────────────────────────
+   Help Center / User Guide.
+
+   Every article describes the app AS IT IS — labels, limits and rules are the
+   ones the UI and backend actually use (button text in quotes is the exact
+   label). When a module changes, update its article here; a guide that names a
+   button that no longer exists is worse than no guide.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+// ── Building blocks ──────────────────────────────────────────────────────────
+
+const H2 = ({ icon: Icon, children }: { icon?: LucideIcon; children: React.ReactNode }) => (
+  <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4 flex items-center gap-2">
+    {Icon && <Icon className="w-5 h-5 text-brand-blue flex-shrink-0" />}
+    {children}
+  </h2>
+);
+
+const Section = ({ title, icon, children, last = false }: { title: string; icon?: LucideIcon; children: React.ReactNode; last?: boolean }) => (
+  <section className={last ? '' : 'mb-10'}>
+    <H2 icon={icon}>{title}</H2>
+    {children}
+  </section>
+);
+
+const P = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+  <p className={`text-gray-600 dark:text-slate-400 leading-relaxed mb-4 ${className}`}>{children}</p>
+);
+
 const Step = ({ number, title, children }: { number: number; title: string; children: React.ReactNode }) => (
   <div className="flex gap-4 mb-6">
     <div className="flex-shrink-0 w-8 h-8 bg-brand-blue text-white rounded-full flex items-center justify-center text-sm font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
@@ -41,7 +77,6 @@ const Step = ({ number, title, children }: { number: number; title: string; chil
   </div>
 );
 
-// Tip/Note component
 const Tip = ({ type = 'tip', children }: { type?: 'tip' | 'warning' | 'info'; children: React.ReactNode }) => {
   const styles = {
     tip: { bg: 'bg-brand-cyan/5', border: 'ring-1 ring-brand-cyan/20', icon: Lightbulb, iconColor: 'text-brand-cyan', label: 'Pro Tip' },
@@ -50,1067 +85,791 @@ const Tip = ({ type = 'tip', children }: { type?: 'tip' | 'warning' | 'info'; ch
   };
   const style = styles[type];
   const Icon = style.icon;
-
   return (
     <div className={`${style.bg} ${style.border} rounded-xl p-4 my-6`}>
       <div className="flex gap-3">
         <Icon className={`w-5 h-5 ${style.iconColor} flex-shrink-0 mt-0.5`} />
         <div className="min-w-0">
           <span className={`font-semibold ${style.iconColor} text-sm`}>{style.label}</span>
-          <p className="text-gray-700 dark:text-slate-300 mt-1">{children}</p>
+          <div className="text-gray-700 dark:text-slate-300 mt-1">{children}</div>
         </div>
       </div>
     </div>
   );
 };
 
-// Feature list item
 const FeatureItem = ({ children }: { children: React.ReactNode }) => (
-  <li className="flex items-start gap-3 py-2">
+  <li className="flex items-start gap-3 py-1.5">
     <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
     <span className="text-gray-700 dark:text-slate-300 min-w-0">{children}</span>
   </li>
 );
 
-// Navigation path item
-const NavPath = ({ children, isLast = false }: { children: React.ReactNode; isLast?: boolean }) => (
-  <span className="inline-flex items-center">
-    <span className="bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded tf-label">{children}</span>
-    {!isLast && <ArrowRight className="w-4 h-4 mx-2 text-gray-400 dark:text-slate-500" />}
-  </span>
+const Features = ({ items }: { items: React.ReactNode[] }) => (
+  <ul className="space-y-0.5 mb-4">{items.map((item, i) => <FeatureItem key={i}>{item}</FeatureItem>)}</ul>
 );
 
-// Help articles content
-// Plans Overview — one list feeding both the desktop table and the phone cards. Declared before
-// helpArticles, whose JSX is built when the module loads.
-const PLAN_OVERVIEW_ROWS: [feature: string, starter: string, professional: string, enterprise: string][] = [
-  ['Users', '3', '10', 'Unlimited'],
-  ['Resume Storage', '100/mo', '500/mo', 'Unlimited'],
-  ['Assessments', '10/mo', '50/mo', 'Unlimited'],
-  ['AI Features', 'Basic', 'Advanced', 'Premium'],
-  ['Support', 'Email', 'Priority', 'Dedicated'],
-];
+/** "Where to find it" breadcrumb. The last crumb links to the page when `href` is set. */
+const NavPath = ({ items, href }: { items: string[]; href?: string }) => (
+  <div className="mb-3 flex flex-wrap items-center gap-y-2">
+    {items.map((item, i) => {
+      const isLast = i === items.length - 1;
+      const chip = isLast && href ? (
+        <Link href={href} className="bg-brand-blue/10 text-brand-blue px-2 py-1 rounded tf-label hover:bg-brand-blue/15 inline-flex items-center gap-1">
+          {item}
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      ) : (
+        <span className="bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded tf-label">{item}</span>
+      );
+      return (
+        <span key={item} className="inline-flex items-center">
+          {chip}
+          {!isLast && <ChevronRight className="w-4 h-4 mx-1.5 text-gray-400 dark:text-slate-500" />}
+        </span>
+      );
+    })}
+  </div>
+);
 
-const helpArticles: Record<string, {
+const CardGrid = ({ items, cols = 2 }: { items: [title: string, text: React.ReactNode][]; cols?: 2 | 3 }) => (
+  <div className={`grid gap-3 mb-4 ${cols === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+    {items.map(([title, text]) => (
+      <div key={title} className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg min-w-0">
+        <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">{title}</div>
+        <div className="tf-body-secondary">{text}</div>
+      </div>
+    ))}
+  </div>
+);
+
+/** Two-or-more column reference table; cards on phones, a table from lg up. */
+const RefTable = ({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) => (
+  <div className="mb-4">
+    <div className={`overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700 tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
+      <table className="w-full">
+        <thead className="bg-white dark:bg-slate-900">
+          <tr>{head.map((h) => <th key={h} className="tf-th-cell text-left tf-th">{h}</th>)}</tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+          {rows.map((row, r) => (
+            <tr key={r}>
+              {row.map((cell, c) => (
+                <td key={c} className={`tf-td ${c === 0 ? 'tf-row-name' : 'tf-body-secondary'}`}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    <MobileRecordList>
+      {rows.map((row, r) => (
+        <MobileRecordCard
+          key={r}
+          title={row[0]}
+          fields={row.slice(1).map((value, c) => ({ label: head[c + 1], value }))}
+        />
+      ))}
+    </MobileRecordList>
+  </div>
+);
+
+const Pills = ({ items }: { items: string[] }) => (
+  <div className="flex flex-wrap gap-2 mb-4">
+    {items.map((item) => (
+      <span key={item} className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">{item}</span>
+    ))}
+  </div>
+);
+
+const StatusBand = ({ tone, label, text }: { tone: 'success' | 'warning' | 'muted'; label: string; text: React.ReactNode }) => {
+  const toneClass = {
+    success: 'bg-success-subtle ring-1 ring-success-line text-success-strong',
+    warning: 'bg-warning-subtle ring-1 ring-warning-line text-warning-strong',
+    muted: 'bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300',
+  }[tone];
+  return (
+    <div className={`flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 p-4 rounded-lg ${toneClass}`}>
+      <div className="font-semibold sm:w-36 flex-shrink-0">{label}</div>
+      <div className="text-sm min-w-0">{text}</div>
+    </div>
+  );
+};
+
+// ── Articles ─────────────────────────────────────────────────────────────────
+
+type Article = {
   id: string;
   title: string;
   subtitle: string;
   category: string;
   readTime: string;
-  icon: any;
+  icon: LucideIcon;
+  /** Extra words the search box should match (labels, synonyms). */
+  keywords: string;
   content: React.ReactNode;
-}> = {
+};
+
+const helpArticles: Record<string, Article> = {
   'getting-started': {
     id: 'getting-started',
     title: 'Getting Started with TalentFlow',
-    subtitle: 'Everything you need to know to start hiring smarter',
+    subtitle: 'Find your way around and set up your hiring workflow',
     category: 'basics',
     readTime: '5 min',
     icon: Book,
+    keywords: 'dashboard quick access navigation menu profile header units chat notifications bell first steps',
     content: (
       <>
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4 flex items-center gap-2">
-            <Zap className="w-5 h-5 text-brand-blue" />
-            Welcome to TalentFlow
-          </h2>
-          <p className="text-gray-600 dark:text-slate-400 leading-relaxed mb-4">
-            TalentFlow is a comprehensive AI-powered recruitment platform designed to streamline your hiring process.
-            From parsing resumes to conducting AI interviews, we've got you covered.
-          </p>
-          <p className="text-gray-600 dark:text-slate-400 leading-relaxed">
-            This guide will walk you through the essential steps to get your recruitment workflow up and running.
-          </p>
-        </section>
+        <Section title="Welcome to TalentFlow" icon={Zap}>
+          <P>
+            TalentFlow is an AI-powered recruitment platform: create job descriptions, build a resume database,
+            score and match candidates with AI, then evaluate them with AI Assessments and AI Interviews.
+          </P>
+        </Section>
 
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-6">Quick Start Steps</h2>
+        <Section title="Finding your way around" icon={ListChecks}>
+          <CardGrid items={[
+            ['Dashboard → Quick access', 'Tiles for Job Descriptions, Resume Scoring, AI Talent Match, AI Assessments, AI Interviews, Resume Database, User Management and Teams.'],
+            ['Profile menu (your name, top right)', 'Profile Settings, Upgrade Plans, Company Profile, Audit Log, User Guide, Support Tickets and Sign Out.'],
+            ['Units pill (header)', 'Shows how many units you have left. Open it to see each unit type, or click "Purchase Add-ons".'],
+            ['Chat & notifications (header)', 'The chat icon opens Team Chat with its own unread badge; the bell shows system notifications.'],
+          ]} />
+          <Tip type="info">
+            Items you cannot use are never hidden — they are greyed out, and hovering them tells you why (missing
+            permission or not in your plan). Ask your account owner if you need access.
+          </Tip>
+        </Section>
 
-          <Step number={1} title="Set up your company profile">
-            <p className="mb-3">Start by configuring your organization's details.</p>
-            <div className="mb-3">
-              <NavPath>Organization</NavPath>
-              <NavPath isLast>Company Profile</NavPath>
-            </div>
-            <ul className="space-y-1 text-sm">
-              <FeatureItem>Add your company logo and branding</FeatureItem>
-              <FeatureItem>Enter company name and description</FeatureItem>
-              <FeatureItem>Configure notification preferences</FeatureItem>
-            </ul>
+        <Section title="Quick start">
+          <Step number={1} title="Complete your company profile">
+            <NavPath items={['Profile menu', 'Company Profile']} href="/organization/company-profile" />
+            <p>Add contact details, industry, company size, headquarters address and an About section.</p>
           </Step>
-
-          <Step number={2} title="Invite your team members">
-            <p className="mb-3">Add recruiters and hiring managers to collaborate.</p>
-            <div className="mb-3">
-              <NavPath>Organization</NavPath>
-              <NavPath isLast>User Management</NavPath>
-            </div>
-            <ul className="space-y-1 text-sm">
-              <FeatureItem>Click "Invite User" to add team members</FeatureItem>
-              <FeatureItem>Assign roles: Admin, Recruiter, or Viewer</FeatureItem>
-              <FeatureItem>Team members receive email invitations</FeatureItem>
-            </ul>
+          <Step number={2} title="Invite your team">
+            <NavPath items={['Dashboard', 'User Management']} href="/organization/user-management" />
+            <p>Click <strong>“Invite User”</strong> and pick a role. They receive an email with a temporary password and set their own on first login.</p>
           </Step>
-
-          <Step number={3} title="Create your first Job Description">
-            <p className="mb-3">Define the position you're hiring for.</p>
-            <div className="mb-3">
-              <NavPath>Recruitment</NavPath>
-              <NavPath isLast>Job Descriptions</NavPath>
-            </div>
-            <ul className="space-y-1 text-sm">
-              <FeatureItem>Click "Create JD" to start</FeatureItem>
-              <FeatureItem>Use AI to generate job requirements</FeatureItem>
-              <FeatureItem>Add skills, experience, and qualifications</FeatureItem>
-            </ul>
+          <Step number={3} title="Create a job description">
+            <NavPath items={['Dashboard', 'Job Descriptions']} href="/recruitment/job-openings" />
+            <p>Click <strong>“Create New Job”</strong>, let AI write it (or paste your own), review the extracted skills and publish.</p>
           </Step>
-
-          <Step number={4} title="Upload candidate resumes">
-            <p className="mb-3">Build your talent pipeline with AI-powered parsing.</p>
-            <div className="mb-3">
-              <NavPath>Recruitment</NavPath>
-              <NavPath isLast>Resume Database</NavPath>
-            </div>
-            <ul className="space-y-1 text-sm">
-              <FeatureItem>Upload individual or bulk resumes (PDF, DOC)</FeatureItem>
-              <FeatureItem>AI automatically extracts candidate information</FeatureItem>
-              <FeatureItem>Organize candidates into folders</FeatureItem>
-            </ul>
+          <Step number={4} title="Upload resumes">
+            <NavPath items={['Dashboard', 'Resume Database']} href="/recruitment/resume-database" />
+            <p>Click <strong>“Upload Resume”</strong> — one file or up to 100 at once. AI extracts the candidate details.</p>
           </Step>
-
-          <Step number={5} title="Start screening candidates">
-            <p className="mb-3">Use AI tools to find the best matches.</p>
-            <ul className="space-y-1 text-sm">
-              <FeatureItem>Use <strong>AI Talent Match</strong> to find best candidates</FeatureItem>
-              <FeatureItem>Use <strong>Resume Scoring</strong> to rank candidates</FeatureItem>
-              <FeatureItem>Create <strong>Assessments</strong> for shortlisted candidates</FeatureItem>
-            </ul>
+          <Step number={5} title="Find and evaluate candidates">
+            <Features items={[
+              <><strong>AI Talent Match</strong> — find the closest resumes for a job (free)</>,
+              <><strong>Resume Scoring</strong> — a detailed AI score out of 10 per candidate</>,
+              <><strong>AI Assessments</strong> and <strong>AI Interviews</strong> — invite shortlisted candidates</>,
+            ]} />
           </Step>
-        </section>
+        </Section>
 
-        <Tip type="tip">
-          Take advantage of the Quick Tour feature (button in the header) for an interactive walkthrough of all features.
-        </Tip>
-
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Dashboard Overview</h2>
-          <p className="text-gray-600 dark:text-slate-400 leading-relaxed mb-4">
-            Your dashboard provides a quick snapshot of your recruitment activity:
-          </p>
-          <div className="tf-grid-2">
-            <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Active Job Openings</div>
-              <div className="tf-body-secondary">Track open positions and their status</div>
-            </div>
-            <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Recent Candidates</div>
-              <div className="tf-body-secondary">Latest applications and uploads</div>
-            </div>
-            <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Pending Assessments</div>
-              <div className="tf-body-secondary">Assessments awaiting completion</div>
-            </div>
-            <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Team Activity</div>
-              <div className="tf-body-secondary">Recent actions by team members</div>
-            </div>
-          </div>
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Need More Help?</h2>
-          <div className="bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-xl p-6">
-            <p className="mb-4 text-gray-700 dark:text-slate-300">Our support team is here to help you succeed.</p>
-            <div className="flex flex-wrap gap-3">
-              <span className="bg-white dark:bg-slate-900 ring-1 ring-brand-blue/15 text-brand-blue px-3 py-1 rounded-full text-sm font-medium">Browse Knowledge Base</span>
-              <span className="bg-white dark:bg-slate-900 ring-1 ring-brand-blue/15 text-brand-blue px-3 py-1 rounded-full text-sm font-medium">Contact Support</span>
-              <span className="bg-white dark:bg-slate-900 ring-1 ring-brand-blue/15 text-brand-blue px-3 py-1 rounded-full text-sm font-medium">Email: support@talentflow.com</span>
-            </div>
-          </div>
-        </section>
+        <Section title="Need more help?" last>
+          <P className="mb-0">
+            Raise a ticket from <Link href="/support-tickets" className="text-brand-blue hover:underline">Support Tickets</Link> or
+            email <a href="mailto:support@talentflow.com" className="text-brand-blue hover:underline">support@talentflow.com</a>.
+          </P>
+        </Section>
       </>
     ),
   },
+
   'create-job-description': {
     id: 'create-job-description',
     title: 'How to Create a Job Description',
-    subtitle: 'Step-by-step guide to creating effective job postings',
+    subtitle: 'AI-generated or manual JDs, extraction, publishing and versions',
     category: 'recruitment',
-    readTime: '8 min',
+    readTime: '7 min',
     icon: Briefcase,
+    keywords: 'jd job opening create new job ai generated manual extract review publish republish draft disable archive version must-have nice-to-have skills salary',
     content: (
       <>
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Overview</h2>
-          <p className="text-gray-600 dark:text-slate-400 leading-relaxed">
-            Job Descriptions (JDs) are the foundation of your recruitment process. A well-crafted JD helps attract
-            the right candidates and enables our AI to make better matches. TalentFlow makes it easy to create
-            professional, comprehensive job descriptions.
-          </p>
-        </section>
+        <Section title="Overview">
+          <P>
+            Every job description (JD) is the source for scoring, matching, assessments and AI interviews — the
+            skills you mark as <strong>Must-Have</strong> and <strong>Nice-to-Have</strong> drive how candidates are evaluated.
+          </P>
+          <NavPath items={['Dashboard', 'Job Descriptions']} href="/recruitment/job-openings" />
+        </Section>
 
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-6">Step-by-Step Guide</h2>
-
-          <Step number={1} title="Navigate to JD Creation">
-            <div className="mb-3">
-              <NavPath>Recruitment</NavPath>
-              <NavPath>Job Descriptions</NavPath>
-              <NavPath isLast>Create JD</NavPath>
-            </div>
-            <p>Click the "Create JD" button to open the job description form.</p>
+        <Section title="Creating a JD">
+          <Step number={1} title="Click &quot;Create New Job&quot;">
+            <p className="mb-3">Choose how to start:</p>
+            <CardGrid items={[
+              ['AI-Generated JD', 'Enter the job title and a short brief; AI writes a professional job description.'],
+              ['Manual Input', 'Write or paste your own job description.'],
+            ]} />
           </Step>
-
-          <Step number={2} title="Enter Basic Information">
-            <p className="mb-3">Fill in the essential job details:</p>
-            <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4 space-y-3">
-              <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
-                <span className="font-medium text-gray-700 dark:text-slate-300">Job Title</span>
-                <span className="tf-body-muted">e.g., "Senior React Developer"</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
-                <span className="font-medium text-gray-700 dark:text-slate-300">Department</span>
-                <span className="tf-body-muted">Select or create new</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
-                <span className="font-medium text-gray-700 dark:text-slate-300">Employment Type</span>
-                <span className="tf-body-muted">Full-time, Part-time, Contract</span>
-              </div>
-              <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
-                <span className="font-medium text-gray-700 dark:text-slate-300">Location</span>
-                <span className="tf-body-muted">Office location or "Remote"</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium text-gray-700 dark:text-slate-300">Salary Range</span>
-                <span className="tf-body-muted">Optional but recommended</span>
-              </div>
-            </div>
+          <Step number={2} title="Extract">
+            <p className="mb-3">AI reads the JD and fills in the structured details. Fields marked * are required:</p>
+            <Pills items={['Must-Have Skills *', 'Nice-to-Have Skills', 'Must-Have / Nice-to-Have Additional Requirements', 'Experience *', 'Industry Type *', 'Locations *', 'Employment Type', 'Work Mode', 'Salary Range', 'Certifications', 'Domain Keywords']} />
+            <p>Drag a skill (or use the arrow buttons) to move it between Must-Have and Nice-to-Have.</p>
           </Step>
-
-          <Step number={3} title="Define Job Requirements">
-            <p className="mb-4">Specify what you're looking for in candidates:</p>
-
-            <div className="mb-4">
-              <h5 className="font-medium text-gray-800 dark:text-slate-200 mb-2">Experience Level</h5>
-              <div className="flex flex-wrap gap-2">
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Entry (0-2 yrs)</span>
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Mid (2-5 yrs)</span>
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Senior (5-8 yrs)</span>
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Lead (8+ yrs)</span>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <h5 className="font-medium text-gray-800 dark:text-slate-200 mb-2">Required Skills</h5>
-              <ul className="space-y-1 text-sm">
-                <FeatureItem>Add technical skills relevant to the role</FeatureItem>
-                <FeatureItem>Include soft skills (communication, teamwork)</FeatureItem>
-                <FeatureItem>Mark skills as "Required" or "Nice to have"</FeatureItem>
-              </ul>
-            </div>
+          <Step number={3} title="Review">
+            <p>Check everything, then click <strong>“Confirm &amp; Publish”</strong> — or <strong>“Save as Draft”</strong> to finish later.</p>
           </Step>
-
-          <Step number={4} title="Use AI-Assisted Content Generation">
-            <p className="mb-3">Let AI help you write compelling job descriptions:</p>
-            <ul className="space-y-1 text-sm">
-              <FeatureItem>Click the <strong>"Generate with AI"</strong> button</FeatureItem>
-              <FeatureItem>AI creates professional job descriptions based on your inputs</FeatureItem>
-              <FeatureItem>Review and customize the generated content</FeatureItem>
-              <FeatureItem>Add company-specific requirements and culture points</FeatureItem>
-            </ul>
+          <Step number={4} title="Publish">
+            <p>Only <strong>Published</strong> jobs can be scored, matched, assessed or interviewed. Drafts are not offered anywhere else.</p>
           </Step>
-
-          <Step number={5} title="Review & Publish">
-            <ul className="space-y-1 text-sm">
-              <FeatureItem>Preview how the JD will appear to candidates</FeatureItem>
-              <FeatureItem>Verify all requirements are accurately listed</FeatureItem>
-              <FeatureItem>Click <strong>"Publish"</strong> to make it active</FeatureItem>
-            </ul>
-          </Step>
-        </section>
+        </Section>
 
         <Tip type="tip">
-          Be specific about requirements but avoid unnecessarily long lists. Focus on 5-7 key responsibilities
-          and must-have skills. This helps attract qualified candidates without deterring good fits.
+          Be precise with Must-Have skills: a candidate who fails any required criterion is a <strong>No Match</strong> in
+          Resume Scoring. Put desirable-but-optional skills in Nice-to-Have.
         </Tip>
 
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Best Practices</h2>
-          <div className="grid gap-3">
-            <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-gray-900 dark:text-slate-50">Use clear, inclusive language</div>
-                <div className="tf-body-secondary">Avoid jargon and gendered terms</div>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-gray-900 dark:text-slate-50">Include salary range</div>
-                <div className="tf-body-secondary">Increases application quality by 30%</div>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-gray-900 dark:text-slate-50">Highlight growth opportunities</div>
-                <div className="tf-body-secondary">Mention career paths and learning</div>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-gray-900 dark:text-slate-50">Describe your team</div>
-                <div className="tf-body-secondary">Team size, reporting structure, collaboration style</div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <Section title="Private and shared notes">
+          <RefTable head={['Field', 'Who sees it']} rows={[
+            ['Additional Details', 'Visible to candidates'],
+            ['Assessment Guidance', 'Visible to the assessment team'],
+            ['Internal Recruiter Notes', 'Private'],
+          ]} />
+        </Section>
 
-        <section>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Managing Job Descriptions</h2>
-          <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700 tf-table-shell">
-            <table className="w-full">
-              <thead className="bg-white dark:bg-slate-900">
-                <tr>
-                  <th className="tf-th-cell text-left tf-th">Action</th>
-                  <th className="tf-th-cell text-left tf-th">Description</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-                <tr>
-                  <td className="tf-td tf-row-name">Edit JD</td>
-                  <td className="tf-td tf-body-secondary">Click on any JD to modify details</td>
-                </tr>
-                <tr>
-                  <td className="tf-td tf-row-name">Clone JD</td>
-                  <td className="tf-td tf-body-secondary">Duplicate an existing JD as a template</td>
-                </tr>
-                <tr>
-                  <td className="tf-td tf-row-name">Archive JD</td>
-                  <td className="tf-td tf-body-secondary">Close positions no longer hiring</td>
-                </tr>
-                <tr>
-                  <td className="tf-td tf-row-name">Delete JD</td>
-                  <td className="tf-td tf-body-secondary">Permanently remove (requires confirmation)</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <Section title="Editing and versions">
+          <Features items={[
+            'A JD that is not in use yet is edited in place.',
+            <>A JD already used for scoring, matching, assessments or interviews cannot be changed — choose <strong>“Create New Version”</strong>. The new version starts as a draft; publishing it makes it the latest.</>,
+            'A job can have at most 5 versions. Click "View Versions" on a row to see its version history.',
+          ]} />
+        </Section>
+
+        <Section title="Managing jobs" last>
+          <RefTable head={['Action', 'What it does']} rows={[
+            ['Edit / View', 'Open the JD (icons on each row)'],
+            ['View Scored · AI Talent Match · Score Resumes', 'Jump straight to that job in each module (row ⋮ menu)'],
+            ['Invite Assessment · Invite AI Interview', 'Available on published jobs'],
+            ['Disable Job / Re-enable JD', 'Stop using a job without archiving it'],
+            ['Archive Job / Unarchive Job', 'Move closed positions out of the way'],
+            ['Delete Job', 'Permanent — if the JD is in use, disabling is recommended instead'],
+            ['Export Selected', 'Tick jobs and export them (bulk bar)'],
+          ]} />
+        </Section>
       </>
     ),
   },
+
   'upload-parse-resumes': {
     id: 'upload-parse-resumes',
-    title: 'How to Upload & Parse Resumes',
-    subtitle: 'Build your talent pipeline with AI-powered resume parsing',
+    title: 'How to Upload & Manage Resumes',
+    subtitle: 'Resume Database, uploads, duplicates, versions and folders',
     category: 'recruitment',
     readTime: '6 min',
     icon: Upload,
+    keywords: 'resume database my resumes shared database upload bulk pdf doc docx file size duplicate overwrite new version folder archive download zip english',
     content: (
       <>
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Overview</h2>
-          <p className="text-gray-600 dark:text-slate-400 leading-relaxed">
-            TalentFlow's AI automatically extracts and organizes information from resumes, saving you hours of
-            manual data entry. Upload resumes in bulk or individually, and let our AI do the heavy lifting.
-          </p>
-        </section>
+        <Section title="Overview">
+          <NavPath items={['Dashboard', 'Resume Database']} href="/recruitment/resume-database" />
+          <CardGrid items={[
+            ['My Resumes', 'Resumes you uploaded, organised in your own folders.'],
+            ['Shared Database', 'Resumes shared across your organisation — searchable by anyone with access.'],
+          ]} />
+        </Section>
 
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-6">Uploading Resumes</h2>
+        <Section title="Uploading">
+          <Step number={1} title="Click &quot;Upload Resume&quot; (My Resumes tab)">
+            <p>Pick <strong>Single Upload</strong> or <strong>Bulk Upload</strong>, choose a folder, then drag &amp; drop or browse.</p>
+          </Step>
+          <Step number={2} title="AI parses each resume">
+            <p>Name, email, phone, location, experience, skills, education, work history and more are extracted automatically.</p>
+          </Step>
+          <RefTable head={['Rule', 'Limit']} rows={[
+            ['File types', 'PDF, DOC, DOCX (RTF and TXT are also accepted)'],
+            ['File size', 'Up to 3 MB per file'],
+            ['Bulk upload', 'Up to 100 resumes at a time'],
+            ['Language', 'English resumes only — upload an English version'],
+            ['Units', '1 Resume Storage unit per resume (refunded if the upload is rejected)'],
+          ]} />
+          <Tip type="tip">
+            Text-based PDFs with standard fonts parse best. Scanned images and heavily designed layouts lose detail.
+          </Tip>
+        </Section>
 
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            <div className="bg-gray-50 dark:bg-slate-800/50 rounded-xl p-5">
-              <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-3 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-gray-600 dark:text-slate-400" />
-                Single Resume Upload
-              </h3>
-              <ol className="space-y-2 tf-body-secondary">
-                <li className="flex gap-2"><span className="font-medium">1.</span> Go to Resume Database</li>
-                <li className="flex gap-2"><span className="font-medium">2.</span> Click "Upload Resume"</li>
-                <li className="flex gap-2"><span className="font-medium">3.</span> Select your file</li>
-                <li className="flex gap-2"><span className="font-medium">4.</span> AI parsing begins automatically</li>
-              </ol>
-            </div>
-            <div className="bg-gray-50 dark:bg-slate-800/50 rounded-xl p-5">
-              <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-3 flex items-center gap-2">
-                <Upload className="w-5 h-5 text-gray-600 dark:text-slate-400" />
-                Bulk Upload
-              </h3>
-              <ol className="space-y-2 tf-body-secondary">
-                <li className="flex gap-2"><span className="font-medium">1.</span> Click "Bulk Upload" button</li>
-                <li className="flex gap-2"><span className="font-medium">2.</span> Select multiple files (up to 50)</li>
-                <li className="flex gap-2"><span className="font-medium">3.</span> Or drag & drop files</li>
-                <li className="flex gap-2"><span className="font-medium">4.</span> Monitor progress in queue</li>
-              </ol>
-            </div>
-          </div>
+        <Section title="Duplicates and versions">
+          <P>If a resume for the same candidate already exists, you choose what happens:</P>
+          <RefTable head={['Option', 'Result']} rows={[
+            ['Discard New Resume', 'Keeps the existing resume; the new file is dropped'],
+            ['Overwrite Existing Resume', 'Replaces the resume content with the new file'],
+            ['Save as New Version (recommended)', 'Keeps both — the new file becomes the latest version'],
+          ]} />
+          <Features items={[
+            'A candidate can have up to 5 resume versions.',
+            'Each score stays linked to the resume version that was scored — scoring a new version never relabels older scores.',
+            'Exact duplicate files are skipped automatically.',
+          ]} />
+        </Section>
 
-          <div className="bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg p-4">
-            <h4 className="font-semibold text-brand-blue mb-2">Supported File Formats</h4>
-            <div className="flex gap-3">
-              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 tf-row-name">PDF</span>
-              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 tf-row-name">.DOC</span>
-              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 tf-row-name">.DOCX</span>
-              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 tf-row-name">.TXT</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">What AI Extracts</h2>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">Our AI parser automatically extracts the following information:</p>
-
-          <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700 tf-table-shell">
-            <table className="w-full">
-              <thead className="bg-white dark:bg-slate-900">
-                <tr>
-                  <th className="tf-th-cell text-left tf-th">Field</th>
-                  <th className="tf-th-cell text-left tf-th">Description</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-                <tr><td className="tf-td tf-row-name">Name</td><td className="tf-td tf-body-secondary">Candidate's full name</td></tr>
-                <tr><td className="tf-td tf-row-name">Email</td><td className="tf-td tf-body-secondary">Contact email address</td></tr>
-                <tr><td className="tf-td tf-row-name">Phone</td><td className="tf-td tf-body-secondary">Phone number(s)</td></tr>
-                <tr><td className="tf-td tf-row-name">Location</td><td className="tf-td tf-body-secondary">City, State, Country</td></tr>
-                <tr><td className="tf-td tf-row-name">Experience</td><td className="tf-td tf-body-secondary">Total years of experience</td></tr>
-                <tr><td className="tf-td tf-row-name">Skills</td><td className="tf-td tf-body-secondary">Technical and soft skills</td></tr>
-                <tr><td className="tf-td tf-row-name">Education</td><td className="tf-td tf-body-secondary">Degrees, institutions, years</td></tr>
-                <tr><td className="tf-td tf-row-name">Work History</td><td className="tf-td tf-body-secondary">Companies, roles, durations</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <Tip type="tip">
-          Clean, well-formatted resumes parse better. PDFs with standard fonts work best.
-          Avoid image-heavy or heavily designed resumes for optimal parsing accuracy.
-        </Tip>
-
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">After Parsing</h2>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">Once parsed, you can:</p>
-          <ul className="space-y-2">
-            <FeatureItem><strong>Review extracted data</strong> for accuracy and make corrections</FeatureItem>
-            <FeatureItem><strong>Add to folders</strong> for organization by role or project</FeatureItem>
-            <FeatureItem><strong>Match against JDs</strong> using AI Talent Match</FeatureItem>
-            <FeatureItem><strong>Score resumes</strong> for specific positions</FeatureItem>
-            <FeatureItem><strong>Invite to assessments</strong> for qualified candidates</FeatureItem>
-          </ul>
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Managing Your Database</h2>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <Search className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
-              <div className="font-medium text-gray-900 dark:text-slate-50">Search</div>
-              <div className="tf-body-secondary">Find by name, skills, or experience</div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <BarChart3 className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
-              <div className="font-medium text-gray-900 dark:text-slate-50">Filter</div>
-              <div className="tf-body-secondary">Filter by location, experience, skills</div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <FileText className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
-              <div className="font-medium text-gray-900 dark:text-slate-50">Folders</div>
-              <div className="tf-body-secondary">Organize by position or stage</div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <Upload className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
-              <div className="font-medium text-gray-900 dark:text-slate-50">Export</div>
-              <div className="tf-body-secondary">Download candidate data</div>
-            </div>
-          </div>
-        </section>
+        <Section title="Organising your database" last>
+          <CardGrid items={[
+            ['Folders', 'Create folders and subfolders (up to 3 levels) under My Folders; Upload to Folder, Rename or Delete from the folder menu.'],
+            ['Archive', 'Archived resumes move to "Archived Resumes" and cannot be scored until unarchived.'],
+            ['Search & filters', 'Search by name, email, phone, skills, title or company; filter by experience, location, education, company, notice period, upload date and source.'],
+            ['Bulk actions', 'Tick resumes to Move to Folder, Score, Invite Assessment, Invite AI Interview, Download (ZIP), Archive or Delete.'],
+          ]} />
+        </Section>
       </>
     ),
   },
+
   'resume-scoring': {
     id: 'resume-scoring',
     title: 'Using Resume Scoring',
-    subtitle: 'AI-powered candidate ranking and matching',
+    subtitle: 'Score candidates against a job with an AI rating out of 10',
     category: 'recruitment',
     readTime: '7 min',
     icon: BarChart3,
+    keywords: 'score resumes exact match partial match no match rating out of 10 required preferred criteria scorecard pdf download units rs',
     content: (
       <>
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Overview</h2>
-          <p className="text-gray-600 dark:text-slate-400 leading-relaxed">
-            Resume Scoring uses AI to evaluate how well candidates match your job requirements.
-            This helps you quickly identify the best fits from large applicant pools and prioritize
-            who to interview first.
-          </p>
-        </section>
+        <Section title="Overview">
+          <P>
+            Resume Scoring evaluates each candidate against every criterion in a job description and gives an
+            <strong> Overall Rating out of 10</strong> with a <strong>match status</strong>, AI reasoning, strengths and weaknesses.
+          </P>
+          <NavPath items={['Dashboard', 'Resume Scoring']} href="/recruitment/resume-scoring" />
+        </Section>
 
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">How It Works</h2>
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 text-center p-6 bg-gray-50 dark:bg-slate-800/50 rounded-xl">
-              <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">1</div>
-              <div className="font-medium text-gray-900 dark:text-slate-50">Select JD</div>
-              <div className="tf-body-secondary mt-1">Choose the position</div>
-            </div>
-            <div className="flex items-center justify-center">
-              <ArrowRight className="w-6 h-6 text-gray-400 dark:text-slate-500 rotate-90 md:rotate-0" />
-            </div>
-            <div className="flex-1 text-center p-6 bg-gray-50 dark:bg-slate-800/50 rounded-xl">
-              <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">2</div>
-              <div className="font-medium text-gray-900 dark:text-slate-50">Select Resumes</div>
-              <div className="tf-body-secondary mt-1">Pick candidates to evaluate</div>
-            </div>
-            <div className="flex items-center justify-center">
-              <ArrowRight className="w-6 h-6 text-gray-400 dark:text-slate-500 rotate-90 md:rotate-0" />
-            </div>
-            <div className="flex-1 text-center p-6 bg-gray-50 dark:bg-slate-800/50 rounded-xl">
-              <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">3</div>
-              <div className="font-medium text-gray-900 dark:text-slate-50">AI Analysis</div>
-              <div className="tf-body-secondary mt-1">AI compares against requirements</div>
-            </div>
-            <div className="flex items-center justify-center">
-              <ArrowRight className="w-6 h-6 text-gray-400 dark:text-slate-500 rotate-90 md:rotate-0" />
-            </div>
-            <div className="flex-1 text-center p-6 bg-success-subtle rounded-xl ring-1 ring-success-line">
-              <div className="w-12 h-12 bg-success-strong text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold">4</div>
-              <div className="font-medium text-gray-900 dark:text-slate-50">Get Scores</div>
-              <div className="tf-body-secondary mt-1">View ranked results</div>
-            </div>
+        <Section title="Scoring resumes">
+          <Step number={1} title="Click &quot;Score Resumes&quot;">
+            <p>Select a <strong>Published</strong> job (Drafts are not listed; Disabled and Archived jobs are greyed out). Use “View Versions” to pick a specific job version.</p>
+          </Step>
+          <Step number={2} title="Click &quot;Select Resumes&quot;">
+            <p>Choose candidates from <strong>My Resumes</strong> or the <strong>Shared Database</strong> — or upload new ones right there; they are selected automatically.</p>
+          </Step>
+          <Step number={3} title="Click &quot;Score N Resumes&quot; and confirm">
+            <p>Scoring runs in the background with a progress window you can minimise. Candidates already scored for that job are skipped; failed rows can be retried.</p>
+          </Step>
+          <P className="mb-0">You can also start scoring from a job’s ⋮ menu (<strong>Score Resumes</strong>) or from AI Talent Match results.</P>
+        </Section>
+
+        <Section title="Understanding the result">
+          <P>Each criterion is rated 0–10; 6 or above is a pass. Criteria are either <strong>Required</strong> or <strong>Preferred</strong>:</P>
+          <div className="space-y-3 mb-4">
+            <StatusBand tone="success" label="Exact Match" text="Every Required criterion passes and their average is 8.0 or higher." />
+            <StatusBand tone="warning" label="Partial Match" text="Every Required criterion passes but their average is below 8.0." />
+            <StatusBand tone="muted" label="No Match" text="At least one Required criterion is below 6." />
           </div>
-        </section>
+          <RefTable head={['Criterion type', 'Includes']} rows={[
+            ['Always Required', 'Must-Have Skills, Must-Have Additional Requirements'],
+            ['Required when marked mandatory on the JD', 'Experience Level, Education Level, Industry Type, Location'],
+            ['Preferred', 'Job title, Job hopping, Nice-to-Have Skills and requirements'],
+          ]} />
+          <Tip type="info">
+            Preferred criteria only add to the rating once every Required criterion has passed. Use the rating to
+            prioritise, then read the AI reasoning before deciding.
+          </Tip>
+        </Section>
 
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Understanding Scores</h2>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">Scores range from 0-100 based on match quality:</p>
-
-          <div className="space-y-3">
-            <div className="flex items-center gap-4 p-4 bg-success-subtle rounded-lg ring-1 ring-success-line">
-              <div className="text-2xl font-bold text-success-strong">90-100</div>
-              <div>
-                <div className="font-medium text-success-strong">Excellent Match</div>
-                <div className="text-sm text-success-strong">Top candidate - prioritize for interview</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 p-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15">
-              <div className="text-2xl font-bold text-brand-blue">75-89</div>
-              <div>
-                <div className="font-semibold text-brand-blue">Strong Match</div>
-                <div className="text-sm text-brand-blue/80">Good fit - consider for interview</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 p-4 bg-warning-subtle rounded-lg ring-1 ring-warning-line">
-              <div className="text-2xl font-bold text-warning-strong">60-74</div>
-              <div>
-                <div className="font-medium text-warning-strong">Moderate Match</div>
-                <div className="text-sm text-warning-strong">Potential fit - review manually</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-              <div className="text-2xl font-bold text-gray-500 dark:text-slate-400">Below 60</div>
-              <div>
-                <div className="font-medium text-gray-700 dark:text-slate-300">Low Match</div>
-                <div className="tf-body-secondary">May not meet key requirements</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <Tip type="info">
-          Don't rely solely on scores. Use them as a starting point to prioritize candidates,
-          then review top scorers manually for cultural fit and other factors AI can't measure.
-        </Tip>
-
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-6">Starting a Scoring Session</h2>
-          <Step number={1} title="Navigate to Resume Scoring">
-            <NavPath>Recruitment</NavPath>
-            <NavPath isLast>Resume Scoring</NavPath>
-          </Step>
-          <Step number={2} title="Click 'New Scoring Session'">
-            <p>Start a new batch of scoring</p>
-          </Step>
-          <Step number={3} title="Select the Job Description">
-            <p>Choose which position to score against</p>
-          </Step>
-          <Step number={4} title="Choose Resumes">
-            <p>Select individual resumes or score all in a folder</p>
-          </Step>
-          <Step number={5} title="Review Results">
-            <p>View scores, breakdowns, and take action on candidates</p>
-          </Step>
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Score Breakdown</h2>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">Each score includes detailed analysis:</p>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Skills Match</div>
-              <div className="tf-body-secondary">How well technical skills align</div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Experience Match</div>
-              <div className="tf-body-secondary">Years and relevance of experience</div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Education Match</div>
-              <div className="tf-body-secondary">Qualifications alignment</div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Overall Fit</div>
-              <div className="tf-body-secondary">Combined assessment score</div>
-            </div>
-          </div>
-        </section>
+        <Section title="Working with scores" last>
+          <Features items={[
+            <>Stat cards <strong>All Scored · Exact Match · Partial Match · No Match</strong> filter the list; switch the view between <strong>Job</strong> and <strong>Candidates</strong>.</>,
+            <>Each row shows the <strong>Job Version</strong> and the <strong>Resume Version</strong> that were scored.</>,
+            <>Open a candidate for the <strong>Overview</strong> (AI Analysis, Strengths, Weaknesses) and the <strong>Score Table</strong> (rating, eligibility and reasoning per criterion).</>,
+            <><strong>Download Scorecard</strong> (PDF), Share via Email, or “Download All Scorecards” for a job as a ZIP.</>,
+            <>Invite straight from a score: <strong>Create / Send Assessment</strong> or <strong>Create / Send AI Interview</strong>.</>,
+            <>Each resume scored uses <strong>1 Resume Scoring unit</strong>; failed scorings are refunded.</>,
+          ]} />
+        </Section>
       </>
     ),
   },
-  'create-assessments': {
-    id: 'create-assessments',
-    title: 'Creating & Managing Assessments',
-    subtitle: 'Evaluate candidates with tests and AI interviews',
-    category: 'assessments',
-    readTime: '10 min',
-    icon: ClipboardCheck,
-    content: (
-      <>
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Overview</h2>
-          <p className="text-gray-600 dark:text-slate-400 leading-relaxed">
-            Assessments help you evaluate candidates beyond their resumes through structured tests,
-            quizzes, and AI-powered interviews. Create custom assessments tailored to each role.
-          </p>
-        </section>
 
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Types of Assessments</h2>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="tf-panel p-5">
-              <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
-                <ClipboardCheck className="w-4 h-4 text-brand-blue" />
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">Technical Quiz</h3>
-              <p className="tf-body-secondary">Multiple choice, coding questions, and problem-solving tests</p>
-            </div>
-            <div className="tf-panel p-5">
-              <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
-                <BarChart3 className="w-4 h-4 text-brand-blue" />
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">Skill Assessment</h3>
-              <p className="tf-body-secondary">Practical tasks and hands-on exercises</p>
-            </div>
-            <div className="tf-panel p-5">
-              <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
-                <MessageCircle className="w-4 h-4 text-brand-blue" />
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">AI Interview</h3>
-              <p className="tf-body-secondary">Automated video interviews with AI analysis</p>
-            </div>
-            <div className="tf-panel p-5">
-              <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
-                <Settings className="w-4 h-4 text-brand-blue" />
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">Custom Assessment</h3>
-              <p className="tf-body-secondary">Your own evaluation criteria and scoring</p>
-            </div>
-          </div>
-        </section>
-
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-6">Creating an Assessment</h2>
-
-          <Step number={1} title="Basic Setup">
-            <div className="mb-3">
-              <NavPath>Recruitment</NavPath>
-              <NavPath>Assessments</NavPath>
-              <NavPath isLast>Create AI Assessment</NavPath>
-            </div>
-            <ul className="space-y-1 text-sm">
-              <FeatureItem>Enter assessment name and description</FeatureItem>
-              <FeatureItem>Link to a Job Description (optional)</FeatureItem>
-              <FeatureItem>Select assessment type</FeatureItem>
-            </ul>
-          </Step>
-
-          <Step number={2} title="Add Questions">
-            <p className="mb-3">Build your assessment with various question types:</p>
-            <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4 space-y-3 text-sm">
-              <div>
-                <span className="font-medium text-gray-900 dark:text-slate-50">Multiple Choice:</span>
-                <span className="text-gray-600 dark:text-slate-400 ml-2">4 options, mark correct answer, set points</span>
-              </div>
-              <div>
-                <span className="font-medium text-gray-900 dark:text-slate-50">Coding Questions:</span>
-                <span className="text-gray-600 dark:text-slate-400 ml-2">Problem description, language, test cases, time limit</span>
-              </div>
-              <div>
-                <span className="font-medium text-gray-900 dark:text-slate-50">Written Response:</span>
-                <span className="text-gray-600 dark:text-slate-400 ml-2">Open-ended prompts with word limits</span>
-              </div>
-            </div>
-          </Step>
-
-          <Step number={3} title="Configure Settings">
-            <div className="tf-grid-2 text-sm">
-              <div className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-                <div className="font-medium text-gray-900 dark:text-slate-50">Time Limit</div>
-                <div className="text-gray-600 dark:text-slate-400">Total duration allowed</div>
-              </div>
-              <div className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-                <div className="font-medium text-gray-900 dark:text-slate-50">Passing Score</div>
-                <div className="text-gray-600 dark:text-slate-400">Minimum score to pass</div>
-              </div>
-              <div className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-                <div className="font-medium text-gray-900 dark:text-slate-50">Randomization</div>
-                <div className="text-gray-600 dark:text-slate-400">Shuffle question order</div>
-              </div>
-              <div className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-                <div className="font-medium text-gray-900 dark:text-slate-50">Deadline</div>
-                <div className="text-gray-600 dark:text-slate-400">When assessment closes</div>
-              </div>
-            </div>
-          </Step>
-
-          <Step number={4} title="Invite Candidates">
-            <ul className="space-y-1 text-sm">
-              <FeatureItem>Click "Invite Candidates" button</FeatureItem>
-              <FeatureItem>Enter email addresses or select from database</FeatureItem>
-              <FeatureItem>Customize the invitation message</FeatureItem>
-              <FeatureItem>Candidates receive email with unique link</FeatureItem>
-            </ul>
-          </Step>
-        </section>
-
-        <Tip type="warning">
-          Keep assessments focused and respect candidates' time. 30-60 minutes is ideal.
-          Very long assessments can lead to candidate drop-off.
-        </Tip>
-
-        <section>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Reviewing Results</h2>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">After candidates complete assessments:</p>
-          <ul className="space-y-2">
-            <FeatureItem>View individual scores and detailed breakdowns</FeatureItem>
-            <FeatureItem>Compare candidates side-by-side</FeatureItem>
-            <FeatureItem>See time spent on each question</FeatureItem>
-            <FeatureItem>Review written responses and code submissions</FeatureItem>
-            <FeatureItem>Export results for team review</FeatureItem>
-          </ul>
-        </section>
-      </>
-    ),
-  },
-  'team-management': {
-    id: 'team-management',
-    title: 'Managing Your Team',
-    subtitle: 'User roles, permissions, and collaboration',
-    category: 'organization',
-    readTime: '6 min',
-    icon: Users,
-    content: (
-      <>
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">User Roles</h2>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">TalentFlow has three main roles with different permission levels:</p>
-
-          <div className="space-y-4">
-            <div className="p-5 ring-1 ring-brand-blue/20 bg-brand-blue/5 rounded-xl">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="px-3 py-1 bg-brand-blue text-white rounded-full text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10">Admin</div>
-              </div>
-              <p className="text-gray-700 dark:text-slate-300">Full access to all features including user management, billing, and settings. Can invite and manage other users.</p>
-            </div>
-            <div className="tf-panel p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="px-3 py-1 bg-brand-blue text-white rounded-full text-sm font-medium shadow-md ring-1 ring-white/10">Recruiter</div>
-              </div>
-              <p className="text-gray-600 dark:text-slate-400">Can create JDs, manage candidates, upload resumes, run assessments, and use AI features. Cannot manage users or billing.</p>
-            </div>
-            <div className="tf-panel p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="px-3 py-1 bg-gray-400 text-white rounded-full text-sm font-medium">Viewer</div>
-              </div>
-              <p className="text-gray-600 dark:text-slate-400">Read-only access to reports and candidate data. Cannot make changes or take actions.</p>
-            </div>
-          </div>
-        </section>
-
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-6">Inviting Team Members</h2>
-          <Step number={1} title="Navigate to User Management">
-            <NavPath>Organization</NavPath>
-            <NavPath isLast>User Management</NavPath>
-          </Step>
-          <Step number={2} title="Click 'Invite User'">
-            <p>Opens the invitation form</p>
-          </Step>
-          <Step number={3} title="Enter Details">
-            <ul className="space-y-1 text-sm">
-              <FeatureItem>Enter their email address</FeatureItem>
-              <FeatureItem>Select their role (Admin, Recruiter, Viewer)</FeatureItem>
-              <FeatureItem>Add to specific teams (optional)</FeatureItem>
-            </ul>
-          </Step>
-          <Step number={4} title="Send Invitation">
-            <p>User receives email to set up their account</p>
-          </Step>
-        </section>
-
-        <Tip type="tip">
-          Follow the principle of least privilege - only give users the permissions they need for their job function.
-        </Tip>
-
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Creating Teams</h2>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">Organize users into teams for project-based hiring:</p>
-          <div className="mb-3">
-            <NavPath>Organization</NavPath>
-            <NavPath isLast>Team Management</NavPath>
-          </div>
-          <ul className="space-y-2">
-            <FeatureItem>Click "Create Team" to start</FeatureItem>
-            <FeatureItem>Name the team (e.g., "Engineering Hiring")</FeatureItem>
-            <FeatureItem>Add team members from your organization</FeatureItem>
-            <FeatureItem>Assign a team lead</FeatureItem>
-          </ul>
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Team Chat</h2>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">Communicate with your team in real-time:</p>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Channels</div>
-              <div className="tf-body-secondary">Create topic-based discussions</div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Direct Messages</div>
-              <div className="tf-body-secondary">Private 1-on-1 conversations</div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Share Candidates</div>
-              <div className="tf-body-secondary">Discuss profiles with team</div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Notifications</div>
-              <div className="tf-body-secondary">Stay updated on mentions</div>
-            </div>
-          </div>
-        </section>
-      </>
-    ),
-  },
-  'subscription-billing': {
-    id: 'subscription-billing',
-    title: 'Understanding Your Subscription',
-    subtitle: 'Plans, usage, and billing management',
-    category: 'billing',
-    readTime: '5 min',
-    icon: CreditCard,
-    content: (
-      <>
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Plans Overview</h2>
-
-          <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-white dark:bg-slate-900">
-                  <th className="tf-th-cell text-left tf-th border border-gray-200 dark:border-slate-700">Feature</th>
-                  <th className="tf-th-cell text-center tf-th border border-gray-200 dark:border-slate-700">Starter</th>
-                  <th className="tf-th-cell text-center text-xs font-semibold border border-gray-200 dark:border-slate-700 bg-brand-blue/5 text-brand-blue">Professional</th>
-                  <th className="tf-th-cell text-center tf-th border border-gray-200 dark:border-slate-700">Enterprise</th>
-                </tr>
-              </thead>
-              <tbody>
-                {PLAN_OVERVIEW_ROWS.map(([feature, starter, professional, enterprise]) => (
-                  <tr key={feature}>
-                    <td className="tf-td tf-body border border-gray-200 dark:border-slate-700">{feature}</td>
-                    <td className="tf-td tf-body-secondary text-center border border-gray-200 dark:border-slate-700">{starter}</td>
-                    <td className="tf-td tf-body-secondary text-center border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">{professional}</td>
-                    <td className="tf-td tf-body-secondary text-center border border-gray-200 dark:border-slate-700">{enterprise}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <MobileRecordList>
-            {PLAN_OVERVIEW_ROWS.map(([feature, starter, professional, enterprise]) => (
-              <MobileRecordCard
-                key={feature}
-                title={feature}
-                fields={[
-                  { label: 'Starter', value: starter },
-                  { label: <span className="text-brand-blue">Professional</span>, value: professional },
-                  { label: 'Enterprise', value: enterprise },
-                ]}
-              />
-            ))}
-          </MobileRecordList>
-        </section>
-
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Checking Your Usage</h2>
-          <div className="mb-3">
-            <NavPath>Subscription</NavPath>
-            <NavPath isLast>Usage & Quotas</NavPath>
-          </div>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">Monitor your usage for each feature:</p>
-          <ul className="space-y-2">
-            <FeatureItem>Resume uploads used vs. remaining</FeatureItem>
-            <FeatureItem>Assessments created this billing period</FeatureItem>
-            <FeatureItem>AI credits consumed</FeatureItem>
-            <FeatureItem>Active users count</FeatureItem>
-          </ul>
-        </section>
-
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Managing Your Plan</h2>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="p-5 border border-gray-200 dark:border-slate-700 rounded-xl">
-              <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-3">Upgrade Plan</h3>
-              <ol className="space-y-2 tf-body-secondary">
-                <li>1. Go to Subscription → Current Plan</li>
-                <li>2. Click "Upgrade"</li>
-                <li>3. Select new plan</li>
-                <li>4. Confirm payment</li>
-                <li>5. New features available immediately</li>
-              </ol>
-            </div>
-            <div className="p-5 border border-gray-200 dark:border-slate-700 rounded-xl">
-              <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-3">Billing History</h3>
-              <ol className="space-y-2 tf-body-secondary">
-                <li>1. Go to Subscription → Billing History</li>
-                <li>2. View all invoices</li>
-                <li>3. Download receipts</li>
-                <li>4. Check payment status</li>
-              </ol>
-            </div>
-          </div>
-        </section>
-
-        <Tip type="info">
-          Need more units mid-cycle? You can purchase add-on packs for additional resume uploads,
-          assessments, or AI credits without changing your plan.
-        </Tip>
-
-        <section>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Need Billing Help?</h2>
-          <div className="tf-card-soft p-6">
-            <p className="mb-3 text-gray-900 dark:text-slate-50">Contact our billing support team:</p>
-            <div className="space-y-2 tf-body-secondary">
-              <div>Email: <span className="text-brand-blue">billing@talentflow.com</span></div>
-              <div>Include your account ID for faster support</div>
-            </div>
-          </div>
-        </section>
-      </>
-    ),
-  },
   'ai-talent-match': {
     id: 'ai-talent-match',
     title: 'Using AI Talent Match',
-    subtitle: 'Find the best candidates with intelligent matching',
+    subtitle: 'Find the closest candidates in your database — free',
     category: 'recruitment',
-    readTime: '6 min',
-    icon: BarChart3,
+    readTime: '4 min',
+    icon: Sparkles,
+    keywords: 'run ai match find matches rank rating free no units shared database best candidates',
     content: (
       <>
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Overview</h2>
-          <p className="text-gray-600 dark:text-slate-400 leading-relaxed">
-            AI Talent Match intelligently analyzes your job requirements and scans your entire resume
-            database to find the best matching candidates. It saves hours of manual screening and
-            ensures you don't miss great candidates.
-          </p>
-        </section>
+        <Section title="Overview">
+          <P>
+            AI Talent Match scans your company’s <strong>Shared Database</strong> and ranks the resumes closest to a job.
+            It is <strong>free</strong> — no units are used. Units are only used if you then score a matched resume.
+          </P>
+          <NavPath items={['Dashboard', 'AI Talent Match']} href="/recruitment/ai-talent-match" />
+        </Section>
 
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-6">How to Start a Match Session</h2>
-
-          <Step number={1} title="Navigate to AI Talent Match">
-            <NavPath>Recruitment</NavPath>
-            <NavPath isLast>AI Talent Match</NavPath>
+        <Section title="Running a match">
+          <Step number={1} title="Click &quot;Run AI Match&quot;">
+            <p>Pick a <strong>Published</strong> job (or use “AI Talent Match” from the job’s ⋮ menu and confirm “Yes, find matches”).</p>
           </Step>
-
-          <Step number={2} title="Click 'New Match Session'">
-            <p>Opens the matching wizard</p>
+          <Step number={2} title="Review the ranked candidates">
+            <p>Only active, non-archived resumes are searched, and only the latest version of each candidate.</p>
           </Step>
+        </Section>
 
-          <Step number={3} title="Select the Job Description">
-            <p>Choose which position you're hiring for</p>
+        <Section title="Understanding results">
+          <Features items={[
+            <><strong>Matched Rating 1–10</strong> is relative to that run: the closest candidate gets 10. Bands: Rating 10 · Rating 9–7 · Rating Below 7.</>,
+            <>Filter by rating, <strong>Scored Status</strong> (Scored / Not Scored) or experience; sort by rating, name, score or experience.</>,
+            <>Use <strong>Run Again</strong> after adding resumes, or <strong>New AI Match</strong> for another job.</>,
+          ]} />
+          <Tip type="tip">
+            The match rating shows similarity, not suitability. Score the top matches to get a full evaluation with strengths and gaps.
+          </Tip>
+        </Section>
+
+        <Section title="Taking action" last>
+          <CardGrid items={[
+            ['Preview Resume', 'Open the candidate’s resume'],
+            ['Score Resume / View Scorecard', 'Run Resume Scoring (1 unit), or open the existing score'],
+            ['Invite Assessment / AI Interview', 'Send an evaluation to selected candidates'],
+            ['Export', 'Download the matched candidates'],
+          ]} />
+        </Section>
+      </>
+    ),
+  },
+
+  'invite-candidates': {
+    id: 'invite-candidates',
+    title: 'Inviting Candidates',
+    subtitle: 'The invite flow shared by AI Assessments and AI Interviews',
+    category: 'evaluation',
+    readTime: '4 min',
+    icon: Send,
+    keywords: 'invite send link excel csv manual email expiry resend revoke copy link track invites invitation status',
+    content: (
+      <>
+        <Section title="One invite flow everywhere">
+          <P>
+            Whether you invite from a job, a scored candidate, AI Talent Match, the Resume Database or the assessment /
+            interview itself, the same invite window opens with four steps:
+          </P>
+          <Pills items={['1. Choose version', '2. Add candidates', '3. Review candidates', '4. Send invite']} />
+        </Section>
+
+        <Section title="Adding candidates">
+          <RefTable head={['Source', 'How']} rows={[
+            ['Manual', 'Type full name and email, then "Add Candidate" (or press Enter)'],
+            ['Excel upload', '.xlsx, .xls or .csv with Name and Email columns'],
+            ['AI Talent Match / Scored Resumes', 'Pick from a job’s matched or scored candidates'],
+            ['My Resumes / Shared Database', 'Pick from your resume database'],
+          ]} />
+          <P>Use the review filters (All, Selected, Not selected, Needs attention) to fix problems before sending.</P>
+        </Section>
+
+        <Section title="Sending">
+          <Features items={[
+            <>Edit the <strong>Email message</strong> — [Candidate Name] is filled in for each person.</>,
+            <>Set <strong>Link expires in</strong>: 1, 3 or 7 days.</>,
+            'Candidates already invited to that version are skipped — use Resend Email instead.',
+            'Large batches send in the background; you can minimise the progress window.',
+          ]} />
+          <Tip type="info">
+            Units are not used at invite time. One Assessment / AI Interview unit is used when the candidate actually starts.
+          </Tip>
+        </Section>
+
+        <Section title="Tracking invites" last>
+          <P>Open the assessment or interview and go to <strong>Invitation Status</strong>. Each candidate shows a timeline (Invited, Email Read, System Check, Started, Completed, Expired, Terminated…) and actions:</P>
+          <Pills items={['Copy Link', 'View Results', 'Resend Email', 'Edit Email', 'Revoke invite']} />
+        </Section>
+      </>
+    ),
+  },
+
+  'create-assessments': {
+    id: 'create-assessments',
+    title: 'Creating & Managing AI Assessments',
+    subtitle: 'JD-based tests with technical, coding and HR rounds',
+    category: 'evaluation',
+    readTime: '8 min',
+    icon: ClipboardCheck,
+    keywords: 'assessment create ai assessment technical coding hr round mcq question pass mark 70 proctoring terminated results export pdf version duplicate 30 minutes',
+    content: (
+      <>
+        <Section title="Overview">
+          <P>
+            AI Assessments generate questions from the job description. <strong>Every candidate receives a unique,
+            freshly generated question set</strong>, so answers can’t be shared between candidates.
+          </P>
+          <NavPath items={['Dashboard', 'AI Assessments']} href="/recruitment/assessments" />
+        </Section>
+
+        <Section title="Creating an assessment">
+          <Step number={1} title="Click &quot;Create AI Assessment&quot; and select a job">
+            <p>Pick a published job (or “Create New Job”). The job’s version is recorded with the assessment.</p>
           </Step>
-
-          <Step number={4} title="Choose Your Resume Pool">
-            <ul className="space-y-1 text-sm">
-              <FeatureItem>All resumes in database</FeatureItem>
-              <FeatureItem>Specific folder only</FeatureItem>
-              <FeatureItem>Recent uploads (last 30 days)</FeatureItem>
-            </ul>
+          <Step number={2} title="Configure the rounds">
+            <RefTable head={['Round', 'What it covers']} rows={[
+              ['Technical Round', 'Domain knowledge and job-specific skills — multiple-choice questions, plus some written answers when Coding is off'],
+              ['Coding Round', 'Hands-on coding questions with hidden test cases; the candidate picks one of the languages you allow'],
+              ['HR Round', 'Up to 5 questions from the HR Question Bank — informational, not scored'],
+            ]} />
+            <p className="mb-2">Turn on at least one round and split the percentages to total 100%. You can add topics with “Add Topic”.</p>
+            <p>Difficulty follows the JD’s experience level, and the assessment is <strong>fixed at 30 minutes</strong>.</p>
           </Step>
-
-          <Step number={5} title="Click 'Find Matches'">
-            <p>AI analyzes and ranks candidates within seconds</p>
+          <Step number={3} title="Save as Draft or Publish">
+            <p>After publishing, use <strong>Invite</strong> to send it to candidates — see <Link href="/help?article=invite-candidates" className="text-brand-blue hover:underline">Inviting Candidates</Link>.</p>
           </Step>
-        </section>
+        </Section>
 
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Understanding Results</h2>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">Each matched candidate shows:</p>
+        <Section title="How it is scored">
+          <Features items={[
+            <>Pass / Fail is decided by the <strong>Technical and Coding</strong> rounds only; the pass mark is <strong>70</strong>.</>,
+            'Unanswered questions score 0. Multiple-choice answers are checked against the answer key; coding answers by their test results.',
+            'Written answers are evaluated by AI.',
+          ]} />
+        </Section>
 
-          <div className="space-y-4">
-            <div className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-              <div className="w-16 h-16 bg-success-subtle rounded-lg flex items-center justify-center">
-                <span className="text-2xl font-bold text-success-strong">85</span>
-              </div>
-              <div>
-                <div className="font-medium text-gray-900 dark:text-slate-50">Match Score</div>
-                <div className="tf-body-secondary">Overall compatibility rating (0-100)</div>
-              </div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-2">Key Strengths</div>
-              <div className="tf-body-secondary">Why this candidate is a good fit for the role</div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-2">Potential Gaps</div>
-              <div className="tf-body-secondary">Areas that may need attention or training</div>
-            </div>
-            <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
-              <div className="font-medium text-gray-900 dark:text-slate-50 mb-2">Recommended Actions</div>
-              <div className="tf-body-secondary">Suggested next steps for this candidate</div>
-            </div>
-          </div>
-        </section>
+        <Section title="What candidates go through">
+          <Pills items={['Job & Consent', 'System Check', 'HR Questions (if on)', 'Assessment']} />
+          <Tip type="warning">
+            The assessment runs in full screen with camera proctoring. Switching tabs or windows, leaving full screen, or
+            using the Windows / ⌘ key ends the assessment immediately — tell candidates before they start.
+          </Tip>
+        </Section>
 
-        <Tip type="tip">
-          The more detailed your Job Description, the better the AI can match candidates.
-          Include specific skills, experience levels, and nice-to-haves for best results.
-        </Tip>
+        <Section title="Reviewing results" last>
+          <Features items={[
+            <>The <strong>Results</strong> tab lists every candidate with Tech and Coding scores, status and source; filter by Pass / Fail.</>,
+            <>Open a candidate for per-round answers, the <strong>Recording</strong>, <strong>Violations</strong> and AI-Generated Candidate Insights.</>,
+            <>Export results as <strong>CSV or Excel</strong>, or download candidate <strong>PDF reports</strong>.</>,
+            <>Once anyone is invited, changing the content creates a <strong>new version</strong> (up to 5); <strong>Duplicate</strong> copies an assessment.</>,
+          ]} />
+        </Section>
+      </>
+    ),
+  },
 
-        <section>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Taking Action on Matches</h2>
-          <p className="text-gray-600 dark:text-slate-400 mb-4">For each matched candidate, you can:</p>
-          <div className="grid md:grid-cols-2 gap-3">
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
-              <span className="font-medium text-gray-900 dark:text-slate-50">View Profile</span> - See full resume details
-            </div>
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
-              <span className="font-medium text-gray-900 dark:text-slate-50">Score Resume</span> - Get detailed scoring
-            </div>
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
-              <span className="font-medium text-gray-900 dark:text-slate-50">Invite to Assessment</span> - Send test invitation
-            </div>
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
-              <span className="font-medium text-gray-900 dark:text-slate-50">Add to Shortlist</span> - Save for later
-            </div>
-          </div>
-        </section>
+  'ai-interviews': {
+    id: 'ai-interviews',
+    title: 'Running AI Interviews',
+    subtitle: 'Voice interviews with Bina, our AI interviewer',
+    category: 'evaluation',
+    readTime: '8 min',
+    icon: Bot,
+    keywords: 'ai interview bina voice timed conversational clusters must-have nice-to-have weight hr round identity otp system check recording transcript violations recommended to hire proctoring risk',
+    content: (
+      <>
+        <Section title="Overview">
+          <P>
+            In an AI Interview, <strong>Bina</strong> — TalentFlow’s AI interviewer — talks with the candidate, asks
+            questions based on the job’s skills and adapts follow-ups to their answers. The candidate answers by speaking.
+          </P>
+          <NavPath items={['Dashboard', 'AI Interviews']} href="/recruitment/ai-interviews" />
+        </Section>
+
+        <Section title="Setting up an interview">
+          <P>Click <strong>“Create AI Interview”</strong> and follow the four steps:</P>
+          <Step number={1} title="Select JD">
+            <p>Pick the published job the interview is for.</p>
+          </Step>
+          <Step number={2} title="Configure">
+            <RefTable head={['Setting', 'Options']} rows={[
+              ['Interview Mode', 'Timed (30 min, a time per question) or Conversational (30 min, the AI adapts) — plus 5 minutes buffer'],
+              ['Must-To-Have / Nice-To-Have Skills', 'Give each a weight (minimum 10%); the weights must total 100%'],
+              ['HR Round', 'Pick questions from the HR Question Bank, asked at the opening or the close'],
+              ['Additional Settings', 'Introduction video (up to 1 min) and QR verification of the candidate’s room with a phone'],
+            ]} />
+          </Step>
+          <Step number={3} title="Clusters">
+            <p>Skills are grouped into clusters that plan which questions Bina asks. Skills are locked once clusters are generated.</p>
+          </Step>
+          <Step number={4} title="Preview & Publish">
+            <p>Check the summary, publish, then invite candidates.</p>
+          </Step>
+        </Section>
+
+        <Section title="What candidates go through">
+          <Pills items={['Job Details & Consent', 'Identity (email OTP + photo)', 'System Check', 'Practice', 'Interview']} />
+          <Features items={[
+            'The system check covers webcam, microphone, internet, lighting, background noise and that only one person is visible.',
+            'A desktop or laptop is required — mobile devices are not supported.',
+            'If the camera or microphone drops, the interview pauses for up to 3 minutes before it ends.',
+          ]} />
+          <Tip type="warning">
+            Like assessments, leaving the interview screen ends the interview. Ask candidates to close other apps first.
+          </Tip>
+        </Section>
+
+        <Section title="Reviewing results" last>
+          <Features items={[
+            <>The <strong>Results</strong> tab shows Score, Result and <strong>Proctoring Risk</strong> (Clean, Low, Medium, High) for every candidate.</>,
+            <>A candidate passes when their Must-Have score is at least <strong>6.0 / 10</strong> — the verdict reads “Recommended to Hire” or “Does Not Meet Requirements”.</>,
+            <>Candidate tabs: <strong>Evaluation Report, Skill Breakdown, Question Analysis, Recording, Transcript, Violations</strong> and QR Verification.</>,
+            <><strong>Download Report</strong> for the evaluation PDF; export the transcript as PDF or text.</>,
+            'Terminated interviews do not get a final recommendation.',
+            <>Each interview uses <strong>1 AI Interview unit</strong> when the candidate clicks Start Interview.</>,
+          ]} />
+        </Section>
+      </>
+    ),
+  },
+
+  'hr-question-bank': {
+    id: 'hr-question-bank',
+    title: 'Using the HR Question Bank',
+    subtitle: 'Reusable HR questions for assessments and interviews',
+    category: 'evaluation',
+    readTime: '2 min',
+    icon: MessageCircle,
+    keywords: 'hr question bank add question text answer yes no reusable informational not scored',
+    content: (
+      <>
+        <Section title="Overview">
+          <P>
+            Keep a library of HR questions and reuse them in both AI Assessments and AI Interviews. HR answers are
+            <strong> informational only — they are not scored</strong>; responses are shared with the recruiter for review.
+          </P>
+          <NavPath items={['AI Assessments or AI Interviews', 'HR Question Bank']} href="/recruitment/hr-question-bank" />
+        </Section>
+
+        <Section title="Adding questions" last>
+          <Step number={1} title="Click &quot;Add Question&quot;">
+            <p>Enter the question text.</p>
+          </Step>
+          <Step number={2} title="Choose an Answer Type">
+            <p><strong>Text Answer</strong>, or <strong>Yes / No / Need to Explain More</strong>.</p>
+          </Step>
+          <P>You can also add a question while building an assessment (“Add Quiz”) or an AI Interview (“Add Question To HR Question Bank”). An assessment can include up to 5 HR questions.</P>
+        </Section>
+      </>
+    ),
+  },
+
+  'team-management': {
+    id: 'team-management',
+    title: 'Managing Users, Roles & Teams',
+    subtitle: 'Invite users, control access and work together',
+    category: 'organization',
+    readTime: '6 min',
+    icon: Users,
+    keywords: 'user management invite user role permissions admin recruiter billing manager viewer custom role reset password deactivate teams team chat channels direct messages user id',
+    content: (
+      <>
+        <Section title="Inviting users">
+          <NavPath items={['Dashboard', 'User Management']} href="/organization/user-management" />
+          <Step number={1} title="Click &quot;Invite User&quot;">
+            <p>Enter their details and choose a role — Invite stays disabled until a role is picked.</p>
+          </Step>
+          <Step number={2} title="They receive a temporary password by email">
+            <p>On first login they are taken to <strong>Set your password</strong>, which shows the account’s email so they can confirm it’s theirs, and click <strong>“Activate account”</strong>.</p>
+          </Step>
+          <Tip type="info">If you’ve used every seat in your plan, the button changes to “Buy More Seats”.</Tip>
+        </Section>
+
+        <Section title="Roles and permissions">
+          <P>Access comes entirely from a user’s role. The account owner always has full access.</P>
+          <RefTable head={['Built-in role', 'Access']} rows={[
+            ['Admin', 'Full access to all features and settings'],
+            ['Recruiter', 'Day-to-day recruiting: jobs, resumes, scoring, assessments, interviews'],
+            ['Billing Manager', 'Read-only billing, invoices and usage'],
+            ['Viewer', 'View-only access across the platform'],
+          ]} />
+          <P>
+            Built-in roles can’t be edited — <strong>duplicate</strong> one, or click <strong>“Create Role”</strong>, to build a custom role and
+            switch individual permissions on or off per module (Job Description, Resume Scoring, Assessment, AI Interview, Billing and more).
+          </P>
+        </Section>
+
+        <Section title="Managing a user">
+          <RefTable head={['Action', 'What it does']} rows={[
+            ['Activate / Deactivate', 'Turn access on or off without deleting the user'],
+            ['Reset Password', 'Email a temporary password, or set one directly (optionally forcing a change on next login)'],
+            ['Force password change', 'Signs them out and requires a new password at next login'],
+            ['Edit User', 'Changing identity details is confirmed with a verification code'],
+            ['Copy User ID', 'Each user has an ID like US-001 — quote it when contacting support'],
+          ]} />
+        </Section>
+
+        <Section title="Teams and Team Chat" last>
+          <CardGrid items={[
+            ['Teams', '"Create Team", assign a Team Lead and members, and track each team’s hiring activity and unit usage.'],
+            ['Team Chat', 'Open to everyone — public or private channels and direct messages, with online status, reactions, pinned messages and image attachments.'],
+          ]} />
+        </Section>
+      </>
+    ),
+  },
+
+  'subscription-billing': {
+    id: 'subscription-billing',
+    title: 'Understanding Your Subscription & Units',
+    subtitle: 'Plans, units, add-ons and billing history',
+    category: 'billing',
+    readTime: '5 min',
+    icon: CreditCard,
+    keywords: 'units credits plan upgrade downgrade add-on purchase usage quotas billing history invoice refund dispute unit dispute payment methods seats',
+    content: (
+      <>
+        <Section title="How units work">
+          <P>Your plan includes units for each AI feature. The <strong>units left</strong> pill in the header shows your total balance.</P>
+          <RefTable head={['Unit', 'Used when', 'Refunded when']} rows={[
+            ['Resume Storage', 'A resume is uploaded', 'The upload is rejected or fails'],
+            ['Resume Scoring', 'A resume is scored against a job', 'Scoring fails'],
+            ['Assessments', 'A candidate starts an assessment', '—'],
+            ['AI Interviews', 'A candidate clicks Start Interview', '—'],
+            ['AI Talent Match', 'Free — never uses units', '—'],
+          ]} />
+          <Tip type="tip">
+            Inviting candidates and copying links don’t use units — only an actual start does.
+          </Tip>
+        </Section>
+
+        <Section title="Your plan">
+          <NavPath items={['Profile menu', 'Upgrade Plans']} href="/subscription/current-plan" />
+          <Features items={[
+            'Compare Starter, Professional and Enterprise plans with the Monthly / Yearly toggle, then "Upgrade" or "Downgrade".',
+            'Plans set your Team Seats and Job Postings limits as well as your unit allowance.',
+            <>Need units mid-cycle? Open the units pill and click <strong>“Purchase Add-ons”</strong> — add-on units are available immediately.</>,
+          ]} />
+        </Section>
+
+        <Section title="Billing pages" last>
+          <RefTable head={['Page', 'Use it to']} rows={[
+            ['Usage & Quotas', 'See plan and add-on units used and remaining per feature'],
+            ['Billing History', 'View and download invoices'],
+            ['Payment Methods', 'Add or manage cards (account owner)'],
+            ['Refund History · Dispute History', 'Follow refunds and payment disputes'],
+            ['Unit Disputes', 'Ask for units back when a system error used them (also a tab in Support Tickets)'],
+          ]} />
+        </Section>
+      </>
+    ),
+  },
+
+  'support-security': {
+    id: 'support-security',
+    title: 'Support, Security & Audit Logs',
+    subtitle: 'Get help, protect your account and review activity',
+    category: 'support',
+    readTime: '4 min',
+    icon: ShieldCheck,
+    keywords: 'support ticket help desk two-factor 2fa authenticator sessions password audit log audit trail activity notifications profile settings',
+    content: (
+      <>
+        <Section title="Getting help">
+          <CardGrid items={[
+            ['Support Tickets', <>Contact the TalentFlow team: “Submit New Ticket”, choose a category and priority, and follow it through Open → In Progress → Resolved. <Link href="/support-tickets" className="text-brand-blue hover:underline">Open</Link></>],
+            ['Help Desk', <>Ask your own administrator for access or help inside your organisation. <Link href="/help-desk" className="text-brand-blue hover:underline">Open</Link></>],
+          ]} />
+          <Tip type="tip">Mark a ticket Urgent only when you or your team cannot use TalentFlow at all.</Tip>
+        </Section>
+
+        <Section title="Securing your account">
+          <NavPath items={['Profile menu', 'Profile Settings']} href="/settings/general-settings" />
+          <Features items={[
+            <>Turn on <strong>Two-Factor Authentication</strong> with an authenticator app (Google Authenticator, Microsoft Authenticator, Authy).</>,
+            <>Review <strong>Active Sessions</strong> and revoke the ones you don’t recognise.</>,
+            'Choose which email and push notifications you receive under the Notifications tab.',
+          ]} />
+        </Section>
+
+        <Section title="Audit logs" last>
+          <RefTable head={['Page', 'Shows']} rows={[
+            ['Audit Log', 'Audited actions and live activity across your organisation (Profile menu → Audit Log)'],
+            ['Audit Trail', 'Every change with user, module, status and units used — account owner only'],
+          ]} />
+        </Section>
       </>
     ),
   },
@@ -1120,10 +879,20 @@ const categories = [
   { id: 'all', name: 'All Articles', icon: Book },
   { id: 'basics', name: 'Getting Started', icon: Lightbulb },
   { id: 'recruitment', name: 'Recruitment', icon: Briefcase },
-  { id: 'assessments', name: 'Assessments', icon: ClipboardCheck },
+  { id: 'evaluation', name: 'Assessments & Interviews', icon: ClipboardCheck },
   { id: 'organization', name: 'Organization', icon: Users },
   { id: 'billing', name: 'Billing', icon: CreditCard },
+  { id: 'support', name: 'Support & Security', icon: LifeBuoy },
 ];
+
+const categoryName = (id: string) => categories.find((c) => c.id === id)?.name ?? id;
+
+const matchesQuery = (article: Article, query: string) => {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = `${article.title} ${article.subtitle} ${article.keywords}`.toLowerCase();
+  return q.split(/\s+/).every((word) => haystack.includes(word));
+};
 
 export default function HelpCenterPage() {
   const router = useRouter();
@@ -1133,22 +902,46 @@ export default function HelpCenterPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
-  const selectedArticle = articleId ? helpArticles[articleId as keyof typeof helpArticles] : null;
+  const allArticles = Object.values(helpArticles);
+  const selectedArticle = articleId ? helpArticles[articleId] : null;
 
-  const filteredArticles = Object.values(helpArticles).filter(article => {
-    const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredArticles = allArticles.filter(
+    (article) => matchesQuery(article, searchQuery) && (selectedCategory === 'all' || article.category === selectedCategory),
+  );
+
+  // Link to an article that doesn't exist (old bookmark, typo).
+  if (articleId && !selectedArticle) {
+    return (
+      <main className="tf-page">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="tf-page-sheet">
+            <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Center', href: '/help' }]} />
+            <div className="tf-card-soft p-8 text-center">
+              <Search className="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-slate-600" />
+              <h1 className="tf-section-title mb-1">Article not found</h1>
+              <p className="tf-body-muted mb-5">This help article may have moved or been renamed.</p>
+              <button onClick={() => router.push('/help')} className="tf-btn-primary inline-flex items-center gap-2">
+                <ArrowLeft className="w-4 h-4" />
+                Back to Help Center
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   // Article view
   if (selectedArticle) {
+    const sameCategory = allArticles.filter((a) => a.id !== selectedArticle.id && a.category === selectedArticle.category);
+    const others = allArticles.filter((a) => a.id !== selectedArticle.id && a.category !== selectedArticle.category);
+    const related = [...sameCategory, ...others].slice(0, 2);
+
     return (
       <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
         <div className="tf-page-sheet">
           <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Center', href: '/help' }, { label: selectedArticle.title }]} />
-          {/* Back button */}
           <button
             onClick={() => router.push('/help')}
             className="inline-flex items-center gap-2 text-sm sm:text-base text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 group"
@@ -1157,9 +950,8 @@ export default function HelpCenterPage() {
             <span>Back to Help Center</span>
           </button>
 
-          {/* Article header */}
           <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-3 min-w-0">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                 <selectedArticle.icon className="h-5 w-5 text-brand-blue" />
               </div>
@@ -1173,23 +965,19 @@ export default function HelpCenterPage() {
                 <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 {selectedArticle.readTime} read
               </span>
-              <span className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 rounded-full capitalize text-gray-700 dark:text-slate-300">{selectedArticle.category}</span>
+              <span className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 rounded-full text-gray-700 dark:text-slate-300">{categoryName(selectedArticle.category)}</span>
             </div>
           </div>
 
-          {/* Article content */}
           <div className="tf-card-soft p-5 sm:p-8 md:p-10">
             {selectedArticle.content}
           </div>
 
-          {/* Related articles */}
-          <div className="mt-10">
-            <h3 className="tf-section-title mb-4">Related Articles</h3>
-            <div className="tf-grid-2">
-              {Object.values(helpArticles)
-                .filter(a => a.id !== selectedArticle.id && a.category === selectedArticle.category)
-                .slice(0, 2)
-                .map(article => (
+          {related.length > 0 && (
+            <div className="mt-10">
+              <h3 className="tf-section-title mb-4">Related Articles</h3>
+              <div className="tf-grid-2">
+                {related.map((article) => (
                   <button
                     key={article.id}
                     onClick={() => router.push(`/help?article=${article.id}`)}
@@ -1206,8 +994,9 @@ export default function HelpCenterPage() {
                     </div>
                   </button>
                 ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         </div>
       </main>
@@ -1220,7 +1009,6 @@ export default function HelpCenterPage() {
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Center' }]} />
-        {/* Header */}
         <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
@@ -1231,23 +1019,31 @@ export default function HelpCenterPage() {
               <p className="mt-0.5 tf-body-secondary">Find answers, guides, and tutorials to help you succeed</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-              <input
-                type="text"
-                placeholder="Search for help articles..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="tf-input pl-9 pr-3"
-              />
-            </div>
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search help, e.g. units, invite, version"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search help articles"
+              className="tf-input pl-9 pr-9"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-slate-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Categories */}
         <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-hide -mx-1 px-1 justify-start sm:flex-wrap">
-          {categories.map(category => (
+          {categories.map((category) => (
             <button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
@@ -1263,7 +1059,6 @@ export default function HelpCenterPage() {
           ))}
         </div>
 
-        {/* Quick Actions */}
         <div className="tf-grid-3 mb-5">
           <button
             onClick={() => router.push('/help?article=getting-started')}
@@ -1279,33 +1074,38 @@ export default function HelpCenterPage() {
           >
             <MessageCircle className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
             <div className="tf-section-title sm:text-lg">Contact Support</div>
-            <div className="tf-body-muted mt-0.5 sm:mt-1">Get personalized help</div>
+            <div className="tf-body-muted mt-0.5 sm:mt-1">Raise a ticket with our team</div>
           </button>
           <button
             onClick={() => router.push('/settings/general-settings')}
             className="p-4 sm:p-6 tf-card-soft hover:border-brand-blue/30 hover:shadow-md transition-all text-left"
           >
             <Settings className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
-            <div className="tf-section-title sm:text-lg">Settings</div>
-            <div className="tf-body-muted mt-0.5 sm:mt-1">Configure your account</div>
+            <div className="tf-section-title sm:text-lg">Profile Settings</div>
+            <div className="tf-body-muted mt-0.5 sm:mt-1">Profile, notifications and security</div>
           </button>
         </div>
 
-        {/* Articles Grid */}
         <div className="mb-5">
           <h2 className="tf-section-title sm:text-lg lg:text-xl mb-4 sm:mb-6">
-            {selectedCategory === 'all' ? 'All Articles' : categories.find(c => c.id === selectedCategory)?.name}
+            {searchQuery.trim() ? 'Search results' : categoryName(selectedCategory)}
             <span className="text-gray-400 dark:text-slate-500 font-normal ml-2">({filteredArticles.length})</span>
           </h2>
 
           {filteredArticles.length === 0 ? (
             <div className="text-center py-16 text-gray-500 dark:text-slate-500">
               <Search className="w-12 h-12 mx-auto mb-4 opacity-30" />
-              <p className="text-lg">No articles found matching your search</p>
+              <p className="text-lg mb-2">No articles found{searchQuery.trim() ? ` for "${searchQuery.trim()}"` : ''}</p>
+              <button
+                onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }}
+                className="text-brand-blue hover:underline text-sm"
+              >
+                Show all articles
+              </button>
             </div>
           ) : (
             <div className="tf-grid-3">
-              {filteredArticles.map(article => (
+              {filteredArticles.map((article) => (
                 <button
                   key={article.id}
                   onClick={() => router.push(`/help?article=${article.id}`)}
@@ -1319,6 +1119,7 @@ export default function HelpCenterPage() {
                       <h3 className="font-semibold text-gray-900 dark:text-slate-50 group-hover:text-brand-blue mb-1 line-clamp-2">
                         {article.title}
                       </h3>
+                      <p className="tf-body-muted line-clamp-2 mb-1.5">{article.subtitle}</p>
                       <div className="flex items-center gap-2 tf-body-muted">
                         <Clock className="w-3.5 h-3.5" />
                         {article.readTime}
@@ -1332,7 +1133,6 @@ export default function HelpCenterPage() {
           )}
         </div>
 
-        {/* Contact Section */}
         <div className="tf-card-soft p-4 sm:p-5">
           <h2 className="tf-section-title mb-6">Still need help?</h2>
           <div className="tf-grid-2">
@@ -1345,7 +1145,7 @@ export default function HelpCenterPage() {
               </div>
               <div className="min-w-0">
                 <div className="font-semibold text-gray-900 dark:text-slate-50">Email Support</div>
-                <div className="text-gray-500 dark:text-slate-400">support@talentflow.com</div>
+                <div className="text-gray-500 dark:text-slate-400 truncate">support@talentflow.com</div>
               </div>
             </a>
             <button

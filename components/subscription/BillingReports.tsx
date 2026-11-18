@@ -7,6 +7,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import ListPagination from '@/components/ListPagination';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { RowActions } from '@/components/subscription/RowActionsMenu';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
@@ -184,6 +185,11 @@ export default function BillingReports<T extends ReportInvoice>({
 
   const moduleOptions = [{ value: 'all', label: 'All Modules' }, ...[...MODULES, OTHERS].map(m => ({ value: m.key, label: m.key }))];
   const hasFilters = statusFilter !== 'all' || moduleFilter !== 'all' || search !== '';
+  // Active filter tags for the table: Status and Module (search shows in its box).
+  const tableFilterChips: FilterChip[] = [
+    statusFilter !== 'all' && { key: 'status', label: 'Status', value: STATUSES.find(s => s.key === statusFilter)?.label ?? statusFilter, onRemove: () => changeStatus('all') },
+    moduleFilter !== 'all' && { key: 'module', label: 'Module', value: moduleFilter, onRemove: () => changeModule('all') },
+  ].filter(Boolean) as FilterChip[];
 
   const emptyChart = (
     <div className="flex h-full items-center justify-center tf-body-muted">No paid invoices in this period</div>
@@ -306,6 +312,9 @@ export default function BillingReports<T extends ReportInvoice>({
           )}
         </div>
       </div>
+      {tableFilterChips.length > 0 && (
+        <FilterChips className="-mt-2" chips={tableFilterChips} />
+      )}
 
       {/* Invoice table */}
       {tableRows.length === 0 ? (

@@ -1,6 +1,8 @@
 'use client';
 
-import { Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Trash2, Lock, AlertCircle, HelpCircle, Layers, Loader2, Eye } from 'lucide-react';
+import { resumeService } from '@/lib/services/resumeService';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,13 +14,37 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+/** A single version picked in the version picker. Absent → every version. */
+export interface DeleteResumeVersionTarget {
+  id: string;
+  version: number;
+}
+
+interface VersionRow {
+  id: string;
+  version: number;
+  created_at?: string | null;
+  file_name?: string | null;
+}
+
 interface DeleteResumeDialogProps {
   open: boolean;
   /** Display names of the resumes being deleted — one entry per resume. */
   names: string[];
+  /** The resume being deleted, when it is one. Its versions are loaded and,
+   *  if there are two or more, the user picks which one to delete. */
+  resumeId?: string;
   onCancel: () => void;
-  onConfirm: () => void;
+  /** No argument: delete the resume (every version). A target: delete only
+   *  that version (resumeService.delete(id, { onlyThisVersion: true })). */
+  onConfirm: (version?: DeleteResumeVersionTarget) => void;
 }
+
+const uploadedOn = (iso?: string | null) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+};
 
 /**
  * The one Delete Resume confirmation — Search Resume (Job Openings → ⋮ →
@@ -26,9 +52,36 @@ interface DeleteResumeDialogProps {
  * buttons can't drift apart again. No corner X (`hideClose`): it is dismissed
  * by the footer's Cancel (or Esc), next to the destructive Delete.
  */
-export default function DeleteResumeDialog({ open, names, onCancel, onConfirm }: DeleteResumeDialogProps) {
+export default function DeleteResumeDialog({ open, names, resumeId, onCancel, onConfirm }: DeleteResumeDialogProps) {
   const count = names.length;
   const single = count <= 1;
+
+  /* Versions of the one resume being deleted. Loaded each time the dialog
+     opens; the picker shows only when there are two or more. */
+  const pickFor = open && single && resumeId ? resumeId : null;
+  const [versions, setVersions] = useState<{ for: string; rows: VersionRow[] } | null>(null);
+  const [choice, setChoice] = useState<'all' | string>('all');
+  useEffect(() => {
+    if (!pickFor) return;
+    let alive = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setChoice('all');
+    resumeService.getVersions(pickFor)
+      .then((data: VersionRow[]) => {
+        if (!alive) return;
+        const rows = (Array.isArray(data) ? data : [])
+          .map((v) => ({ id: String(v.id), version: Number(v.version) || 1, created_at: v.created_at, file_name: v.file_name }))
+          .sort((a, b) => b.version - a.version);
+        setVersions({ for: pickFor, rows });
+      })
+      .catch(() => { if (alive) setVersions({ for: pickFor, rows: [] }); });
+    return () => { alive = false; };
+  }, [pickFor]);
+  const rows = versions && versions.for === pickFor ? versions.rows : null;
+  const loadingVersions = !!pickFor && rows === null;
+  const multi = !!rows && rows.length > 1;
+  const picked = multi && choice !== 'all' ? rows.find((r) => r.id === choice) ?? null : null;
+  const pickedLabel = picked ? `Version ${picked.version}` : null;
 
   return (
     <AlertDialog open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
@@ -50,21 +103,11 @@ export default function DeleteResumeDialog({ open, names, onCancel, onConfirm }:
               <div className="space-y-4 rounded-xl border border-red-100 bg-red-50/60 p-4">
                 <div className="flex items-center gap-3">
                   <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
-                    <ShieldAlert className="h-4 w-4" />
-                  </span>
-                  <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
-                  <p className="tf-body">
-                    This action is <span className="font-semibold text-red-600">permanent</span> and{' '}
-                    <span className="font-semibold text-red-600">cannot be undone</span>.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
                     <Lock className="h-4 w-4" />
                   </span>
                   <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
                   <p className="tf-body">
-                    {single ? 'Deleted resume' : 'Deleted resumes'}{' '}
+                    {picked ? `Deleted ${pickedLabel?.toLowerCase()}` : single ? 'Deleted resume' : 'Deleted resumes'}{' '}
                     <span className="font-semibold text-red-600">cannot be restored</span>.
                   </p>
                 </div>
@@ -78,14 +121,70 @@ export default function DeleteResumeDialog({ open, names, onCancel, onConfirm }:
                   </p>
                 </div>
               </div>
+              {loadingVersions && (
+                <p className="flex items-center gap-2 tf-body-muted">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Checking versions…
+                </p>
+              )}
+              {multi && rows && (
+                <fieldset className="space-y-2">
+                  <legend className="mb-2 flex items-center gap-2 tf-row-title">
+                    <Layers className="h-4 w-4 text-brand-blue" />
+                    This resume has {rows.length} versions — which one do you want to delete?
+                  </legend>
+                  {[{ id: 'all', title: `All versions (${rows.length})`, sub: 'Removes the whole resume' },
+                    ...rows.map((r, i) => ({
+                      id: r.id,
+                      title: `Version ${r.version}${i === 0 ? ' · Latest' : ''}`,
+                      sub: [uploadedOn(r.created_at) ? `Uploaded ${uploadedOn(r.created_at)}` : null, r.file_name].filter(Boolean).join(' · ')
+                        + (i === 0 ? ' — the previous version becomes the latest' : ''),
+                    }))].map((o) => (
+                    <label
+                      key={o.id}
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors ${choice === o.id
+                        ? 'border-red-300 bg-red-50/60'
+                        : 'border-gray-200 hover:bg-gray-50'}`}
+                    >
+                      <input
+                        type="radio"
+                        name="delete-resume-version"
+                        value={o.id}
+                        checked={choice === o.id}
+                        onChange={() => setChoice(o.id)}
+                        className="mt-1 accent-red-600"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-gray-900">{o.title}</span>
+                        {o.sub && <span className="block text-xs text-gray-500 [overflow-wrap:anywhere]">{o.sub}</span>}
+                      </span>
+                      {/* Look at this version before deciding — new tab, so
+                          this dialog (and the pick) stays as it is. */}
+                      {o.id !== 'all' && (
+                        <a
+                          href={`/recruitment/resume-view/${encodeURIComponent(o.id)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="View this version in a new tab"
+                          className="ml-auto inline-flex h-7 shrink-0 items-center gap-1 self-center rounded-md border border-gray-200 bg-white px-2 text-xs font-medium text-brand-blue hover:bg-brand-blue/5"
+                        >
+                          <Eye className="h-3.5 w-3.5" /> View
+                        </a>
+                      )}
+                    </label>
+                  ))}
+                </fieldset>
+              )}
               <div className="flex items-start gap-3 border-t border-gray-100 pt-4">
                 <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 border-brand-orange text-brand-orange">
                   <HelpCircle className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
                   <p className="break-words tf-row-title">
-                    {single ? (
-                      <>Are you sure you want to delete &ldquo;{names[0] ?? ''}&rdquo;?</>
+                    {picked ? (
+                      <>Are you sure you want to delete {pickedLabel} of &ldquo;{names[0] ?? ''}&rdquo;?</>
+                    ) : single ? (
+                      <>Are you sure you want to delete &ldquo;{names[0] ?? ''}&rdquo;{multi ? ' and all its versions' : ''}?</>
                     ) : (
                       <>Are you sure you want to delete {count} resumes?</>
                     )}
@@ -106,11 +205,12 @@ export default function DeleteResumeDialog({ open, names, onCancel, onConfirm }:
             Cancel
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={onConfirm}
+            onClick={() => onConfirm(picked ? { id: picked.id, version: picked.version } : undefined)}
+            disabled={loadingVersions}
             className="gap-2 bg-red-600 text-white hover:bg-red-700"
           >
             <Trash2 className="h-4 w-4" />
-            {single ? 'Delete Resume' : 'Delete Resumes'}
+            {picked ? `Delete ${pickedLabel}` : single ? 'Delete Resume' : 'Delete Resumes'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

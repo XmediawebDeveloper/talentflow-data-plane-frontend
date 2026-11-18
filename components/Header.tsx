@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Monitor, Moon, Sun } from 'lucide-react';
+import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, Lock, X, Building2, Menu, MessageCircle, Monitor, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/button';
 import brandLogo from '@/assets/brand/talent-flow-logo-header.webp';
 import { useQuota } from '@/contexts/QuotaContext';
 import notificationService, { Notification } from '@/lib/services/notificationService';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import chatService from '@/lib/services/chatService';
 import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'sonner';
@@ -78,9 +79,23 @@ export default function Header(props: HeaderProps) {
   return <HeaderBody {...props} user={props.user} />;
 }
 
+const UNIT_VIEW_CODES = [
+  'usage:read', 'billing:read', 'current_plan:read',   // Subscription & Billing
+  'my_resumes:upload',                                  // Resume Upload (storage)
+  'scoring:score',                                      // Resume Scoring
+  'assessments:create',                                 // Assessments
+  'ai_interview:create',                                // AI Interviews
+];
+const UNITS_BLOCKED_MESSAGE = "Your role doesn't use units. Ask the account owner if you need Subscription & Billing access.";
+
 function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen, subscriptionExpired }: HeaderProps & { user: UserType }) {
   const router = useRouter();
-  const { refreshUser, isTenantAdmin, hasPermission } = useAuth();
+  const { refreshUser, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  // The plan / units pill is for roles that use units (Resume Upload, Resume
+  // Scoring, Assessments, AI Interviews) or see Subscription & Billing. Anyone
+  // else (e.g. a role with every area at No access) gets it greyed with a
+  // tooltip - never the unit balances (2026-11-13).
+  const canSeeUnits = isTenantAdmin || UNIT_VIEW_CODES.some((c) => hasPermissionCode(c));
   // Plan upgrade and add-on purchase need Subscription & Billing Access
   // (Upgrade Plan) — same as the Current Plan page and the add-on API (2026-11-10).
   const canBuyForPlan = isTenantAdmin || hasPermission('canUpgradePlan');
@@ -267,16 +282,64 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
   // Track if welcome notification call has been made this session
   const welcomeNotifCalledRef = useRef(false);
 
+  /* Team Chat unread — its own icon next to the bell, since chat stays out of
+     the bell's popup. Anyone signed in can use Team Chat, so no permission gate. */
+  const pathname = usePathname();
+  const onTeamChat = pathname?.startsWith('/organization/team-chat') ?? false;
+  const onTeamChatRef = useRef(onTeamChat);
+  useEffect(() => {
+    onTeamChatRef.current = onTeamChat;
+  }, [onTeamChat]);
+  const [chatUnread, setChatUnread] = useState(0);
+  const fetchChatUnread = useCallback(async () => {
+    try {
+      setChatUnread(await chatService.getUnreadCount());
+    } catch (error) {
+      console.error('Error fetching chat unread count:', error);
+    }
+  }, []);
+  useEffect(() => {
+    if (!user) return;
+    fetchChatUnread();
+    // The chat page knows its own total; take it from there while it's open.
+    const onChatUnread = (e: Event) => {
+      const total = Number((e as CustomEvent).detail);
+      if (Number.isFinite(total)) setChatUnread(Math.max(0, total));
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchChatUnread();
+    };
+    window.addEventListener('chatUnreadChanged', onChatUnread);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('chatUnreadChanged', onChatUnread);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user?.id, fetchChatUnread]);
+
   // Handle new notification from WebSocket - stable callback
   const handleNewNotification = useCallback((notification: any) => {
     console.log('[Header] New notification via WebSocket:', notification);
-    // Chat messages aren't shown in the popup, so they don't bump its badge.
-    if (isChatNotification(notification)) return;
+    // Chat messages aren't shown in the bell's popup — they go to the chat
+    // icon instead, plus a toast unless Team Chat is already on screen.
+    if (isChatNotification(notification)) {
+      if (onTeamChatRef.current) return;
+      fetchChatUnread();
+      toast.info(notification.title || 'New message', {
+        id: notification.id ? `chat-${notification.id}` : undefined,
+        description: notification.message,
+        duration: 6000,
+        action: notification.action_url
+          ? { label: notification.action_label || 'View Message', onClick: () => router.push(notification.action_url) }
+          : undefined,
+      });
+      return;
+    }
     // Increment unread count
     setUnreadCount(prev => prev + 1);
     // Dispatch event to trigger refresh if panel is open
     window.dispatchEvent(new CustomEvent('wsNotificationReceived'));
-  }, []);
+  }, [fetchChatUnread, router]);
 
   // Handle count update from WebSocket - stable callback. The pushed count
   // includes chat rows, so recount instead of taking it as-is.
@@ -856,7 +919,22 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
         )}
 
         {/* Plan & Unit Balance Display - Clickable to show breakdown dropdown */}
-        {hasQuotaPermission && (
+        {hasQuotaPermission && !canSeeUnits && (
+          <div
+            title={UNITS_BLOCKED_MESSAGE}
+            aria-disabled="true"
+            className="liquid-glass-card flex min-h-[36px] sm:min-h-[44px] cursor-not-allowed items-center gap-1.5 lg:gap-2 rounded-lg px-1.5 py-1 sm:px-2 sm:py-1.5 lg:px-2.5 opacity-60"
+          >
+            <div className="w-6 h-6 rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center dark:border-slate-700 dark:bg-slate-800">
+              <CreditCard className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.15} />
+            </div>
+            <span className="hidden sm:block text-2xs lg:text-xs font-semibold text-slate-500 dark:text-slate-400 truncate max-w-[90px] md:max-w-[130px] lg:max-w-[170px]">
+              {loadingQuota ? 'Loading...' : planName}
+            </span>
+            <Lock className="w-3 h-3 text-slate-400" />
+          </div>
+        )}
+        {hasQuotaPermission && canSeeUnits && (
           <div className="relative">
             <button
               onClick={() => {
@@ -1087,6 +1165,36 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
             )}
           </div>
         )}
+
+        {/* Team Chat — unread messages across all conversations */}
+        <Tooltip content="Team Chat" position="bottom">
+          <button
+            onClick={() => {
+              setShowNotifications(false);
+              setShowPlanMenu(false);
+              setShowUserMenu(false);
+              router.push('/organization/team-chat');
+            }}
+            className="relative p-1.5 sm:p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+            aria-label={chatUnread > 0 ? `Team Chat, ${chatUnread} unread` : 'Team Chat'}
+          >
+            <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+            {chatUnread > 0 && (
+              <span className="absolute top-0 right-0 flex items-center justify-center">
+                <span
+                  className="absolute inset-0 rounded-full bg-brand-blue/60 animate-ping motion-reduce:hidden"
+                  aria-hidden="true"
+                />
+                <span
+                  className="relative flex items-center justify-center min-w-[0.875rem] sm:min-w-[1rem] h-3.5 sm:h-4 px-0.5 sm:px-1 bg-brand-blue text-white rounded-full ring-1 ring-white font-semibold text-2xs sm:text-2xs leading-none tabular-nums"
+                  aria-hidden="true"
+                >
+                  {chatUnread > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : chatUnread}
+                </span>
+              </span>
+            )}
+          </button>
+        </Tooltip>
 
         {/* FIX-010: Notifications with Tooltip */}
         <div className="relative">

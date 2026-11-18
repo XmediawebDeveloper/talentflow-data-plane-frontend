@@ -212,7 +212,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
     <>
       {job.experience && (
         <span className="flex items-center gap-1.5">
-          <TrendingUp className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <TrendingUp className="w-4 h-4 text-gray-900 dark:text-slate-100" />
           {job.experience}
         </span>
       )}
@@ -220,7 +220,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
           hidden — on a wrapped two-line card it read as a stray dash, not
           as "not set". From sm the placeholders show as before. */}
       <span className={`flex items-center gap-1.5 ${job.industry_type ? '' : 'max-sm:hidden'}`}>
-        <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+        <Building2 className="w-4 h-4 text-gray-900 dark:text-slate-100" />
         {formatIndustryType(job.industry_type)}
       </span>
       {/* Location — under `hideEmpty` (Job Openings cards) it is omitted entirely
@@ -229,7 +229,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
           with every name available in a hover tooltip rather than overflowing the row. */}
       {(!hideEmpty || hasLocation) && (
         <span className={`flex items-center gap-1.5 ${hasLocation ? '' : 'max-sm:hidden'}`}>
-          <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <MapPin className="w-4 h-4 text-gray-900 dark:text-slate-100" />
           {locationNames.length > 1 ? (
             <Tooltip
               content={
@@ -252,7 +252,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
       {/* Salary — same conditional treatment: shown only when there is a value. */}
       {(!hideEmpty || hasSalary) && (
         <span className={`flex items-center gap-1.5 ${hasSalary ? '' : 'max-sm:hidden'}`}>
-          <Coins className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <Coins className="w-4 h-4 text-gray-900 dark:text-slate-100" />
           Salary {salaryText || '-'}
           {(job.salary_min || job.salary_max) && job.compensation_type
             ? ` / ${formatCompensationPeriod(job.compensation_type)}`
@@ -261,12 +261,12 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
       )}
       {breakBeforeType && <span aria-hidden="true" className="tf-line-break" />}
       <span className="flex items-center gap-1.5">
-        <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+        <Briefcase className="w-4 h-4 text-gray-900 dark:text-slate-100" />
         {formatEmploymentType(job.employmentType)}
       </span>
       {job.workMode && (
         <span className="flex items-center gap-1.5">
-          <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <Users className="w-4 h-4 text-gray-900 dark:text-slate-100" />
           <span className="capitalize">{job.workMode}</span>
         </span>
       )}
@@ -277,17 +277,28 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
 /* On small mobile the meta WRAPS (flex-wrap) — forcing it onto one nowrap row
    there made the row wider than the phone screen, which pushed the whole card
    past the viewport (clipping the title/status too, not just the meta). From
-   sm: up it returns to the intended single scrollable line.
+   lg (laptop / desktop) up it returns to the intended single scrollable line.
+   Tablets (sm–lg) wrap too, each item kept whole — the one line ran past the
+   card there and scrolled sideways under a visible bar, clipping the counts.
    [&>span]:flex-shrink-0 matters at sm+: a flex item can shrink below its own
    content width even under flex-nowrap, which with nowrap text would push the
    label out of its box instead of scrolling the row. */
 const SINGLE_LINE_ROW =
-  'flex-wrap gap-x-3 gap-y-1.5 sm:flex-nowrap sm:gap-y-0 sm:whitespace-nowrap sm:overflow-x-auto sm:scrollbar-hide sm:[&>span]:flex-shrink-0';
+  'flex-wrap gap-x-3 gap-y-1.5 sm:max-lg:[&>span]:whitespace-nowrap lg:flex-nowrap lg:gap-y-0 lg:whitespace-nowrap lg:overflow-x-auto lg:scrollbar-hide lg:[&>span]:flex-shrink-0';
 
 /* `phoneGrid` (compact phone layout): below sm the row's fields are drawn at
    text-xs with 14px icons and tighter gaps, and each field stays whole on one
    line — so they wrap as whole units ("By Deepak Raj", "4 assessed") instead
    of breaking mid-name or mid-word inside a narrow column. */
+/* `mergeInfoRows` (AI Interview wizard header): the card shares its width with
+   View JD / Change JD, so on tablets and 1024px laptops the one line ran past
+   the card and scrolled under a visible native bar (plain `scrollbar-hide`
+   loses to the global thin-scrollbar rule). Below xl the items wrap, each kept
+   whole; from xl it is one line, scrolling if it must, with the native bar
+   truly hidden (tf-hide-native-scrollbar). */
+const MERGED_INFO_ROW =
+  'flex-wrap gap-x-3 gap-y-1.5 [&>span]:whitespace-nowrap xl:flex-nowrap xl:gap-y-0 xl:whitespace-nowrap xl:overflow-x-auto tf-hide-native-scrollbar xl:[&>span]:flex-shrink-0';
+
 const PHONE_GRID_ROW =
   'max-sm:text-xs max-sm:gap-x-3 max-sm:gap-y-1.5 max-sm:[&>span]:whitespace-nowrap max-sm:[&>span]:max-w-full max-sm:[&>span]:gap-1 max-sm:[&_svg]:w-3.5 max-sm:[&_svg]:h-3.5';
 
@@ -432,7 +443,7 @@ export default function JobOpeningSummary({
 
       {mergeInfoRows ? (
         /* Both rows as one line */
-        <div className={`flex items-center text-sm text-gray-600 dark:text-slate-400 mb-2 ${SINGLE_LINE_ROW}`}>
+        <div className={`flex items-center text-sm text-gray-600 dark:text-slate-400 mb-2 ${MERGED_INFO_ROW}`}>
           <JobOpeningPrimaryItems job={job} hideEmpty={hideEmptyFields} />
           {showMetaRow && <JobOpeningMetaItems job={job} showIcons={showMetaIcons} showCounts={showCountBadges} coloredCounts={coloredCountBadges} applicantsLabel={applicantsLabel} />}
         </div>

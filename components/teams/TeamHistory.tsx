@@ -10,12 +10,17 @@ import NameAvatar from '@/components/ui/name-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import ListPagination from '@/components/ListPagination';
 import { toast } from '@/components/ui/enhanced-toast';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import FilterSelect from '@/components/ui/filter-select';
+
+/* FilterSelect trigger sized to the filter row's h-9 band (grid cell on mobile). */
+const FILTER_TRIGGER = 'min-w-0 sm:w-full lg:w-auto py-0 sm:py-0 data-[size=default]:h-9 sm:data-[size=default]:h-9 rounded-lg sm:rounded-lg text-xs sm:text-sm';
 
 const PAGE_SIZES = [10, 25, 50];
 
@@ -432,6 +437,43 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
 
   const filterLabel = filter === 'ALL' ? '' : eventLabel(filter);
 
+  // Active filter tags: event, team, person and the date range as one tag (the
+  // search shows in its own box). Each removes just its own filter.
+  const formatChipDate = (v: string) => {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const activeFilterChips: FilterChip[] = [
+    filter !== 'ALL' && {
+      key: 'event',
+      label: 'Event',
+      value: eventLabel(filter),
+      onRemove: () => handleFilterChange('ALL'),
+    },
+    teamFilter && {
+      key: 'team',
+      label: 'Team',
+      value: teamOptions.find((t) => t.id === teamFilter)?.name ?? teamFilter,
+      onRemove: () => { setTeamFilter(''); setPage(1); },
+    },
+    actorFilter && {
+      key: 'person',
+      label: 'Person',
+      value: actorOptions.find((a) => a.id === actorFilter)?.name ?? actorFilter,
+      onRemove: () => { setActorFilter(''); setPage(1); },
+    },
+    (dateFrom || dateTo) && {
+      key: 'date',
+      label: 'Date',
+      value: dateFrom && dateTo
+        ? `${formatChipDate(dateFrom)} – ${formatChipDate(dateTo)}`
+        : dateFrom ? `From ${formatChipDate(dateFrom)}` : `Until ${formatChipDate(dateTo)}`,
+      onRemove: () => { setDateFrom(''); setDateTo(''); setPage(1); },
+    },
+  ].filter(Boolean) as FilterChip[];
+
   let body: React.ReactNode;
   if (error) {
     body = (
@@ -689,38 +731,30 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
         </div>
         <div className="grid grid-cols-2 gap-2 lg:flex">
           {/* Event type — was a row of chips; the counts moved into the options. */}
-          <select
+          <FilterSelect
             value={filter}
-            onChange={(e) => handleFilterChange(e.target.value)}
-            aria-label="Filter by event"
-            className={`h-9 min-w-0 rounded-lg border bg-white px-2 text-xs sm:text-sm dark:bg-slate-900 lg:w-48 ${
-              filter !== 'ALL' ? 'border-brand-blue/40 text-brand-blue' : 'border-gray-200 text-gray-900 dark:border-slate-700 dark:text-slate-50'
-            }`}
-          >
-            {chipFilters.map((f) => (
-              <option key={f} value={f}>
-                {f === 'ALL' ? 'All events' : eventLabel(f)}{chipCounts?.[f] !== undefined ? ` (${chipCounts[f].toLocaleString()})` : ''}
-              </option>
-            ))}
-          </select>
-          <select
+            onChange={handleFilterChange}
+            ariaLabel="Filter by event"
+            options={chipFilters.map((f) => ({
+              value: f,
+              label: `${f === 'ALL' ? 'All events' : eventLabel(f)}${chipCounts?.[f] !== undefined ? ` (${chipCounts[f].toLocaleString()})` : ''}`,
+            }))}
+            className={`${FILTER_TRIGGER} lg:w-48 ${filter !== 'ALL' ? 'border-brand-blue/40 text-brand-blue' : ''}`}
+          />
+          <FilterSelect
             value={teamFilter}
-            onChange={(e) => { setTeamFilter(e.target.value); setPage(1); }}
-            aria-label="Filter by team"
-            className="h-9 min-w-0 rounded-lg border border-gray-200 bg-white px-2 text-xs sm:text-sm text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 lg:w-44"
-          >
-            <option value="">All teams</option>
-            {teamOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-          <select
+            onChange={(v) => { setTeamFilter(v); setPage(1); }}
+            ariaLabel="Filter by team"
+            options={[{ value: '', label: 'All teams' }, ...teamOptions.map((t) => ({ value: t.id, label: t.name }))]}
+            className={`${FILTER_TRIGGER} lg:w-44`}
+          />
+          <FilterSelect
             value={actorFilter}
-            onChange={(e) => { setActorFilter(e.target.value); setPage(1); }}
-            aria-label="Filter by person"
-            className="h-9 min-w-0 rounded-lg border border-gray-200 bg-white px-2 text-xs sm:text-sm text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 lg:w-44"
-          >
-            <option value="">Anyone</option>
-            {actorOptions.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
+            onChange={(v) => { setActorFilter(v); setPage(1); }}
+            ariaLabel="Filter by person"
+            options={[{ value: '', label: 'Anyone' }, ...actorOptions.map((a) => ({ value: a.id, label: a.name }))]}
+            className={`${FILTER_TRIGGER} lg:w-44`}
+          />
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 lg:flex">
           <DateField
@@ -820,6 +854,8 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
             </button>
           </div>
         </div>
+        {/* Active filter tags: the card's last line (the card's gap-3 spaces them). */}
+        {activeFilterChips.length > 0 && <FilterChips chips={activeFilterChips} />}
       </div>
 
       {/* An honest note when the summary and filters see the latest batch only. */}

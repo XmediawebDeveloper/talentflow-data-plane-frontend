@@ -207,7 +207,7 @@ export function NoResumesYetState({
 export function SidebarNoFoldersState() {
   return (
     <div className="flex flex-col items-center px-3 py-4 text-center">
-      <div className="w-full max-w-[9rem]">
+      <div className="w-full max-w-[8rem]">
         <FolderPlusIllustration />
       </div>
       <p className="mt-2 tf-meta">No folders yet.</p>

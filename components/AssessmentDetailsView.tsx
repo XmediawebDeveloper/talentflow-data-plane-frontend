@@ -1,5 +1,6 @@
 import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, ArchiveRestore, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, Cpu, User, ExternalLink, Info, Layers, Loader2, Monitor, Ban, Sliders, Globe, Zap, Star, Shield } from 'lucide-react';
 import { Fragment, useState, useMemo, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useBackgroundWorkRefresh } from '@/lib/backgroundWorkEvents';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -1166,6 +1167,9 @@ export default function AssessmentDetailsView({
       onRefresh?.(),
     ]);
   };
+  /* Invites go out in the background after they are queued: re-read the
+     invite table, its summary and the header counts as they actually go out. */
+  useBackgroundWorkRefresh(() => { void reloadInvites(); }, ['invite']);
 
   /* Opens the candidate's Result Details — the same route and the same
      Prev/Next list the Recent Activity tab hands it, so paging between
@@ -1231,6 +1235,7 @@ export default function AssessmentDetailsView({
     setIsBulkResendingInvites(true);
     let sent = 0;
     let failedCount = 0;
+    const failedIds = new Set<string>();
     for (const invitation of targets) {
       try {
         await api.post(`/assessments/${assessment.id}/invitations/${invitation.id}/resend`);
@@ -1238,14 +1243,19 @@ export default function AssessmentDetailsView({
       } catch (error) {
         console.error('Failed to resend invitation:', invitation.id, error);
         failedCount += 1;
+        failedIds.add(invitation.id);
       }
     }
     if (sent > 0) toast.success(`New invitation link sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
     if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
     setIsBulkResendingInvites(false);
     setShowInviteBulkResend(false);
-    setInviteSelectedIds(new Set());
-    await reloadInvites();
+    /* Any success: keep only the failed rows ticked (retry) and reload.
+       All failed: nothing changed — keep the selection as is. */
+    if (sent > 0) {
+      setInviteSelectedIds(failedIds);
+      await reloadInvites();
+    }
   };
 
   /* Bulk Revoke — mirrors Bulk Resend above (and the Track Invites popup's
@@ -1265,6 +1275,7 @@ export default function AssessmentDetailsView({
     setIsBulkRevokingInvites(true);
     let revoked = 0;
     let failedCount = 0;
+    const failedIds = new Set<string>();
     for (const invitation of targets) {
       try {
         await assessmentService.revokeInvitation(assessment.id, invitation.id);
@@ -1272,14 +1283,19 @@ export default function AssessmentDetailsView({
       } catch (error) {
         console.error('Failed to revoke invitation:', invitation.id, error);
         failedCount += 1;
+        failedIds.add(invitation.id);
       }
     }
     if (revoked > 0) toast.success(`Revoked ${revoked} invitation${revoked === 1 ? '' : 's'}.`);
     if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
     setIsBulkRevokingInvites(false);
     setShowInviteBulkRevoke(false);
-    setInviteSelectedIds(new Set());
-    await reloadInvites();
+    /* Any success: keep only the failed rows ticked (retry) and reload.
+       All failed: keep the selection as is. */
+    if (revoked > 0) {
+      setInviteSelectedIds(failedIds);
+      await reloadInvites();
+    }
   };
 
   const handleUpdateInviteEmail = async (invitation: any) => {

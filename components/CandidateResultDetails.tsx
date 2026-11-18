@@ -70,6 +70,12 @@ interface CandidateResultDetailsProps {
    */
   onCandidateLoaded?: (name: string) => void;
   /**
+   * Ask the backend to record an ASSESSMENT_RESULT_VIEWED audit entry on the
+   * initial load. Only the standalone results/details page sets this, so
+   * inline views and the scoring poll do not flood the audit trail.
+   */
+  logView?: boolean;
+  /**
    * Fired when the in-page resume view opens or closes. A parent that owns the
    * breadcrumb (the standalone results/details route) uses it to append the
    * "Resume" crumb and to hang the way back off the candidate crumb — hence
@@ -194,6 +200,7 @@ export default function CandidateResultDetails({
   showRecordPager = true,
   breadcrumbItems,
   onCandidateLoaded,
+  logView = false,
 }: CandidateResultDetailsProps) {
   // Report download is an action (2026-11-10): Assessments "Download Report".
   // Viewer (Assessments: Partial) sees the result but can't take the file.
@@ -440,7 +447,7 @@ export default function CandidateResultDetails({
       setIsLoadingDetails(true);
       setDetailsError(null);
       try {
-        const details = await assessmentService.getResultDetails(assessmentId, candidateId);
+        const details = await assessmentService.getResultDetails(assessmentId, candidateId, { logView });
         console.log('[CandidateResultDetails] API Response:', {
           overall_score: details.overall_score,
           round_scores: details.round_scores.map(r => ({

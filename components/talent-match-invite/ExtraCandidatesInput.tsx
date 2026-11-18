@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { AlertTriangle, Check, CheckCircle, Copy, Download, FileSpreadsheet, Info, Link2, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import { Check, CheckCircle, Copy, Download, FileSpreadsheet, Info, Link2, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import readXlsxFile from 'read-excel-file/browser';
@@ -68,8 +68,6 @@ export interface PickedPerson {
   resumeId?: string;
 }
 
-/* Names compared the way people type them: case and spacing aside. */
-const sameName = (a: string, b: string) => a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase();
 
 /** What the host knows about a typed email beyond this tab. */
 export interface EmailCheck {
@@ -269,8 +267,6 @@ export default function ExtraCandidatesInput({
   const [offer, setOffer] = useState<{ match: ExistingCandidateMatch; typedName: string } | null>(null);
   /* A typed email already in the send: said calmly, not as an error. */
   const [included, setIncluded] = useState<PickedPerson | null>(null);
-  /* A typed name already picked with another email: Skip, or Add anyway. */
-  const [nameWarn, setNameWarn] = useState<{ person: PickedPerson; name: string; email: string } | null>(null);
   /* The email as typed, read 300ms after the last key: shows "already
      included" before Add Candidate is pressed. */
   const [typedEmail, setTypedEmail] = useState('');
@@ -303,18 +299,16 @@ export default function ExtraCandidatesInput({
   const liveIncluded = isValidEmailFormat(typedEmail) && typedEmail === email.trim().toLowerCase() ? includedAs(typedEmail) : null;
   const showIncluded = (p: PickedPerson) => {
     setIncluded(p);
-    setNameWarn(null);
     setError(null);
     setName('');
     setEmail('');
     setTypedEmail('');
   };
 
-  const add = async (nameChecked = false) => {
+  const add = async () => {
     if (checking) return;
     setOffer(null);
     setIncluded(null);
-    setNameWarn(null);
     const n = name.trim();
     const e = email.trim().toLowerCase();
     if (!n || !e) { setError('Enter a full name and an email address.'); return; }
@@ -332,12 +326,7 @@ export default function ExtraCandidatesInput({
     }
     const elsewhere = takenEmail?.(e);
     if (elsewhere) { showIncluded({ name: n, email: e, sourceLabel: elsewhere }); return; }
-    // The same name already picked with another email: maybe the same person.
-    if (!nameChecked) {
-      const namesake = picked.find((p) => sameName(p.name, n))
-        ?? rows.filter((r) => sameName(r.name, n)).map((r): PickedPerson => ({ name: r.name, email: r.email, sourceLabel: r.origin }))[0];
-      if (namesake) { setNameWarn({ person: namesake, name: n.replace(/\s+/g, ' '), email: e }); return; }
-    }
+    // Duplicates are by email only: two people may share a name.
     if (checkEmail) {
       setChecking(true);
       let found: EmailCheck = {};
@@ -568,7 +557,7 @@ export default function ExtraCandidatesInput({
                 ref={nameRef}
                 type="text"
                 value={name}
-                onChange={(e) => { setName(e.target.value); setError(null); setIncluded(null); setNameWarn(null); }}
+                onChange={(e) => { setName(e.target.value); setError(null); setIncluded(null); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void add(); } }}
                 placeholder="e.g. Priya Raman"
                 disabled={disabled || full}
@@ -580,7 +569,7 @@ export default function ExtraCandidatesInput({
               <input
                 type="email"
                 value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(null); setIncluded(null); setNameWarn(null); }}
+                onChange={(e) => { setEmail(e.target.value); setError(null); setIncluded(null); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void add(); } }}
                 placeholder="e.g. priya@company.com"
                 aria-invalid={!!error || undefined}
@@ -620,31 +609,6 @@ export default function ExtraCandidatesInput({
               </div>
             );
           })()}
-          {/* The same name picked with another email: maybe the same person. */}
-          {nameWarn && (
-            <div role="alert" className="flex flex-col gap-2 rounded-lg border border-warning-line bg-warning-subtle px-3 py-2.5 text-sm">
-              <p className="flex items-start gap-2 text-foreground">
-                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-warning-strong" aria-hidden="true" />
-                <span className="min-w-0 break-words">
-                  A <b className="font-semibold text-warning-strong">{nameWarn.person.name}</b> is already {nameWarn.person.sourceLabel === 'Manual' ? 'added below' : <>selected from <b className="font-semibold text-warning-strong">{nameWarn.person.sourceLabel}</b></>} ({nameWarn.person.email}). Same person?
-                  <span className="block tf-meta">You entered: {nameWarn.email}</span>
-                </span>
-              </p>
-              <span className="flex flex-wrap items-center gap-2 pl-6">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => { setNameWarn(null); setName(''); setEmail(''); nameRef.current?.focus(); }}
-                  autoFocus
-                >
-                  Skip
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => void add(true)}>
-                  Add anyway
-                </Button>
-              </span>
-            </div>
-          )}
           {/* Found in a list: link the invite to that resume (default), or add
               the email as typed. */}
           {offer && (

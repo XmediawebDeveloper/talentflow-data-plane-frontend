@@ -1,15 +1,22 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { usePathname } from 'next/navigation';
+import { emitBackgroundWork } from '@/lib/backgroundWorkEvents';
+import { getTokens } from '@/lib/services/api';
+import { scoringService, normalizeScoringStatus, type BatchScoringStatus, type MyScoringBatch } from '@/lib/services/scoringService';
 
 export interface ScoringProgressItem {
   id: string;
   resumeId: string;
+  /** Which version of the resume this run scores — the one the recruiter picked. */
+  resumeVersion?: number;
   candidateName: string;
   jobTitle: string;
   jobId: string;
   source: 'Internal DB' | 'My Resumes';
-  status: 'Queued' | 'Scoring in progress' | 'Scored successfully' | 'Failed';
+  /** 'Cancelled': stopped while still waiting (Cancel / Cancel all) — settled, never charged. */
+  status: 'Queued' | 'Scoring in progress' | 'Scored successfully' | 'Failed' | 'Cancelled';
   errorReason?: string;
   scoredDateTime?: string;
   matchResult?: 'Exact Match' | 'Partial Match' | 'No Match';
@@ -30,6 +37,26 @@ export interface ScoringJob {
   startedAt: string;
   items: ScoringProgressItem[];
   returnUrl?: string;
+  /** The job's JD ID ("JD-352") and version, for the corner widget's rows. */
+  jobCode?: string;
+  jobVersion?: number;
+  /** Say when the run finishes (toast + View Results) — a run started in the
+   *  background from a page that keeps the recruiter where they are. */
+  announce?: boolean;
+  /** The Celery scoring batch behind the run (latest one, for a JD-keyed
+   *  job) — lets the popup Cancel / Retry it. */
+  batchId?: string;
+  /** Picked up from the server (GET /scoring/batches/mine) rather than started
+   *  in this browser — so no page here polls it; the provider does. */
+  serverTracked?: boolean;
+}
+
+/** Optional details a run can be started with. */
+export interface ScoringJobMeta {
+  jobCode?: string;
+  jobVersion?: number;
+  announce?: boolean;
+  batchId?: string;
 }
 
 interface ScoringProgressContextType {
@@ -40,7 +67,7 @@ interface ScoringProgressContextType {
   isMainPanelOpen: boolean;  // True when center panel is visible (not minimized)
 
   // Actions
-  startScoringJob: (jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string) => void;
+  startScoringJob: (jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string, meta?: ScoringJobMeta) => void;
   /**
    * Upsert a whole job from a progress snapshot.
    *
@@ -81,27 +108,160 @@ interface ScoringProgressContextType {
   setOnRestorePanel: (callback: (() => void) | undefined) => void;
 }
 
-const STORAGE_KEY = 'scoring_progress_state';
+/* Saved per signed-in user. The old single key was shared by everyone who used
+   the browser, so the next user to sign in saw the previous user's runs. */
+const LEGACY_STORAGE_KEY = 'scoring_progress_state';
+const storageKey = (identity: string) => `${LEGACY_STORAGE_KEY}:${identity}`;
 
 /** How long a finished run stays available in the corner before it is forgotten. */
 const JOB_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+/** How often the server is asked for this user's running batches. */
+const SERVER_SYNC_MS = 15000;
+/** Cap on remembered "removed from the corner" batch ids. */
+const MAX_DISMISSED = 200;
+
+/** `tenant:user` from the access token, or null when signed out. */
+const readIdentity = (): string | null => {
+  const token = getTokens().accessToken;
+  if (!token) return null;
+  try {
+    const part = token.split('.')[1] ?? '';
+    const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/'))) as { sub?: string; tenant_id?: string };
+    return json.sub ? `${json.tenant_id ?? ''}:${json.sub}` : null;
+  } catch {
+    return null;
+  }
+};
+
+const isJobActive = (job: ScoringJob) => job.queued > 0 || job.processing > 0;
+
+/** Backend match_status → the progress row's verdict (drives Exact Match counts). */
+export function toMatchResult(status?: string): ScoringProgressItem['matchResult'] {
+  if (!status) return undefined;
+  const s = status.toLowerCase().replace(/_/g, ' ').trim();
+  if (s === 'exact match' || s === 'excellent') return 'Exact Match';
+  if (s === 'partial match' || s === 'partial') return 'Partial Match';
+  return 'No Match';
+}
+
+/** A server batch snapshot → the corner widget's job (keyed by batch id, like trackScoringBatch). */
+function jobFromServer(status: BatchScoringStatus, summary?: MyScoringBatch, existing?: ScoringJob): Omit<ScoringJob, 'startedAt'> & { startedAt?: string } {
+  const jobTitle = status.jd_title || summary?.jd_title || existing?.jobTitle || 'Resume Scoring';
+  const items: ScoringProgressItem[] = (status.items || []).map(item => {
+    const s = (item.status || '').toLowerCase();
+    const norm = normalizeScoringStatus(item.status);
+    const st: ScoringProgressItem['status'] = s === 'cancelled' ? 'Cancelled'
+      : norm === 'completed' ? 'Scored successfully'
+      : norm === 'failed' ? 'Failed'
+      : norm === 'processing' ? 'Scoring in progress'
+      : 'Queued';
+    return {
+      id: `${status.batch_id}-${item.resume_id}`,
+      resumeId: item.resume_id,
+      candidateName: item.candidate_name || 'Unknown',
+      jobTitle,
+      jobId: status.jd_id,
+      source: 'Internal DB',
+      status: st,
+      score: item.overall_score,
+      overallRating10: item.overall_rating_10,
+      matchResult: st === 'Scored successfully' ? toMatchResult(item.match_status) : undefined,
+      errorReason: item.error_message,
+    };
+  });
+  return {
+    jobId: status.batch_id,
+    batchId: status.batch_id,
+    jobTitle,
+    total: status.total || items.length,
+    queued: status.queued,
+    processing: status.processing,
+    completed: status.completed,
+    failed: status.failed,
+    items,
+    returnUrl: existing?.returnUrl || `/recruitment/resume-scoring?jd_id=${status.jd_id}`,
+    jobCode: summary?.jd_job_id || existing?.jobCode,
+    jobVersion: summary?.jd_version_number ?? existing?.jobVersion,
+    startedAt: status.created_at || summary?.created_at,
+    serverTracked: true,
+  };
+}
 
 const ScoringProgressContext = createContext<ScoringProgressContextType | undefined>(undefined);
 
 export function ScoringProgressProvider({ children }: { children: React.ReactNode }) {
   const [activeScoringJobs, setActiveScoringJobs] = useState<ScoringJob[]>([]);
   const [isMinimized, setIsMinimized] = useState(true);
+
+  /* Tell the pages when a run scores more resumes or finishes, so Scored /
+     result counts re-read as it happens (lib/backgroundWorkEvents). The first
+     sight of a run only records it. */
+  const seenScoring = useRef<Map<string, { completed: number; active: boolean }>>(new Map());
+  useEffect(() => {
+    for (const job of activeScoringJobs) {
+      const active = job.queued > 0 || job.processing > 0;
+      const before = seenScoring.current.get(job.jobId);
+      seenScoring.current.set(job.jobId, { completed: job.completed, active });
+      if (!before) continue;
+      const finished = before.active && !active;
+      if (job.completed > before.completed || finished) emitBackgroundWork({ kind: 'scoring', jdId: job.jobId, finished });
+    }
+  }, [activeScoringJobs]);
   // Ref-counted by owner id (see `setPanelVisibility` on the context type for
   // why this isn't a single shared boolean anymore).
   const [openPanelOwners, setOpenPanelOwners] = useState<Set<string>>(new Set());
   const isMainPanelOpen = openPanelOwners.size > 0;
   const [onRestorePanel, setOnRestorePanelState] = useState<(() => void) | undefined>(undefined);
-  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load state from localStorage on mount
+  /* Who is signed in. Read after mount (client-only) and again on every route
+     change and tab focus — sign-in / sign-out swaps the list for that user's. */
+  const [identity, setIdentity] = useState<string | null>(null);
+  /** The identity whose saved list is currently loaded (null = none yet). */
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const identityRef = useRef<string | null>(null);
+  useEffect(() => { identityRef.current = identity; }, [identity]);
+  const pathname = usePathname();
+  const checkIdentity = useCallback(() => {
+    const next = readIdentity();
+    setIdentity(prev => (prev === next ? prev : next));
+  }, []);
   useEffect(() => {
+    try { localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* storage blocked */ }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    checkIdentity();
+    const onFocus = () => checkIdentity();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [checkIdentity]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { checkIdentity(); }, [pathname, checkIdentity]);
+
+  /* Batches the user removed from the corner — never re-added by the server
+     sync while they are still running. */
+  const dismissedRef = useRef<string[]>([]);
+  const dismiss = useCallback((jobs: ScoringJob[]) => {
+    const ids = jobs.flatMap(j => [j.jobId, j.batchId].filter(Boolean) as string[]);
+    if (!ids.length) return;
+    dismissedRef.current = [...dismissedRef.current.filter(id => !ids.includes(id)), ...ids].slice(-MAX_DISMISSED);
+  }, []);
+
+  // Load this user's saved state whenever the signed-in user changes
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setActiveScoringJobs([]);
+    dismissedRef.current = [];
+    seenScoring.current = new Map();
+    if (!identity) {
+      setLoadedFor(null);
+      return;
+    }
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(storageKey(identity));
       if (saved) {
         const parsed = JSON.parse(saved);
         /* Finished runs are KEPT. The corner button is meant to stay put until
@@ -119,30 +279,33 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
         });
         setActiveScoringJobs(activeJobs);
         setIsMinimized(parsed.isMinimized ?? true);
+        if (Array.isArray(parsed.dismissed)) dismissedRef.current = parsed.dismissed.slice(-MAX_DISMISSED);
       }
     } catch (error) {
       console.error('[ScoringProgressContext] Error loading from localStorage:', error);
     }
-    setIsInitialized(true);
-  }, []);
+    setLoadedFor(identity);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [identity]);
 
-  // Save state to localStorage whenever it changes
+  // Save state to localStorage (under this user's key) whenever it changes
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!identity || loadedFor !== identity) return;
 
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      localStorage.setItem(storageKey(identity), JSON.stringify({
         activeScoringJobs,
-        isMinimized
+        isMinimized,
+        dismissed: dismissedRef.current,
       }));
     } catch (error) {
       console.error('[ScoringProgressContext] Error saving to localStorage:', error);
     }
-  }, [activeScoringJobs, isMinimized, isInitialized]);
+  }, [activeScoringJobs, isMinimized, identity, loadedFor]);
 
   const hasActiveScoring = activeScoringJobs.some(job => job.queued > 0 || job.processing > 0);
 
-  const startScoringJob = useCallback((jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string) => {
+  const startScoringJob = useCallback((jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string, meta?: ScoringJobMeta) => {
     const newItems: ScoringProgressItem[] = items.map(item => ({ ...item, status: 'Queued' as const }));
 
     setActiveScoringJobs(prev => {
@@ -159,6 +322,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
           startedAt: new Date().toISOString(),
           items: newItems,
           returnUrl,
+          ...meta,
         };
         return [...prev, newJob];
       }
@@ -190,6 +354,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
         completed: mergedItems.filter(i => i.status === 'Scored successfully').length,
         failed: mergedItems.filter(i => i.status === 'Failed').length,
         returnUrl: returnUrl || existing.returnUrl,
+        ...meta,
       };
       const updated = [...prev];
       updated[existingIndex] = merged;
@@ -208,6 +373,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
          would keep pushing that expiry forward. */
       const next: ScoringJob = {
         ...incoming,
+        batchId: incoming.batchId ?? existing?.batchId,
         startedAt: existing?.startedAt || incoming.startedAt || new Date().toISOString(),
       };
       if (!existing) return [...prev, next];
@@ -249,12 +415,76 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
   }, []);
 
   const clearCompletedJobs = useCallback(() => {
-    setActiveScoringJobs(prev => prev.filter(job => job.queued > 0 || job.processing > 0));
-  }, []);
+    setActiveScoringJobs(prev => {
+      dismiss(prev.filter(job => !isJobActive(job)));
+      return prev.filter(isJobActive);
+    });
+  }, [dismiss]);
 
   const clearJob = useCallback((jobId: string) => {
-    setActiveScoringJobs(prev => prev.filter(job => job.jobId !== jobId));
-  }, []);
+    setActiveScoringJobs(prev => {
+      dismiss(prev.filter(job => job.jobId === jobId));
+      return prev.filter(job => job.jobId !== jobId);
+    });
+  }, [dismiss]);
+
+  /* Server sync: the runs this user has going, from ANY browser or device.
+     Without it the corner only knew runs started in this browser (they lived
+     in localStorage alone), so the same login in Firefox or on another laptop
+     showed no icon. Runs started here keep their own page pollers; the ones
+     picked up from the server (`serverTracked`) are polled here until done. */
+  const jobsRef = useRef(activeScoringJobs);
+  useEffect(() => { jobsRef.current = activeScoringJobs; }, [activeScoringJobs]);
+  const syncBusy = useRef(false);
+  const pullServerJobs = useCallback(async () => {
+    const who = identityRef.current;
+    if (!who || loadedFor !== who || syncBusy.current || !getTokens().accessToken) return;
+    syncBusy.current = true;
+    try {
+      const running = await scoringService.getMyBatches({ status: 'active', page_size: 50 });
+      const current = jobsRef.current;
+      const known = new Set<string>();
+      current.forEach(j => { known.add(j.jobId); if (j.batchId) known.add(j.batchId); });
+      // A run this browser tracks by its JD (the ?batch_id= handoff) — don't add it twice.
+      const runningJds = new Set(current.filter(isJobActive).map(j => j.jobId));
+      const dismissed = new Set(dismissedRef.current);
+      const summaries = new Map(running.map(b => [b.batch_id, b]));
+
+      const adopt = running.filter(b => !known.has(b.batch_id) && !runningJds.has(b.jd_id) && !dismissed.has(b.batch_id));
+      const follow = current.filter(j => j.serverTracked && j.batchId && isJobActive(j));
+      const ids = [...new Set([...adopt.map(b => b.batch_id), ...follow.map(j => j.batchId as string)])];
+      if (!ids.length) return;
+
+      const results = await Promise.allSettled(ids.map(id => scoringService.getBatchStatus(id)));
+      if (identityRef.current !== who) return; // signed out / switched user meanwhile
+      results.forEach(r => {
+        if (r.status !== 'fulfilled' || !r.value?.batch_id) return;
+        const status = r.value;
+        if (dismissedRef.current.includes(status.batch_id)) return;
+        const existing = jobsRef.current.find(j => j.jobId === status.batch_id);
+        syncScoringJob(jobFromServer(status, summaries.get(status.batch_id), existing));
+      });
+    } catch (error) {
+      // Offline / signed out: the next round retries.
+      console.warn('[ScoringProgressContext] Server sync failed:', error);
+    } finally {
+      syncBusy.current = false;
+    }
+  }, [loadedFor, syncScoringJob]);
+
+  useEffect(() => {
+    if (!identity || loadedFor !== identity) return;
+    void pullServerJobs();
+    const onVisible = () => { if (document.visibilityState !== 'hidden') void pullServerJobs(); };
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    const t = setInterval(onVisible, SERVER_SYNC_MS);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [identity, loadedFor, pullServerJobs]);
 
   const setMinimized = useCallback((minimized: boolean) => {
     setIsMinimized(minimized);

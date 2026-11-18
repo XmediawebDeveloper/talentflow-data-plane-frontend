@@ -58,6 +58,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { Skeleton } from '@/components/ui/skeleton';
 import { DateField } from '@/components/ui/date-field';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -1928,6 +1929,56 @@ export default function UsageHistory() {
     { id: 'team', label: 'Team-Wise', icon: Users },
   ];
 
+  // Active filter tags: the period / date range as one tag (only once it moves
+  // off the default "Current Billing Period") and Status where it shows.
+  // Labels match the dropdowns' options.
+  const PERIOD_CHIP_LABELS: Record<string, string> = {
+    last_week: 'Last Week',
+    last_month: 'Last Month',
+    last_quarter: 'Last Quarter',
+    last_year: 'Last Year',
+  };
+  const STATUS_CHIP_LABELS: Record<string, string> = {
+    SUCCESS: 'Success',
+    FAILED: 'Failed',
+    INSUFFICIENT_UNITS: 'Insufficient Units',
+    ABANDONED: 'Abandoned',
+    INTERRUPTED: 'Interrupted',
+  };
+  const formatChipDate = (v: string) => {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const activeFilterChips: FilterChip[] = [
+    quickPeriod !== 'billing' && {
+      key: 'date',
+      label: 'Date',
+      value: quickPeriod
+        ? PERIOD_CHIP_LABELS[quickPeriod] ?? quickPeriod
+        : startDateInput && endDateInput
+          ? `${formatChipDate(startDateInput)} – ${formatChipDate(endDateInput)}`
+          : startDateInput
+            ? `From ${formatChipDate(startDateInput)}`
+            : endDateInput
+              ? `Until ${formatChipDate(endDateInput)}`
+              : 'All Time',
+      // Back to the default period — the Period dropdown's 'billing' branch.
+      onRemove: () => {
+        setQuickPeriod('billing');
+        setStartDateInput(billingPeriod?.start ? billingPeriod.start.slice(0, 10) : '');
+        setEndDateInput(billingPeriod?.start ? formatDateForInput(new Date()) : '');
+      },
+    },
+    activeTab === 'feature' && filterStatus !== 'all' && {
+      key: 'status',
+      label: 'Status',
+      value: STATUS_CHIP_LABELS[filterStatus] ?? filterStatus,
+      onRemove: () => setFilterStatus('all'),
+    },
+  ].filter(Boolean) as FilterChip[];
+
   return (
     // Card, breadcrumb, organization tabs and the tab panel come from
     // app/(dashboard)/organization/layout.tsx — this renders the panel's content.
@@ -2062,6 +2113,10 @@ export default function UsageHistory() {
                 />
               </label>
             )}
+
+            {/* Active filter tags — full width, so they wrap onto their own line
+                under the filters; the row's gap spaces them. */}
+            {activeFilterChips.length > 0 && <FilterChips className="w-full" chips={activeFilterChips} />}
           </div>
 
           {/* View toggle — the sliding white tile from Resume Scoring's "View by"

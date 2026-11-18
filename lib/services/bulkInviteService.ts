@@ -133,7 +133,8 @@ export interface BulkInviteReviewPage {
 }
 
 export type BulkInviteJobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'paused';
-export type BulkInviteItemStatus = 'queued' | 'processing' | 'sent' | 'skipped' | 'failed';
+/** 'cancelled': stopped by a cancel (whole send or that one candidate) before it went out. */
+export type BulkInviteItemStatus = 'queued' | 'processing' | 'sent' | 'skipped' | 'failed' | 'cancelled';
 
 export interface BulkInviteJob {
   job_id: string;
@@ -146,6 +147,8 @@ export interface BulkInviteJob {
   total: number;
   sent: number;
   skipped: number;
+  /** Candidates a cancel stopped before they went out (not in `skipped`). */
+  cancelled?: number;
   failed: number;
   processed: number;
   remaining: number;
@@ -196,6 +199,8 @@ export interface BulkInviteResultRow {
   processed_at: string | null;
   /** Retry would send it again unchanged (a mail hiccup, or cancelled). */
   can_retry?: boolean;
+  /** Still waiting in the queue — Cancel stops just this candidate. */
+  can_cancel?: boolean;
   /** Edit can fix it (wrong / missing address, failed). */
   can_edit?: boolean;
   /** Edit & send: the address before it was corrected, by whom, when. */
@@ -361,6 +366,16 @@ export const bulkInviteService = {
         base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
       });
       return response.data.items || [];
+    } catch (error) {
+      throw apiError(error);
+    }
+  },
+
+  /** Cancel ONE candidate still waiting in the queue; the rest carry on. */
+  async cancelItem(jobId: string, itemId: string): Promise<{ job: BulkInviteJob; item: BulkInviteResultRow | null }> {
+    try {
+      const response = await api.post<{ job: BulkInviteJob; item: BulkInviteResultRow | null }>(`/bulk-invites/${jobId}/items/${itemId}/cancel`);
+      return response.data;
     } catch (error) {
       throw apiError(error);
     }

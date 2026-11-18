@@ -289,7 +289,8 @@ function JobDetailsContent() {
 
   useEffect(() => {
     if (jobId) {
-      fetchJobDetails();
+      // Initial load of this JD: the one read that records JD_VIEWED.
+      fetchJobDetails(true);
     } else {
       // No `?id=` in the URL — nothing to fetch. Without this, `loading` stays
       // true forever and the page hangs on the skeleton instead of falling
@@ -363,7 +364,7 @@ function JobDetailsContent() {
     fetchAllPublished().catch(() => {});
   }, []);
 
-  const fetchJobDetails = async () => {
+  const fetchJobDetails = async (logView: boolean = false) => {
     if (!jobId) return;
     const seq = ++fetchSeqRef.current;
     const isStale = () => seq !== fetchSeqRef.current;
@@ -373,7 +374,7 @@ function JobDetailsContent() {
        values; the refreshed `job` prop simply flows in. */
     if (!job || job.id !== jobId) setLoading(true);
     try {
-      const data = await jdService.getById(jobId);
+      const data = await jdService.getById(jobId, logView);
       if (isStale()) return;
       setRawJdData(data);
 

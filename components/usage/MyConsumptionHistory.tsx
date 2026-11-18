@@ -33,6 +33,7 @@ import {
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import ExportFormatModal from '@/components/ExportFormatModal';
@@ -183,6 +184,31 @@ export default function MyConsumptionHistory() {
     successCount: filteredHistory.filter(item => item.status === 'SUCCESS').length,
     failedCount: filteredHistory.filter(item => item.status === 'FAILED').length,
   };
+
+  // Active filter tags: Type, Status and a non-default date range (30 days is
+  // the default). Values are the dropdowns' option labels.
+  const TYPE_CHIP_LABELS: Record<string, string> = { RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview' };
+  const STATUS_CHIP_LABELS: Record<string, string> = { SUCCESS: 'Success', FAILED: 'Failed' };
+  const activeFilterChips: FilterChip[] = [
+    selectedType !== 'all' && {
+      key: 'type',
+      label: 'Type',
+      value: TYPE_CHIP_LABELS[selectedType] ?? selectedType,
+      onRemove: () => setSelectedType('all'),
+    },
+    selectedStatus !== 'all' && {
+      key: 'status',
+      label: 'Status',
+      value: STATUS_CHIP_LABELS[selectedStatus] ?? selectedStatus,
+      onRemove: () => setSelectedStatus('all'),
+    },
+    dateRange !== 30 && {
+      key: 'date',
+      label: 'Date',
+      value: `Last ${dateRange} days`,
+      onRemove: () => setDateRange(30),
+    },
+  ].filter(Boolean) as FilterChip[];
 
   if (isLoading) {
     return (
@@ -337,6 +363,7 @@ export default function MyConsumptionHistory() {
             {filteredHistory.length} records
           </div>
         </div>
+        {activeFilterChips.length > 0 && <FilterChips className="mt-3" chips={activeFilterChips} />}
       </div>
 
       {/* Consumption History Table */}

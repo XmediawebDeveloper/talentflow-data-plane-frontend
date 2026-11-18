@@ -43,6 +43,8 @@ export interface ListEmptyStateProps {
   /** An inline illustration for the genuinely-empty case, in place of
    *  `imageSrc` (see `components/ui/illustrated-empty-state`). */
   illustration?: React.ReactNode;
+  /** The same for the narrowed ("No … match") case. */
+  narrowedIllustration?: React.ReactNode;
 }
 
 export default function ListEmptyState({
@@ -57,13 +59,23 @@ export default function ListEmptyState({
   imageSrc,
   imageAlt,
   illustration,
+  narrowedIllustration,
 }: ListEmptyStateProps) {
   const trimmedQuery = (query || '').trim();
+  const shownIllustration = isNarrowed ? narrowedIllustration : illustration;
+  /* With an illustration, the heading and text take the illustrated empty
+     states' bolder style, so every illustrated card reads the same. */
+  const titleClass = shownIllustration
+    ? 'mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50'
+    : 'tf-section-title mb-1';
+  const bodyClass = shownIllustration
+    ? 'mx-auto max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300'
+    : 'tf-body-muted';
 
   return (
     <div className={cn('py-14 px-6 text-center', className)}>
-      {!isNarrowed && illustration ? (
-        <div className="mb-4 flex justify-center">{illustration}</div>
+      {shownIllustration ? (
+        <div className="mb-4 flex justify-center">{shownIllustration}</div>
       ) : !isNarrowed && imageSrc ? (
         <Image
           src={imageSrc}
@@ -80,7 +92,7 @@ export default function ListEmptyState({
 
       {isNarrowed ? (
         <>
-          <h3 className="tf-section-title mb-1">
+          <h3 className={titleClass}>
             No {entityLabel}s match
             {trimmedQuery && (
               <>
@@ -89,15 +101,15 @@ export default function ListEmptyState({
               </>
             )}
           </h3>
-          <p className="tf-body-muted">
+          <p className={bodyClass}>
             Try a different search, or clear what you have narrowed by.
           </p>
         </>
       ) : (
         <>
-          <h3 className="tf-section-title mb-1">{emptyTitle}</h3>
+          <h3 className={titleClass}>{emptyTitle}</h3>
           {emptyDescription && (
-            <p className="tf-body-muted">{emptyDescription}</p>
+            <p className={bodyClass}>{emptyDescription}</p>
           )}
           {action && <div className="mt-4 flex justify-center">{action}</div>}
         </>

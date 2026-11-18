@@ -30,6 +30,7 @@ import { UNIT_ICON, TOTAL_UNITS_ICON } from '@/lib/constants/unitColors';
 import { useTeamReportRange, RangePresets, RANGE_PRESETS, todayIST, UnitRulesHelp, UnitStatCard, UNIT_STAT_GRID, useSessionState, ReportScopeBadge } from './reportControls';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
+import FilterSelect from '@/components/ui/filter-select';
 import UnitActivityLog from './UnitActivityLog';
 import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
@@ -268,20 +269,26 @@ function downloadHistory(entries: ConsumptionLogEntry[], memberName: string, fro
 }
 
 function HistoryToolbar({ f, onDownload, className = '' }: { f: HistoryFilters; onDownload: () => void; className?: string }) {
-  const select = 'h-7 rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300';
+  const select = 'w-auto sm:w-auto py-0 sm:py-0 pl-2 sm:pl-2 pr-1.5 sm:pr-1.5 data-[size=default]:h-7 sm:data-[size=default]:h-7 rounded-md sm:rounded-md text-xs text-gray-700 dark:text-slate-300';
   return (
     <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
       {f.unitOptions.length > 1 && (
-        <select aria-label="Filter by unit type" value={f.unit} onChange={e => f.setUnit(e.target.value)} className={select}>
-          <option value="">All units</option>
-          {f.unitOptions.map(u => <option key={u} value={u}>{UNIT_TYPE_LABEL[u] ?? u}</option>)}
-        </select>
+        <FilterSelect
+          ariaLabel="Filter by unit type"
+          value={f.unit}
+          onChange={f.setUnit}
+          options={[{ value: '', label: 'All units' }, ...f.unitOptions.map(u => ({ value: u, label: UNIT_TYPE_LABEL[u] ?? u }))]}
+          className={select}
+        />
       )}
       {f.statusOptions.length > 1 && (
-        <select aria-label="Filter by status" value={f.status} onChange={e => f.setStatus(e.target.value)} className={select}>
-          <option value="">All statuses</option>
-          {f.statusOptions.map(st => <option key={st} value={st}>{st.replace(/_/g, ' ').toLowerCase()}</option>)}
-        </select>
+        <FilterSelect
+          ariaLabel="Filter by status"
+          value={f.status}
+          onChange={f.setStatus}
+          options={[{ value: '', label: 'All statuses' }, ...f.statusOptions.map(st => ({ value: st, label: st.replace(/_/g, ' ').toLowerCase() }))]}
+          className={select}
+        />
       )}
       <button
         type="button"
@@ -563,16 +570,17 @@ function MemberListControls({ view, className = '' }: { view: MemberView; classN
           className="tf-input tf-input-sm pl-8 pr-2"
         />
       </div>
-      <select
-        aria-label="Sort members"
+      <FilterSelect
+        ariaLabel="Sort members"
         value={view.sort}
-        onChange={e => view.setSort(e.target.value as MemberSort)}
-        className="h-8 shrink-0 rounded-md border border-gray-200 bg-white px-2 tf-meta dark:border-slate-700 dark:bg-slate-900"
-      >
-        <option value="usage">Most usage</option>
-        <option value="name">Name (A–Z)</option>
-        <option value="recent">Recently active</option>
-      </select>
+        onChange={v => view.setSort(v as MemberSort)}
+        options={[
+          { value: 'usage', label: 'Most usage' },
+          { value: 'name', label: 'Name (A–Z)' },
+          { value: 'recent', label: 'Recently active' },
+        ]}
+        className="w-auto sm:w-auto shrink-0 py-0 sm:py-0 pl-2 sm:pl-2 pr-1.5 sm:pr-1.5 data-[size=default]:h-8 sm:data-[size=default]:h-8 rounded-md sm:rounded-md text-xs"
+      />
     </div>
   );
 }

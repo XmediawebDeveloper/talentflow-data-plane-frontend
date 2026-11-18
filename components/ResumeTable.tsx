@@ -17,8 +17,10 @@ import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import { ResumeArchivedBadge } from './ui/resume-archived-badge';
 import { TeamMemberEmailBadge } from './ui/team-member-badge';
 import Pagination from './Pagination';
+import ListPagination from './ListPagination';
 import { usePagination } from '@/lib/hooks/usePagination';
 import ResumeVersionsModal from './ResumeVersionsModal';
+import VersionEyeBadge from '@/components/ui/version-eye-badge';
 import ShareResumeModal from './ShareResumeModal';
 import { toast } from 'sonner';
 import { resumeService, archiveResumeToArchivedFolder } from '@/lib/services/resumeService';
@@ -253,6 +255,10 @@ interface ResumeTableProps {
   onUnarchiveDisabled?: boolean;
   onUnarchiveDisabledReason?: string;
   disablePagination?: boolean;
+  /** 'list': the Job Openings pager (Show N per page · Showing x to y of z ·
+   *  Go to · ‹ n / m ›, 5/10/20/40/100) instead of the default Pagination.
+   *  Opt-in — the My Resumes / Resume Database pages keep theirs. */
+  paginationStyle?: 'default' | 'list';
   isArchivedFolder?: boolean;
   archivedFolderId?: string;
   canShare?: boolean;
@@ -286,6 +292,10 @@ interface ResumeTableProps {
    *  a page panel (Resume Database) so the cards line up with the panel's
    *  content inset. Default keeps the 8px gutter dialogs rely on. */
   flushCards?: boolean;
+  /** Width the table takes over from the phone cards: 'lg' (1024px, default)
+   *  or 'md' (768px) — the Select Applicants popup shows the table on tablets
+   *  too, the same layout as desktop. */
+  tableFrom?: 'md' | 'lg';
   /** Drops the header's select-all checkbox (the column stays for the row
    *  ticks) — for callers that put the Job Openings "Select All ▾" menu in
    *  their own toolbar instead. */
@@ -349,6 +359,7 @@ export default function ResumeTable({
   onUnarchiveDisabled,
   onUnarchiveDisabledReason,
   disablePagination = false,
+  paginationStyle = 'default',
   isArchivedFolder = false,
   archivedFolderId,
   canShare = false,
@@ -361,6 +372,7 @@ export default function ResumeTable({
   containerClassName = 'flex-1',
   tableShellClassName = '',
   flushCards = false,
+  tableFrom = 'lg',
   hideHeaderSelectAll = false,
   onPageItemsChange,
 }: ResumeTableProps) {
@@ -579,7 +591,7 @@ export default function ResumeTable({
     totalItems,
     startIndex,
     endIndex,
-  } = usePagination({ items: orderedResumes, initialItemsPerPage: 25 });
+  } = usePagination({ items: orderedResumes, initialItemsPerPage: paginationStyle === 'list' ? 20 : 25 });
 
   /* Keep the current page inside the row set. `usePagination` holds the page
      number on its own and never re-clamps it when `items` shrinks, so
@@ -669,7 +681,7 @@ export default function ResumeTable({
           grew to fit every row and never scrolled — `sticky top-0` had nothing
           to stick to, and the header scrolled away with the page. Capping the
           height makes the rows scroll inside it and pins the header. */}
-      <div className={`hidden lg:block overflow-auto min-h-[320px] max-h-[calc(100dvh-24rem)] tf-table-shell ${tableShellClassName}`}>
+      <div className={`hidden ${tableFrom === 'md' ? 'md:block' : 'lg:block'} overflow-auto max-h-[calc(100dvh-24rem)] tf-table-shell ${tableShellClassName}`}>
         <table className="w-full min-w-[1200px] table-auto">
         {/* Background goes on the cells, not just <thead>: with separate cell
             backgrounds the rows would otherwise show through as they pass under. */}
@@ -929,23 +941,26 @@ export default function ResumeTable({
                 <span className="tf-body">{resume.uploadedBy}</span>
               </td>
               <td className="tf-td whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => handleShowVersionHistory(resume)}
-                  disabled={isLoadingVersions}
-                  className="flex items-center gap-2 text-sm text-gray-700 hover:text-brand-blue transition-colors group disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleShowVersionHistory(resume)}
+                    disabled={isLoadingVersions}
+                    title="Version history"
+                    className="flex items-center gap-1 text-sm text-gray-700 hover:text-brand-blue transition-colors disabled:opacity-50"
+                  >
                     <Paperclip className="w-4 h-4" />
                     <span>{resume.attachments}</span>
-                  </div>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ring-1 group-hover:bg-brand-blue/15 transition-colors ${
-                    (resume.versionCount && resume.versionCount > 1) || (resume.versions && resume.versions.length > 1)
-                      ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
-                      : 'bg-slate-100 text-gray-600 ring-gray-200'
-                  }`}>
-                    v{resume.version || 1}
-                  </span>
-                </button>
+                  </button>
+                  {/* The version (opens its history) with Preview Resume
+                      joined to it as an eye — the candidate page's badge. */}
+                  <VersionEyeBadge
+                    label={`v${resume.version || 1}`}
+                    onLabelClick={isLoadingVersions ? undefined : () => handleShowVersionHistory(resume)}
+                    labelTitle="Version history"
+                    onView={() => onQuickView(resume)}
+                    viewLabel="Preview Resume"
+                  />
+                </div>
               </td>
               <td
                 /* No z-index lift while the menu is open: the menu is
@@ -1166,7 +1181,7 @@ export default function ResumeTable({
       </div>
 
       {/* FIX-008: Mobile Card View - visible only on mobile */}
-      <div className={`lg:hidden space-y-3 ${flushCards ? 'py-3' : 'px-2'}`}>
+      <div className={`${tableFrom === 'md' ? 'md:hidden' : 'lg:hidden'} space-y-3 ${flushCards ? 'py-3' : 'px-2'}`}>
         {paginatedItems.map((resume) => {
           const isBlocked = isBlockedResume(resume);
           return (
@@ -1211,14 +1226,16 @@ export default function ResumeTable({
                   No actions available
                 </span>
               ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => onQuickView(resume)}
-                  icon={<Eye className="w-4 h-4" />}
-                >
-                  View
-                </Button>
+                /* The version (opens its history) with the view eye joined to
+                   it, as in the table's Files column. */
+                <VersionEyeBadge
+                  label={`v${resume.version || 1}`}
+                  onLabelClick={() => handleShowVersionHistory(resume)}
+                  labelTitle="Version history"
+                  onView={() => onQuickView(resume)}
+                  viewLabel="Preview Resume"
+                  size="md"
+                />
               )
             }
           >
@@ -1236,7 +1253,23 @@ export default function ResumeTable({
         })}
       </div>
 
-      {!disablePagination && totalPages > 1 && (
+      {!disablePagination && paginationStyle === 'list' && totalItems > 5 && (
+        <div className="mt-2 flex-shrink-0">
+          {/* compact: 'list' is only used inside the Select Applicants to Score
+              popup, where the full-size bar took too much of the dialog. */}
+          <ListPagination
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={totalItems}
+            onPageChange={goToPage}
+            onItemsPerPageChange={changeItemsPerPage}
+            itemLabel="resumes"
+            alwaysShow
+            compact
+          />
+        </div>
+      )}
+      {!disablePagination && paginationStyle !== 'list' && totalPages > 1 && (
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}

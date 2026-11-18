@@ -4,7 +4,7 @@ import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { formatExperienceRange, formatJdExperience } from '@/lib/utils/jobExperience';
 import ChipsReveal from '@/components/ui/chips-reveal';
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
-import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw, ClipboardList } from 'lucide-react';
+import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw, ClipboardList, FileSearch } from 'lucide-react';
 import { SectionHeader, SummaryLocation } from '@/components/ai-interview/ConfigSummary';
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
 import { Button } from '@/components/ui/button';
@@ -51,12 +51,14 @@ import {
   lineageKey,
   mapJDStatus,
   needsVersionPicker,
+  newerVersionsNote,
   mapJDToJob,
   sortJobs,
 } from '@/lib/utils/jobOpeningDisplay';
 import { Skeleton, PageSkeleton } from '@/components/ui/skeleton';
 import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
 import { ASSESSMENT_JOB_LOCK_MESSAGE, isJobVersionLocked } from '@/lib/utils/assessmentJobLock';
+import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -3336,7 +3338,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   const inactiveJobs: Job[] = [];
   groupByLineage(allJdVersions).forEach((bucket, key) => {
     if (buildableLineages.has(key)) return;
-    const inactiveRep = inactiveAssessmentRepresentative(bucket);
+    const inactiveRep = inactiveAssessmentRepresentative(bucket, version =>
+      versionHasAssessment(key, version.id),
+    );
     if (inactiveRep) inactiveJobs.push(inactiveRep);
   });
   const availableJobs = [...buildableJobs, ...inactiveJobs];
@@ -3777,6 +3781,11 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   const showVersionPicker = needsVersionPicker(job, allJdVersions, version =>
                     versionHasAssessment(versionKey, version.id),
                   );
+                  /* The card sits on the newest FREE published version, so
+                     when a newer one was skipped (already assessed, Disabled,
+                     Archived…) say so — otherwise "where did v4 go?". */
+                  const skippedNote = newerVersionsNote(job, allJdVersions, version =>
+                    versionHasAssessment(versionKey, version.id), 'an assessment');
 
                   return (
                     <div
@@ -3799,7 +3808,11 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         blockedByOtherPick
                           ? otherPickReason
                           : !latestSelectableStatus
-                            ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
+                            ? (showVersionPicker
+                              ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
+                              : isJobVersionLocked(job.status)
+                                ? ASSESSMENT_JOB_LOCK_MESSAGE
+                                : `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()}`)
                             : showVersionPicker
                               ? 'View Versions opens this job’s version history — every version of this job, and the one to build the assessment against.'
                               : `v${job.versionNumber ?? 1} is this job’s only available version — select it to build the assessment against it.`
@@ -3836,7 +3849,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                 ? `v${job.versionNumber ?? 1} already has an assessment — open View Versions to build against another version`
                                 : !latestSelectableStatus
                                   ? latestUnpublishedReason
-                                  : `Select the latest version (v${job.versionNumber ?? 1})`
+                                  : `Select v${job.versionNumber ?? 1}`
                           }
                         >
                           <input
@@ -3849,7 +3862,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             onClick={() => isPicked && pickJdVersion(job, versionKey)}
                             className="tf-radio focus:ring-brand-blue/40"
                           />
-                          <span className="sr-only">Select the latest version of {job.title}</span>
+                          <span className="sr-only">Select v{job.versionNumber ?? 1} of {job.title}</span>
                         </label>
 
                         <div className={`flex-1 min-w-0 ${!latestSelectableStatus && !blockedByOtherPick ? 'opacity-60' : ''}`}>
@@ -3884,6 +3897,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-brand-blue/10 px-2 py-1 text-xs font-medium text-brand-blue max-w-full">
                               <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
                               v{pickedVersionOfThisJob.versionNumber ?? 1} selected, chosen from Version History
+                            </p>
+                          )}
+                          {skippedNote && (
+                            <p className="mt-2 flex items-start gap-1.5 tf-meta">
+                              <Info className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+                              <span>{skippedNote}</span>
                             </p>
                           )}
                         </div>
@@ -4281,22 +4300,23 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   </div>
                 )}
                 {filteredAvailableJobs.length === 0 && !isLoadingMoreJobs && !(jobsLoadError === 'jobs' && availableJobs.length === 0) && (
-                  <div className="text-center py-8 sm:py-12 text-gray-500">
-                    <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
-                    <p className="text-sm sm:text-base">
-                      {availableJobs.length > 0
-                        ? 'No matching job descriptions found'
-                        : hasAnyPublishedVersion
-                          ? 'No jobs available for a new assessment'
-                          : 'No published jobs available'}
-                    </p>
-                    <p className="text-sm mt-1">
-                      {availableJobs.length > 0
-                        ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
-                        : hasAnyPublishedVersion
-                          ? 'Every published job version already has an assessment. Publish a new version of a job to create another one.'
-                          : 'Create and publish a Job first to create assessments'}
-                    </p>
+                  <IllustratedEmptyState
+                    bordered={false}
+                    illustration={<FolderIconIllustration
+                      icon={availableJobs.length > 0 ? FileSearch : Briefcase}
+                      badge={availableJobs.length === 0 && !hasAnyPublishedVersion ? 'plus' : undefined}
+                    />}
+                    title={availableJobs.length > 0
+                      ? 'No matching job descriptions found'
+                      : hasAnyPublishedVersion
+                        ? 'No jobs available for a new assessment'
+                        : 'No published jobs available'}
+                    description={availableJobs.length > 0
+                      ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
+                      : hasAnyPublishedVersion
+                        ? 'Every published job version already has an assessment. Publish a new version of a job to create another one.'
+                        : 'Create and publish a Job first to create assessments.'}
+                  >
                     {availableJobs.length === 0 && (
                       <Button
                         variant="primary"
@@ -4306,13 +4326,13 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         }}
                         aria-disabled={!canCreateJd}
                         title={!canCreateJd ? 'You do not have permission to create job descriptions' : undefined}
-                        className={`mt-4 mx-auto ${!canCreateJd ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`mx-auto ${!canCreateJd ? 'opacity-50 cursor-not-allowed' : ''}`}
                         icon={<Plus className="w-4 h-4" />}
                       >
                         Create New Job
                       </Button>
                     )}
-                  </div>
+                  </IllustratedEmptyState>
                 )}
 
                 {/* Pagination — the shared control, so the page sizes, the
