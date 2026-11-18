@@ -123,10 +123,14 @@ export function MobileRecordCard({
   selected = false,
   wrapTitle = false,
   actionsBelow = false,
+  actionsOnNameRow = false,
   onClick,
   className,
   ...rest
 }: {
+  /** `jd` layout: keep icon-only actions at the right end of the name row even when there is
+   *  a footer (by default they ride the footer line, and wrap below full-width tiles). */
+  actionsOnNameRow?: boolean;
   /** `jd` layout: put the actions on the bottom row even when they are icon-only (too many
    *  controls for the name row — e.g. a status toggle plus four icons). */
   actionsBelow?: boolean;
@@ -183,6 +187,7 @@ export function MobileRecordCard({
         selected={selected}
         wrapTitle={wrapTitle}
         forceActionsBelow={actionsBelow}
+        actionsOnNameRow={actionsOnNameRow}
         onClick={onClick}
         className={className}
       >
@@ -313,11 +318,13 @@ function JdRecordCard({
   selected,
   wrapTitle,
   forceActionsBelow = false,
+  actionsOnNameRow = false,
   onClick,
   className,
   ...rest
 }: {
   forceActionsBelow?: boolean;
+  actionsOnNameRow?: boolean;
   select?: React.ReactNode;
   idBadge?: React.ReactNode;
   badges?: React.ReactNode;
@@ -347,7 +354,7 @@ function JdRecordCard({
   const actionsBelow = forceActionsBelow || textActionsBelow;
   /* No version chip (titleAddon) to sit beside: icon buttons ride the footer line, right
      after its chips (e.g. "Score 7.5/10 · ⋮"), rather than a line of their own. */
-  const actionsInFooter = !actionsBelow && !titleAddon && !!footer;
+  const actionsInFooter = !actionsBelow && !titleAddon && !!footer && !actionsOnNameRow;
 
   const hasTop = !!(idBadge || badges);
   const actionsEl = actions ? (

@@ -314,6 +314,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const [jobVersions, setJobVersions] = useState<JDLineageVersion[]>([]);
   const [jobVersionsLoading, setJobVersionsLoading] = useState(false);
   const jobVersionsRequestedFor = useRef<string | null>(null);
+  /* Header's Interview Version dropdown - every interview authored against
+     this job version (the list the page already loads for the badge's number),
+     newest version first; a row opens that interview. */
+  const [showInterviewVersionMenu, setShowInterviewVersionMenu] = useState(false);
+  const [interviewVersionMenuShift, setInterviewVersionMenuShift] = useState(0);
+  const interviewVersionMenuRef = useRef<HTMLDivElement | null>(null);
 
   /* Every AI interview config across the tenant, bucketed by the job version
      (`jd_id`) it was authored against — same shape and same two requests
@@ -507,6 +513,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showJobVersionMenu]);
 
+  // Close the Interview Version dropdown on an outside click.
+  useEffect(() => {
+    if (!showInterviewVersionMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (interviewVersionMenuRef.current && !interviewVersionMenuRef.current.contains(e.target as Node)) {
+        setShowInterviewVersionMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showInterviewVersionMenu]);
+
   // Every config across the tenant, bucketed by job version — see the state
   // declaration above for why this loads eagerly rather than on demand. Same
   // paged-live + separate-archived fetch AllInterviewsTable.tsx's `fetchAll`
@@ -555,6 +573,15 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     () => storedInterviewVersionOrdinal(config, siblingConfigsByJdId.get(config.jd_id || '') ?? []),
     [siblingConfigsByJdId, config],
   );
+
+  /** The Interview Version dropdown's rows: each interview of this job
+   *  version with its version number, newest first. */
+  const interviewVersionRows = useMemo(() => {
+    const bucket = siblingConfigsByJdId.get(config.jd_id || '') ?? [];
+    const rows = bucket.map((c) => ({ config: c, ordinal: c.id === config.id ? interviewVersionOrdinal : storedInterviewVersionOrdinal(c, bucket) }));
+    if (!rows.some((r) => r.config.id === config.id)) rows.push({ config, ordinal: interviewVersionOrdinal });
+    return rows.sort((x, y) => Number(y.ordinal) - Number(x.ordinal));
+  }, [siblingConfigsByJdId, config, interviewVersionOrdinal]);
 
   /** Every version of this interview, any status - what Duplicate's draft and
    *  cap rules are judged against. */
@@ -1594,11 +1621,80 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
                 {/* Interview Version - this version's number within its
                     interview (V1 is the original, V2.. are duplicates). */}
-                <span className="tf-badge bg-brand-blue text-white">
-                  Interview Version
-                  <span aria-hidden className="text-white/50">&middot;</span>
-                  V{interviewVersionOrdinal}
-                </span>
+                <div className="relative" ref={interviewVersionMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const opening = !showInterviewVersionMenu;
+                      if (opening && interviewVersionMenuRef.current) {
+                        const menuWidth = Math.min(288, window.innerWidth - 32);
+                        const left = interviewVersionMenuRef.current.getBoundingClientRect().left;
+                        setInterviewVersionMenuShift(Math.min(0, window.innerWidth - 20 - (left + menuWidth)));
+                      }
+                      setShowInterviewVersionMenu(opening);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue text-white rounded-full text-xs font-medium hover:bg-brand-blue/90 transition-colors whitespace-nowrap"
+                    aria-label={`Interview version, currently V${interviewVersionOrdinal}`}
+                    aria-haspopup="menu"
+                    aria-expanded={showInterviewVersionMenu}
+                    title="View interview versions"
+                  >
+                    Interview Version
+                    <span aria-hidden className="text-white/50">&middot;</span>
+                    V{interviewVersionOrdinal}
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showInterviewVersionMenu ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {showInterviewVersionMenu && (
+                    <div
+                      role="menu"
+                      aria-label="Interview versions"
+                      style={{ left: interviewVersionMenuShift }}
+                      className="absolute left-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden">
+                      <div className="flex items-baseline justify-between gap-2 px-3 py-2">
+                        <span className="tf-caption tracking-tight">Interview Versions</span>
+                        <span className="tf-micro-hint">
+                          {interviewVersionRows.length} version{interviewVersionRows.length === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      <div className="border-t border-gray-100 dark:border-slate-700/60" />
+                      <div className="max-h-72 overflow-y-auto py-1">
+                        {interviewVersionRows.map(({ config: v, ordinal }) => {
+                          const isCurrent = v.id === config.id;
+                          return (
+                            <button
+                              key={v.id}
+                              type="button"
+                              role="menuitem"
+                              aria-current={isCurrent ? 'true' : undefined}
+                              onClick={() => {
+                                setShowInterviewVersionMenu(false);
+                                if (!isCurrent) router.push(`/recruitment/ai-interviews/${v.id}${originQuery}`);
+                              }}
+                              className={`w-full px-3 py-2 text-left transition-colors ${isCurrent ? 'bg-brand-blue/5 hover:bg-brand-blue/10' : 'hover:bg-brand-blue/5'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="w-4 flex-shrink-0 flex items-center justify-center">
+                                  {isCurrent && <Check className="w-3.5 h-3.5 text-brand-blue" />}
+                                </span>
+                                <span className="tf-row-title tabular-nums flex-shrink-0">V{ordinal}</span>
+                                <Badge variant={getStatusVariant(v.status)} className="flex-shrink-0 text-2xs px-1.5 py-0.5">
+                                  {getStatusLabel(v.status)}
+                                </Badge>
+                                <span aria-hidden className="ml-auto flex-shrink-0 text-2xs font-medium text-brand-blue">
+                                  {isCurrent ? 'Current' : 'View'}
+                                </span>
+                              </div>
+                              {v.created_at && (
+                                <div className="pl-6 mt-0.5 tf-micro-hint">{formatIST(v.created_at)}</div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

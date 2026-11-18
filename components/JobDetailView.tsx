@@ -83,7 +83,7 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { usePlanFeature, usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { useScoringProgress, toMatchResult } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
@@ -708,12 +708,27 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
    * "Preferred" criteria share the 40% block and never fail a candidate on their own.
    */
   const requirementLabel = requirementBadge;
-  /* The breadcrumb still pins at the top, but the tab bar below it no longer
-     sticks — the toolbar lives inside it now and must scroll naturally with the
-     page (matching the Job Openings master, whose toolbar doesn't pin either).
-     That removed the measured top-offset the pinned bar used to need.
-     `breadcrumbBarRef` is still handed to PageBreadcrumb for its own layout. */
-  const breadcrumbBarRef = useRef<HTMLElement | null>(null);
+  /* The tab card (tabs + its toolbar row) pins directly under the sticky
+     breadcrumb, so its `top` is the breadcrumb's real height — re-measured on
+     resize, because the bar grows when its RecordPager row wraps (tablet /
+     phone). A callback ref held in state, not useRef + a mount-only effect:
+     the first renders are loading / early-return views with no breadcrumb, so
+     a mount-only measure found null and the tabs tucked under a wrapped crumb.
+     Same fix as CandidateScoringDetailPage. */
+  const [breadcrumbBarEl, breadcrumbBarRef] = useState<HTMLElement | null>(null);
+  const [tabBarTop, setTabBarTop] = useState(52);
+  /* The pinned tab card itself — the Overview right column measures it so it
+     pins BELOW the tabs rather than sliding under them. */
+  const [tabCardEl, setTabCardEl] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const bar = breadcrumbBarEl;
+    if (!bar || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setTabBarTop(bar.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [breadcrumbBarEl]);
 
   const jobBreadcrumbItems = breadcrumbItems ?? [
     { label: 'Dashboard', href: '/dashboard' },
@@ -959,13 +974,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   /** Bumped by a send from a tracker's Invite More, so the tracker left open
    *  under the popup lists the new invitations at once. */
   const [trackerRefreshSignal, setTrackerRefreshSignal] = useState(0);
+  /** Bumped by a successful send from a popup opened off the AI Talent Match
+   *  tab's Actions menu, so that tab drops its (now acted-on) row selection. */
+  const [aiMatchSelectionResetSignal, setAiMatchSelectionResetSignal] = useState(0);
   /** Opens the popup with a tab's ticked candidates, each tagged with that tab
    *  as its source (the popup's group headings). */
-  const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource) =>
+  const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource, onSent?: () => void) =>
     setInviteDialog({
       kind,
       candidates: candidates.map((c) => ({ ...c, source })),
       openOn: source === 'talent-match' ? 'talent-match' : undefined,
+      // e.g. the Scored Resumes table's own clear, when opened from its selection.
+      onSent: onSent ? () => onSent() : undefined,
     });
   // AI Interview Version History dialog (history icon on the AI Interview heading).
   const [showAIVersionHistory, setShowAIVersionHistory] = useState(false);
@@ -2066,7 +2086,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     const GAP = 16;
     const measure = () => {
       const viewportH = scroller ? scroller.clientHeight : window.innerHeight;
-      const pinnedTop = (breadcrumbBarRef.current?.offsetHeight ?? 0) + GAP;
+      // Below the breadcrumb AND the sticky tab card pinned under it.
+      const pinnedTop = (breadcrumbBarEl?.offsetHeight ?? 0) + (tabCardEl?.offsetHeight ?? 0) + GAP;
       const columnH = column.offsetHeight;
       setRightColumnTop(
         pinnedTop + columnH + GAP <= viewportH ? pinnedTop : viewportH - columnH - GAP
@@ -2076,9 +2097,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     const ro = new ResizeObserver(measure);
     ro.observe(column);
     if (scroller) ro.observe(scroller);
-    if (breadcrumbBarRef.current) ro.observe(breadcrumbBarRef.current);
+    if (breadcrumbBarEl) ro.observe(breadcrumbBarEl);
+    if (tabCardEl) ro.observe(tabCardEl);
     return () => ro.disconnect();
-  }, [activeTab]);
+  }, [activeTab, breadcrumbBarEl, tabCardEl]);
   // Recent Activity panel — 10 events per page.
   const [activityPage, setActivityPage] = useState(1);
   const ACTIVITY_PAGE_SIZE = 10;
@@ -2387,6 +2409,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             } else if (itemStatus === 'completed') {
               updateItemStatus(batchId, itemId, 'Scored successfully', {
                 score: item.overall_score,
+                overallRating10: item.overall_rating_10,
+                matchResult: toMatchResult(item.match_status),
                 scoredDateTime: new Date().toISOString(),
               });
             } else if (itemStatus === 'failed') {
@@ -2505,6 +2529,24 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       skills: ['React', 'JavaScript', 'CSS', 'Git']
     }
   ];
+
+  /* Background work on this job moved: invites going out (Assessment Results,
+     the AI interview invite count, the tracker) or resumes being scored
+     (Scored Resumes) — re-read so the tabs' counts change as it happens.
+     Must stay ABOVE the early returns below (applicants view, pending resume,
+     AI interview candidate drill-down): calling it after them skips its hooks
+     on those renders and crashes the page with React error #300. */
+  useBackgroundWorkRefresh((detail) => {
+    if (detail.jdId && detail.jdId !== job.id) return;
+    if (detail.kind === 'invite') {
+      void fetchAssessmentResults();
+      aiInterviewConfigFetchedRef.current = false;
+      void loadAIInterviewConfig();
+      setTrackerRefreshSignal((n) => n + 1);
+    } else {
+      void fetchScoredResumes();
+    }
+  });
 
   // Show applicants view
   if (showApplicantsView) {
@@ -2666,25 +2708,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onSent={(kind, sent) => {
             if (kind === 'assessment') void fetchAssessmentResults();
             else setAiInterviewCount((prev) => Math.max(prev + sent, 1));
+            // Bulk send from the AI Talent Match tab succeeded: clear its selection.
+            if (inviteDialog.openOn === 'talent-match') setAiMatchSelectionResetSignal((n) => n + 1);
             inviteDialog.onSent?.(kind, sent);
           }}
         />
   ) : null;
-
-  /* Background work on this job moved: invites going out (Assessment Results,
-     the AI interview invite count, the tracker) or resumes being scored
-     (Scored Resumes) — re-read so the tabs' counts change as it happens. */
-  useBackgroundWorkRefresh((detail) => {
-    if (detail.jdId && detail.jdId !== job.id) return;
-    if (detail.kind === 'invite') {
-      void fetchAssessmentResults();
-      aiInterviewConfigFetchedRef.current = false;
-      void loadAIInterviewConfig();
-      setTrackerRefreshSignal((n) => n + 1);
-    } else {
-      void fetchScoredResumes();
-    }
-  });
 
   if (viewingScoredResume) {
     const _scoredIdx = scoredResumes.findIndex(
@@ -3372,9 +3401,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         </div>
       </div>
 
-      {/* Tab Navigation — NOT sticky: the tabs and the toolbar they hold scroll
-          naturally with the page, like the Job Openings master toolbar. */}
+      {/* Tab Navigation — sticky, pinned flush under the sticky breadcrumb at
+          its MEASURED height (tabBarTop). z-20 keeps it under the crumb bar
+          (z-30) and over the page content scrolling beneath it. */}
       <div
+        ref={setTabCardEl}
+        style={{ top: tabBarTop }}
         /* pb-2 only on Overview: that tab has no toolbar row below the tabs, so
            without it the underline track would sit flush against the card's
            bottom border (reading as a doubled border at the rounded corners).
@@ -3382,7 +3414,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
            Phones / tablets (below lg): on Overview this card and the job
            description card below join into ONE card — the tab track becomes the
            divider — the way the result tabs' toolbar sits inside this card. */
-        className={`mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5${activeTab === 'overview' ? ' pb-2 max-lg:mb-0 max-lg:pb-0 max-lg:rounded-b-none max-lg:border-b-0 max-lg:shadow-none' : ''}`}
+        className={`sticky z-20 mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5${activeTab === 'overview' ? ' pb-2 max-lg:mb-0 max-lg:pb-0 max-lg:rounded-b-none max-lg:border-b-0 max-lg:shadow-none' : ''}`}
       >
         {/* Underline tabs. The border-b "track" is on this NON-scrolling outer
             div; the inner div is the horizontal scroll container (scrollbar-hide,
@@ -4429,7 +4461,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               hiddenColumnIds={['jdId', 'jobTitle']}
               /* Actions ▸ AI Assessment / AI Interview Invite: the AI Talent
                  Match tab's version popups, with the ticked candidates. */
-              onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'score-resume')}
+              onOpenInviteDialog={(kind, invitees, _fromSelection, clearSelection) => openInviteDialog(kind, invitees, 'score-resume', clearSelection)}
               /* Row ⋮: Create / Send Assessment | AI Interview directly, no Invite ▸. */
               inlineRowInviteItems
               initialMatchStatus={scoredResumesMatchFilter}
@@ -4663,6 +4695,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           loading={loadingAiMatch}
           canRunAiMatch={permissions.canRunAiMatch}
           jobLockedReason={jobInactive ? jobInactiveReason : null}
+          selectionResetSignal={aiMatchSelectionResetSignal}
           onRunMatch={handleAITalentMatch}
           onScoreSelected={(selected) => { if (selected.length > 0) setAiMatchScoreReview(selected); }}
           onScoreAll={() => {
@@ -5302,6 +5335,7 @@ function AIMatchTabContent({
   loading,
   canRunAiMatch,
   jobLockedReason = null,
+  selectionResetSignal = 0,
   onRunMatch,
   onScoreSelected,
   onScoreAll,
@@ -5326,6 +5360,9 @@ function AIMatchTabContent({
   /* A disabled / archived JD: Run AI Match and Score (row and Score
      Selected) stay visible, greyed out with this as the reason. */
   jobLockedReason?: string | null;
+  /* Bumped by the parent after a bulk action on the ticked rows succeeds
+     (an invite send); each change clears the selection. */
+  selectionResetSignal?: number;
   onRunMatch: () => void;
   onScoreSelected: (selected: MatchedCandidate[]) => void;
   onScoreAll: () => void;
@@ -5340,6 +5377,11 @@ function AIMatchTabContent({
     ? 'You do not have permission to run AI Talent Match'
     : jobLockedReason ?? null;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // A bulk action on the selection succeeded upstream — drop the selection
+  // (the Actions bar hides with it).
+  useEffect(() => {
+    if (selectionResetSignal > 0) setSelectedIds(new Set());
+  }, [selectionResetSignal]);
   /* Rows opened to show their remaining details (Phone, Location, Skills,
      Uploaded By / Date, Attachments) — display only. */
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
@@ -5560,6 +5602,8 @@ function AIMatchTabContent({
       title: `${title} - AI Talent Match`,
     });
     toast.success(`Exported ${rows.length} candidate${rows.length !== 1 ? 's' : ''} to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+    // Export succeeded: clear the selection (hides the Actions bar). No refresh — nothing changed.
+    setSelectedIds(new Set());
   };
 
   /* Create / Send Assessment | AI Interview — the Scored Resumes tab's

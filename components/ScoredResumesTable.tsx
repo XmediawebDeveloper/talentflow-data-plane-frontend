@@ -453,7 +453,11 @@ interface ScoredResumesTableProps {
    * the ticked candidates, instead of this table's own invite flow. The popup
    * handles a job with no version yet (pick one, or create the next).
    */
-  onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[]) => void;
+  /** `fromSelection` is true when opened from the selection's Actions menu, so
+   *  the host can clear its selection once the invite is sent. `clearSelection`
+   *  (set only then) unticks this table's own rows — hosts that don't hold the
+   *  selection call it from their dialog's onSent. */
+  onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[], fromSelection?: boolean, clearSelection?: () => void) => void;
   /**
    * Job Details → Resume Scoring: a row's ⋮ menu lists the two invite entries
    * (Create / Send Assessment | AI Interview) directly, instead of under an
@@ -1304,7 +1308,7 @@ Best regards`);
    * none) on the popup's own picker of every published one. A candidate
    * ticked on several jobs is listed once.
    */
-  const openRowsInvite = (kind: 'assessment' | 'interview', rows: ScoredResume[]) => {
+  const openRowsInvite = (kind: 'assessment' | 'interview', rows: ScoredResume[], fromSelection = false) => {
     const seen = new Set<string>();
     const people = rows.filter((r) => {
       const k = String(r.email || r.resumeId || r.id).toLowerCase();
@@ -1313,7 +1317,7 @@ Best regards`);
       return true;
     });
     if (onOpenInviteDialog) {
-      onOpenInviteDialog(kind, people.map(toInvitee));
+      onOpenInviteDialog(kind, people.map(toInvitee), fromSelection, fromSelection ? () => clearSelection() : undefined);
       return;
     }
     const ownJobId = jobId && jobId !== 'global' && jobId !== 'jd-1' ? jobId : '';
@@ -1331,8 +1335,9 @@ Best regards`);
         : undefined,
       candidates: people.map((r) => ({ ...toInvitee(r), source: 'score-resume', inviteSource: 'Resume Scoring' })),
       openOn: 'score-resume',
-      // A bulk send clears the ticks, as the old bulk invite did.
-      onSent: rows.length > 1 ? () => clearSelection() : undefined,
+      // A bulk send (from the selection's Actions menu, even with one row
+      // ticked) clears the ticks, as the old bulk invite did.
+      onSent: fromSelection || rows.length > 1 ? () => clearSelection() : undefined,
     });
   };
 
@@ -1593,9 +1598,10 @@ Best regards`);
     return `${dd}-${mm}-${date.getFullYear()}`;
   };
 
-  const handleDownloadScorecard = async (resumeId: string) => {
+  /** Resolves true once the PDF is handed to the browser (false on failure). */
+  const handleDownloadScorecard = async (resumeId: string): Promise<boolean> => {
     const resume = resumes.find(r => r.id === resumeId);
-    if (!resume) return;
+    if (!resume) return false;
 
     setDownloadingId(resumeId);
     try {
@@ -1612,9 +1618,11 @@ Best regards`);
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
       toast.success('Scorecard downloaded successfully');
+      return true;
     } catch (error) {
       console.error('Error downloading scorecard:', error);
       toast.error('Failed to download scorecard');
+      return false;
     } finally {
       setDownloadingId(null);
     }
@@ -1622,14 +1630,14 @@ Best regards`);
 
   // "Download as ZIP" confirmation — asked before a multi-candidate download.
 
-  const handleDownloadBulkScorecards = async (rows: ScoredResume[]) => {
-    if (rows.length === 0) return;
+  /** Resolves true when the download succeeded, so the caller can clear the selection. */
+  const handleDownloadBulkScorecards = async (rows: ScoredResume[]): Promise<boolean> => {
+    if (rows.length === 0) return false;
 
     // One candidate needs no ZIP wrapper — download that single PDF
     // directly, via the exact same path the per-row action uses.
     if (rows.length === 1) {
-      await handleDownloadScorecard(rows[0].id);
-      return;
+      return handleDownloadScorecard(rows[0].id);
     }
 
     setBulkDownloading(true);
@@ -1637,9 +1645,11 @@ Best regards`);
       const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_') || 'Scorecards';
       await downloadScorecardsZip(rows, `${safeName}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
       toast.success(`${rows.length} scorecards downloaded`);
+      return true;
     } catch (error) {
       console.error('Error downloading bulk scorecards:', error);
       toast.error('Failed to download scorecards');
+      return false;
     } finally {
       setBulkDownloading(false);
     }
@@ -2227,7 +2237,7 @@ Best regards`);
                   e.preventDefault();
                   return;
                 }
-                openRowsInvite('assessment', effectiveSelectedRows);
+                openRowsInvite('assessment', effectiveSelectedRows, true);
               },
             })}
             {renderInviteTargetItems({
@@ -2242,7 +2252,7 @@ Best regards`);
                   e.preventDefault();
                   return;
                 }
-                openRowsInvite('interview', effectiveSelectedRows);
+                openRowsInvite('interview', effectiveSelectedRows, true);
               },
             })}
           </>
@@ -2313,6 +2323,38 @@ Best regards`);
   // No padded outer card, embedded or standalone: standalone it sat inside the
   // page panel and framed the already-bordered rows a second time (a card
   // inside a card). Resume Scoring's View by Job dropped the same shell.
+  /* Standalone (Resume Scoring): Select All, search, filters, Sort and List /
+     Grid on ONE toolbar line (2026-11-17). Phones keep it leading row 2. */
+  const standaloneSelectAll = !embedded && filteredResumes.length > 0 ? (() => {
+    const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
+    const selectedCount = isGrouped
+      ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
+      : effectiveSelectedRows.length;
+    return (
+      <SelectAllMenu
+        selectedCount={selectedCount}
+        pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
+        totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
+        noun={isGrouped ? 'candidates' : 'resumes'}
+        allSelected={allVisibleSelected}
+        pageSelected={pageRows.length > 0 && pageRows.every((r) => effectiveSelectedIds.has(r.id))}
+        onSelectPage={() => {
+          const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
+          selectExactly(ids);
+        }}
+        onDeselectPage={() => {
+          const pageIds = new Set(pageRows.map((r) => r.id));
+          selectExactly(effectiveSelectedRows.map((r) => r.id).filter((id) => !pageIds.has(id)));
+        }}
+        onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
+        onClear={clearSelection}
+      />
+    );
+  })() : null;
+  /* Row 2 on laptop / desktop only when it still has something besides the
+     phone-only Select All and Sort menu. */
+  const row2OnDesktop = !!viewPillsSlot || (isGrouped && paginatedGroups.length > 0);
+
   return (
     <div>
       {/* Header — title and the one page-level action. Everything that acts on
@@ -2418,7 +2460,9 @@ Best regards`);
                   })()}
                 </>
               )
-              : undefined
+              : standaloneSelectAll
+                ? <div className="max-sm:hidden">{standaloneSelectAll}</div>
+                : undefined
           }
           onToggleFilters={() => setShowFilters(!showFilters)}
           // Active filter tags: a popup on hovering More Filters (laptop / desktop).
@@ -2475,8 +2519,6 @@ Best regards`);
               variant="primary"
               size="sm"
               onClick={() => { if (scoreResumesDisabled) return; onScoreResumes(); }}
-              /* Phones: shares the Sort line, half and half (globals.css, data-tb-primary). */
-              data-tb-primary=""
               aria-disabled={!!scoreResumesDisabled}
               title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
               icon={<ClipboardList className="w-4 h-4" />}
@@ -2676,42 +2718,12 @@ Best regards`);
             rides the toolbar row above (beforeSearch), matching the AI Talent
             Match reference; this row renders only when it still has content. */}
         {(viewPillsSlot || (isGrouped && paginatedGroups.length > 0) || (!embedded && filteredResumes.length > 0)) && (
-        <div className={`${embedded ? '' : 'tf-jobs-row2 '}mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2`}>
-          {/* Standalone: Select All leads this row, then a divider and the
-              verdict pills — exactly View by Job's row 2. */}
-          {!embedded && filteredResumes.length > 0 && (() => {
-            const pageRows = isGrouped ? paginatedGroups.flatMap((g) => g.rows) : paginatedResumes;
-            const selectedCount = isGrouped
-              ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size
-              : effectiveSelectedRows.length;
-            return (
-              <>
-                <div className="tf-jobs-select">
-                <SelectAllMenu
-                  selectedCount={selectedCount}
-                  pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
-                  totalCount={isGrouped ? candidateGroups.length : filteredResumes.length}
-                  noun={isGrouped ? 'candidates' : 'resumes'}
-                  allSelected={allVisibleSelected}
-                  pageSelected={pageRows.length > 0 && pageRows.every((r) => effectiveSelectedIds.has(r.id))}
-                  onSelectPage={() => {
-                    const ids = Array.from(new Set([...effectiveSelectedRows.map((r) => r.id), ...pageRows.map((r) => r.id)]));
-                    selectExactly(ids);
-                  }}
-                  onDeselectPage={() => {
-                    const pageIds = new Set(pageRows.map((r) => r.id));
-                    selectExactly(effectiveSelectedRows.map((r) => r.id).filter((id) => !pageIds.has(id)));
-                  }}
-                  onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
-                  onClear={clearSelection}
-                />
-                </div>
-                {viewPillsSlot && (
-                  <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
-                )}
-              </>
-            );
-          })()}
+        <div className={`${embedded ? '' : 'tf-jobs-row2 '}${!embedded && !row2OnDesktop ? 'sm:hidden ' : ''}mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2`}>
+          {/* Standalone: Select All leads this row on phones only — laptop /
+              desktop carry it on the toolbar line above. */}
+          {standaloneSelectAll && (
+            <div className="tf-jobs-select sm:!hidden">{standaloneSelectAll}</div>
+          )}
           {viewPillsSlot}
           {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
           {!embedded && filteredResumes.length > 0 && (
@@ -3856,7 +3868,8 @@ Best regards`);
             const action = bulkAction;
             setBulkAction(null);
             if (action === 'download') {
-              await handleDownloadBulkScorecards(rows);
+              // Download is read-only: on success just untick (hides the Actions bar), no refresh.
+              if (await handleDownloadBulkScorecards(rows)) clearSelection();
             }
           }}
         />
@@ -4125,6 +4138,7 @@ Best regards`);
           }}
           rowJobCode={rowJobCode}
           auditJdId={jobId}
+          onExported={clearSelection}
           onClose={() => setShowExportModal(false)}
         />
       )}

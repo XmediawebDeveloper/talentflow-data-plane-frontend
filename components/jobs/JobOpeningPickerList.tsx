@@ -1,7 +1,7 @@
 'use client';
 
 import { Search, CheckCircle, Briefcase, Loader2, Eye, ChevronDown, RefreshCw } from 'lucide-react';
-import { useEffect, useMemo, useState, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import {
@@ -148,6 +148,13 @@ export interface JobOpeningPickerListProps {
   /** The applicant count's label on the cards and the version table
    *  ("Scored" on Resume Scoring). Omitted = "applicants" / "Applicants". */
   applicantsLabel?: string;
+  /** Bump to re-fetch the list (e.g. after a run is scored, so its counts
+   *  are fresh). The first value does not trigger a fetch. */
+  reloadSignal?: number;
+  /** 'page': the list heading (with its count) and Search Jobs share one
+   *  toolbar line — for a full page (Resume Scoring's Score Resumes). The
+   *  default keeps the stacked search-then-heading layout used in popups. */
+  layout?: 'default' | 'page';
 }
 
 /**
@@ -175,6 +182,8 @@ export default function JobOpeningPickerList({
   coloredCountBadges = false,
   hideSelectedTick = false,
   applicantsLabel,
+  reloadSignal,
+  layout = 'default',
 }: JobOpeningPickerListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const candidateCounts = useJobCandidateCounts(showCandidateCounts);
@@ -196,6 +205,13 @@ export default function JobOpeningPickerList({
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const lastReloadSignal = useRef(reloadSignal);
+  useEffect(() => {
+    if (reloadSignal === undefined || reloadSignal === lastReloadSignal.current) return;
+    lastReloadSignal.current = reloadSignal;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReloadToken(t => t + 1);
+  }, [reloadSignal]);
 
   /* Progressive: the first 10 jobs are put on screen the moment they land,
      and the 100-row pages are read in parallel behind them, the list swapping
@@ -402,7 +418,7 @@ export default function JobOpeningPickerList({
     <>
     <div>
       {/* Job Search */}
-      <div className="mb-4">
+      <div className={layout === 'page' ? 'hidden' : 'mb-4'}>
         <label className="block tf-label mb-2">Search Jobs</label>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -425,7 +441,49 @@ export default function JobOpeningPickerList({
         {/* flex-wrap: on a phone the heading keeps its width and the
             "1 selected · Clear Selection" pair drops to the next line,
             instead of squeezing the heading into a word-per-line column. */}
-        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-3">
+        {layout === 'page' && (
+          /* Page layout: heading + count left, Search Jobs right — one line
+             from md, stacked on phones. Same words as the default layout. */
+          <div className="mb-3 flex flex-col gap-2 border-b border-[var(--border)] pb-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-[var(--text-primary)]">Select a Job Opening</span>
+              {sortedJobs.length > 0 && !loadingJobs && (
+                <span className="tf-stat-chip tf-stat-chip-info !py-0 tabular-nums">
+                  {sortedJobs.length} {excludeDraftsOnly ? `job${sortedJobs.length === 1 ? '' : 's'}` : 'available'}
+                </span>
+              )}
+              {loadingJobs && (
+                <span className="inline-flex items-center gap-1 tf-meta">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading jobs...
+                </span>
+              )}
+              {selection && (
+                <span className="flex items-center gap-2">
+                  <span className="tf-badge text-brand-blue bg-brand-blue/10">1 selected</span>
+                  <button onClick={() => onSelectionChange(null)} className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium whitespace-nowrap">
+                    Clear Selection
+                  </button>
+                </span>
+              )}
+            </div>
+            {/* "Search Jobs" sits to the left of the search box, on one row. */}
+            <label className="flex w-full items-center gap-2 md:w-[25rem] lg:w-[29rem]">
+              <span className="tf-meta shrink-0 whitespace-nowrap !font-semibold !text-[var(--text-primary)]">Search Jobs</span>
+              <span className="relative min-w-0 flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search by JD number, role, department or location..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="tf-input pl-10 pr-4"
+                />
+              </span>
+            </label>
+          </div>
+        )}
+        <div className={layout === 'page' ? 'hidden' : 'flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-3'}>
           <label className="min-w-0 tf-label">
             Select a Job Opening
             {/* The published-job count — the Job Openings page's own
@@ -517,16 +575,18 @@ export default function JobOpeningPickerList({
                  latest one that's actually published, if the true latest is
                  a draft), so every row reaching this point is already
                  eligible to be picked directly. */
+              /* Another job is picked: this card is greyed out to keep the
+                 eye on the pick, but it stays clickable — picking it simply
+                 switches the selection (2026-11-17). Before, it was inert and
+                 the recruiter had to Clear Selection first. */
               const blockedByOtherPick = !!selection && !lineageSelected;
               /* `excludeDraftsOnly` lists Disabled / Archived jobs too; those
                  are shown but cannot be picked from their card. */
               const inactiveJob = excludeDraftsOnly && job.status !== 'Published';
-              const selectable = !blockedByOtherPick && !inactiveJob;
+              const selectable = !inactiveJob;
               const reason = inactiveJob
                 ? `This job is ${String(job.status).toLowerCase()} — it can't be selected`
-                : blockedByOtherPick
-                  ? 'Only one job can be picked at a time — clear the current selection to choose this one'
-                  : undefined;
+                : undefined;
 
               /* Every version in this lineage, not just the published one
                  represented here — what Version History below lists,
@@ -580,11 +640,13 @@ export default function JobOpeningPickerList({
                   /* A row the user can't pick — another job is already
                      chosen — stays visible but inert, with the reason in
                      the title attribute. */
-                  title={selectable ? undefined : reason}
+                  title={selectable ? (blockedByOtherPick ? 'Pick this job instead' : undefined) : reason}
                   aria-disabled={!selectable}
                   className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${
-                    blockedByOtherPick || inactiveJob
+                    inactiveJob
                       ? `bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 ${blockedByOtherPick ? 'opacity-60' : ''}`
+                      : blockedByOtherPick
+                        ? 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 opacity-60 hover:opacity-100 hover:border-brand-blue/30 hover:bg-white dark:hover:bg-slate-900'
                       : lineageSelected
                         ? 'bg-brand-blue/5 border-brand-blue/40 shadow-sm shadow-brand-blue/10'
                         : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
@@ -795,7 +857,9 @@ export default function JobOpeningPickerList({
                          block through — never anything about THIS card's own
                          status, which `listedJobs` already guarantees is
                          Published. */
-                      selectionDisabled={blockedByOtherPick}
+                      /* Another job being picked no longer blocks these:
+                         choosing a version here switches the pick. */
+                      selectionDisabled={false}
                       selectionDisabledReason={reason}
                       radioGroupName={radioGroupName}
                       publishedOnly

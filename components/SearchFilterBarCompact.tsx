@@ -90,6 +90,8 @@ interface SearchFilterBarProps {
    *  of the filter panel below lg). Defaults to `getResumeFilterChips`; a page
    *  with extra filters of its own passes the full list. */
   filterChips?: FilterChip[];
+  /** Rendered right after the search box (e.g. the Resume Database's Versions dropdown). */
+  afterSearch?: React.ReactNode;
 }
 
 export default function SearchFilterBarCompact({
@@ -100,6 +102,7 @@ export default function SearchFilterBarCompact({
   sortBy,
   onSortChange,
   hideSearch = false,
+  afterSearch,
   inline = false,
   showClearAllFilters = true,
   filterChips,
@@ -279,6 +282,7 @@ export default function SearchFilterBarCompact({
         ) : !inline ? (
           <div className="hidden sm:block flex-1" />
         ) : null}
+        {afterSearch}
 
         {/* Filter Button */}
         <div className="relative flex items-center gap-2" ref={filterPanelRef}>

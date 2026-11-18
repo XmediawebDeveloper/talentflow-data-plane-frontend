@@ -1237,8 +1237,8 @@ export default function DashboardPage() {
           </SectionShell>
         </div> */}
 
-        {/* ── JD ACTIVITY (only if backend returned any) ── */}
-        {jdActivity.length > 0 && (
+        {/* ── JD ACTIVITY ── hidden: the dashboard shows only the banner + Quick Access ── */}
+        {false && jdActivity.length > 0 && (
           <SectionShell
             eyebrow="Jobs"
             title="Recent JD updates"

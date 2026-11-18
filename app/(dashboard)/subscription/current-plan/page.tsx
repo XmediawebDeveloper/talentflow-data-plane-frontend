@@ -1474,6 +1474,16 @@ function CurrentPlanContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [purchaseHold]);
 
+  // A plan bought directly from the company was activated by the Control Plane
+  // (websocket 'plan_updated' -> window 'plan-updated'): show it without a reload.
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
+  useEffect(() => {
+    const onPlanUpdated = async () => { await fetchDataRef.current(await refetchQuota()); };
+    window.addEventListener('plan-updated', onPlanUpdated);
+    return () => window.removeEventListener('plan-updated', onPlanUpdated);
+  }, [refetchQuota]);
+
   // Auto-select plan from URL parameter (from pricing page flow)
   useEffect(() => {
     if (encodedPlanFromUrl && plans.length > 0 && !selectedPlanForPayment) {
@@ -2958,14 +2968,18 @@ function CurrentPlanContent() {
                 return (
                   <div
                     key={plan.id}
-                    className={`relative flex flex-col rounded-xl p-4 sm:p-5 transition-all duration-300 ease-out ${
+                    /* Subgrid: the card's 6 sections (name, description, price,
+                       limits, features, button) each sit on a row shared with
+                       every card beside it, so they line up across cards even
+                       when one card's price or features run longer. */
+                    className={`relative grid grid-rows-subgrid row-span-6 gap-0 rounded-xl p-4 sm:p-5 transition-[box-shadow] duration-300 ease-out ${
                       isSelectedPending
                         ? 'border-2 border-warning-line bg-white shadow-lg shadow-warning/20 hover:shadow-xl hover:shadow-warning/30 dark:bg-slate-900'
                         : isCurrentForToggle
                           ? 'border-2 border-success bg-gradient-to-b from-success/[0.06] to-white shadow-lg shadow-success/20 hover:shadow-xl hover:shadow-success/30 dark:from-success/15 dark:to-slate-900 dark:shadow-success/10'
                           : plan.popular
-                            ? 'border-2 border-brand-blue bg-white shadow-lg shadow-brand-blue/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-blue/30 dark:bg-slate-900 dark:shadow-brand-blue/20'
-                            : 'border border-gray-200 bg-white shadow-md shadow-slate-200/70 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-300/60 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:shadow-black/50'
+                            ? 'border-2 border-brand-blue bg-white shadow-lg shadow-brand-blue/20 hover:shadow-2xl hover:shadow-brand-blue/30 dark:bg-slate-900 dark:shadow-brand-blue/20'
+                            : 'border border-gray-200 bg-white shadow-md shadow-slate-200/70 hover:shadow-xl hover:shadow-slate-300/60 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:shadow-black/50'
                     }`}
                   >
                     {isSelectedPending && (
@@ -3062,7 +3076,7 @@ function CurrentPlanContent() {
                         ? (plan.annualQuotas || plan.quotas)
                         : (plan.monthlyQuotas || plan.quotas);
 
-                      if (!rawQuotas) return null;
+                      if (!rawQuotas) return <div />;
 
                       // Normalize quota values to handle different API property names
                       const displayQuotas = {
@@ -3081,20 +3095,23 @@ function CurrentPlanContent() {
                         { label: 'Resume Scores', value: displayQuotas.RS },
                         { label: 'Assessments', value: displayQuotas.AS },
                         { label: 'AI Interviews', value: displayQuotas.AIU },
-                      ].filter(row => row.value != null && formatQuotaValue(row.value) !== '-');
+                      ];
 
-                      if (quotaRows.length === 0) return null;
+                      // Every card lists the same rows in the same order so they
+                      // line up side by side; a missing limit reads as "—".
+                      if (quotaRows.every(row => row.value == null || formatQuotaValue(row.value) === '-')) return <div />;
 
                       return (
                         <div className={`mb-4 space-y-2 rounded-lg px-3 py-2.5 text-sm ${
                           isCurrentForToggle ? 'bg-brand-blue/[0.06] dark:bg-slate-800/70' : 'bg-gray-50 dark:bg-slate-800/50'
                         }`}>
                           {quotaRows.map(row => {
-                            const formatted = formatQuotaValue(row.value);
+                            const raw = row.value == null ? '-' : formatQuotaValue(row.value);
+                            const formatted = raw === '-' ? '—' : raw;
                             return (
                               <div key={row.label} className="flex items-center justify-between gap-2">
                                 <span className="text-gray-500 dark:text-slate-400">{row.label}</span>
-                                <span className={`font-semibold ${formatted === 'Unlimited' ? 'text-brand-teal' : 'text-gray-900 dark:text-slate-50'}`}>{formatted}</span>
+                                <span className={`font-semibold ${formatted === 'Unlimited' ? 'text-brand-teal' : formatted === '—' ? 'text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{formatted}</span>
                               </div>
                             );
                           })}
@@ -3107,8 +3124,9 @@ function CurrentPlanContent() {
                       const displayFeatures = isYearly
                         ? (plan.annualFeatures?.length ? plan.annualFeatures : plan.features)
                         : (plan.monthlyFeatures?.length ? plan.monthlyFeatures : plan.features);
-                      return displayFeatures.length > 0 && (
-                        <div className="mb-5">
+                      if (displayFeatures.length === 0) return <div />;
+                      return (
+                        <div className="mb-5 self-start">
                           <ul className="space-y-1.5">
                             {displayFeatures.slice(0, expandedFeaturesPlan === plan.id ? undefined : 4).map((feature, idx) => (
                               <li key={idx} className="flex items-start gap-2">
@@ -3134,12 +3152,9 @@ function CurrentPlanContent() {
                       );
                     })()}
 
-                    {/* Spacer to push button to bottom */}
-                    <div className="flex-grow" />
-
                     {/* Native-disabled button: the permission tooltip sits on a wrapper. */}
                     <span
-                      className="mt-auto block w-full"
+                      className="block w-full self-end"
                       title={planChangeLocked && !isCurrentForToggle ? 'You do not have permission to change the subscription plan' : undefined}
                     >
                     <button

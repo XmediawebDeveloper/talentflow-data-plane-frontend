@@ -1133,4 +1133,36 @@ export async function archiveResumeToArchivedFolder(
   return folderId;
 }
 
+/**
+ * Unarchive resumes the same way as My Resumes: clear the flag and put each one
+ * back in the folder it was archived from (remembered by
+ * archiveResumeToArchivedFolder), else in Root. Each resume is done on its own
+ * so one failure doesn't stop the rest. Returns which ids succeeded / failed and
+ * how many went back to their original folder (the rest went to Root).
+ */
+export async function unarchiveResumesToPreviousFolder(
+  resumeIds: string[],
+  opts: { rootFolderId: string; archivedFolderId?: string; validFolderIds: Set<string> },
+): Promise<{ succeeded: string[]; failed: string[]; restoredToOriginal: number }> {
+  let stash: Record<string, string> = {};
+  try { stash = JSON.parse(localStorage.getItem(ARCHIVED_PREV_FOLDER_KEY) || '{}'); } catch { stash = {}; }
+  const targetFor = (id: string) => {
+    const prev = stash[id];
+    return prev && opts.validFolderIds.has(prev) && prev !== opts.archivedFolderId ? prev : opts.rootFolderId;
+  };
+  const results = await Promise.allSettled(resumeIds.map(async (id) => {
+    // skipAudit on the move: the archive call itself logs "Resume unarchived".
+    await resumeService.archive(id, false);
+    await resumeService.move(id, targetFor(id), true);
+  }));
+  const succeeded = resumeIds.filter((_, i) => results[i].status === 'fulfilled');
+  const failed = resumeIds.filter((_, i) => results[i].status === 'rejected');
+  const restoredToOriginal = succeeded.filter((id) => targetFor(id) !== opts.rootFolderId).length;
+  try {
+    succeeded.forEach((id) => { delete stash[id]; });
+    localStorage.setItem(ARCHIVED_PREV_FOLDER_KEY, JSON.stringify(stash));
+  } catch { /* best-effort cleanup */ }
+  return { succeeded, failed, restoredToOriginal };
+}
+
 export default resumeService;

@@ -54,7 +54,7 @@ export const inviteStateOf = (j: TrackedBulkInvite): { label: string; tone: 'run
 
 export default function BulkInviteProgressIndicator() {
   const {
-    jobs, inPopupIds, openResultsFor, openResultsTab, setOpenResultsFor, widget, setWidget, setIconShown,
+    jobs, inPopupIds, openResultsFor, openResultsTab, openResultsBack, setOpenResultsFor, widget, setWidget, setIconShown,
   } = useBulkInviteProgress();
 
   // Sends in the background: not removed, and not shown in their own popup.
@@ -92,14 +92,28 @@ export default function BulkInviteProgressIndicator() {
       const outcome = `${sent} sent${skipped ? ` · ${skipped} skipped` : ''}${cancelledN ? ` · ${cancelledN} cancelled` : ''}${failed ? ` · ${failed} failed` : ''}`;
       const clean = !failed && finished.every((j) => j.status === 'done');
       const show = clean ? toast.success : toast.warning;
-      if (finished.length === 1) {
-        const j = finished[0];
-        const v = inviteVersionOf(j);
-        const what = `${inviteKindLabel(j)}${v ? ` V${v}` : ''}${j.jdCode ? ` · ${j.jdCode}` : ''}`;
-        const st = inviteStateOf(j).label;
-        show(`${what}: ${j.status === 'done' ? (j.mode === 'resend' ? 'new links sent' : 'invitations sent') : st.toLowerCase()}`, {
-          description: j.status === 'paused' ? (j.paused_reason || outcome) : outcome,
-          action: { label: 'View', onClick: () => setOpenResultsFor(j.job_id, j.failed > 0 ? 'failed' : 'all') },
+      /* Up to 3 sends: one toast each, named like
+         "<JD ID> <job title> v<JD version> — AI Assessment V<version> sent successfully". */
+      if (finished.length <= 3) {
+        finished.forEach((j) => {
+          const v = inviteVersionOf(j);
+          const jdVersion = j.jobVersion ?? j.job_version;
+          const subject = [j.jdCode ?? j.jd_code, j.jdTitle || j.jd_title, jdVersion ? `v${jdVersion}` : ''].filter(Boolean).join(' ');
+          const what = `${j.kind === 'assessment' ? 'AI Assessment' : 'AI Interview'}${v ? ` V${v}` : ''}`;
+          const one = `${j.sent} ${j.mode === 'resend' ? 'new link' : 'invited'}${j.mode === 'resend' && j.sent !== 1 ? 's' : ''}`
+            + `${j.skipped ? ` · ${j.skipped} skipped` : ''}${j.cancelled ? ` · ${j.cancelled} cancelled` : ''}${j.failed ? ` · ${j.failed} failed` : ''}`;
+          const ok = j.status === 'done' && !j.failed;
+          const result = j.status === 'done'
+            ? (j.failed ? `sent, ${j.failed} failed` : j.mode === 'resend' ? 'new links sent successfully' : 'sent successfully')
+            : inviteStateOf(j).label.toLowerCase();
+          (ok ? toast.success : j.sent === 0 && j.status !== 'cancelled' ? toast.error : toast.warning)(
+            `${subject ? `${subject} — ` : ''}${what} ${result}`,
+            {
+              description: j.status === 'paused' ? (j.paused_reason || one) : one,
+              duration: ok ? 8000 : 10000,
+              action: { label: 'View', onClick: () => setOpenResultsFor(j.job_id, j.failed > 0 ? 'failed' : 'all') },
+            },
+          );
         });
       } else {
         show(`${finished.length} batches finished`, {
@@ -123,6 +137,8 @@ export default function BulkInviteProgressIndicator() {
       // Close: back to the dock's list. Minimize: down to its round button.
       onClose={() => { setOpenResultsFor(null); setWidget('mini'); }}
       onMinimize={() => { setOpenResultsFor(null); setWidget('icon'); }}
+      onBack={openResultsBack ? () => { setOpenResultsFor(null); openResultsBack(); } : undefined}
+      backLabel="Back to Overall Activity"
     />
   ) : null;
 }

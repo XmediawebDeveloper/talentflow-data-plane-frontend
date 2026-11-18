@@ -42,6 +42,8 @@ import { rememberScoringOrigin } from '@/lib/utils/resumeActivityTrail';
 import { useInPageScoringProgress } from '@/components/resumes/useInPageScoringProgress';
 import ScoringStartSummary, { type ScoringStartRequest } from '@/components/resumes/ScoringStartSummary';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { getResumeFilterChips } from '@/components/SearchFilterBarCompact';
+import { type ResumeVersionFilter, keepByVersion, versionFilterChips, ResumeVersionFilterSelect } from '@/components/resumes/resumeVersionFilter';
 import { usePagedList } from '@/lib/hooks/usePagedList';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { NoMatchingResumesState, NoResumesYetState } from '@/components/resumes/ResumeEmptyStates';
@@ -199,6 +201,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const appliedSearchQuery = search.appliedQuery;
   const filters = search.filters as SearchFilters;
   const [sortBy, setSortBy] = useState('latest');
+  const [versionFilter, setVersionFilter] = useState<ResumeVersionFilter>('all');
+  /* Header badge: the whole Shared Database, never the filtered view. */
+  const [libraryTotal, setLibraryTotal] = useState<number | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -210,8 +215,15 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
      "any keyword" rule via search_mode=any). This used to page through the
      WHOLE database (fetchAllRows) and slice it in the browser. */
   const listQuery = useMemo(
-    () => buildInternalDbQuery(filters, appliedSearchQuery, sortBy, currentPage, pageSize),
-    [filters, appliedSearchQuery, sortBy, currentPage, pageSize],
+    () => ({
+      ...buildInternalDbQuery(filters, appliedSearchQuery, sortBy, currentPage, pageSize),
+      /* Client-side keys (stripped before the request): the Versions choice,
+         and whether nothing narrows the list (its total = the library's). */
+      version_filter: versionFilter,
+      unfiltered: !appliedSearchQuery && versionFilter === 'all'
+        && Object.values(filters).every((v) => v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)),
+    }),
+    [filters, appliedSearchQuery, sortBy, currentPage, pageSize, versionFilter],
   );
   const [totalIncludingVersions, setTotalIncludingVersions] = useState<number | undefined>(
     lastTotalIncludingVersions,
@@ -220,19 +232,35 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     name: 'resumes:internal-db',
     query: listQuery,
     fetchPage: async (q) => {
-      const res = await resumeService.list(q);
+      const { version_filter, unfiltered, ...apiQuery } = q as InternalDbQuery & { version_filter: ResumeVersionFilter; unfiltered: boolean };
       // A whole-pool figure (the server ignores search/filters for it), so one
       // value is enough; kept at module level so a remount served from the
       // list cache still has it.
-      if (typeof res.total_including_versions === 'number') {
-        lastTotalIncludingVersions = res.total_including_versions;
-        setTotalIncludingVersions(res.total_including_versions);
+      const noteVersions = (n: unknown) => {
+        if (typeof n === 'number') {
+          lastTotalIncludingVersions = n;
+          setTotalIncludingVersions(n);
+        }
+      };
+      if (version_filter === 'all') {
+        const res = await resumeService.list(apiQuery);
+        noteVersions(res.total_including_versions);
+        if (unfiltered) setLibraryTotal(res.total);
+        return { items: res.items, total: res.total };
       }
-      return { items: res.items, total: res.total };
+      /* Versions filter: every matching row, kept on `version_count`, then
+         this page sliced out — the total is the filtered set's. */
+      const { page, page_size, ...rest } = apiQuery;
+      const all = await fetchAllRows((ps, pg) => resumeService.list({ ...rest, page: pg, page_size: ps }));
+      noteVersions(all.total_including_versions);
+      const kept = keepByVersion(all.items || [], version_filter);
+      const start = (page - 1) * page_size;
+      return { items: kept.slice(start, start + page_size), total: kept.length };
     },
   });
   const resumes: Resume[] = useMemo(() => paged.items.map(toListRow), [paged.items]);
   const totalResumes = paged.total;
+  const headerTotal = libraryTotal ?? totalResumes;
   const loading = paged.loading || paged.refreshing;
   const refreshList = paged.refresh;
 
@@ -324,7 +352,18 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     if (initialLoadDone.current) {
       setCurrentPage(1);
     }
-  }, [appliedSearchQuery, filters]);
+  }, [appliedSearchQuery, filters, versionFilter]);
+
+  /* The library's own count for the header badge, read once on landing (the
+     list may open already filtered); unfiltered list loads keep it current. */
+  useEffect(() => {
+    resumeService.stats({ source: 'internal-db', include_folders: false })
+      .then((s) => {
+        const n = s.sources?.['internal-db'] ?? s.all_total;
+        if (typeof n === 'number') setLibraryTotal((prev) => prev ?? n);
+      })
+      .catch(() => {});
+  }, []);
 
   // Handle search change from SearchFilterBarCompact (already debounced)
   // The hook holds the typed value and debounces it into `appliedSearchQuery`,
@@ -366,6 +405,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     if (version) {
       try {
         await resumeService.delete(version.id, { onlyThisVersion: true });
+        // Clear the acted-on row from the selection (hides the bulk bar when it
+        // was the only pick); the list refreshes via usePagedList's invalidation.
+        setSelectedResumes(prev => prev.filter(r => !ids.includes(r)));
         toast.success(`Version ${version.version} deleted`);
       } catch {
         toast.error(`Couldn't delete version ${version.version}. Please try again.`);
@@ -1014,12 +1056,14 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 {/* The same rows the table lists (search applied). The
                     versions note is a server total for the whole list, so it
                     only shows while no search is narrowing it. */}
-                {totalResumes.toLocaleString()} Resumes
-                {!appliedSearchQuery && typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalResumes && (
+                {/* Standard: the whole Shared Database, never the filtered view —
+                    search, filters and Versions narrow the list, not this badge. */}
+                {headerTotal.toLocaleString()} Resumes
+                {typeof totalIncludingVersions === 'number' && totalIncludingVersions > headerTotal && (
                   <span
-                    title={`${totalResumes.toLocaleString()} resumes + ${(totalIncludingVersions - totalResumes).toLocaleString()} older versions = ${totalIncludingVersions.toLocaleString()} stored (counted in Resume Storage)`}
+                    title={`${headerTotal.toLocaleString()} resumes + ${(totalIncludingVersions - headerTotal).toLocaleString()} older versions = ${totalIncludingVersions.toLocaleString()} stored (counted in Resume Storage)`}
                   >
-                    {' '}(+{(totalIncludingVersions - totalResumes).toLocaleString()} {totalIncludingVersions - totalResumes === 1 ? 'version' : 'versions'})
+                    {' '}(+{(totalIncludingVersions - headerTotal).toLocaleString()} {totalIncludingVersions - headerTotal === 1 ? 'version' : 'versions'})
                   </span>
                 )}
               </span>
@@ -1082,6 +1126,15 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             onFiltersChange={(next: SearchFilters) => search.setFilters(next as Record<string, unknown>)}
             sortBy={sortBy}
             onSortChange={setSortBy}
+            /* Versions dropdown right after the search box; its choice is a
+               filter tag, so the badge counts it and Reset clears it. */
+            afterSearch={
+              <ResumeVersionFilterSelect compact value={versionFilter} onChange={(v) => { setVersionFilter(v); setCurrentPage(1); }} />
+            }
+            filterChips={[
+              ...versionFilterChips(versionFilter, () => { setVersionFilter('all'); setCurrentPage(1); }),
+              ...getResumeFilterChips(filters, (next: SearchFilters) => search.setFilters(next as Record<string, unknown>)),
+            ]}
           />
         </div>
 
@@ -1094,7 +1147,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         )}
 
         {/* Search Results Summary */}
-        {(appliedSearchQuery || activeFilterCount > 0) && !loading && (
+        {(appliedSearchQuery || activeFilterCount > 0 || versionFilter !== 'all') && !loading && (
           <div className="py-3 border-b border-gray-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-brand-blue" />
@@ -1105,10 +1158,10 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 )}
               </span>
             </div>
-            {(appliedSearchQuery || activeFilterCount > 0) && (
+            {(appliedSearchQuery || activeFilterCount > 0 || versionFilter !== 'all') && (
               <button
-                // One reset for the query and every filter.
-                onClick={search.reset}
+                // One reset for the query, every filter and the Versions choice.
+                onClick={() => { search.reset(); setVersionFilter('all'); }}
                 className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:underline"
               >
                 Clear all filters

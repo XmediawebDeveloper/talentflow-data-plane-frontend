@@ -17,6 +17,7 @@ import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import { ResumeArchivedBadge } from './ui/resume-archived-badge';
 import { TeamMemberEmailBadge } from './ui/team-member-badge';
 import Pagination from './Pagination';
+import ListPagination from './ListPagination';
 import { usePagination } from '@/lib/hooks/usePagination';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import VersionEyeBadge from '@/components/ui/version-eye-badge';
@@ -254,6 +255,10 @@ interface ResumeTableProps {
   onUnarchiveDisabled?: boolean;
   onUnarchiveDisabledReason?: string;
   disablePagination?: boolean;
+  /** 'list': the Job Openings pager (Show N per page · Showing x to y of z ·
+   *  Go to · ‹ n / m ›, 5/10/20/40/100) instead of the default Pagination.
+   *  Opt-in — the My Resumes / Resume Database pages keep theirs. */
+  paginationStyle?: 'default' | 'list';
   isArchivedFolder?: boolean;
   archivedFolderId?: string;
   canShare?: boolean;
@@ -354,6 +359,7 @@ export default function ResumeTable({
   onUnarchiveDisabled,
   onUnarchiveDisabledReason,
   disablePagination = false,
+  paginationStyle = 'default',
   isArchivedFolder = false,
   archivedFolderId,
   canShare = false,
@@ -585,7 +591,7 @@ export default function ResumeTable({
     totalItems,
     startIndex,
     endIndex,
-  } = usePagination({ items: orderedResumes, initialItemsPerPage: 25 });
+  } = usePagination({ items: orderedResumes, initialItemsPerPage: paginationStyle === 'list' ? 20 : 25 });
 
   /* Keep the current page inside the row set. `usePagination` holds the page
      number on its own and never re-clamps it when `items` shrinks, so
@@ -1247,7 +1253,23 @@ export default function ResumeTable({
         })}
       </div>
 
-      {!disablePagination && totalPages > 1 && (
+      {!disablePagination && paginationStyle === 'list' && totalItems > 5 && (
+        <div className="mt-2 flex-shrink-0">
+          {/* compact: 'list' is only used inside the Select Applicants to Score
+              popup, where the full-size bar took too much of the dialog. */}
+          <ListPagination
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={totalItems}
+            onPageChange={goToPage}
+            onItemsPerPageChange={changeItemsPerPage}
+            itemLabel="resumes"
+            alwaysShow
+            compact
+          />
+        </div>
+      )}
+      {!disablePagination && paginationStyle !== 'list' && totalPages > 1 && (
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
