@@ -12,7 +12,7 @@ import { dispatchAccessRestrictedEvent } from '@/lib/services/api';
 const WS_CLOSE_ACCOUNT_INACTIVE = 4403;
 
 interface WebSocketMessage {
-  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated' | 'plan_change_pending' | 'company_profile_updated' | 'access_restricted';
+  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated' | 'plan_change_pending' | 'company_profile_updated' | 'access_restricted' | 'plan_updated';
   data?: any;
 }
 
@@ -233,6 +233,12 @@ export function useNotificationWebSocket({
               case 'plan_change_pending':
                 console.log('[WebSocket] Plan change pending - dispatching event');
                 window.dispatchEvent(new CustomEvent('plan-change-pending', { detail: message.data }));
+                break;
+
+              case 'plan_updated':
+                // A plan bought directly from the company was activated by the Control Plane.
+                console.log('[WebSocket] Plan updated - dispatching event');
+                window.dispatchEvent(new CustomEvent('plan-updated', { detail: message.data }));
                 break;
 
               case 'company_profile_updated':

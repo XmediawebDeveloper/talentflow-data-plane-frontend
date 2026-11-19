@@ -59,6 +59,7 @@ import { rememberScoringOrigin } from '@/lib/utils/resumeActivityTrail';
 import { useInPageScoringProgress } from '@/components/resumes/useInPageScoringProgress';
 import ScoringStartSummary, { type ScoringStartRequest } from '@/components/resumes/ScoringStartSummary';
 import { NoFoldersState, NoFoldersMatchState, NoMatchingResumesState } from '@/components/resumes/ResumeEmptyStates';
+import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
 
 const formatDateIST = formatISTDate;
 
@@ -914,7 +915,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   // my_resumes:update isn't a role-editor code; Resume Upload Access (my_resumes:upload)
   // covers folder rename / move too (2026-11-10).
   const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload');
-  const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
+  const canDeleteMyResumes = canDeleteResumes(isTenantAdmin);
   const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
   // Viewing isn't downloading (2026-11-10): own uploads need Resume Upload access.
@@ -1492,13 +1493,31 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         };
       };
 
+      /* Landing: the folder-badge reconcile below needs GET /resumes/stats,
+         and used to ask for it only after the list + folders came back — a
+         second round trip on every open. Start it now, beside them (not
+         awaited); reconcileFolderCounts' own call then picks up this response
+         through the api client's GET sharing. Only before the first reconcile:
+         later fetches on an unchanged tree skip the reconcile anyway. */
+      if (
+        !lastReconciledRef.current
+        && versionFilter === 'all'
+        && Object.keys(searchParams).every(key => BASE_SEARCH_PARAM_KEYS.includes(key))
+      ) {
+        fetchMyResumeStats().catch(() => {});
+      }
+
       const [resumeResponse, folderResponse] = await Promise.all([
         listResumes(),
         // Same Uploaded By value the resume list was just sent — so a
         // folder's badge always matches what opening that folder under the
         // same filter actually lists (see folderService.list's own note).
+        // Folder / page / sort / search clicks (the params effect, `dedupe`)
+        // change no folder, so they reuse a tree read in the last 30s instead
+        // of re-reading /folders on every click. Writes always re-read.
         folderService.list(
           searchParams.uploaded_by_name ? { uploaded_by_name: searchParams.uploaded_by_name } : undefined,
+          opts?.dedupe ? { reuseMs: 30_000 } : undefined,
         ).catch(() => []),
       ]);
 
@@ -1919,19 +1938,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     const movedFrom = resumeIds
       .map(id => resumes.find(r => r.id === id)?.folderId)
       .filter((id): id is string => !!id);
-    /* Which folder this move might empty, and what it held before the move.
-       Read here, off the pre-move state: `setFolders` below queues a patch, it
-       does not update `folders` in this closure.
-
-       The folder on screen, deliberately — not "wherever the rows came from".
-       A selection can span folders (handleSelectAll keeps picks made in other
-       folders), and the rule is about the view the user would otherwise be
-       left staring at. */
-    const sourceFolderId = getViewedFolderId();
-    const sourceCountBefore =
-      sourceFolderId && sourceFolderId !== folderId
-        ? getFolderById(sourceFolderId)?.count
-        : undefined;
+    // The folder on screen before the move (null for an aggregate view).
+    const viewedBefore = getViewedFolderId();
     try {
       await Promise.all(resumeIds.map(id => resumeService.move(id, folderId)));
       setResumes(prev => prev.map(r =>
@@ -1966,38 +1974,18 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       setSelectedResumes([]);
       toast.success(`${resumeIds.length} resume(s) moved`);
 
-      /* Where the user ends up. Driven by what the SOURCE folder has left, not
-         by which folder was the destination — so it reads the same for the
-         root folder, Archived Resumes, or any folder a customer made.
-
-         Emptied it: follow the resumes into the destination rather than leave
-         the user on a folder with nothing in it. Setting the folder is enough
-         to load it — the params effect refetches on `selectedFolder`, which is
-         what puts the moved rows on screen.
-
-         Still holds resumes: hold position and refresh, so the moved rows drop
-         out of the list. The refresh is not optional in list view — it renders
-         the server page as-is, so a moved row keeps its seat until the next
-         fetch. (Card view filters by `folderId` and drops it immediately, but
-         it still needs the fetch for the page count.)
-
-         `undefined` count means the source folder isn't known here — an
-         aggregate view, a move back into the same folder, or a folder missing
-         from state. Nothing to empty, so nothing to do. */
-      const sourceRemaining =
-        sourceCountBefore === undefined
-          ? undefined
-          : Math.max(0, sourceCountBefore - (leaving.get(sourceFolderId!) || 0));
-
-      if (sourceRemaining === 0) {
-        if (viewMode === 'card') {
-          navigateToFolder(folderId);
-        } else {
-          setSelectedFolder(folderId);
-          setCurrentPage(1);
-        }
-      } else if (sourceRemaining !== undefined) {
+      /* Where the user ends up: always the destination folder, opened on its
+         first page, so the user sees the resumes they just moved there.
+         Setting the folder is enough to load it — the params effect refetches
+         on `selectedFolder`. Already looking at the destination (a move into
+         the folder on screen): stay and refresh so the list shows them. */
+      if (viewedBefore === folderId) {
         fetchData(appliedSearchQuery, filters, selectedFolder, true);
+      } else if (viewMode === 'card') {
+        navigateToFolder(folderId);
+      } else {
+        setSelectedFolder(folderId);
+        setCurrentPage(1);
       }
     } catch (error) {
       toast.error('Failed to move resumes');
@@ -3276,7 +3264,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onDeleteDisabled={!canDeleteMyResumes}
-            onDeleteDisabledReason="You do not have permission to delete resumes"
+            onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
             folders={folders.filter(f => f.id !== 'all')}
             onAssessment={!isArchivedContext ? handleAssessment : undefined}
             onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment')))}
@@ -3513,7 +3501,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onDelete={(id) => handleDelete(id)}
                   onDeleteDisabled={!canDeleteMyResumes}
                   canDownload={canDownloadMyResumes}
-                  onDeleteDisabledReason="You do not have permission to delete resumes"
+                  onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
                   onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                   onViewDetails={(resume) => {
@@ -4058,7 +4046,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
                             onDelete={(id) => handleDelete(id)}
                             onDeleteDisabled={!canDeleteMyResumes}
-                            onDeleteDisabledReason="You do not have permission to delete resumes"
+                            onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
                             onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                             onViewDetails={(resume) => {

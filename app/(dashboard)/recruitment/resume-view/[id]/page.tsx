@@ -243,6 +243,7 @@ import {
   resumeDatabaseTabHref,
   type ResumeTab,
 } from '@/lib/constants/resumePools';
+import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
 
 /** Create / Send button when the user lacks the permission: shown, greyed, hover explains. */
 const PERMISSION_LOCKED_BUTTON_CLASS =
@@ -460,11 +461,9 @@ export default function ResumeViewPage() {
     own: !!uploaderId && uploaderId === String(user?.id ?? ''),
     fromAiMatch,
   });
-  const canDeleteResume = !isTenantUserEmailResume && (isTenantAdmin || (
-    sharedPool
-      ? hasPermissionCode('internal_db:delete')
-      : hasPermission('canDeleteResumes') || hasPermissionCode('my_resumes:delete')
-  ));
+  // Account owner only (2026-11-19): deleting erases the resume's Resume
+  // Scoring and AI Talent Match results, so no role can be given Delete.
+  const canDeleteResume = !isTenantUserEmailResume && canDeleteResumes(isTenantAdmin);
   // An archived resume is off-limits for every action below (Score, AI Talent
   // Match, Invite) — it can still be viewed, downloaded, shared and deleted,
   // same as the Resume Database list's own rule (ResumeTable.tsx / MyResumesView.tsx).
@@ -978,7 +977,7 @@ Best regards`);
       variant: 'delete',
       confirmText: 'Delete Resume',
       item: { label: 'RESUME', name: getCandidateName() },
-      warningNote: 'Deleting this resume will permanently remove it and cannot be restored.',
+      warningNote: "Deleting this resume will permanently remove it and cannot be restored. Its Resume Scoring and AI Talent Match results are deleted too (only the candidate's name and email stay there). Assessments and AI Interviews are kept.",
     })) {
       try {
         await resumeService.delete(resumeId);
@@ -1739,7 +1738,7 @@ Best regards`);
                       <button
                         onClick={() => { if (!canDeleteResume) return; handleDelete(); }}
                         aria-disabled={!canDeleteResume}
-                        title={isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : !canDeleteResume ? 'You do not have permission to delete resumes' : undefined}
+                        title={isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : !canDeleteResume ? RESUME_DELETE_OWNER_ONLY_REASON : undefined}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm ${
                           canDeleteResume
                             ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300'

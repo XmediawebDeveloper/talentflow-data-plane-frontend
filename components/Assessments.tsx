@@ -80,8 +80,8 @@ import TabEmptyState from '@/components/ui/tab-empty-state';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterSelect from '@/components/ui/filter-select';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import type { AssessmentAttemptResponse } from '@/lib/services/assessmentService';
-import { isAssessmentArchived } from '@/lib/services/assessmentService';
+import type { AssessmentAttemptResponse, InvitationStatusStats, InvitationStatusPageQuery } from '@/lib/services/assessmentService';
+import { isAssessmentArchived, ASSESSMENT_PAGE_INCLUDE } from '@/lib/services/assessmentService';
 
 import { Job } from '@/lib/types/types';
 import { assessmentService } from '@/lib/services';
@@ -1627,6 +1627,30 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      on the whole selection rather than the page in front of you. It is dropped
      on a reload, where those ids may no longer exist. */
   const [selectedInviteIds, setSelectedInviteIds] = useState<Set<string>>(new Set());
+
+  /* Server-paged mode (GET /assessments/all-invitations?view=status). Non-null
+     stats = the server answered: `inviteStatusRows` then holds ONE page, the
+     chips read these counts (whole set), and `inviteServerTotal` is the
+     filtered total. Null = the browser still holds every row (an older
+     backend, or before the first answer), and everything below works as it
+     always did. */
+  const [inviteServerStats, setInviteServerStats] = useState<InvitationStatusStats | null>(null);
+  const [inviteServerTotal, setInviteServerTotal] = useState(0);
+  /* Set once an answer came back without stats: this backend has no server
+     mode, so the tab stays on the full read for the session. */
+  const inviteServerUnsupportedRef = useRef(false);
+  /* Every server row seen, by id, so ticks survive paging and bulk Resend /
+     Revoke / Export act on rows from other pages. */
+  const [knownInviteRows, setKnownInviteRows] = useState<Record<string, any>>({});
+  /* How many rows "Select all" ticked (null = it has not run for these
+     filters), so the header box reads as all-selected only then. */
+  const [inviteMatchingSelectable, setInviteMatchingSelectable] = useState<number | null>(null);
+  const [selectingAllInvites, setSelectingAllInvites] = useState(false);
+  /* The search the server is asked for — the box's value, 300 ms after the
+     last keystroke. */
+  const [inviteAppliedSearch, setInviteAppliedSearch] = useState('');
+  const lastInviteFilterKeyRef = useRef<string | null>(null);
+  const lastInvitePageKeyRef = useRef<string | null>(null);
   const [showInviteExportModal, setShowInviteExportModal] = useState(false);
   const [inviteExportFormat, setInviteExportFormat] = useState<'csv' | 'xls'>('csv');
 
@@ -2352,20 +2376,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      permission, as on the AI Interviews Invitation Status tab. */
   const canInviteFromStatusTab = isTenantAdmin || hasPermissionCode('assessments:invite');
 
+  /* The rows a selection is read from: every row seen when the server pages
+     the tab (ticks reach across pages), else the full set the browser holds. */
+  const inviteSelectionPool: any[] = inviteServerStats !== null
+    ? Object.values(knownInviteRows)
+    : inviteStatusRows;
+
   /* The count the confirm dialog shows. Derived here rather than in the tab's
      render scope, because the dialog is a page-level sibling of it — same
      filter-and-tick rule the button applies. */
-  const inviteBulkResendCount = inviteStatusRows.filter(
+  const inviteBulkResendCount = inviteSelectionPool.filter(
     (inv: any) => selectedInviteIds.has(inv.id) && isInviteResendable(inv)
   ).length;
-  const inviteBulkRevokeCount = inviteStatusRows.filter(
+  const inviteBulkRevokeCount = inviteSelectionPool.filter(
     (inv: any) => selectedInviteIds.has(inv.id) && isInviteRevocable(inv)
   ).length;
 
   const handleInviteBulkResend = async () => {
     /* Re-derived at send time rather than trusting what was ticked — a status
        can have moved since, which is the popup's reasoning too. */
-    const targets = inviteStatusRows.filter(
+    const targets = inviteSelectionPool.filter(
       (inv: any) => selectedInviteIds.has(inv.id) && isInviteResendable(inv)
     );
     if (targets.length === 0) {
@@ -2385,7 +2415,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   const handleInviteBulkRevoke = async () => {
-    const targets = inviteStatusRows.filter(
+    const targets = inviteSelectionPool.filter(
       (inv: any) => selectedInviteIds.has(inv.id) && isInviteRevocable(inv)
     );
     if (targets.length === 0) {
@@ -3005,8 +3035,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (jobs.length === 0) return;
     jobs.forEach((j) => loadedVisibleJobsRef.current.add(j));
     try {
-      const res = await assessmentService.listPage({ job: jobs.join(','), page: 1, page_size: 500 });
-      mergeLoadedAssessments(res.items || [], new Set(jobs));
+      /* Usually no request: the page that listed these rows carried every
+         version of their jobs (`include=job_versions`). */
+      const versions = await assessmentService.listJobVersions(jobs);
+      mergeLoadedAssessments(versions, new Set(jobs));
     } catch (error) {
       jobs.forEach((j) => loadedVisibleJobsRef.current.delete(j));
       console.log('[TalentFlow] Failed to load assessments for the visible jobs:', error);
@@ -3037,7 +3069,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const totalJobsPaged = usePagedList<AssessmentResponse, unknown, AssessmentPageParams>({
     name: 'assessments:total-jobs',
     query: totalJobsQuery,
-    fetchPage: (q) => assessmentService.listPage(q),
+    /* The versions, lineages and version counts of the page's jobs ride along
+       (`include`), so the reads that followed every page need no round trip. */
+    fetchPage: (q) => assessmentService.listPage({ ...q, include: ASSESSMENT_PAGE_INCLUDE }),
     /* After the restore, and once a restored search has settled: one page
        request on landing, for the state actually on screen. */
     enabled: serverTotalJobs && listStateRestored && assessmentSearch === assessmentSearchQuery,
@@ -3450,9 +3484,114 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      stacking another fan-out on top. */
   const inviteStatusSeqRef = useRef(0);
   const inviteStatusInFlightRef = useRef(0);
+
+  /* What the server is asked for: the page, its size and the filters on
+     screen. Kept in a ref (written every render) so a poll or a reload after
+     a bulk action asks for what is on screen NOW, not what was there when the
+     callback was made. */
+  const inviteFilterKey = [
+    inviteStatusFilters.status, inviteAppliedSearch.trim(), inviteStatusFilters.dateFrom,
+    inviteStatusFilters.dateTo, listSortBy === 'oldest' ? 'asc' : 'desc',
+  ].join('|');
+  const inviteQueryRef = useRef({ page: 1, pageSize: 10, filterKey: '' });
+  inviteQueryRef.current = { page: inviteStatusPage, pageSize: inviteStatusPageSize, filterKey: inviteFilterKey };
+  const inviteServerQuery = (extra: Partial<InvitationStatusPageQuery> = {}): InvitationStatusPageQuery => ({
+    page: inviteQueryRef.current.page,
+    page_size: inviteQueryRef.current.pageSize,
+    search: inviteAppliedSearch.trim() || undefined,
+    status: inviteStatusFilters.status !== 'all' ? inviteStatusFilters.status : undefined,
+    invite_date_from: inviteStatusFilters.dateFrom || undefined,
+    invite_date_to: inviteStatusFilters.dateTo || undefined,
+    sort_dir: listSortBy === 'oldest' ? 'asc' : undefined,
+    ...extra,
+  });
+
+  /* The job version column for server rows: resolved from the JD rows of the
+     jobs on the page, the same rule the full read applied to every row. */
+  const withInviteJobVersions = async (rows: any[]): Promise<any[]> => {
+    const jdIds = [...new Set(rows.map((row) => row._jd_id).filter(Boolean))] as string[];
+    if (jdIds.length === 0) return rows;
+    const jobVersionByJdId = rememberJobVersions(await resolveJobVersionsByJdId(jdIds));
+    return rows.map((row) => ({
+      ...row,
+      _jd_version: jobVersionOfAssessment({ jd_id: row._jd_id, jd_version: row._jd_version }, jobVersionByJdId),
+    }));
+  };
+  const rememberInviteRows = (rows: any[]) => {
+    if (rows.length === 0) return;
+    setKnownInviteRows((prev) => {
+      const next = { ...prev };
+      for (const row of rows) if (row?.id) next[row.id] = row;
+      return next;
+    });
+  };
+
+  /* One page of the tab from the server, with the chip counts. Returns false
+     when this backend has no server mode (no `stats` in the answer), and the
+     caller then does the full read. */
+  const loadInviteStatusPage = async (silent: boolean): Promise<boolean> => {
+    const seq = ++inviteStatusSeqRef.current;
+    const isStale = () => seq !== inviteStatusSeqRef.current;
+    inviteStatusInFlightRef.current += 1;
+    const startedAt = performance.now();
+    const query = inviteServerQuery({ include_stats: true });
+    lastInviteFilterKeyRef.current = inviteQueryRef.current.filterKey;
+    lastInvitePageKeyRef.current = `${inviteQueryRef.current.filterKey}|${query.page}|${query.page_size}`;
+    if (!silent && inviteStatusRowsRef.current.length === 0) setIsLoadingInviteStatus(true);
+    if (!silent) setInviteStatusError(null);
+    try {
+      const res = await assessmentService.listInvitationStatusPage(query);
+      if (isStale()) return true;
+      if (!res?.stats) {
+        inviteServerUnsupportedRef.current = true;
+        return false;
+      }
+      const rows = await withInviteJobVersions(res.items ?? []);
+      if (isStale()) return true;
+      setInviteServerStats(res.stats);
+      setInviteServerTotal(res.total ?? 0);
+      setInviteStatusRows(rows);
+      rememberInviteRows(rows);
+      perfNote('Assessments / Invitation Status — page loaded', startedAt);
+      return true;
+    } catch (err: any) {
+      if (silent || isStale()) return true;
+      console.error('Failed to load invitation statuses:', err);
+      setInviteStatusError(err?.message || 'Failed to load invitation statuses');
+      return true;
+    } finally {
+      inviteStatusInFlightRef.current -= 1;
+      if (!isStale()) setIsLoadingInviteStatus(false);
+    }
+  };
+
+  /* Select all: every row matching the filters, across pages — their ids
+     (and jobs, for the job lock) from the server, the rows not seen yet
+     fetched by id so Resend / Revoke / Export can read them. */
+  const selectAllMatchingInvites = async () => {
+    setSelectingAllInvites(true);
+    try {
+      const res = await assessmentService.listInvitationStatusPage(inviteServerQuery({ page: 1, page_size: 1, id_list: true }));
+      const refs = (res.ids ?? []).filter((r) => !jobLockReason({ jd_id: r.jd_id ?? undefined }));
+      const missing = refs.map((r) => r.id).filter((id) => !knownInviteRows[id]);
+      for (let i = 0; i < missing.length; i += 500) {
+        const chunk = missing.slice(i, i + 500);
+        const got = await assessmentService.listInvitationStatusPage({ page: 1, page_size: chunk.length, ids: chunk.join(',') });
+        rememberInviteRows(await withInviteJobVersions(got.items ?? []));
+      }
+      setSelectedInviteIds(new Set(refs.map((r) => r.id)));
+      setInviteMatchingSelectable(refs.length);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not select every invitation');
+    } finally {
+      setSelectingAllInvites(false);
+    }
+  };
+
   /* `fromCache`: only the tab-open effect passes true (see
      loadAllCompletedCandidates). */
   const loadAllInviteStatuses = async (silent = false, fromCache = false) => {
+    if (!inviteServerUnsupportedRef.current && await loadInviteStatusPage(silent)) return;
     const seq = ++inviteStatusSeqRef.current;
     const isStale = () => seq !== inviteStatusSeqRef.current;
     inviteStatusInFlightRef.current += 1;
@@ -3461,6 +3600,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (!silent && inviteStatusRowsRef.current.length === 0) setIsLoadingInviteStatus(true);
     if (!silent) setInviteStatusError(null);
     try {
+      /* The one-request invitation read goes out NOW, beside the assessment
+         list below, instead of after it and the job-version resolve (it used
+         to be the third serial round trip of this tab). Settled into a value
+         so an early return below never leaves an unhandled rejection. */
+      const allInvitesRequest = assessmentService.getAllInvitations().then(
+        (rows) => ({ ok: true as const, rows }),
+        () => ({ ok: false as const, rows: [] as any[] }),
+      );
       /* Every assessment of every job version, paged to the end — see the same
          call in `loadAllCompletedCandidates`. */
       const items = await listAllAssessments({}, fromCache ? { reuseRecent: true } : { fresh: true });
@@ -3516,9 +3663,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       let fastRows: any[] | null = null;
       try {
         const assessmentById = new Map<string, any>(items.map((a: any) => [a.id, a]));
-        const rows = await assessmentService.getAllInvitations();
+        const allInvites = await allInvitesRequest;
         if (isStale()) return;
-        fastRows = rows
+        if (!allInvites.ok) throw new Error('all-invitations unavailable');
+        fastRows = allInvites.rows
           .filter((inv: any) => inv.assessment_id && assessmentById.has(inv.assessment_id))
           .map((inv: any) => stampInvite(inv, assessmentById.get(inv.assessment_id)));
       } catch {
@@ -3598,6 +3746,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     loadAllInviteStatuses(false, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+  /* The search box asks the server 300 ms after the last keystroke. */
+  useEffect(() => {
+    const t = window.setTimeout(() => setInviteAppliedSearch(inviteStatusFilters.search), 300);
+    return () => window.clearTimeout(t);
+  }, [inviteStatusFilters.search]);
+  /* Server mode: a new page, page size or filter asks for that page. A filter
+     change goes back to page 1 and drops the selection (it may tick rows the
+     new filter hides) before asking. */
+  useEffect(() => {
+    if (activeTab !== 'invitation-status' || inviteServerStats === null) return;
+    if (inviteFilterKey !== lastInviteFilterKeyRef.current) {
+      lastInviteFilterKeyRef.current = inviteFilterKey;
+      setSelectedInviteIds(new Set());
+      setInviteMatchingSelectable(null);
+      if (inviteStatusPage !== 1) {
+        setInviteStatusPage(1);
+        return;
+      }
+    }
+    if (`${inviteFilterKey}|${inviteStatusPage}|${inviteStatusPageSize}` === lastInvitePageKeyRef.current) return;
+    void loadInviteStatusPage(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, inviteServerStats === null, inviteFilterKey, inviteStatusPage, inviteStatusPageSize]);
   /* Candidates open, start and finish on their own, so the tab polls quietly
      instead of waiting for a page refresh. Skipped while the browser tab is
      hidden. */
@@ -6764,74 +6935,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     );
   };
 
-  /* First load: a full-page skeleton (same shape as the AI Interviews page)
-     until the stats are in, instead of a page of "..." placeholders. Remembered
-     stats from an earlier visit skip it — `isLoadingStats` then starts false. */
-  if (isLoadingStats) {
-    return (
-      <main className="tf-page">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <div className="tf-page-sheet">
-            <Skeleton className="h-4 w-48 mb-4 md:mb-6" />
-            {/* Header */}
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 lg:gap-4 mb-5">
-              <div className="flex items-start gap-3 min-w-0">
-                <Skeleton className="hidden sm:block h-9 w-9 rounded-lg shrink-0" />
-                <div className="space-y-2">
-                  <Skeleton className="h-6 w-56" />
-                  <Skeleton className="h-4 w-80 max-w-full" />
-                </div>
-              </div>
-              <div className="flex items-stretch gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
-                <Skeleton className="h-9 w-36 rounded-lg" />
-                <Skeleton className="h-9 w-32 rounded-lg" />
-                <Skeleton className="h-9 w-40 rounded-lg" />
-              </div>
-            </div>
-            {/* Stats cards */}
-            <div className="tf-grid-4 mb-5 sm:mb-8">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-brand-blue/15 bg-white px-3.5 py-3.5 sm:px-4 sm:py-4">
-                  <div className="flex items-start gap-2.5">
-                    <Skeleton className="h-9 w-9 rounded-xl shrink-0" />
-                    <div className="min-w-0 space-y-1.5 flex-1">
-                      <Skeleton className="h-3.5 w-20" />
-                      <Skeleton className="h-6 w-10" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Assessment rows */}
-            <div className="space-y-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="tf-card-soft p-3 sm:p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-                    <div className="flex items-center gap-2.5 min-w-0 lg:w-[360px] lg:flex-shrink-0">
-                      <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
-                      <Skeleton className="h-4 w-16 rounded-md shrink-0" />
-                      <Skeleton className="h-4 w-40" />
-                    </div>
-                    <div className="flex-shrink-0 lg:w-[104px]">
-                      <Skeleton className="h-5 w-20 rounded-full" />
-                    </div>
-                    <div className="tf-grid-stats lg:flex-1 lg:min-w-0">
-                      {Array.from({ length: 4 }).map((_, j) => (
-                        <div key={j} className="space-y-1.5">
-                          <Skeleton className="h-3 w-16" />
-                          <Skeleton className="h-4 w-10" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </main>
-    );
-  }
+  /* First load: the page itself renders at once, with skeleton figures in the
+     stat cards until /assessments/stats lands. It used to return a full-page
+     skeleton here instead, which kept the list (AllAssessmentsTable / Total
+     Jobs) from MOUNTING until the stats were back — so its first page was
+     only requested after them, one round trip later (~0.7 s on staging).
+     Now the stats and the first page go out together. */
+  const statValuePlaceholder = <Skeleton className="h-6 w-10 inline-block align-middle" />;
 
   return (
     <main ref={rootRef} className="tf-page">
@@ -7083,7 +7193,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               showClickArrow
               icon={Briefcase}
               label="Configured Jobs"
-              value={isLoadingStats ? '...' : totalJobs.toLocaleString()}
+              value={isLoadingStats ? statValuePlaceholder : totalJobs.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('jobs')}
             >
@@ -7106,7 +7216,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               showClickArrow
               icon={FileText}
               label="Total Assessments"
-              value={isLoadingStats ? '...' : stats.total_assessments.toLocaleString()}
+              value={isLoadingStats ? statValuePlaceholder : stats.total_assessments.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('all')}
             >
@@ -7122,7 +7232,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               showClickArrow
               icon={Globe}
               label="Active Assessments"
-              value={isLoadingStats ? '...' : stats.active_assessments.toLocaleString()}
+              value={isLoadingStats ? statValuePlaceholder : stats.active_assessments.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('active')}
             >
@@ -7138,7 +7248,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               showClickArrow
               icon={Users}
               label="Total Assessed"
-              value={isLoadingStats ? '...' : candidatesAssessed.toLocaleString()}
+              value={isLoadingStats ? statValuePlaceholder : candidatesAssessed.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('completed-candidates')}
             >
@@ -7529,7 +7639,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
                 className="tf-jobs-refresh flex-shrink-0 !h-9"
               >
-                <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
+                <span className="hidden max-sm:inline 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
               </Button>
               </div>
             </div>
@@ -8338,8 +8448,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 if (s === 'bounced') return 'failed';
                 return s;
               };
-              const bucketCount = (bucket: string) =>
-                inviteStatusRows.filter((inv) => chipOf(inv) === bucket).length;
+              /* Server mode: the chips count the WHOLE set on the server
+                 (the browser holds one page); otherwise over every row here. */
+              const serverPaged = inviteServerStats !== null;
+              const bucketCount = (bucket: string) => (serverPaged
+                ? Number((inviteServerStats as unknown as Record<string, number>)[bucket] ?? 0)
+                : inviteStatusRows.filter((inv) => chipOf(inv) === bucket).length);
               /* The More Filters Status dropdown — the tabs below, as options. */
               const INVITATION_STATUS_TAB_OPTIONS = [
                 { value: 'all', label: 'All Statuses' },
@@ -8350,7 +8464,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 { value: 'completed', label: 'Completed' },
                 { value: 'failed', label: 'Failed' },
               ];
-              const totalInvites = inviteStatusRows.length;
+              const totalInvites = serverPaged ? inviteServerStats.total : inviteStatusRows.length;
               const completedInvites = bucketCount('completed');
 
               const search = inviteStatusFilters.search.trim().toLowerCase();
@@ -8359,7 +8473,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                  exactly 00:00. */
               const fromTime = inviteStatusFilters.dateFrom ? new Date(`${inviteStatusFilters.dateFrom}T00:00:00`).getTime() : null;
               const toTime = inviteStatusFilters.dateTo ? new Date(`${inviteStatusFilters.dateTo}T23:59:59.999`).getTime() : null;
-              const filtered = (listSortBy === 'oldest' ? [...inviteStatusRows].reverse() : inviteStatusRows).filter((inv) => {
+              /* Server mode: the server already filtered, sorted and paged —
+                 the rows here ARE the page. */
+              const filtered = serverPaged ? inviteStatusRows : (listSortBy === 'oldest' ? [...inviteStatusRows].reverse() : inviteStatusRows).filter((inv) => {
                 if (inviteStatusFilters.status !== 'all' && chipOf(inv) !== inviteStatusFilters.status) return false;
                 if (search) {
                   /* Every identifier the row shows is searchable, plus the
@@ -8385,10 +8501,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 return true;
               });
 
-              const total = filtered.length;
+              const total = serverPaged ? inviteServerTotal : filtered.length;
               const totalPages = Math.max(1, Math.ceil(total / inviteStatusPageSize));
               const safePage = Math.min(Math.max(1, inviteStatusPage), totalPages);
-              const pageItems = filtered.slice((safePage - 1) * inviteStatusPageSize, safePage * inviteStatusPageSize);
+              const pageItems = serverPaged
+                ? filtered
+                : filtered.slice((safePage - 1) * inviteStatusPageSize, safePage * inviteStatusPageSize);
 
               /* Selection, and the export it gates. Intersected with `filtered`
                  rather than read raw, so a row that a later filter or search
@@ -8409,12 +8527,31 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                  Disabled/Archived can't be ticked. The Actions menu then counts,
                  per item, how many ticked rows it can act on. */
               const showInviteSelection = true;
-              const selectedInviteRows = filtered.filter((inv) => selectedInviteIds.has(inv.id) && !inviteJobLock(inv));
+              /* Server mode: ticks are kept by id across pages and read from
+                 every row seen (a filter change clears them, so they are
+                 always within the filter); Select All asks the server for
+                 every matching id. */
+              const selectedInviteRows = serverPaged
+                ? [...selectedInviteIds].map((id) => knownInviteRows[id]).filter((inv) => inv && !inviteJobLock(inv))
+                : filtered.filter((inv) => selectedInviteIds.has(inv.id) && !inviteJobLock(inv));
               const selectableIds = filtered.filter((inv) => !inviteJobLock(inv)).map((inv) => inv.id);
-              const allFilteredSelected = selectableIds.length > 0
-                && selectableIds.every((id) => selectedInviteIds.has(id));
-              const toggleSelectAllInvites = () =>
+              const selectAllCount = serverPaged ? total : selectableIds.length;
+              const allFilteredSelected = serverPaged
+                ? inviteMatchingSelectable !== null && inviteMatchingSelectable > 0
+                  && selectedInviteIds.size >= inviteMatchingSelectable
+                : selectableIds.length > 0 && selectableIds.every((id) => selectedInviteIds.has(id));
+              const toggleSelectAllInvites = () => {
+                if (serverPaged) {
+                  if (allFilteredSelected) {
+                    setSelectedInviteIds(new Set<string>());
+                    setInviteMatchingSelectable(null);
+                  } else if (!selectingAllInvites) {
+                    void selectAllMatchingInvites();
+                  }
+                  return;
+                }
                 setSelectedInviteIds(() => (allFilteredSelected ? new Set<string>() : new Set<string>(selectableIds)));
+              };
               const toggleSelectInvite = (id: string) =>
                 setSelectedInviteIds((prev) => {
                   const next = new Set(prev);
@@ -9124,7 +9261,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     onClick={toggleSelectAllInvites}
                                     className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
                                     aria-label={allFilteredSelected ? 'Deselect all invitations' : 'Select all invitations'}
-                                    title={allFilteredSelected ? 'Deselect all' : `Select all ${selectableIds.length} matching`}
+                                    title={allFilteredSelected ? 'Deselect all' : `Select all ${selectAllCount} matching`}
                                   >
                                     {allFilteredSelected ? (
                                       <CheckSquare className="w-4 h-4 text-gray-800 dark:text-slate-200" />
@@ -10410,7 +10547,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         isOpen={showInviteBulkResendConfirm}
         kind="assessment"
         bulk={{ count: inviteBulkResendCount }}
-        targets={inviteStatusRows.filter((inv) => selectedInviteIds.has(inv.id) && isInviteResendable(inv)).map((inv) => ({ jobCode: inv._jd_short_id, jobTitle: inv._jd_title, version: inv._assessment_version, email: inv.candidate_email }))}
+        targets={inviteSelectionPool.filter((inv: any) => selectedInviteIds.has(inv.id) && isInviteResendable(inv)).map((inv) => ({ jobCode: inv._jd_short_id, jobTitle: inv._jd_title, version: inv._assessment_version, email: inv.candidate_email }))}
         onCancel={() => { if (!isBulkResending) setShowInviteBulkResendConfirm(false); }}
         onConfirm={handleInviteBulkResend}
         isLoading={isBulkResending}
@@ -10432,7 +10569,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         isOpen={showInviteBulkRevokeConfirm}
         kind="assessment"
         bulk={{ scope: 'selected', count: inviteBulkRevokeCount }}
-        targets={inviteStatusRows.filter((inv) => selectedInviteIds.has(inv.id) && isInviteRevocable(inv)).map((inv) => ({ jobCode: inv._jd_short_id, jobTitle: inv._jd_title, version: inv._assessment_version, email: inv.candidate_email }))}
+        targets={inviteSelectionPool.filter((inv: any) => selectedInviteIds.has(inv.id) && isInviteRevocable(inv)).map((inv) => ({ jobCode: inv._jd_short_id, jobTitle: inv._jd_title, version: inv._assessment_version, email: inv.candidate_email }))}
         onCancel={() => { if (!isBulkRevoking) setShowInviteBulkRevokeConfirm(false); }}
         onConfirm={handleInviteBulkRevoke}
         isLoading={isBulkRevoking}

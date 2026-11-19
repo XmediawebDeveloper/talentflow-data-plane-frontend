@@ -52,7 +52,8 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
   const loadLimits = async () => {
     setIsLoading(true);
     try {
-      const data = await featurePermissionService.getUserLimits();
+      // First load (refreshTrigger 0) reuses a recent answer; a bumped trigger asks again.
+      const data = await featurePermissionService.getUserLimits({ reuseRecent: refreshTrigger === 0 });
       setLimits(data);
     } catch (error: any) {
       // Don't show error toast for this component - it's informational
@@ -353,7 +354,8 @@ export function useUserLimits() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    featurePermissionService.getUserLimits()
+    // Arriving on the page: reuse an answer from the last 30 s (writes clear it).
+    featurePermissionService.getUserLimits({ reuseRecent: true })
       .then(setLimits)
       // Expected for view-only users: /users/limits/status requires
       // can_manage_users (seat/quota limits are an admin-only concern).

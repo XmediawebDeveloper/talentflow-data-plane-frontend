@@ -434,7 +434,9 @@ export default function DashboardPage() {
   /* The last response this session got (kept in memory per signed-in user), so a
      repeat visit draws at once instead of waiting behind the skeleton. The
      requests below still run every time and replace it. Only the very first
-     visit, with nothing remembered, shows the skeleton. */
+     visit, with nothing remembered, shows the skeleton. Both reads reuse an
+     answer from the last 30 s (lib/utils/listCache; any write clears it), so
+     coming straight back here costs no request at all. */
   const [remembered] = useState(() => readListSnapshot<{
     dashboard: DashboardResponse | null;
     interview: AIInterviewStatsResponse | null;
@@ -456,8 +458,8 @@ export default function DashboardPage() {
       // it the call only 403s in the console, so don't make it.
       const canSeeInterviews = isTenantAdmin || hasPermission('canViewAIInterviews') || hasPermission('canRunAiInterviews');
       const [dashboardRes, interviewRes] = await Promise.allSettled([
-        dashboardService.getDashboard(),
-        canSeeInterviews ? aiInterviewService.getStats() : Promise.reject(new Error('no AI Interviews access')),
+        dashboardService.getDashboard({ reuseRecent: true }),
+        canSeeInterviews ? aiInterviewService.getStats({ reuseRecent: true }) : Promise.reject(new Error('no AI Interviews access')),
       ]);
 
       if (cancelled) return;
@@ -1237,8 +1239,8 @@ export default function DashboardPage() {
           </SectionShell>
         </div> */}
 
-        {/* ── JD ACTIVITY (only if backend returned any) ── */}
-        {jdActivity.length > 0 && (
+        {/* ── JD ACTIVITY ── hidden: the dashboard shows only the banner + Quick Access ── */}
+        {false && jdActivity.length > 0 && (
           <SectionShell
             eyebrow="Jobs"
             title="Recent JD updates"

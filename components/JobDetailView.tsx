@@ -97,6 +97,7 @@ import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 import { toOneDecimalScore } from '@/lib/utils/score';
 import NameAvatar from '@/components/ui/name-avatar';
 import { AssessmentIllustration, InterviewIllustration, ScoredResumesIllustration, TalentMatchIllustration } from '@/components/jobs/JobResultsIllustrations';
+import DeletedResumeRows from '@/components/resumes/DeletedResumeRows';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -708,12 +709,27 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
    * "Preferred" criteria share the 40% block and never fail a candidate on their own.
    */
   const requirementLabel = requirementBadge;
-  /* The breadcrumb still pins at the top, but the tab bar below it no longer
-     sticks — the toolbar lives inside it now and must scroll naturally with the
-     page (matching the Job Openings master, whose toolbar doesn't pin either).
-     That removed the measured top-offset the pinned bar used to need.
-     `breadcrumbBarRef` is still handed to PageBreadcrumb for its own layout. */
-  const breadcrumbBarRef = useRef<HTMLElement | null>(null);
+  /* The tab card (tabs + its toolbar row) pins directly under the sticky
+     breadcrumb, so its `top` is the breadcrumb's real height — re-measured on
+     resize, because the bar grows when its RecordPager row wraps (tablet /
+     phone). A callback ref held in state, not useRef + a mount-only effect:
+     the first renders are loading / early-return views with no breadcrumb, so
+     a mount-only measure found null and the tabs tucked under a wrapped crumb.
+     Same fix as CandidateScoringDetailPage. */
+  const [breadcrumbBarEl, breadcrumbBarRef] = useState<HTMLElement | null>(null);
+  const [tabBarTop, setTabBarTop] = useState(52);
+  /* The pinned tab card itself — the Overview right column measures it so it
+     pins BELOW the tabs rather than sliding under them. */
+  const [tabCardEl, setTabCardEl] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const bar = breadcrumbBarEl;
+    if (!bar || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setTabBarTop(bar.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [breadcrumbBarEl]);
 
   const jobBreadcrumbItems = breadcrumbItems ?? [
     { label: 'Dashboard', href: '/dashboard' },
@@ -1706,6 +1722,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           matchStatus: matchStatus,
           scorePercentage: Number((item.overall_score || 0).toFixed(1)),  // Keep 1 decimal for consistency
           overallRating10: item.overall_rating_10,
+          resumeDeleted: item.resume_deleted,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by || item.scored_by_name || 'System',
           // Identifies one scoring trigger, where the API sends it — Recent
@@ -2071,7 +2088,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     const GAP = 16;
     const measure = () => {
       const viewportH = scroller ? scroller.clientHeight : window.innerHeight;
-      const pinnedTop = (breadcrumbBarRef.current?.offsetHeight ?? 0) + GAP;
+      // Below the breadcrumb AND the sticky tab card pinned under it.
+      const pinnedTop = (breadcrumbBarEl?.offsetHeight ?? 0) + (tabCardEl?.offsetHeight ?? 0) + GAP;
       const columnH = column.offsetHeight;
       setRightColumnTop(
         pinnedTop + columnH + GAP <= viewportH ? pinnedTop : viewportH - columnH - GAP
@@ -2081,9 +2099,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     const ro = new ResizeObserver(measure);
     ro.observe(column);
     if (scroller) ro.observe(scroller);
-    if (breadcrumbBarRef.current) ro.observe(breadcrumbBarRef.current);
+    if (breadcrumbBarEl) ro.observe(breadcrumbBarEl);
+    if (tabCardEl) ro.observe(tabCardEl);
     return () => ro.disconnect();
-  }, [activeTab]);
+  }, [activeTab, breadcrumbBarEl, tabCardEl]);
   // Recent Activity panel — 10 events per page.
   const [activityPage, setActivityPage] = useState(1);
   const ACTIVITY_PAGE_SIZE = 10;
@@ -2697,7 +2716,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           }}
         />
   ) : null;
-
 
   if (viewingScoredResume) {
     const _scoredIdx = scoredResumes.findIndex(
@@ -3385,9 +3403,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         </div>
       </div>
 
-      {/* Tab Navigation — NOT sticky: the tabs and the toolbar they hold scroll
-          naturally with the page, like the Job Openings master toolbar. */}
+      {/* Tab Navigation — sticky, pinned flush under the sticky breadcrumb at
+          its MEASURED height (tabBarTop). z-20 keeps it under the crumb bar
+          (z-30) and over the page content scrolling beneath it. */}
       <div
+        ref={setTabCardEl}
+        style={{ top: tabBarTop }}
         /* pb-2 only on Overview: that tab has no toolbar row below the tabs, so
            without it the underline track would sit flush against the card's
            bottom border (reading as a doubled border at the rounded corners).
@@ -3395,7 +3416,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
            Phones / tablets (below lg): on Overview this card and the job
            description card below join into ONE card — the tab track becomes the
            divider — the way the result tabs' toolbar sits inside this card. */
-        className={`mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5${activeTab === 'overview' ? ' pb-2 max-lg:mb-0 max-lg:pb-0 max-lg:rounded-b-none max-lg:border-b-0 max-lg:shadow-none' : ''}`}
+        className={`sticky z-20 mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5${activeTab === 'overview' ? ' pb-2 max-lg:mb-0 max-lg:pb-0 max-lg:rounded-b-none max-lg:border-b-0 max-lg:shadow-none' : ''}`}
       >
         {/* Underline tabs. The border-b "track" is on this NON-scrolling outer
             div; the inner div is the horizontal scroll container (scrollbar-hide,
@@ -4661,10 +4682,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       )}
 
       {/* AI Talent Match Tab Content */}
+      {/* Results whose resume the account owner deleted (2026-11-19): name +
+          email only, listed apart until the job is run again. */}
+      {activeTab === 'ai-talent-match' && (
+        <DeletedResumeRows
+          rows={aiMatchCandidates.filter((c) => c.resumeDeleted).map((c) => ({ id: c.id, name: c.name, email: c.email }))}
+          className="mb-3"
+        />
+      )}
       {activeTab === 'ai-talent-match' && (
         <AIMatchTabContent
           toolbarPortal={tabToolbarSlot}
-          candidates={aiMatchCandidates}
+          candidates={aiMatchCandidates.filter((c) => !c.resumeDeleted)}
           scoredResumes={scoredResumes}
           scoredResumesLoaded={scoredResumesLoaded && !loadingScoredResumes}
           jobTitle={job.title}
@@ -4681,7 +4710,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onScoreSelected={(selected) => { if (selected.length > 0) setAiMatchScoreReview(selected); }}
           onScoreAll={() => {
             const scoredIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
-            const unscored = aiMatchCandidates.filter((c) => !scoredIds.has(c.resumeId));
+            const unscored = aiMatchCandidates.filter((c) => !c.resumeDeleted && !scoredIds.has(c.resumeId));
             if (unscored.length > 0) setAiMatchScoreReview(unscored);
           }}
           onViewCandidate={(candidate) => {

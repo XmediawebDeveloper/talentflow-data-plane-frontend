@@ -10,6 +10,7 @@ import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/ser
 import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 import { forceNavigate } from '@/lib/utils/forcedNavigation';
+import { focusRefreshDue, markRefreshed } from '@/lib/utils/focusRefresh';
 
 // Helper to store/retrieve user from localStorage
 const USER_STORAGE_KEY = 'talentflow_user';
@@ -484,6 +485,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Validate with API in background and refresh tenant name
         try {
+          markRefreshed('auth-me');
           const apiUserData = await authService.getCurrentUser();
 
           // Account deactivated while this session was cached → block via modal.
@@ -577,6 +579,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (authService.isAuthenticated()) {
         try {
           console.log('[AUTH] Fetching current user from API...');
+          markRefreshed('auth-me');
           const apiUserData = await authService.getCurrentUser();
           console.log('[AUTH] Got user data:', apiUserData);
 
@@ -897,6 +900,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!authService.isAuthenticated()) return;
     try {
       console.log('[AUTH] refreshUser() called — fetching latest user from API...');
+      markRefreshed('auth-me');
       const apiUserData = await authService.getCurrentUser();
 
       // Admin deactivated this user (e.g. pushed via WebSocket) → block via modal.
@@ -951,8 +955,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Refresh permissions when tab becomes visible again (e.g. admin changed role in another tab)
   useEffect(() => {
     if (!user) return;
+    // At most once a minute: permission changes are pushed over the WebSocket
+    // (onPermissionsUpdated → refreshUser) and the API interceptor catches a
+    // version bump, so this only backs up a missed push.
     const handleVisibilityChange = () => {
-      if (!document.hidden) refreshUser();
+      if (!document.hidden && focusRefreshDue('auth-me')) refreshUser();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);

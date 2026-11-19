@@ -63,6 +63,8 @@ export const RESUMES_CHANGED_EVENT = 'resumes-changed';
 let resumesChangedTimer: ReturnType<typeof setTimeout> | null = null;
 export function dispatchResumesChanged() {
   if (typeof window === 'undefined') return;
+  // Folder counts moved: the next folder list must come from the server.
+  lastFolderList = null;
   if (resumesChangedTimer) clearTimeout(resumesChangedTimer);
   resumesChangedTimer = setTimeout(() => {
     resumesChangedTimer = null;
@@ -497,8 +499,10 @@ export const resumeService = {
         // Adjusts a usage counter only — no listed data changes, so keep the
         // list caches (see `invalidatesLists`); the layout refetches quota
         // itself after a reconcile that ran.
-        await api.post('/resumes/usage/reconcile', undefined, { invalidatesLists: false });
-        return true;
+        // True only when usage actually moved: the layout refetches quota on
+        // true, and a no-drift run (delta 0, the normal case) changed nothing.
+        const res = await api.post<{ delta?: number }>('/resumes/usage/reconcile', undefined, { invalidatesLists: false });
+        return !!res.data?.delta;
       } catch {
         // Reconciliation is best-effort; never block the page on it. Drop the
         // stamp so the next mount retries, as it did before the throttle.
@@ -964,6 +968,10 @@ export interface FolderDeleteResult {
   deleted_resumes: number;
 }
 
+/* The last GET /folders answer, for `list(..., { reuseMs })`. Any folder
+   write through this service drops it. */
+let lastFolderList: { key: string; at: number; data: Folder[] } | null = null;
+
 export const folderService = {
   /**
    * List all folders.
@@ -973,10 +981,19 @@ export const folderService = {
    * when that filter is active, a folder's badge equals what opening that
    * folder under the same filter actually lists, instead of staying at the
    * folder's unfiltered total.
+   *
+   * `reuseMs`: answer from the last list read with the same params if it is at
+   * most that old (folder / page / sort clicks, which change no folder) —
+   * callers after a write leave it out and always re-read.
    */
-  async list(params?: { uploaded_by_name?: string }): Promise<Folder[]> {
+  async list(params?: { uploaded_by_name?: string }, opts?: { reuseMs?: number }): Promise<Folder[]> {
+    const key = params?.uploaded_by_name ?? '';
+    if (opts?.reuseMs && lastFolderList && lastFolderList.key === key && Date.now() - lastFolderList.at <= opts.reuseMs) {
+      return structuredClone(lastFolderList.data);
+    }
     try {
       const response = await api.get<Folder[]>('/folders', { params });
+      lastFolderList = { key, at: Date.now(), data: structuredClone(response.data) };
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -1013,6 +1030,7 @@ export const folderService = {
   async create(name: string, parentId?: string): Promise<Folder> {
     try {
       console.log('[folderService] Creating folder:', { name, parent_id: parentId });
+      lastFolderList = null;
       const response = await api.post<Folder>('/folders', { name, parent_id: parentId });
       console.log('[folderService] Folder created:', response.data);
       return response.data;
@@ -1027,6 +1045,7 @@ export const folderService = {
    */
   async update(id: string, data: { name?: string; parent_id?: string }): Promise<Folder> {
     try {
+      lastFolderList = null;
       const response = await api.put<Folder>(`/folders/${id}`, data);
       return response.data;
     } catch (error) {
@@ -1044,6 +1063,7 @@ export const folderService = {
     deleteResumes?: boolean,
   ): Promise<FolderDeleteResult> {
     try {
+      lastFolderList = null;
       const response = await api.delete<FolderDeleteResult>(`/folders/${id}`, {
         params: {
           move_resumes_to: moveResumesTo,
@@ -1131,6 +1151,38 @@ export async function archiveResumeToArchivedFolder(
   await resumeService.archive(resumeId, true);
   await resumeService.move(resumeId, folderId, true);
   return folderId;
+}
+
+/**
+ * Unarchive resumes the same way as My Resumes: clear the flag and put each one
+ * back in the folder it was archived from (remembered by
+ * archiveResumeToArchivedFolder), else in Root. Each resume is done on its own
+ * so one failure doesn't stop the rest. Returns which ids succeeded / failed and
+ * how many went back to their original folder (the rest went to Root).
+ */
+export async function unarchiveResumesToPreviousFolder(
+  resumeIds: string[],
+  opts: { rootFolderId: string; archivedFolderId?: string; validFolderIds: Set<string> },
+): Promise<{ succeeded: string[]; failed: string[]; restoredToOriginal: number }> {
+  let stash: Record<string, string> = {};
+  try { stash = JSON.parse(localStorage.getItem(ARCHIVED_PREV_FOLDER_KEY) || '{}'); } catch { stash = {}; }
+  const targetFor = (id: string) => {
+    const prev = stash[id];
+    return prev && opts.validFolderIds.has(prev) && prev !== opts.archivedFolderId ? prev : opts.rootFolderId;
+  };
+  const results = await Promise.allSettled(resumeIds.map(async (id) => {
+    // skipAudit on the move: the archive call itself logs "Resume unarchived".
+    await resumeService.archive(id, false);
+    await resumeService.move(id, targetFor(id), true);
+  }));
+  const succeeded = resumeIds.filter((_, i) => results[i].status === 'fulfilled');
+  const failed = resumeIds.filter((_, i) => results[i].status === 'rejected');
+  const restoredToOriginal = succeeded.filter((id) => targetFor(id) !== opts.rootFolderId).length;
+  try {
+    succeeded.forEach((id) => { delete stash[id]; });
+    localStorage.setItem(ARCHIVED_PREV_FOLDER_KEY, JSON.stringify(stash));
+  } catch { /* best-effort cleanup */ }
+  return { succeeded, failed, restoredToOriginal };
 }
 
 export default resumeService;

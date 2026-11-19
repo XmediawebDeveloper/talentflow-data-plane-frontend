@@ -19,8 +19,7 @@ import AddSeatsModal from './AddSeatsModal';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+import { featurePermissionService } from '@/lib/services/featurePermissionService';
 
 const SEATS_BLOCKED_MESSAGE = "Your role can't buy seats or add-ons. Ask the account owner or a Billing Manager.";
 
@@ -57,55 +56,43 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
   const [showAddonModal, setShowAddonModal] = useState(false);
 
   useEffect(() => {
-    fetchQuotaData();
+    // Only the very first load may reuse a recent answer; a bumped trigger asks again.
+    fetchQuotaData({ reuseRecent: refreshTrigger === 0 });
   }, [refreshTrigger]); // Re-fetch when refreshTrigger changes
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : '',
-    };
-  };
-
-  const fetchQuotaData = async () => {
+  const fetchQuotaData = async (opts?: { reuseRecent?: boolean }) => {
     setLoading(true);
     try {
-      // Use /users/limits API - same as UserLimits component
-      // This returns actual user count, not quota tracking
-      const response = await fetch(`${API_BASE}/users/limits`, {
-        headers: getAuthHeaders(),
+      /* GET /users/limits/status through featurePermissionService — the SAME
+         read useUserLimits (UserLimits.tsx) makes on this page, so the two share
+         one request instead of hitting /users/limits and /users/limits/status
+         (one handler, two paths) side by side. */
+      const data = await featurePermissionService.getUserLimitsStatus(opts);
+      const used = data.current_users || 0;
+      const limit = data.max_users === 'Unlimited' ? -1 : (data.max_users || 0);
+      // The local-count fallback answers `remaining_seats` only.
+      const remaining = data.available_slots ?? data.remaining_seats ?? 0;
+      const isUnlimited = limit === -1;
+      const percentage = isUnlimited ? 0 : (limit > 0 ? (used / limit) * 100 : 0);
+      const isExhausted = !isUnlimited && (data.is_at_limit || remaining <= 0);
+
+      console.log('[SeatQuotaCard] Parsed data:', {
+        limit, used, remaining, isExhausted, isAtLimit: data.is_at_limit
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[SeatQuotaCard] User limits response:', data);
+      setSeatData({
+        limit,
+        used,
+        remaining,
+        percentage,
+        status: isExhausted ? 'EXCEEDED' : 'OK',
+        is_exhausted: isExhausted,
+        is_low: data.approaching_limit || false,
+        addon_remaining: 0,
+        total_remaining: remaining,
+      });
 
-        const used = data.current_users || 0;
-        const limit = data.max_users === 'Unlimited' ? -1 : (data.max_users || 0);
-        const remaining = data.available_slots || 0;
-        const isUnlimited = limit === -1;
-        const percentage = isUnlimited ? 0 : (limit > 0 ? (used / limit) * 100 : 0);
-        const isExhausted = !isUnlimited && (data.is_at_limit || remaining <= 0);
-
-        console.log('[SeatQuotaCard] Parsed data:', {
-          limit, used, remaining, isExhausted, isAtLimit: data.is_at_limit
-        });
-
-        setSeatData({
-          limit,
-          used,
-          remaining,
-          percentage,
-          status: isExhausted ? 'EXCEEDED' : 'OK',
-          is_exhausted: isExhausted,
-          is_low: data.approaching_limit || false,
-          addon_remaining: 0,
-          total_remaining: remaining,
-        });
-
-        setPlanName(data.plan_name || 'Unknown Plan');
-      }
+      setPlanName(data.plan_name || 'Unknown Plan');
     } catch (error) {
       console.error('[SeatQuotaCard] Error fetching user limits:', error);
     } finally {

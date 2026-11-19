@@ -163,7 +163,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     viewCode: 'my_resumes:read',
     actions: [
       { code: 'my_resumes:upload', label: 'Upload' },
-      { code: 'my_resumes:delete', label: 'Delete' },
+      // No Delete: resume deletion is account-owner only (2026-11-19).
       { code: 'my_resumes:archive', label: 'Archive' },
       { code: 'my_resumes:assessment', label: 'Invite to Assessment' },
       { code: 'my_resumes:invite_ai_interview', label: 'Invite to AI Interview' },
@@ -183,7 +183,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     viewCode: 'internal_db:read',
     actions: [
       { code: 'internal_db:archive', label: 'Archive' },
-      { code: 'internal_db:delete', label: 'Delete' },
+      // No Delete: resume deletion is account-owner only (2026-11-19).
       { code: 'internal_db:assessment', label: 'Invite to Assessment' },
       { code: 'internal_db:invite_ai_interview', label: 'Invite to AI Interview' },
       { code: 'internal_db:ai_match', label: 'Run AI Talent Match' },
@@ -193,8 +193,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // Rule: Assessment invite from Internal DB requires Assessment Invite
     // (see jd:invite above for why this points at 'assessments:invite')
     //
-    // Rule: Delete requires View (app/services/permission_dependencies.py:
-    // internal_db:delete -> internal_db:read). No 'Create'/'Edit' checkbox
+    // No 'Create'/'Edit' checkbox
     // exists in this category to mirror internal_db:create/update — those
     // backend codes have no corresponding frontend action at all.
     //
@@ -203,7 +202,6 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // internal_db:ai_match -> ai_match:run) — otherwise the button here could
     // be enabled while every click 403s server-side.
     dependencies: {
-      'internal_db:delete': ['internal_db:read'],
     },
   },
   {
