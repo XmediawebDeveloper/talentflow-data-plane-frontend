@@ -15,7 +15,7 @@ import ColumnCustomizationModal from './ColumnCustomizationModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
-import ListEmptyState from '@/components/ui/list-empty-state';
+import ListEmptyState, { NO_MATCHES_ILLUSTRATION } from '@/components/ui/list-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
@@ -3061,6 +3061,7 @@ Best regards`);
               isNarrowed={search.isNarrowed}
               query={search.appliedQuery}
               entityLabel="scored resume"
+              narrowedIllustration={NO_MATCHES_ILLUSTRATION}
               emptyTitle="No Scored Resumes Yet"
               emptyDescription="Score resumes against this job description to see the candidates here."
               onReset={search.reset}
@@ -3617,6 +3618,7 @@ Best regards`);
                 isNarrowed={search.isNarrowed}
                 query={search.appliedQuery}
                 entityLabel="candidate"
+                narrowedIllustration={NO_MATCHES_ILLUSTRATION}
                 emptyTitle="No scored candidates yet"
                 emptyDescription="Upload and score candidates to see them here."
                 onReset={search.reset}
@@ -3791,6 +3793,7 @@ Best regards`);
                 isNarrowed={search.isNarrowed}
                 query={search.appliedQuery}
                 entityLabel="candidate"
+                narrowedIllustration={NO_MATCHES_ILLUSTRATION}
                 emptyTitle="No scored candidates yet"
                 emptyDescription="Upload and score candidates to see them here."
                 onReset={search.reset}
@@ -3896,6 +3899,7 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
+            narrowedIllustration={NO_MATCHES_ILLUSTRATION}
             emptyTitle="No Scored Resumes Yet"
             emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}
@@ -4112,6 +4116,7 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
+            narrowedIllustration={NO_MATCHES_ILLUSTRATION}
             emptyTitle="No Scored Resumes Yet"
             emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}

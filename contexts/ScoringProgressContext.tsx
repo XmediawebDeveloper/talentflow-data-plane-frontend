@@ -49,6 +49,10 @@ export interface ScoringJob {
   /** Picked up from the server (GET /scoring/batches/mine) rather than started
    *  in this browser — so no page here polls it; the provider does. */
   serverTracked?: boolean;
+  /** When the "scored successfully" toast was shown for this run. Saved with
+   *  the run, so a reload never shows it again; starting the job again (new
+   *  resumes on the same JD, or a new batch) clears it. */
+  announcedAt?: string;
 }
 
 /** Optional details a run can be started with. */
@@ -65,6 +69,12 @@ interface ScoringProgressContextType {
   isMinimized: boolean;
   hasActiveScoring: boolean;
   isMainPanelOpen: boolean;  // True when center panel is visible (not minimized)
+  /** The signed-in user whose saved runs are now in `activeScoringJobs`
+   *  (null until they are read from storage after mount / a user switch).
+   *  Until then the list is a placeholder `[]`, not "no runs". */
+  restoredFor: string | null;
+  /** Record that these runs' finish was announced (see `ScoringJob.announcedAt`). */
+  markAnnounced: (jobIds: string[]) => void;
 
   // Actions
   startScoringJob: (jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string, meta?: ScoringJobMeta) => void;
@@ -358,6 +368,8 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
         completed: mergedItems.filter(i => i.status === 'Scored successfully').length,
         failed: mergedItems.filter(i => i.status === 'Failed').length,
         returnUrl: returnUrl || existing.returnUrl,
+        // A new round of scoring: its finish is announced afresh.
+        announcedAt: undefined,
         ...meta,
       };
       const updated = [...prev];
@@ -375,14 +387,24 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
       /* `startedAt` is kept from the first sighting — it is what the retention
          window ages a finished run out on, and taking it from each snapshot
          would keep pushing that expiry forward. */
+      const sameBatch = !incoming.batchId || !existing?.batchId || incoming.batchId === existing.batchId;
       const next: ScoringJob = {
         ...incoming,
         batchId: incoming.batchId ?? existing?.batchId,
         startedAt: existing?.startedAt || incoming.startedAt || new Date().toISOString(),
+        // A snapshot of the same run keeps "already announced"; a new batch does not.
+        announcedAt: sameBatch ? existing?.announcedAt : undefined,
       };
       if (!existing) return [...prev, next];
       return prev.map(job => (job.jobId === incoming.jobId ? next : job));
     });
+  }, []);
+
+  const markAnnounced = useCallback((jobIds: string[]) => {
+    if (!jobIds.length) return;
+    const at = new Date().toISOString();
+    setActiveScoringJobs(prev => prev.map(job =>
+      jobIds.includes(job.jobId) && !job.announcedAt ? { ...job, announcedAt: at } : job));
   }, []);
 
   const updateItemStatus = useCallback((
@@ -527,11 +549,15 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     setOnRestorePanelState(() => callback);
   }, []);
 
+  const restoredFor = identity && loadedFor === identity ? identity : null;
+
   const contextValue = useMemo<ScoringProgressContextType>(() => ({
     activeScoringJobs,
     isMinimized,
     hasActiveScoring,
     isMainPanelOpen,
+    restoredFor,
+    markAnnounced,
     startScoringJob,
     syncScoringJob,
     updateItemStatus,
@@ -547,6 +573,8 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     isMinimized,
     hasActiveScoring,
     isMainPanelOpen,
+    restoredFor,
+    markAnnounced,
     startScoringJob,
     syncScoringJob,
     updateItemStatus,
