@@ -22,6 +22,8 @@ import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedO
 import { isRouteAuthorized } from '@/lib/navigation/routeAccess';
 import NameAvatar from '@/components/ui/name-avatar';
 import { clearRbacSessionCache } from '@/lib/utils/rbacSessionCache';
+import { focusRefreshDue, markRefreshed } from '@/lib/utils/focusRefresh';
+import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 
 /* Highest unread count the bell badge spells out. 1-9 show as themselves;
    anything from 10 up reads "9+" — the count keeps growing behind the scenes
@@ -246,14 +248,21 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     }
   }, [user, activeNotificationTab]);
 
-  // Fetch notification count only
+  // Fetch notification count only. The first one of the page load comes from
+  // the app-shell /bootstrap (one request for the whole header) when it has it.
+  const countFromBootstrapRef = useRef(true);
   const fetchNotificationCount = useCallback(async () => {
     if (!user) return;
 
     try {
       // /notifications/count?exclude_chat=true: chat rows (hidden by the popup)
       // are left out server-side, so the badge needs no list fetch.
-      const counts = await notificationService.getNotificationCounts({ excludeChat: true });
+      const first = countFromBootstrapRef.current;
+      countFromBootstrapRef.current = false;
+      const boot = first
+        ? await takeBootstrapPart<Awaited<ReturnType<typeof notificationService.getNotificationCounts>>>('notification_counts')
+        : { hit: false as const };
+      const counts = boot.hit ? boot.data : await notificationService.getNotificationCounts({ excludeChat: true });
       if (counts.excludes_chat === true) {
         setUnreadCount(Math.max(0, counts.unread));
         setTotalCount(Math.max(0, counts.total));
@@ -291,8 +300,18 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     onTeamChatRef.current = onTeamChat;
   }, [onTeamChat]);
   const [chatUnread, setChatUnread] = useState(0);
+  const chatFromBootstrapRef = useRef(true);
   const fetchChatUnread = useCallback(async () => {
+    markRefreshed('chat-unread');
     try {
+      // First read of the page load: the app-shell /bootstrap carries it.
+      const first = chatFromBootstrapRef.current;
+      chatFromBootstrapRef.current = false;
+      const boot = first ? await takeBootstrapPart<{ total_unread?: number }>('chat_unread_count') : { hit: false as const };
+      if (boot.hit && typeof boot.data?.total_unread === 'number') {
+        setChatUnread(boot.data.total_unread);
+        return;
+      }
       setChatUnread(await chatService.getUnreadCount());
     } catch (error) {
       console.error('Error fetching chat unread count:', error);
@@ -306,8 +325,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       const total = Number((e as CustomEvent).detail);
       if (Number.isFinite(total)) setChatUnread(Math.max(0, total));
     };
+    // New messages arrive over the notifications socket (handleNewNotification),
+    // so the focus re-check only covers a missed push — once a minute is plenty.
     const onVisible = () => {
-      if (document.visibilityState === 'visible') fetchChatUnread();
+      if (document.visibilityState === 'visible' && focusRefreshDue('chat-unread')) fetchChatUnread();
     };
     window.addEventListener('chatUnreadChanged', onChatUnread);
     document.addEventListener('visibilitychange', onVisible);

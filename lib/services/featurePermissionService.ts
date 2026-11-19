@@ -4,6 +4,7 @@
  */
 
 import api, { handleApiError } from './api';
+import { cachedList, listCacheKey, listReadOptions, type ListReadOptions } from '@/lib/utils/listCache';
 import { FeatureFlags, FeatureMetadata, FeatureDependency, UserLimits } from '../types/tenant';
 
 // Feature flag codes matching backend
@@ -183,11 +184,10 @@ export const featurePermissionService = {
    * Get current user limits for the tenant
    * Uses /users/limits/status endpoint which fetches from Admin API
    */
-  async getUserLimits(): Promise<UserLimitsResponse> {
+  async getUserLimits(opts?: ListReadOptions): Promise<UserLimitsResponse> {
     try {
-      const response = await api.get<any>('/users/limits/status');
       // Map the response to UserLimitsResponse format
-      const data = response.data;
+      const data = await featurePermissionService.getUserLimitsStatus(opts);
       // max_users comes from Control Plane API - no hardcoded fallback
       const maxUsers = data.max_users === 'Unlimited' ? -1 : (data.max_users ?? -1);
       const currentUsers = data.current_users || 0;
@@ -207,6 +207,21 @@ export const featurePermissionService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /**
+   * The raw GET /users/limits/status body. Every reader on the user screens
+   * (useUserLimits, SeatQuotaCard, Usage history) goes through here, so one
+   * request serves them all. `reuseRecent` reuses an answer from the last 30 s
+   * for screens that only display it on arrival; a check made before adding a
+   * user (canAddUsers) never passes it. Any write clears it (lib/utils/listCache).
+   */
+  async getUserLimitsStatus(opts?: ListReadOptions): Promise<any> {
+    return cachedList(
+      listCacheKey('users|limits-status'),
+      async () => (await api.get<any>('/users/limits/status')).data,
+      listReadOptions(opts),
+    );
   },
 
   /**

@@ -97,6 +97,10 @@ export default function DashboardKpiRow({
           <Link
             key={k.id}
             href={k.href}
+            /* Same pages as the Quick Access tiles, which prefetch them; these
+               hrefs carry their own query string, so prefetching here fetched
+               each page a second time on every dashboard visit. */
+            prefetch={false}
             className="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.02] transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/30 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:ring-white/[0.02] sm:px-5 sm:py-5"
           >
             <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ${k.accent}`}>

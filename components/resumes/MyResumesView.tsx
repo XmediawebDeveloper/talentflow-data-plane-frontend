@@ -1493,13 +1493,31 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         };
       };
 
+      /* Landing: the folder-badge reconcile below needs GET /resumes/stats,
+         and used to ask for it only after the list + folders came back — a
+         second round trip on every open. Start it now, beside them (not
+         awaited); reconcileFolderCounts' own call then picks up this response
+         through the api client's GET sharing. Only before the first reconcile:
+         later fetches on an unchanged tree skip the reconcile anyway. */
+      if (
+        !lastReconciledRef.current
+        && versionFilter === 'all'
+        && Object.keys(searchParams).every(key => BASE_SEARCH_PARAM_KEYS.includes(key))
+      ) {
+        fetchMyResumeStats().catch(() => {});
+      }
+
       const [resumeResponse, folderResponse] = await Promise.all([
         listResumes(),
         // Same Uploaded By value the resume list was just sent — so a
         // folder's badge always matches what opening that folder under the
         // same filter actually lists (see folderService.list's own note).
+        // Folder / page / sort / search clicks (the params effect, `dedupe`)
+        // change no folder, so they reuse a tree read in the last 30s instead
+        // of re-reading /folders on every click. Writes always re-read.
         folderService.list(
           searchParams.uploaded_by_name ? { uploaded_by_name: searchParams.uploaded_by_name } : undefined,
+          opts?.dedupe ? { reuseMs: 30_000 } : undefined,
         ).catch(() => []),
       ]);
 
