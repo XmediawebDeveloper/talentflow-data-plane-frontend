@@ -57,7 +57,7 @@ export function SiteHeader() {
   const isLoggedIn = useSignedIn();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string | null>(NAV_ITEMS[0].section);
 
   const navRef = useRef<HTMLElement>(null);
   const markerRef = useRef<HTMLSpanElement>(null);
@@ -107,9 +107,9 @@ export function SiteHeader() {
       { rootMargin: "-20% 0px -70% 0px", threshold: 0 }
     );
     sections.forEach((section) => observer.observe(section));
-    // Above the first section nothing is current.
+    // At the top of the page (above the first section) Features is current.
     const onTop = () => {
-      if (window.scrollY < 200) setActiveSection(null);
+      if (window.scrollY < 200) setActiveSection(NAV_ITEMS[0].section);
     };
     window.addEventListener("scroll", onTop, { passive: true });
     return () => {

@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X, Users, Mail, Play, Check, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send, Undo2 } from 'lucide-react';
+import { X, Users, Mail, Play, Check, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send, Undo2, Download, FileText, FileSpreadsheet } from 'lucide-react';
+import ExportColumnsModal, { type ExportFormatOption } from '@/components/ExportColumnsModal';
+import { exportRows } from '@/lib/utils/exportUtils';
+import { useAuth } from '@/lib/hooks/useAuth';
 import type { InviteStatusKind } from '@/components/ui/invite-status-chip';
 import { StatCardsHint, StatusLegend, UpdatedAgo } from '@/components/ui/guided-tracker';
 import { TrackerSelectAll, TrackerStatusTabs, TrackerTabHint, trackerSelection, TRACKER_LOOK_PANEL_CLASS, TRACKER_LOOK_BODY_CLASS, TrackerBulkBar, type TrackerTab, type TrackerSelectGroup } from '@/components/ui/tracker-look';
@@ -39,7 +42,51 @@ import AIInterviewInviteTable, {
   isRevocableInvite,
   displayInviteScore,
   matchesInviteResultFilter,
+  inviteResult,
+  inviteSourceLabel,
+  inviteStatusLabel,
 } from '@/components/AIInterviewInviteTable';
+
+const exportDate = (value: string | null | undefined): string => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+};
+
+const exportVersion = (n: number | null | undefined): string => (n != null && n > 0 ? `V${n}` : '');
+
+/* Export columns: one row per invite, in the table's own order and wording.
+   The Export popup lets the user untick any of them. */
+type InviteExportContext = { jdShortId?: string; jdTitle: string; jobVersion?: number; interviewVersion?: number };
+type InviteExportRow = {
+  candidate_cid?: string | null; candidate_name?: string | null; candidate_email?: string | null;
+  invitation_sent_at?: string | null; created_at?: string | null; started_at?: string | null;
+  completed_at?: string | null; expires_at?: string | null; _jd_version?: number; _interview_version?: number;
+};
+const INVITE_EXPORT_COLUMNS: { id: string; label: string; value: (inv: InviteExportRow, ctx: InviteExportContext) => string }[] = [
+  { id: 'cid', label: 'CID', value: (inv) => inv.candidate_cid || '' },
+  { id: 'name', label: 'Candidate Name', value: (inv) => inv.candidate_name || '' },
+  { id: 'email', label: 'Email', value: (inv) => inv.candidate_email || '' },
+  { id: 'status', label: 'Status', value: (inv) => inviteStatusLabel(inv) },
+  { id: 'invited', label: 'Invited At', value: (inv) => exportDate(inv.invitation_sent_at || inv.created_at) },
+  { id: 'started', label: 'Started At', value: (inv) => exportDate(inv.started_at) },
+  { id: 'completed', label: 'Completed At', value: (inv) => exportDate(inv.completed_at) },
+  { id: 'expires', label: 'Link Expires At', value: (inv) => exportDate(inv.expires_at) },
+  { id: 'score', label: 'Score', value: (inv) => { const s = displayInviteScore(inv); return s != null ? String(Math.round(s)) : ''; } },
+  { id: 'result', label: 'Result', value: (inv) => inviteResult(inv, displayInviteScore(inv)) ?? '' },
+  { id: 'jobId', label: 'Job ID', value: (_inv, ctx) => ctx.jdShortId || '' },
+  { id: 'jobTitle', label: 'Job Title', value: (_inv, ctx) => ctx.jdTitle },
+  { id: 'jobVersion', label: 'Job Version', value: (inv, ctx) => exportVersion(inv._jd_version ?? ctx.jobVersion) },
+  { id: 'interviewVersion', label: 'Interview Version', value: (inv, ctx) => exportVersion(inv._interview_version ?? ctx.interviewVersion) },
+  { id: 'source', label: 'Invite Source', value: (inv) => inviteSourceLabel(inv)?.replace(/^Via /, '') ?? '' },
+];
+
+type InviteExportFormat = 'csv' | 'xlsx';
+const INVITE_EXPORT_FORMATS: ExportFormatOption<InviteExportFormat>[] = [
+  { key: 'csv', title: 'CSV Format', description: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
+  { key: 'xlsx', title: 'Excel Format (.xlsx)', description: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100 dark:bg-blue-500/15', iconColor: 'text-blue-700 dark:text-blue-300' },
+];
 
 /* Bulk resend eligibility — Expired rows only, and never once the candidate
    has started or completed. A freshly-sent "invited" row has no manual resend
@@ -183,6 +230,13 @@ export default function AIInterviewTrackInvitesModal({
   guided = !embedded,
   scope,
 }: AIInterviewTrackInvitesModalProps) {
+  // Export uses the module's export permission (`ai_interview:export`), greyed when missing.
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExport = isTenantAdmin || hasPermissionCode('ai_interview:export');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<InviteExportFormat>('xlsx');
+
   /* Keyed on its contents: the host builds the array on every render. */
   const scopeKey = (scope ?? []).map((entry) => `${entry.configId}:${entry.jobVersion}:${entry.interviewVersion}`).join('|');
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -625,24 +679,76 @@ export default function AIInterviewTrackInvitesModal({
   /* look: every page's matching rows for "Select all pages" — the same
      requests and filters as loadInvitations, unpaged (1000 a config, as its
      own Source / Result path reads). */
+  /* Every page's rows matching the current tab, search and filters, unpaged.
+     Shared by "Select all pages" and Export. */
+  const fetchAllMatchingRows = async (): Promise<typeof invitations> => {
+    const params = {
+      search: filters.search.trim() || undefined,
+      status: filters.status !== 'all' ? filters.status : undefined,
+      invite_date_from: filters.dateFrom || undefined,
+      invite_date_to: filters.dateTo || undefined,
+      page: 1,
+      page_size: 1000,
+    };
+    const lists = jobScope
+      ? await Promise.all(jobScope
+        .filter((entry) => (!jobVersionFilter || String(entry.jobVersion) === jobVersionFilter) && (!versionFilter || String(entry.interviewVersion) === versionFilter))
+        .map((entry) => aiInterviewService.getConfigInvitations(entry.configId, params).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; }).then((res) => (res.items || []).map((inv) => ({
+          ...inv, _config_id: entry.configId, _jd_version: entry.jobVersion, _interview_version: entry.interviewVersion,
+        })))))
+      : [((await aiInterviewService.getConfigInvitations(configId, params).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; })).items || [])];
+    return lists.flat().filter((inv) =>
+      (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
+  };
+
+  /* Export: the ticked rows when there are any, otherwise every row matching
+     the current tab and filters (all pages). Built in the browser from the
+     same data the table shows — no extra backend endpoint. */
+  const handleExport = async (columnIds: string[]) => {
+    if (!canExport || isExporting) return;
+    const format = exportFormat;
+    // Keep the table's order whatever order the columns were ticked in.
+    const picked = INVITE_EXPORT_COLUMNS.filter((c) => columnIds.includes(c.id));
+    if (picked.length === 0) {
+      toast.warning('Pick at least one column to export');
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const rows = selectedIds.size > 0 ? selectedRows : await fetchAllMatchingRows();
+      if (rows.length === 0) {
+        toast.warning('No invites to export');
+        return;
+      }
+      const ctx: InviteExportContext = { jdShortId, jdTitle: jdTitle || '', jobVersion: headerJobVersion, interviewVersion: headerInterviewVersion };
+      const data = rows.map((inv) => picked.map((c) => c.value(inv, ctx)));
+      const statusPart = filters.status !== 'all' ? `-${filters.status}` : '';
+      const baseName = `${(jdShortId || 'ai-interview').replace(/\s+/g, '_')}-invites${statusPart}-${new Date().toISOString().slice(0, 10)}`;
+      await exportRows(format, picked.map((c) => c.label), data, baseName, {
+        sheetName: 'Invite Status',
+        title: `AI Interview Invites — ${jdShortId ? `${jdShortId} - ` : ''}${jdTitle}`,
+      });
+      // Audit trail through the module's existing export-log endpoint.
+      void aiInterviewService.logListExport({
+        format: format === 'csv' ? 'csv' : 'excel',
+        recordCount: rows.length,
+        tab: filters.status,
+        ids: rows.map((inv) => String(inv.id)),
+        exportType: 'ai_interview_invites',
+      });
+      toast.success(`Exported ${rows.length} ${rows.length === 1 ? 'invite' : 'invites'} to ${format === 'csv' ? 'CSV' : 'Excel'}`);
+      setShowExportModal(false);
+    } catch (err) {
+      toast.error(friendlyErrorMessage(err, "Couldn't export invites. Please try again."));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const selectAllPages = async () => {
     setAllPagesLoading(true);
     try {
-      const params = {
-        search: filters.search.trim() || undefined,
-        status: filters.status !== 'all' ? filters.status : undefined,
-        invite_date_from: filters.dateFrom || undefined,
-        invite_date_to: filters.dateTo || undefined,
-        page: 1,
-        page_size: 1000,
-      };
-      const lists = jobScope
-        ? [(await loadJobScopeRows(jobScope.filter((entry) =>
-            (!jobVersionFilter || String(entry.jobVersion) === jobVersionFilter)
-            && (!versionFilter || String(entry.interviewVersion) === versionFilter)), null)).rows]
-        : [((await aiInterviewService.getConfigInvitations(configId, params).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; })).items || [])];
-      const rows: typeof invitations = lists.flat().filter((inv) =>
-        (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
+      const rows = await fetchAllMatchingRows();
       const lockedRow = (inv: (typeof invitations)[number]) => (rowJdLocked(inv) ? { ...inv, _jd_status: lockedStatusByVersion.get(inv._jd_version as number) } : inv);
       setAllPages({ key: allPagesKey, rows: rows.map(lockedRow) });
       setSelectedIds(new Set(rows.filter((inv) => isBulkActionable(inv) && !rowJdLocked(inv)).map((inv) => inv.id)));
@@ -741,7 +847,10 @@ export default function AIInterviewTrackInvitesModal({
       <div
         {...(embedded ? {} : heightLock.dialogProps)}
         className={embedded
-          ? 'bg-white dark:bg-slate-900 w-full flex flex-col'
+          /* Embedded as the job page's Invitation Status tab: take the page
+             sheet's own dark surface (not a slate-900 block on it), and have
+             the table's sticky header / pinned columns paint that same surface. */
+          ? 'bg-white dark:bg-[var(--surface)] [--tf-sticky-surface:var(--surface)] w-full flex flex-col'
           : `${TRACKER_DIALOG_PANEL_CLASS} ${look ? TRACKER_LOOK_PANEL_CLASS : paginationBelowTable ? NO_INNER_SCROLL_PANEL : ''}`}>
         {/* Header */}
         <div className={`${paginationBelowTable || look ? 'tf-tracker-header ' : ''}px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0`}>
@@ -769,7 +878,7 @@ export default function AIInterviewTrackInvitesModal({
                   <span className="truncate">{jdTitle}</span>
                   {jobLock && <JobLockBadge kind={jobLock} title={jobLockMessage} />}
                   {jobScope && (
-                    <span className="text-gray-400 dark:text-slate-600 whitespace-nowrap">
+                    <span className="text-gray-400 dark:text-slate-400 whitespace-nowrap">
                       - all job versions ({jobScope.length} interview{jobScope.length === 1 ? '' : 's'})
                     </span>
                   )}
@@ -808,6 +917,21 @@ export default function AIInterviewTrackInvitesModal({
               <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
                 {isRefreshing ? 'Refreshing...' : 'Refresh'}
               </span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { if (canExport) setShowExportModal(true); }}
+              disabled={isLoading && invitations.length === 0}
+              aria-disabled={!canExport || undefined}
+              title={canExport
+                ? (selectedIds.size > 0 ? `Export the ${selectedIds.size} selected invites` : 'Export every invite in this view (all pages)')
+                : 'You do not have permission to export AI interviews'}
+              aria-label="Export"
+              className={canExport ? '' : 'opacity-50 cursor-not-allowed'}
+              icon={<Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+            >
+              <span className="hidden sm:inline">Export</span>
             </Button>
             {/* No ✕: the footer's Cancel is the one close control. */}
           </div>
@@ -1083,6 +1207,25 @@ export default function AIInterviewTrackInvitesModal({
         </div>
         </div>
         </>
+        )}
+
+        {/* Export — the AI Interview module's export popup: CSV or Excel
+            (.xlsx), then Customize Columns. Exports the ticked invites, else
+            every invite in the current tab and filters across all pages. */}
+        {showExportModal && (
+          <ExportColumnsModal<InviteExportFormat>
+            title="Export Invite Status"
+            recordCount={selectedIds.size > 0 ? selectedIds.size : filteredTotal}
+            recordNoun={['invite', 'invites']}
+            formats={INVITE_EXPORT_FORMATS}
+            format={exportFormat}
+            onFormatChange={setExportFormat}
+            columns={INVITE_EXPORT_COLUMNS.map(({ id, label }) => ({ id, label }))}
+            initialColumnIds={INVITE_EXPORT_COLUMNS.map((c) => c.id)}
+            exporting={isExporting}
+            onExport={(ids) => void handleExport(ids)}
+            onClose={() => { if (!isExporting) setShowExportModal(false); }}
+          />
         )}
 
         {/* Resend confirmation — regenerates the interview token, so the old

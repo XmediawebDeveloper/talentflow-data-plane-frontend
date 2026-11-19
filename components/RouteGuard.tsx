@@ -28,9 +28,9 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { isRouteAuthorized, UNAUTHORIZED_PATH } from '@/lib/navigation/routeAccess';
 
 /* Where a refused page sends you, when somewhere better than the Dashboard
-   fits: Teams without View Teams → its sibling Chat, which everyone can use. */
+   fits: Teams without View Teams → Chat (/chat), which everyone can use. */
 const UNAUTHORIZED_FALLBACKS: { prefix: string; to: string }[] = [
-  { prefix: '/organization/team-management', to: '/organization/team-chat' },
+  { prefix: '/organization/team-management', to: '/chat' },
 ];
 
 export default function RouteGuard({ children }: { children: React.ReactNode }) {

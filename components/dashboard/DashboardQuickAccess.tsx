@@ -37,7 +37,7 @@ const ITEM_SUBTITLE: Record<string, string> = {
   'audit-trail': 'Activity log',
   'support-tickets': 'Help & tickets',
   'help-desk': 'Internal desk',
-  teams: 'Teams & team chat',
+  teams: 'Members & groups',
 };
 
 // Short, always-visible reason under a disabled tile; the full sentence is in
@@ -253,18 +253,21 @@ export default function DashboardQuickAccess() {
     [isTenantAdmin, user?.permissions, planFeaturesLoading, hasPlanFeature],
   );
 
-  /* Teams + Chat, as one tile at the end (they used to be tabs on User
-     Management). Chat is open to everyone, so the tile is never locked: it
-     opens Teams when the plan and permissions allow it, otherwise Chat. */
+  /* Teams, as a tile at the end. It follows the Teams page and the backend
+     (the plan's Teams feature + View Teams; the owner always) and greys out
+     with the reason otherwise. Chat is not a tile: it's in the profile menu
+     (above Support Tickets) and behind the header's chat icon. */
   const teamsTile: NavItem = useMemo(() => {
-    // Same rule as the Teams page and the backend: View Teams (owner always).
-    const canUseTeams = hasPlanFeature('teams') && hasPerm('canViewTeams');
+    const planAllows = hasPlanFeature('teams');
+    const permAllows = hasPerm('canViewTeams');
     return {
       id: 'teams',
       label: 'Teams',
       icon: UsersRound,
-      href: canUseTeams ? '/organization/team-management' : '/organization/team-chat',
+      href: '/organization/team-management',
       pending: planFeaturesLoading,
+      disabled: !planAllows || !permAllows,
+      disabledReason: !planAllows ? 'plan' : 'permission',
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTenantAdmin, user?.permissions, planFeaturesLoading, hasPlanFeature]);

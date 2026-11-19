@@ -36,6 +36,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { invitedViaResume, useInviteResumePreview } from '@/components/ai-interview/useInviteResumePreview';
 
 /**
  * The candidate list for an AI interview's invite tracker.
@@ -249,7 +250,7 @@ export const InviteTimelineLines = ({ inv, duration, limit }: { inv: any; durati
       {duration && (
         <div className="flex items-center gap-2 whitespace-nowrap">
           <Timer className="w-3 h-3 flex-shrink-0 text-gray-400" />
-          <span><span className="text-gray-400 dark:text-slate-500">Duration:</span> {duration}</span>
+          <span><span className="text-gray-400 dark:text-slate-400">Duration:</span> {duration}</span>
         </div>
       )}
     </div>
@@ -315,7 +316,7 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
     case 'ai_interview_invite_expired':
       return { label: 'Expired at', Icon: Clock, tone: 'text-brand-orange-deep' };
     default:
-      return { label: action, Icon: Clock, tone: 'text-gray-500' };
+      return { label: action, Icon: Clock, tone: 'text-gray-500 dark:text-slate-400' };
   }
 };
 
@@ -539,6 +540,32 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
       return <InviteStatusChip kind="bounced" />;
     default:
       return <InviteStatusChip kind="other" label={inv.status || 'Pending'} />;
+  }
+};
+
+/** The status badge's wording as plain text (exports, screen-reader text).
+ *  Same rules as AIInviteStatusBadge, so a file always matches the screen. */
+export const inviteStatusLabel = (inv: {
+  status?: string | null;
+  expires_at?: string | null;
+  ai_evaluation?: { closing_reason?: unknown } | null;
+}): string => {
+  if (isInviteExpired(inv)) return 'Expired';
+  switch (inv.status) {
+    case 'completed': {
+      const reason: string = (inv.ai_evaluation?.closing_reason || '').toString().toLowerCase();
+      return reason.startsWith('time_limit') ? 'Completed (Auto)' : 'Completed';
+    }
+    case 'in_progress': return 'In Progress';
+    case 'system_check': return 'System Check';
+    case 'invited': return 'Invited';
+    case 'cancelled': return 'Cancelled';
+    case 'terminated': return 'Terminated';
+    case 'expired': return 'Expired';
+    case 'revoked': return 'Revoked';
+    case 'failed': return 'Invite Failed';
+    case 'bounced': return 'Bounced';
+    default: return inv.status ? String(inv.status) : 'Pending';
   }
 };
 
@@ -784,6 +811,9 @@ export default function AIInterviewInviteTable({
 
   /* Built once per row and rendered twice — as menu items on desktop, as compact
      buttons on the mobile card — so the two can't drift apart. */
+  // Row ⋮ › View Resume (Via Resume invites): the result page's resume lookup and preview popup.
+  const resumePreview = useInviteResumePreview();
+
   const rowActions = (inv: any): RowAction[] => {
     const actions: RowAction[] = [];
     const locked = rowLocked(inv);
@@ -804,6 +834,21 @@ export default function AIInterviewInviteTable({
        a Partial Evaluation. In Progress / Invited have nothing to show yet. */
     if (onViewDetails && hasResultToOpen(inv)) {
       actions.push({ key: 'view', label: 'View Results', Icon: Eye, run: () => onViewDetails(inv), iconClassName: 'text-menu-icon-view' });
+    }
+    /* View Resume — only for candidates invited from a resume ("Via Resume");
+       a direct-email invite has no resume behind it. Any status: the resume is
+       the recruiter's own record, not part of the interview. */
+    if (invitedViaResume(inv)) {
+      const loading = resumePreview.loadingId === inv.id;
+      actions.push({
+        key: 'resume',
+        label: 'View Resume',
+        Icon: FileText,
+        run: () => { void resumePreview.openResume(inv); },
+        busy: loading,
+        disabled: loading,
+        iconClassName: 'text-menu-icon-view',
+      });
     }
     if (onResend && (canResendInvite(inv) || inv.status === 'failed')) {
       actions.push({
@@ -916,7 +961,7 @@ export default function AIInterviewInviteTable({
 
   if (invitations.length === 0) {
     return (
-      <div className={`${TRACKER_DIALOG_PLACEHOLDER_CLASS} text-gray-500 dark:text-slate-500`}>
+      <div className={`${TRACKER_DIALOG_PLACEHOLDER_CLASS} text-gray-500 dark:text-slate-400`}>
         <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-brand-blue/30" />
         {/* "None invited" is wrong when a filter is what emptied the list — it
             reads as data loss rather than as a narrowed view. */}
@@ -1011,7 +1056,7 @@ export default function AIInterviewInviteTable({
                       <ResultBadge result={inviteResult(inv, score)} />
                     </>
                   ) : (
-                    <span className="text-gray-400 dark:text-slate-500">No score</span>
+                    <span className="text-gray-400 dark:text-slate-400">No score</span>
                   )}
                 </span>
                 {inviteSourceLabel(inv) && <InviteSourceValue inv={inv} iconClassName="w-3 h-3" />}
@@ -1291,7 +1336,7 @@ export default function AIInterviewInviteTable({
                   // Every milestone on its own line, oldest first. Centred like
                   // the other columns, so a lone "Invited" line is not stuck at
                   // the top of a taller row.
-                  id: 'timeline', label: 'Timeline', className: `${cellY} px-4 align-middle text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell`,
+                  id: 'timeline', label: 'Timeline', className: `${cellY} px-4 align-middle text-xs text-gray-500 dark:text-slate-400 whitespace-nowrap hidden md:table-cell`,
                   content: trackerLook ? (
                     <TrackerTimeline
                       events={events}
@@ -1400,11 +1445,16 @@ export default function AIInterviewInviteTable({
                   tabIndex={rowInteractive ? 0 : undefined}
                   aria-expanded={expandableRows ? isExpanded : undefined}
                   title={expandableRows ? (isExpanded ? 'Hide details' : 'Show details') : openable ? 'View candidate details' : undefined}
-                  className={`transition-colors ${
+                  /* tf-row-match: the row's resting / hover / selected colours
+                     are the pinned Select and Actions cells' own, so they never
+                     read as a separate layer (dark mode). An expanded row counts
+                     as selected for that tint. */
+                  data-row-selected={isExpanded || selectedIds?.has(inv.id) ? 'true' : undefined}
+                  className={`tf-row-match transition-colors ${
                     rowInteractive
-                      ? 'cursor-pointer hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40'
-                      : 'hover:bg-gray-50 dark:hover:bg-slate-800/60'
-                  } ${isExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : ''} ${autoHeight ? AUTO_HEIGHT_ROW_MIN_H : ''}`}
+                      ? 'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40'
+                      : ''
+                  } ${autoHeight ? AUTO_HEIGHT_ROW_MIN_H : ''}`}
                 >
                   {selectable && (
                     <td className="tf-td pl-4 pr-0 tf-sticky-col-left">
@@ -1508,7 +1558,7 @@ export default function AIInterviewInviteTable({
             <DialogDescription className="break-words">
               {capitalizedCase(timelineTarget?.candidate_name) || timelineTarget?.candidate_email || 'Candidate'}
               {timelineTarget?.candidate_name && timelineTarget?.candidate_email && (
-                <span className="text-gray-400 dark:text-slate-500"> · {timelineTarget.candidate_email}</span>
+                <span className="text-gray-400 dark:text-slate-400"> · {timelineTarget.candidate_email}</span>
               )}
             </DialogDescription>
           </DialogHeader>
@@ -1539,6 +1589,7 @@ export default function AIInterviewInviteTable({
           </div>
         </DialogContent>
       </Dialog>
+      {resumePreview.modal}
     </>
   );
 }
