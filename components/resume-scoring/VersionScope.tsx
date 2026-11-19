@@ -13,7 +13,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Clock, Eye, Info, Layers, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 
 export interface ScopeVersion {
   id: string;
@@ -75,21 +74,53 @@ export function VersionScopeSwitch({
           {label}<ChevronDown className="h-3 w-3" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
-        {versions.map(v => (
-          <DropdownMenuItem key={v.id} className="group" disabled={v.id === currentId} onSelect={() => onPickVersion(v)}>
-            <span className={`${MENU_ITEM_SCALE_CLASS} flex w-full items-center justify-between gap-3`}>
-              <span className="flex items-center gap-1.5">
-                <b>v{v.versionNumber}</b>
-                {v.isLatest && <span className="tf-stat-chip tf-stat-chip-info !py-0">Latest</span>}
-              </span>
-              <span className="flex items-center gap-2 tf-meta">
-                {v.scored != null && <span className="tabular-nums">{v.scored} scored</span>}
-                {v.id === currentId ? <Check className="h-3.5 w-3.5 text-brand-blue" /> : <span className="w-3.5" />}
-              </span>
-            </span>
-          </DropdownMenuItem>
-        ))}
+      {/* Same menu as AI Interview details' Job Version picker: a "Job
+          Versions · N versions" header, then rows with the tick in a left
+          column, the selected row tinted brand-blue (not greyed out). */}
+      <DropdownMenuContent
+        align="start"
+        className="w-72 max-w-[calc(100vw-2rem)] !p-0 !rounded-xl !bg-white dark:!bg-slate-900 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] !shadow-lg shadow-brand-blue/10"
+      >
+        <div className="flex items-baseline justify-between gap-2 px-3 py-2">
+          <span className="tf-caption tracking-tight">Job Versions</span>
+          <span className="tf-micro-hint">{versions.length} version{versions.length === 1 ? '' : 's'}</span>
+        </div>
+        <div className="border-t border-gray-100 dark:border-slate-700/60" />
+        <div className="max-h-72 overflow-y-auto py-1">
+          {versions.map(v => {
+            const isCurrent = v.id === currentId;
+            return (
+              <DropdownMenuItem
+                key={v.id}
+                aria-current={isCurrent ? 'true' : undefined}
+                /* The version on screen stays a normal (not disabled) row —
+                   picking it is just a no-op, so it doesn't read as greyed out. */
+                onSelect={() => { if (!isCurrent) onPickVersion(v); }}
+                className={`!block !rounded-none !px-3 !py-2 transition-colors ${isCurrent
+                  ? 'bg-brand-blue/5 data-[highlighted]:bg-brand-blue/10'
+                  : 'data-[highlighted]:bg-brand-blue/5'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="w-4 flex-shrink-0 flex items-center justify-center">
+                    {isCurrent && <Check className="size-3.5 text-brand-blue" />}
+                  </span>
+                  <span className="tf-row-title tabular-nums flex-shrink-0">V{v.versionNumber}</span>
+                  {v.isLatest && (
+                    <span className="tf-badge flex-shrink-0 text-2xs bg-brand-blue/10 text-brand-blue">Latest</span>
+                  )}
+                  <span aria-hidden className="ml-auto flex-shrink-0 text-2xs font-medium text-brand-blue">
+                    {isCurrent ? 'Viewing' : 'View'}
+                  </span>
+                </div>
+                {v.scored != null && (
+                  <div className="pl-6 mt-0.5 tf-micro-hint tabular-nums">
+                    {v.scored} candidate{v.scored === 1 ? '' : 's'} scored
+                  </div>
+                )}
+              </DropdownMenuItem>
+            );
+          })}
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   ) : (
