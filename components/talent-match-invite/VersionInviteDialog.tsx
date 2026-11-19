@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Briefcase, Calend
 import { toast } from 'sonner';
 import { usePathname, useRouter } from 'next/navigation';
 import { type InviteUnitsRestore } from '@/lib/utils/inviteUnitsHandoff';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api, { dispatchUnitsConsumed } from '@/lib/services/api';
@@ -745,7 +745,9 @@ export default function VersionInviteDialog({
             try {
               setEditing(await loadAssessmentForPopup(draft, 'edit'));
             } catch (err) {
-              toast.error(friendlyErrorMessage(err, 'Could not load the assessment. Please try again.'));
+              showErrorToast(err, "Couldn't load the assessment", {
+                retry: () => loadAssessmentForPopup(draft, 'edit').then(setEditing),
+              });
             }
           } else if (draft) {
             setWizardHref(await versionHref(draft, 'edit', job.jdTitle, returnUrl));
@@ -764,7 +766,7 @@ export default function VersionInviteDialog({
       setBusyId(v.id);
       void loadAssessmentForPopup(v, item.action)
         .then(open, (err: unknown) => {
-          toast.error(friendlyErrorMessage(err, 'Could not load the assessment. Please try again.'));
+          showErrorToast(err, "Couldn't load the assessment", { retry: () => handleAction(v, item) });
           if (item.action === 'edit') void reload();
         })
         .finally(() => setBusyId(null));
@@ -816,7 +818,7 @@ export default function VersionInviteDialog({
       await confirm.run();
       setConfirm(null);
     } catch (err) {
-      toast.error(friendlyErrorMessage(err, `Couldn't ${confirm.confirmText.toLowerCase()}. Please try again.`));
+      showErrorToast(err, `Couldn't ${confirm.confirmText.toLowerCase()}`);
     } finally {
       setConfirmBusy(false);
     }
@@ -1064,7 +1066,7 @@ export default function VersionInviteDialog({
       if (queued === 0) toast.info('Nothing to send — every selected candidate was skipped (see the reasons below)');
       else toast.success(`Sending ${plural(queued, 'invitation')}`);
     } catch (err) {
-      toast.error(friendlyErrorMessage(err, 'Could not start sending. Please try again.'));
+      showErrorToast(err, "Couldn't start sending invitations");
     } finally {
       setSending(false);
     }
@@ -1242,17 +1244,18 @@ export default function VersionInviteDialog({
               footer's Cancel closes (the popup standard). While a send runs,
               Minimize in the top-right corner — the Resume Scoring progress
               popup's — hands it to the floating card, bottom right. */}
-          <div className={`relative flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-3.5 border-b border-gray-100 dark:border-slate-700/60 ${afterSend ? 'pr-14 sm:pr-16' : ''}`}>
+          <div className={`relative flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-3.5 border-b border-gray-100 dark:border-slate-700/60 ${afterSend ? 'pr-14 sm:pr-40' : ''}`}>
             {afterSend && (
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={minimize}
-                className="w-8 !px-0 absolute top-3 right-4 sm:top-1/2 sm:-translate-y-1/2 sm:right-6"
+                className="w-8 !px-0 sm:w-auto sm:!px-3 absolute top-3 right-4 sm:top-1/2 sm:-translate-y-1/2 sm:right-6"
                 aria-label="Minimize"
                 title="Minimize — sending carries on; follow it from the icon bottom right"
               >
                 <Minus className="w-4 h-4" />
+                <span className="hidden sm:inline">Minimize</span>
               </Button>
             )}
             <div className="flex items-center gap-3 min-w-0">

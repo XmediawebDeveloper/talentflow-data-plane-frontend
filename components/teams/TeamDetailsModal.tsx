@@ -23,8 +23,10 @@ interface TeamDetailsModalProps {
   canDelete?: boolean;
   /** True while the edit form is loading its user list. */
   isPreparingEdit?: boolean;
-  /** This team's units in the last 30 days; omitted when the user can't see usage. */
+  /** This team's units over `unitsPeriod`; omitted when the user can't see usage. */
   units?: TeamUnits;
+  /** What the units cover: "billing period", or "last 30 days" without one. */
+  unitsPeriod?: string;
   /** Shows the units box even with no data for this team (`units` undefined → "—"). */
   showUnits?: boolean;
   /** Name of whoever created the team, when known. */
@@ -43,6 +45,7 @@ export default function TeamDetailsModal({
   units,
   showUnits = false,
   createdByName,
+  unitsPeriod = 'last 30 days',
 }: TeamDetailsModalProps) {
   if (!isOpen || !team) return null;
 
@@ -151,7 +154,7 @@ export default function TeamDetailsModal({
             <div className={statTile}>
               <dt className={statLabel}>
                 <BarChart3 className="h-3.5 w-3.5 text-brand-blue" />
-                Units · 30 days
+                Units · {unitsPeriod}
               </dt>
               <dd className="mt-1.5">
                 <TeamUnitsSummary units={units} />

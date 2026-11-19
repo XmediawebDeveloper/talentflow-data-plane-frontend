@@ -14,12 +14,13 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import PlanSelectionModal from './PlanSelectionModal';
 import { AUTH_THEME_CSS } from './authTheme';
 import Image from 'next/image';
 import SuccessAnimation from '@/components/ui/success-animation';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import type { TermsAndConditions } from '@/lib/types/terms';
 // Auto-login support after paid signup payment — see handlePaymentSubmit.
 import { setTokens, clearTokens } from '@/lib/services/api';
@@ -175,6 +176,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
   const [companyNameError, setCompanyNameError] = useState('');
   const [adminNameError, setAdminNameError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
 
   // OTP state (inline, not popup)
@@ -695,7 +697,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
         message = 'Workspace creation is taking longer than expected. Please try logging in — your account may already be ready.';
       }
       setError(message);
-      toast.error('Registration failed', { description: message });
+      showErrorToast(message, "Couldn't create your account");
     } finally {
       setIsLoading(false);
       setPaymentProcessing(false);
@@ -749,7 +751,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
         if (checkoutErr?.message?.includes('cancelled')) {
           toast.info('Payment cancelled');
         } else {
-          toast.error(friendlyErrorMessage(checkoutErr, "Payment failed. Please try again."));
+          showErrorToast(checkoutErr, "Couldn't complete the payment");
         }
         return;
       }
@@ -806,7 +808,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
       console.error('Payment error:', err);
       const message = err.message || 'Payment failed. Please try again.';
       setError(message);
-      toast.error('Payment failed', { description: message });
+      showErrorToast(message, "Couldn't complete the payment");
     } finally {
       setPaymentProcessing(false);
     }
@@ -1227,7 +1229,10 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
   // anything was typed).
   const handleCancel = () => {
     const typed = Object.values(form).some((v) => typeof v === 'string' && v.trim() !== '');
-    if (typed && !window.confirm('Leave signup? The details you entered will be lost.')) return;
+    if (typed) {
+      setShowLeaveConfirm(true);
+      return;
+    }
     router.push('/pricing');
   };
   const cancelBusy = isLoading || paymentProcessing || razorpayProcessing;
@@ -1850,6 +1855,17 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
         isOpen={showPlanModal}
         onPlanSelected={handlePlanSelected}
         onClose={() => router.push('/pricing')}
+      />
+
+      {/* Cancel with details typed — the app's own dialog, not window.confirm(). */}
+      <ConfirmationDialog
+        isOpen={showLeaveConfirm}
+        onClose={() => setShowLeaveConfirm(false)}
+        onConfirm={() => router.push('/pricing')}
+        title="Leave sign-up?"
+        description="The details you entered will be lost."
+        confirmText="Leave"
+        variant="warning"
       />
 
       {/* Top bar */}

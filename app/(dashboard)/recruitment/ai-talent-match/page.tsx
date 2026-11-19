@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import AITalentMatchPage from '@/components/AITalentMatchPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
@@ -224,14 +224,20 @@ export default function AITalentMatchRoute() {
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
 
-  const requestJobs = useCallback(() => {
+  const requestJobs = useCallback(function loadJobs() {
     if (jobsRequestedRef.current) return;
     jobsRequestedRef.current = true;
     jdService.list({ page_size: 100, source: 'my-jds' })
       .then(res => { if (mountedRef.current) setJobs((res.items || []).map(transformJDToJob)); })
       .catch(err => {
         console.error('[AITalentMatch] Failed to load jobs:', err);
-        toast.error('Failed to load your jobs. Refresh to try again.');
+        showErrorToast(err, "Couldn't load your jobs", {
+          id: 'ai-talent-match-jobs-load',
+          retry: () => {
+            jobsRequestedRef.current = false;
+            loadJobs();
+          },
+        });
       })
       .finally(() => { if (mountedRef.current) setJobsLoaded(true); });
   }, []);

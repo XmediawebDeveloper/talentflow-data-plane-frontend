@@ -4,6 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import TabEmptyState from '@/components/ui/tab-empty-state';
@@ -269,7 +270,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       window.location.reload();
     } catch (error: any) {
       console.error('[DELETE] Failed:', error);
-      toast.error(error?.message || 'Failed to delete result. Please try again.');
+      showErrorToast(error, `Couldn't delete the result for ${result.candidateName}`);
     } finally {
       setIsDeleting(null);
     }
@@ -353,9 +354,13 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   const { isTenantAdmin, hasPermissionCode } = useAuth();
   const canExportAssessments = isTenantAdmin || hasPermissionCode('assessments:export');
   const EXPORT_DENIED_REASON = 'You do not have permission to export assessments';
-  const exportErrorMessage = (error: unknown) => {
+  const showExportError = (error: unknown, retry: () => unknown) => {
     const msg = error instanceof Error ? error.message : '';
-    return /permission|forbidden|403/i.test(msg) ? EXPORT_DENIED_REASON : 'Failed to export results. Please try again.';
+    if (/permission|forbidden|403/i.test(msg)) {
+      showErrorToast(error, "Couldn't export results", { description: EXPORT_DENIED_REASON });
+    } else {
+      showErrorToast(error, "Couldn't export results", { retry });
+    }
   };
 
   const handleExportExcel = () => {
@@ -409,7 +414,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       setExportStep('format');
     } catch (error) {
       console.error('Export failed:', error);
-      toast.error(exportErrorMessage(error));
+      showExportError(error, exportCurrentPage);
     }
   };
 
@@ -451,7 +456,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       setSelectedResults([]);
     } catch (error) {
       console.error('Export failed:', error);
-      toast.error(exportErrorMessage(error));
+      showExportError(error, exportAllFiltered);
     }
   };
 
@@ -501,7 +506,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       toast.success('PDF downloaded successfully!');
     } catch (error: any) {
       console.error('[PDF] Failed to download:', error);
-      toast.error(error?.message || 'Failed to download PDF report. Please try again.');
+      showErrorToast(error, "Couldn't download the PDF report", { retry: () => handleDownloadPDF(resultId) });
     } finally {
       setDownloadingPDF(null);
     }
@@ -543,7 +548,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       setSelectedResults([]);
     } catch (error) {
       console.error('Failed to download bulk PDFs:', error);
-      toast.error('Failed to download PDF reports. Please try again.');
+      showErrorToast(error, "Couldn't download the PDF reports", { retry: handleDownloadBulkPDFs });
     } finally {
       setDownloadingBulkPDF(false);
     }

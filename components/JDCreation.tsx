@@ -43,6 +43,7 @@ import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
 import { clearFreshDraftVersion, isFreshDraftVersion } from '@/lib/utils/jdDraftVersion';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
 
 type CreationMode = 'ai' | 'manual';
@@ -3130,7 +3131,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           setLoadedJDData(jdData);
         } catch (error) {
           console.error('[JDCreation] Failed to fetch JD:', error);
-          toast.error('Failed to load JD');
+          showErrorToast(error, "Couldn't load this job description", {
+            id: `jd-${editingJDId}-load`,
+            retry: fetchJD,
+          });
         } finally {
           setLoadingJD(false);
         }
@@ -4097,10 +4101,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         setIndustryGate(result);
       }
     } catch (error) {
-      toast.error({
-        title: 'Could not add the industry',
-        description: friendlyErrorMessage(error, "Please try again."),
-      });
+      showErrorToast(error, "Couldn't add the industry");
     } finally {
       setIsResolvingIndustryGate(false);
     }
@@ -5158,6 +5159,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     needsLeavePromptRef.current = needsLeavePrompt;
   });
 
+  /* Generation (Step 1's AI call) is in flight. While this is true, leaving must
+     not raise the Leave dialog at all — the JD record that exists right now is
+     mid-write, so "Discard"/"Delete" would act on a draft the generation call is
+     still filling in. Read via a ref by the popstate/click listeners below. */
+  const isGeneratingNowRef = useRef(false);
+  useEffect(() => {
+    isGeneratingNowRef.current = isGenerating || isStreaming;
+  }, [isGenerating, isStreaming]);
+
   /* A draft version forked from a published JD just for this visit (Edit on a
      published JD - see lib/utils/jdDraftVersion.ts). Left untouched it is removed
      again on leave, silently; once edited, Discard removes it and the published
@@ -5244,6 +5254,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             e.preventDefault();
             e.stopPropagation();
 
+            if (isGeneratingNowRef.current) {
+              toast.error({
+                title: 'Generation in progress',
+                description: 'Please wait until the JD finishes generating before leaving this page.',
+              });
+              return;
+            }
+
             if (dropFork) {
               void dropUntouchedForkRef.current().then(() => router.push(href));
               return;
@@ -5296,7 +5314,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return;
       }
 
-      if (needsLeavePromptRef.current()) {
+      if (isGeneratingNowRef.current) {
+        // Absorb the Back press and re-plant the trap, same as the dialog case
+        // below, but without raising the dialog — generation is still writing
+        // to the record the Leave options would otherwise act on.
+        window.history.pushState(TRAP_STATE, '', window.location.href);
+        toast.error({
+          title: 'Generation in progress',
+          description: 'Please wait until the JD finishes generating before leaving this page.',
+        });
+      } else if (needsLeavePromptRef.current()) {
         // Cancel the visual back-navigation (there isn't one yet — the trap
         // absorbed it) and re-plant the trap for the next attempt.
         window.history.pushState(TRAP_STATE, '', window.location.href);
@@ -5642,16 +5669,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             title: 'OpenAI Quota Exceeded',
             description: 'The AI service is temporarily unavailable. Please try again later or contact support.'
           });
-        } else if (error instanceof Error && error.message) {
-          toast.error({
-            title: 'Generation Failed',
-            description: friendlyErrorMessage(error, "Please try again."),
-          });
         } else {
-          toast.error({
-            title: 'Generation Failed',
-            description: 'Could not generate JD. Please check your connection and try again.'
-          });
+          showErrorToast(error, "Couldn't generate the job description");
         }
         throw error;
       }
@@ -6640,10 +6659,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         }
       } catch (saveError) {
         console.error('[TalentFlow] Failed to save extract stage:', saveError);
-        toast.error({
-          title: 'Save Failed',
-          description: 'Could not save progress. Your work may be lost on refresh.',
-        });
+        showErrorToast(saveError, "Couldn't save your progress — it may be lost on refresh");
       }
 
       toast.success({
@@ -6659,20 +6675,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // Show appropriate error message
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       if (errorMessage.includes('AI service')) {
-        toast.error({
-          title: 'AI Service Error',
-          description: 'The AI extraction service is currently unavailable. Please try again later.'
-        });
-      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-        toast.error({
-          title: 'Connection Error',
-          description: 'Could not connect to the server. Please check your internet connection.'
+        showErrorToast(error, "Couldn't extract details from the job description", {
+          description: 'The AI extraction service is currently unavailable. Please try again later.',
         });
       } else {
-        toast.error({
-          title: 'Extraction Failed',
-          description: errorMessage || 'Could not extract parameters from JD. Please try again.',
-        });
+        // Network / status / readable-detail cases are picked by the helper.
+        showErrorToast(error, "Couldn't extract details from the job description");
       }
     } finally {
       setIsExtracting(false);
@@ -6785,10 +6793,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           console.log('[Add] Skill added and saved to DB successfully:', skillToAdd);
         } catch (error) {
           console.error('[Add] Failed to save skill addition:', error);
-          toast.error({
-            title: 'Failed to save',
-            description: 'Skill was added locally but could not be saved. Please try again.',
-          });
+          showErrorToast(error, "Couldn't save the new skill — it was added here but not saved");
         }
       } else {
         console.warn('[Add] editingId is null - skill addition not persisted to DB.');
@@ -6835,10 +6840,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[Delete] Skill deleted and saved to DB successfully:', deletedSkill);
       } catch (error) {
         console.error('[Delete] Failed to save skill deletion:', error);
-        toast.error({
-          title: 'Failed to save',
-          description: 'Skill was removed locally but could not be saved. Please try again.',
-        });
+        showErrorToast(error, "Couldn't save the skill removal — it was removed here but not saved");
       }
     } else {
       // editingId is null - JD hasn't been saved yet
@@ -6885,10 +6887,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[Move] Skill moved and saved to DB successfully:', skill);
       } catch (error) {
         console.error('[Move] Failed to save skill move:', error);
-        toast.error({
-          title: 'Failed to save',
-          description: 'Skill was moved locally but could not be saved. Please try again.',
-        });
+        showErrorToast(error, "Couldn't save the skill move — it was moved here but not saved");
       }
     } else {
       console.warn('[Move] editingId is null - skill move not persisted to DB.');
@@ -6932,6 +6931,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           console.log('[Add] Comment added and saved to DB');
         } catch (error) {
           console.error('[Add] Failed to save comment addition:', error);
+          showErrorToast(error, "Couldn't save the new comment");
         }
       }
     }
@@ -6955,6 +6955,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[Delete] Comment deleted and saved to DB');
       } catch (error) {
         console.error('[Delete] Failed to save comment deletion:', error);
+        showErrorToast(error, "Couldn't save the comment removal");
       }
     }
   };
@@ -7012,6 +7013,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           console.log('[Edit] Skill edited and saved to DB');
         } catch (error) {
           console.error('[Edit] Failed to save skill edit:', error);
+          showErrorToast(error, "Couldn't save the skill change");
         }
       }
     }
@@ -7060,6 +7062,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           console.log('[Edit] Comment edited and saved to DB');
         } catch (error) {
           console.error('[Edit] Failed to save comment edit:', error);
+          showErrorToast(error, "Couldn't save the comment change");
         }
       }
     }
@@ -7114,6 +7117,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[Delete] Nice comment deleted and saved to DB');
       } catch (error) {
         console.error('[Delete] Failed to save nice comment deletion:', error);
+        showErrorToast(error, "Couldn't save the comment removal");
       }
     }
   };
@@ -7187,6 +7191,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[Delete] Recruiter comment deleted and saved to DB');
       } catch (error) {
         console.error('[Delete] Failed to save recruiter comment deletion:', error);
+        showErrorToast(error, "Couldn't save the recruiter comment removal");
       }
     }
   };
@@ -7249,6 +7254,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           console.log('[Add] Certification added and saved to DB');
         } catch (error) {
           console.error('[Add] Failed to save certification addition:', error);
+          showErrorToast(error, "Couldn't save the new certification");
         }
       }
     }
@@ -7273,6 +7279,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[Delete] Certification deleted and saved to DB:', deletedCert);
       } catch (error) {
         console.error('[Delete] Failed to save certification deletion:', error);
+        showErrorToast(error, "Couldn't save the certification removal");
       }
     }
   };
@@ -7305,6 +7312,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           console.log('[Add] Domain keyword added and saved to DB');
         } catch (error) {
           console.error('[Add] Failed to save domain keyword addition:', error);
+          showErrorToast(error, "Couldn't save the new domain keyword");
         }
       }
     }
@@ -7329,6 +7337,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[Delete] Domain keyword deleted and saved to DB:', deletedKeyword);
       } catch (error) {
         console.error('[Delete] Failed to save domain keyword deletion:', error);
+        showErrorToast(error, "Couldn't save the domain keyword removal");
       }
     }
   };
@@ -7366,10 +7375,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           : { nice_to_have_skills: reordered });
       } catch (error) {
         console.error('[Reorder] Failed to save skill order:', error);
-        toast.error({
-          title: 'Failed to save',
-          description: 'Skill was reordered locally but could not be saved. Please try again.',
-        });
+        showErrorToast(error, "Couldn't save the new skill order — it was reordered here but not saved");
       }
     }
   };
@@ -7432,6 +7438,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log(`[Delete] ${category} deleted and saved to DB`);
       } catch (error) {
         console.error(`[Delete] Failed to save ${category} deletion:`, error);
+        showErrorToast(error, "Couldn't save the comment removal");
       }
     }
   };
@@ -7505,6 +7512,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[Delete] Location deleted and saved to DB');
       } catch (error) {
         console.error('[Delete] Failed to save location deletion:', error);
+        showErrorToast(error, "Couldn't save the location removal");
       }
     }
   };
@@ -7709,10 +7717,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           return;
         }
       } catch (error) {
-        toast.error({
-          title: 'Could not check the industry',
-          description: friendlyErrorMessage(error, "Please try again."),
-        });
+        showErrorToast(error, "Couldn't check the industry");
         return;
       } finally {
         setIsRegenerating(false);
@@ -8038,10 +8043,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     } catch (saveError) {
       console.error('[TalentFlow] Failed to save review stage:', saveError);
-      toast.error({
-        title: 'Save Failed',
-        description: 'Could not save progress. Your work may be lost on refresh.',
-      });
+      showErrorToast(saveError, "Couldn't save your progress — it may be lost on refresh");
     }
   };
 
@@ -8277,7 +8279,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       toast.success({ title: 'Downloaded!', description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}saved as a PDF file.` });
     } catch (error) {
       console.error('[TalentFlow] JD download failed:', error);
-      toast.error({ title: 'Download failed', description: 'Could not create the file. Please try again.' });
+      showErrorToast(error, "Couldn't download the job description", { retry: () => downloadReviewJD(format) });
     }
   };
 
@@ -8342,10 +8344,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     } catch (error) {
       console.error('[TalentFlow] Regeneration failed:', error);
-      toast.error({
-        title: 'Regeneration Failed',
-        description: 'Could not regenerate JD. Please try again.'
-      });
+      showErrorToast(error, "Couldn't regenerate the job description");
     } finally {
       setIsRegenerating(false);
     }
@@ -8626,10 +8625,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         handleQuotaError(error, router, 'Failed to publish job description');
       } else {
         // Use regular toast for non-quota errors
-        toast.error({
-          title: "Couldn't publish job description",
-          description: friendlyErrorMessage(error, "Please try again."),
-        });
+        showErrorToast(error, "Couldn't publish the job description");
       }
     }
   };
@@ -8645,6 +8641,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Prevent multiple clicks from creating multiple JDs
     if (isNavigatingBack || isSavingDraft) {
       console.log('[DEBUG] handleBackClick - already navigating or saving, ignoring click');
+      return;
+    }
+
+    if (isGenerating || isStreaming) {
+      toast.error({
+        title: 'Generation in progress',
+        description: 'Please wait until the JD finishes generating before leaving this page.',
+      });
       return;
     }
 
@@ -8763,10 +8767,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     } catch (error) {
       discardedRef.current = false;
       console.error('[Leave] Failed to discard changes:', error);
-      toast.error({
-        title: 'Could not discard changes',
-        description: friendlyErrorMessage(error, "Please try again."),
-      });
+      showErrorToast(error, "Couldn't discard changes");
     } finally {
       setLeaveBusy(null);
     }
@@ -8788,10 +8789,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     } catch (error) {
       discardedRef.current = false;
       console.error('[Leave] Failed to delete the JD:', error);
-      toast.error({
-        title: 'Could not delete this JD',
-        description: friendlyErrorMessage(error, "Please try again."),
-      });
+      showErrorToast(error, "Couldn't delete this JD");
     } finally {
       setLeaveBusy(null);
     }
@@ -8827,7 +8825,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       router.push('/recruitment/job-openings');
     } catch (error) {
       console.error('Failed to delete JD:', error);
-      toast.error('Failed to delete JD');
+      showErrorToast(error, "Couldn't delete the JD");
     } finally {
       setIsCancelling(false);
       setShowCancelDialog(false);
@@ -9010,10 +9008,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     } catch (error) {
       console.error('[ERROR] Failed to save draft:', error);
       setIsSavingDraft(false);
-      toast.error({
-        title: "Couldn't save draft",
-        description: friendlyErrorMessage(error, "Please try again."),
-      });
+      showErrorToast(error, "Couldn't save the draft");
       // Stay on page even on error - let user retry or fix issues
       return false;
     }

@@ -10,6 +10,7 @@ import {
   CreditCard, AlertCircle, Loader2, CheckCircle, ShieldCheck, ArrowLeft, Check, Shield
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import Cookies from 'js-cookie';
 import { decodeParam, decodePlanId } from '@/lib/utils/planEncoder';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
@@ -192,7 +193,7 @@ function CompletePaymentContent() {
         if (rzpErr.message?.includes('cancelled')) {
           toast.info('Payment cancelled', { description: 'You can try again anytime.' });
         } else {
-          toast.error('Payment failed', { description: rzpErr.message });
+          showErrorToast(rzpErr, "Couldn't complete the payment");
         }
         setPaymentProcessing(false);
         setPaymentStep('');
@@ -264,7 +265,7 @@ function CompletePaymentContent() {
         ? 'Payment processing failed. Please try again or contact support if the issue persists.'
         : rawMessage;
       setError(message);
-      toast.error('Payment failed', { description: message });
+      showErrorToast(message, "Couldn't complete the payment");
     } finally {
       setPaymentProcessing(false);
       setPaymentStep('');

@@ -6,7 +6,7 @@ import {
   Archive, BarChart3, CheckCircle, ClipboardList, Clock, Eye, FileText, Info, Loader2,
   RefreshCw, X
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
 import { loadJobAssessmentHierarchy } from '@/lib/utils/jobAssessmentHierarchy';
@@ -167,7 +167,7 @@ export default function AssessmentVersionHistoryModal({
      first by default); Created By / Rounds / Status by name, count, status. */
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'created', dir: 'desc' });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async function loadHistory(): Promise<void> {
     setLoading(true);
     try {
       const hierarchy = await loadJobAssessmentHierarchy(jobId);
@@ -176,8 +176,11 @@ export default function AssessmentVersionHistoryModal({
       setJobVersionById(Object.fromEntries(hierarchy.jobVersionByAssessmentId));
       const entries = await Promise.all(all.map(async (c) => [c.id, await loadStats(c).catch(() => null)] as const));
       setStats(Object.fromEntries(entries.filter(([, v]) => v !== null)) as Record<string, VersionStats>);
-    } catch {
-      toast.error('Could not load the assessment version history.');
+    } catch (error) {
+      showErrorToast(error, "Couldn't load the assessment version history", {
+        id: 'assessment-version-history-modal-load',
+        retry: () => loadHistory(),
+      });
     } finally {
       setLoading(false);
     }

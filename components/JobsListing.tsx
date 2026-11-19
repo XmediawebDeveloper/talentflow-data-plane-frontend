@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { Job } from '@/lib/types/types';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -600,7 +601,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   const serverStats = paged.stats;
 
   useEffect(() => {
-    if (paged.error) toast.error('Failed to load job openings');
+    if (paged.error) showErrorToast(paged.error, "Couldn't load job openings", { id: 'jobs-list-load', retry: () => refreshListRef.current?.() });
   }, [paged.error]);
 
   /* Statuses / deletes the host has just written show at once; the refetch
@@ -701,8 +702,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
       setAllMatchingIds(ids);
       setVersionPicks(new Map());
       setSelectedJobs(new Set(ids));
-    } catch {
-      toast.error('Could not select all jobs. Please try again.');
+    } catch (error) {
+      showErrorToast(error, "Couldn't select all jobs", { retry: selectAllPages });
     } finally {
       setSelectingAll(false);
     }
@@ -729,8 +730,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
       setAllVersionIds(versionIds);
       setVersionPicks(new Map(versionIds.map((id) => [id, true])));
       setSelectedJobs(new Set(rowIds));
-    } catch {
-      toast.error('Could not select all versions. Please try again.');
+    } catch (error) {
+      showErrorToast(error, "Couldn't select all versions", { retry: selectAllVersions });
     } finally {
       setSelectingAll(false);
     }

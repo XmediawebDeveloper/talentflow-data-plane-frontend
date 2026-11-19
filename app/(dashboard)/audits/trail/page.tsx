@@ -60,6 +60,7 @@ import NameAvatar from '@/components/ui/name-avatar';
 import { MobileRecordList, MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { exportRows } from '@/lib/utils/exportUtils';
 import { toast } from '@/components/ui/enhanced-toast';
+import { showErrorToast } from '@/lib/utils/errorToast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -864,7 +865,7 @@ export default function AuditTrailPage() {
       setExportModalOpen(false);
     } catch (err) {
       console.error('Export failed:', err);
-      toast.error({ title: 'Export failed', description: err instanceof Error ? err.message : 'Please try again.' });
+      showErrorToast(err, "Couldn't export audit records", { retry: handleExport });
     } finally {
       setExportLoading(false);
     }

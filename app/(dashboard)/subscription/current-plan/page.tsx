@@ -14,6 +14,7 @@ import { Tooltip } from '@/components/ui/tooltip';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -1803,7 +1804,7 @@ function CurrentPlanContent() {
           if (rzpErr.message?.includes('cancelled')) {
             toast.info('Payment cancelled', { description: 'You can try again anytime.' });
           } else {
-            toast.error('Payment failed', { description: rzpErr.message });
+            showErrorToast(rzpErr, "Couldn't complete the payment");
           }
           setIsSelectingPlan(false);
           setPaymentStep('');
@@ -1993,10 +1994,7 @@ function CurrentPlanContent() {
         }
 
         setError(errorMessage);
-        toast.error('Plan Selection Failed', {
-          description: errorMessage,
-          duration: 6000,
-        });
+        showErrorToast(errorMessage, "Couldn't change your plan");
       }
     } catch (err) {
       console.error('Error selecting plan:', err);
@@ -2013,10 +2011,7 @@ function CurrentPlanContent() {
       }
 
       setError(errorMessage);
-      toast.error('Plan Selection Failed', {
-        description: errorMessage,
-        duration: 6000,
-      });
+      showErrorToast(errorMessage, "Couldn't change your plan");
     } finally {
       setIsSelectingPlan(false);
       setPaymentStep('');

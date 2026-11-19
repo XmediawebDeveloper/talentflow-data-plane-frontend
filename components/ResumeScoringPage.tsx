@@ -29,6 +29,7 @@ import api, { dispatchUnitsConsumed } from '@/lib/services/api';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import type { ScoredJdListParams } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import RecordPager from '@/components/RecordPager';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { useFreshQuota } from '@/lib/hooks/useFreshQuota';
@@ -57,7 +58,7 @@ import { BulkActionConfirmModal, useScoringActionPermissions, renderInviteTarget
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { clearInviteHandoff, readInviteHandoff, RESUME_INVITE_PARAM, type InviteHandoff } from '@/lib/utils/resumeScoringInviteHandoff';
-import { downloadScorecardPdf, downloadScorecardsZip, formatFileDate, scorecardVersionTag } from '@/lib/utils/scorecardDownload';
+import { downloadScorecardPdf, downloadScorecardsZipWithToast, formatFileDate, scorecardVersionTag } from '@/lib/utils/scorecardDownload';
 import { TableSkeleton, Skeleton } from '@/components/ui/skeleton';
 import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
@@ -1433,7 +1434,12 @@ export default function ResumeScoringPage({
       setGlobalFailed(true);
       // Let the next need (another tick / expand) try again.
       globalPrefetchedRef.current = false;
-      if (!silent) toast.error('Failed to load all scored candidates');
+      if (!silent) {
+        showErrorToast(error, "Couldn't load all scored candidates", {
+          id: 'global-scored-resumes',
+          retry: () => fetchGlobalScoredResumes(),
+        });
+      }
     } finally {
       setIsLoadingGlobal(false);
       setGlobalSettled(true);
@@ -1521,7 +1527,10 @@ export default function ResumeScoringPage({
       }
     }
     if (!row) {
-      toast.error('Could not open this scoring result. Please try again.');
+      showErrorToast(null, "Couldn't open this scoring result", {
+        description: 'The result may still be saving. Wait a few seconds and try again.',
+        retry: () => openProgressResult(item),
+      });
       return;
     }
     // Hide the popup (the run itself is left alone) and open the result.
@@ -2169,7 +2178,7 @@ export default function ResumeScoringPage({
       } catch (err) {
         console.error(`[ResumeScoringPage] Failed to dispatch scoring batch:`, err);
         // Show the reason (e.g. not enough Resume Scoring units) when there is one.
-        toast.error(err instanceof Error && err.message ? err.message : 'Failed to start scoring. Please try again.');
+        showErrorToast(err, "Couldn't start scoring");
         // Mark all queued items as failed so the modal shows the error
         for (let i = 0; i < newItemStatuses.length; i++) {
           newItemStatuses[i].status = 'failed';
@@ -3393,7 +3402,7 @@ export default function ResumeScoringPage({
                       }
                     : p
                 ));
-                toast.error(`Failed to retry scoring for ${item.candidateName}`);
+                showErrorToast(error, `Couldn't re-score ${item.candidateName}`);
               }
             }}
           />
@@ -3702,14 +3711,16 @@ export default function ResumeScoringPage({
           const base = singleSelectedJob
             ? `${jdCodeOf(singleSelectedJob) ? `${jdCodeOf(singleSelectedJob)}_` : ''}${singleSelectedJob.jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_')}`
             : 'Selected_Jobs';
-          await downloadScorecardsZip(rows, `${base}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
-          toast.success(`${rows.length} scorecards downloaded`);
+          // Live progress / partial-failure / error toasts come from the helper;
+          // keep the selection when nothing at all could be downloaded.
+          const ok = await downloadScorecardsZipWithToast(rows, `${base}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
+          if (!ok) return;
         }
         // Download is read-only: untick the jobs (hides the Actions bar), no refresh.
         clearJobSelection();
       } catch (error) {
         console.error('Error downloading scorecards:', error);
-        toast.error('Failed to download scorecards');
+        showErrorToast(error, "Couldn't download the scorecard", { retry: () => runJobBulkDownload(rows) });
       } finally {
         setJobBulkDownloading(false);
       }
@@ -4509,7 +4520,7 @@ export default function ResumeScoringPage({
                   setShowProgressModal(true);
                 } catch (error) {
                   console.error('[ResumeScoringPage] Failed to load job progress:', error);
-                  toast.error('Failed to load scoring progress for this job');
+                  showErrorToast(error, "Couldn't load scoring progress for this job", { retry: openWholeJobProgress });
                 } finally {
                   setLoadingProgressJobId(null);
                 }
@@ -5480,7 +5491,7 @@ export default function ResumeScoringPage({
                       }
                     : p
                 ));
-                toast.error(`Failed to retry scoring for ${item.candidateName}`);
+                showErrorToast(error, `Couldn't re-score ${item.candidateName}`);
               }
             }}
           />
@@ -6342,7 +6353,7 @@ export default function ResumeScoringPage({
                     }
                   : p
               ));
-              toast.error(`Failed: ${errorMsg}`);
+              showErrorToast(error, `Couldn't re-score ${item.candidateName}`);
             }
           }}
         />

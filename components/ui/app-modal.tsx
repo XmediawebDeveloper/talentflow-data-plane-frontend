@@ -1,8 +1,23 @@
 'use client';
 
-import React, { ReactNode, useEffect } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { Drawer as DrawerPrimitive } from 'vaul';
 import { Button } from './button';
+
+/** Below Tailwind's `sm` (640px) — where `mobileSheet` turns into a bottom sheet. */
+const PHONE_QUERY = '(max-width: 639.98px)';
+function useIsPhone(): boolean {
+  const [isPhone, setIsPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(PHONE_QUERY);
+    const update = () => setIsPhone(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return isPhone;
+}
 
 /**
  * Standard popup frame — every popup uses the same format:
@@ -111,9 +126,11 @@ interface AppModalProps {
   compactFooter?: boolean;
   /** Overrides the `size` width (e.g. `sm:max-w-[840px]`). Rare — prefer `size`. */
   widthClassName?: string;
-  /** Phones (below sm): full-screen sheet that slides up, instead of a
-   *  centred box — for long forms. The footer stays pinned at the bottom.
-   *  From sm up nothing changes. Off by default. */
+  /** Phones (below sm): a bottom sheet (vaul) instead of a centred box —
+   *  rounded top with a drag handle, as tall as its content (max 92% of the
+   *  screen), footer pinned at the bottom. Swipe down = Cancel (so a popup
+   *  that asks "discard changes?" on Cancel still asks); tapping outside does
+   *  nothing, as on the centred box. From sm up nothing changes. Off by default. */
   mobileSheet?: boolean;
 }
 
@@ -192,6 +209,8 @@ export default function AppModal({
   // White header (warning's frame) — `plain` keeps a brand-blue icon tile.
   const lightHeader = warning || tone === 'plain';
   const showFooter = !closeButton || !!footer || !!footerStart || (actions?.length ?? 0) > 0;
+  const isPhone = useIsPhone();
+  const asSheet = mobileSheet && isPhone;
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -201,18 +220,9 @@ export default function AppModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onCancel, cancelDisabled]);
 
-  if (!open) return null;
-
-  return (
-    <div
-      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-gray-900/60 p-2 backdrop-blur-sm sm:p-6 ${mobileSheet ? "max-sm:items-end max-sm:p-0" : ""}`}
-      role="dialog"
-      aria-modal="true"
-      aria-label={ariaLabel ?? (typeof title === 'string' ? title : undefined)}
-    >
-      <div
-        className={`tf-round-edges flex max-h-[calc(100dvh-1rem)] w-full max-w-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[calc(100dvh-3rem)] ${widthClassName ?? APP_MODAL_WIDTH[size]} ${mobileSheet ? "max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:rounded-none max-sm:border-0 max-sm:animate-in max-sm:slide-in-from-bottom max-sm:duration-300 motion-reduce:animate-none" : ""}`}
-      >
+  const TitleTag = asSheet ? DrawerPrimitive.Title : 'h2';
+  const frame = (
+      <>
         {/* Header — no close button unless `closeButton`; otherwise Cancel in the footer is the way out. */}
         <div
           className={`flex shrink-0 items-center justify-between gap-3 px-4 py-4 sm:px-6 ${
@@ -235,13 +245,13 @@ export default function AppModal({
               </div>
             )}
             <div className="min-w-0">
-              <h2
+              <TitleTag
                 className={`line-clamp-2 break-words text-base font-bold leading-snug sm:text-lg ${
                   lightHeader ? 'text-gray-900 dark:text-slate-50' : 'text-white'
                 }`}
               >
                 {title}
-              </h2>
+              </TitleTag>
               {subtitle && (
                 <p
                   className={`text-xs sm:text-sm ${
@@ -288,6 +298,56 @@ export default function AppModal({
             />
           </div>
         ))}
+      </>
+  );
+
+  /* Phone + mobileSheet: the same header / body / footer in a vaul bottom
+     sheet. `open` stays controlled by the caller; any close the sheet asks
+     for (a swipe down) goes through onCancel, exactly like the Cancel button. */
+  if (asSheet) {
+    return (
+      <DrawerPrimitive.Root
+        open={open}
+        onOpenChange={(next) => { if (!next && !cancelDisabled) onCancel(); }}
+        dismissible={!cancelDisabled}
+        repositionInputs={false}
+      >
+        <DrawerPrimitive.Portal>
+          <DrawerPrimitive.Overlay className={`fixed inset-0 ${zIndexClass} bg-gray-900/60 backdrop-blur-sm`} />
+          <DrawerPrimitive.Content
+            aria-describedby={undefined}
+            aria-label={ariaLabel ?? (typeof title === 'string' ? title : undefined)}
+            /* Tapping outside never closes (half-filled forms); Esc is the
+               window listener above, so Radix's own Esc is switched off. */
+            onPointerDownOutside={(e) => e.preventDefault()}
+            onInteractOutside={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => e.preventDefault()}
+            className={`fixed inset-x-0 bottom-0 ${zIndexClass} flex max-h-[92dvh] flex-col overflow-hidden rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl outline-none dark:border-slate-700 dark:bg-slate-900`}
+          >
+            {/* Drag handle — swipe down from here (or the header) to cancel. */}
+            <div className="flex shrink-0 justify-center bg-white py-2 dark:bg-slate-900" aria-hidden="true">
+              <span className="h-1.5 w-10 rounded-full bg-gray-300 dark:bg-slate-600" />
+            </div>
+            {frame}
+          </DrawerPrimitive.Content>
+        </DrawerPrimitive.Portal>
+      </DrawerPrimitive.Root>
+    );
+  }
+
+  if (!open) return null;
+
+  return (
+    <div
+      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-gray-900/60 p-2 backdrop-blur-sm sm:p-6`}
+      role="dialog"
+      aria-modal="true"
+      aria-label={ariaLabel ?? (typeof title === 'string' ? title : undefined)}
+    >
+      <div
+        className={`tf-round-edges flex max-h-[calc(100dvh-1rem)] w-full max-w-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[calc(100dvh-3rem)] ${widthClassName ?? APP_MODAL_WIDTH[size]}`}
+      >
+        {frame}
       </div>
     </div>
   );

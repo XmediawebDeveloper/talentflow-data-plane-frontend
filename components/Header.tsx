@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, Lock, X, Building2, Menu, MessageCircle, Monitor, Moon, Sun } from 'lucide-react';
+import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, Lock, X, Building2, Menu, MessageCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
@@ -15,9 +15,12 @@ import { useQuota } from '@/contexts/QuotaContext';
 import notificationService, { Notification } from '@/lib/services/notificationService';
 import { usePathname, useRouter } from 'next/navigation';
 import chatService from '@/lib/services/chatService';
+import HeaderChatMenu from '@/components/HeaderChatMenu';
+import { BellAnimatedIcon, ThemeAnimatedIcon } from '@/components/icons/HeaderAnimatedIcons';
 import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
 import { isRouteAuthorized } from '@/lib/navigation/routeAccess';
 import NameAvatar from '@/components/ui/name-avatar';
@@ -112,6 +115,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(false);
   const [tenantStatus, setTenantStatus] = useState<string | null>(null);
 
   // Notification state
@@ -295,7 +299,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
   /* Team Chat unread — its own icon next to the bell, since chat stays out of
      the bell's popup. Anyone signed in can use Team Chat, so no permission gate. */
   const pathname = usePathname();
-  const onTeamChat = pathname?.startsWith('/organization/team-chat') ?? false;
+  const onTeamChat = pathname === '/chat' || (pathname?.startsWith('/chat/') ?? false);
   const onTeamChatRef = useRef(onTeamChat);
   useEffect(() => {
     onTeamChatRef.current = onTeamChat;
@@ -714,6 +718,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
 
   const planName = getPlanDisplayName();
   const usagePercentage = totalUnits.limit > 0 ? ((totalUnits.used / totalUnits.limit) * 100) : 0;
+  /* Shown beside a usage bar: whole percent, "<1%" for a sliver of use (so a
+     little use never reads as 0%), capped at 100%. */
+  const percentLabel = (pct: number) => (pct > 0 && pct < 1 ? '<1%' : `${Math.min(100, Math.round(pct))}%`);
   const isPendingStatus = tenantStatus === 'PENDING' || tenantStatus === 'SUSPENDED' || tenantStatus === 'LOCKED';
   const isExpiredSubscription = ['expired', 'inactive'].includes((quotaData?.subscription_status || '').toLowerCase());
 
@@ -772,11 +779,13 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
          more for a 1.6s checkmark is not worth it, and a toast is how the rest
          of this file reports what happened anyway. */
       toast.success('User ID copied to clipboard');
-    } catch {
+    } catch (err) {
       /* Clipboard is blocked on insecure origins and by some browser policies.
          Say so rather than flashing a tick for a copy that did not happen —
          the tooltip still shows the full id to select by hand. */
-      toast.error('Could not copy — your browser blocked clipboard access');
+      showErrorToast(err, "Couldn't copy your user ID", {
+        description: 'Your browser blocked clipboard access. Select the ID in the tooltip to copy it by hand.',
+      });
     }
   };
 
@@ -852,6 +861,15 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       subtitle: 'Guides, articles and how-tos',
       href: '/help',
       alwaysEnabled: true,
+    },
+    /* Chat — its own page (/chat), open to everyone; listed here rather than
+       as a dashboard tile. The header's chat icon opens the quick-reply box. */
+    {
+      id: 'chat',
+      icon: MessageCircle,
+      title: 'Chat',
+      subtitle: 'Messages & channels',
+      href: '/chat',
     },
     {
       id: 'support',
@@ -940,6 +958,20 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
           </Button>
         )}
 
+        {/* Quick actions (UI/UX guidelines §1) — start a main workflow from any page. */}
+        <QuickActions
+          open={showQuickActions}
+          onOpenChange={(open) => {
+            setShowQuickActions(open);
+            if (open) {
+              setShowNotifications(false);
+              setShowPlanMenu(false);
+              setShowUserMenu(false);
+            }
+          }}
+          subscriptionExpired={subscriptionExpired}
+        />
+
         {/* Plan & Unit Balance Display - Clickable to show breakdown dropdown */}
         {hasQuotaPermission && !canSeeUnits && (
           <div
@@ -988,14 +1020,35 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                 )}
               </div>
               {!loadingQuota && !quotaError && !isPendingStatus && !isExpiredSubscription && totalUnits.limit > 0 && (
-                <div className="hidden sm:block w-10 lg:w-12 h-1.5 rounded-full bg-slate-200/80 dark:bg-slate-700/80 overflow-hidden">
+                /* Units used, as a bar and its percentage (same colour). */
+                <div
+                  className="hidden sm:flex items-center gap-1"
+                  title={`${percentLabel(usagePercentage)} of units used`}
+                >
                   <div
-                    className={`h-full rounded-full transition-all ${
-                      usagePercentage > 90 ? 'bg-destructive' :
-                      usagePercentage > 70 ? 'bg-brand-orange' : 'bg-brand-blue'
+                    role="progressbar"
+                    aria-label="Units used"
+                    aria-valuenow={Math.min(100, Math.round(usagePercentage))}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    className="w-10 lg:w-12 h-1.5 rounded-full bg-slate-200/80 dark:bg-slate-700/80 overflow-hidden"
+                  >
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        usagePercentage > 90 ? 'bg-destructive' :
+                        usagePercentage > 70 ? 'bg-brand-orange' : 'bg-brand-blue dark:bg-blue-400'
+                      }`}
+                      style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                    />
+                  </div>
+                  <span
+                    className={`min-w-[2.1rem] text-right text-2xs font-semibold tabular-nums leading-none ${
+                      usagePercentage > 90 ? 'text-destructive dark:text-red-400' :
+                      usagePercentage > 70 ? 'text-brand-orange-deep dark:text-orange-300' : 'text-slate-600 dark:text-slate-300'
                     }`}
-                    style={{ width: `${Math.min(usagePercentage, 100)}%` }}
-                  />
+                  >
+                    {percentLabel(usagePercentage)}
+                  </span>
                 </div>
               )}
               <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform group-hover:text-slate-500 dark:text-slate-500 ${showPlanMenu ? 'rotate-180' : ''}`} />
@@ -1039,7 +1092,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           )}
                           {renewalLabel && (
                             <>
-                              {planPeriodLabel && <span className="text-gray-300">•</span>}
+                              {planPeriodLabel && <span className="text-gray-300 dark:text-slate-600">•</span>}
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3 text-gray-400" />
                                 {quotaData?.is_trial ? 'Ends on' : 'Renews on'} {renewalLabel}
@@ -1048,7 +1101,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           )}
                           {planDaysLeft != null && (
                             <>
-                              {(planPeriodLabel || renewalLabel) && <span className="text-gray-300">•</span>}
+                              {(planPeriodLabel || renewalLabel) && <span className="text-gray-300 dark:text-slate-600">•</span>}
                               <span className="text-success-strong font-medium">{planDaysLeft} days left</span>
                             </>
                           )}
@@ -1098,11 +1151,24 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           <div className="flex-1 min-w-0">
                             <div className="tf-row-title truncate">{meta.label}</div>
                             {!isUnlimited && limit != null && limit > 0 && (
-                              <div className="mt-1 h-1.5 max-w-[140px] bg-gray-100 rounded-full overflow-hidden">
+                              /* Used share, as a bar and its percentage. */
+                              <div className="mt-1 flex items-center gap-1.5" title={`${percentLabel(pct)} of ${meta.label} used`}>
                                 <div
-                                  className={`h-full rounded-full transition-[width] ${meta.bar}`}
-                                  style={{ width: `${pct}%` }}
-                                />
+                                  role="progressbar"
+                                  aria-label={`${meta.label} used`}
+                                  aria-valuenow={Math.round(pct)}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  className="h-1.5 w-full max-w-[140px] bg-gray-100 dark:bg-slate-700/80 rounded-full overflow-hidden"
+                                >
+                                  <div
+                                    className={`h-full rounded-full transition-[width] ${meta.bar}`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className={`shrink-0 text-2xs font-semibold tabular-nums ${meta.left}`}>
+                                  {percentLabel(pct)}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -1135,7 +1201,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                     return (
                       <div className="mx-3 mt-1.5 rounded-lg bg-brand-blue/5 border border-brand-blue/10 px-2.5 py-2 sm:px-3 sm:py-2.5">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-200/70 text-gray-600 flex items-center justify-center flex-shrink-0">
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-200/70 text-gray-600 dark:bg-slate-700/70 dark:text-slate-300 flex items-center justify-center flex-shrink-0">
                             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -1188,35 +1254,18 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
           </div>
         )}
 
-        {/* Team Chat — unread messages across all conversations */}
-        <Tooltip content="Team Chat" position="bottom">
-          <button
-            onClick={() => {
-              setShowNotifications(false);
-              setShowPlanMenu(false);
-              setShowUserMenu(false);
-              router.push('/organization/team-chat');
-            }}
-            className="relative p-1.5 sm:p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
-            aria-label={chatUnread > 0 ? `Team Chat, ${chatUnread} unread` : 'Team Chat'}
-          >
-            <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-            {chatUnread > 0 && (
-              <span className="absolute top-0 right-0 flex items-center justify-center">
-                <span
-                  className="absolute inset-0 rounded-full bg-brand-blue/60 animate-ping motion-reduce:hidden"
-                  aria-hidden="true"
-                />
-                <span
-                  className="relative flex items-center justify-center min-w-[0.875rem] sm:min-w-[1rem] h-3.5 sm:h-4 px-0.5 sm:px-1 bg-brand-blue text-white rounded-full ring-1 ring-white font-semibold text-2xs sm:text-2xs leading-none tabular-nums"
-                  aria-hidden="true"
-                >
-                  {chatUnread > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : chatUnread}
-                </span>
-              </span>
-            )}
-          </button>
-        </Tooltip>
+        {/* Chat — click opens the Chat page; hover shows the unread
+            conversations with quick reply / open / mark as read. */}
+        <HeaderChatMenu
+          unread={chatUnread}
+          onUnreadChanged={fetchChatUnread}
+          currentUserId={user?.id}
+          onActivate={() => {
+            setShowNotifications(false);
+            setShowPlanMenu(false);
+            setShowUserMenu(false);
+          }}
+        />
 
         {/* FIX-010: Notifications with Tooltip */}
         <div className="relative">
@@ -1227,10 +1276,13 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                 setShowPlanMenu(false);
                 setShowUserMenu(false);
               }}
-              className="relative p-1.5 sm:p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+              data-active={showNotifications || undefined}
+              className={`tf-hbtn relative p-1.5 sm:p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors ${
+                showNotifications ? 'bg-brand-blue/5 text-brand-blue' : 'text-gray-500'
+              }`}
               aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
             >
-              <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+              <BellAnimatedIcon className="w-4 h-4 sm:w-5 sm:h-5" />
               {unreadCount > 0 && (
                 /* Pinned to the button's very corner and kept small, so the
                    bell reads as a bell: at the previous size (h-4/h-5 plus a
@@ -1248,7 +1300,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                     aria-hidden="true"
                   />
                   <span
-                    className="relative flex items-center justify-center min-w-[0.875rem] sm:min-w-[1rem] h-3.5 sm:h-4 px-0.5 sm:px-1 bg-destructive text-white rounded-full ring-1 ring-white font-semibold text-2xs sm:text-2xs leading-none tabular-nums"
+                    className="relative flex items-center justify-center min-w-[0.875rem] sm:min-w-[1rem] h-3.5 sm:h-4 px-0.5 sm:px-1 bg-destructive text-white rounded-full ring-1 ring-white dark:ring-slate-900 font-semibold text-2xs sm:text-2xs leading-none tabular-nums"
                     aria-hidden="true"
                   >
                     {unreadCount > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : unreadCount}
@@ -1399,14 +1451,13 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
         <Tooltip content={`Theme: ${THEME_LABEL[theme ?? 'light'] ?? 'Light'} — click for ${THEME_LABEL[nextTheme(theme)]}`} position="bottom">
           <button
             onClick={() => setTheme(nextTheme(theme))}
-            className="p-1.5 sm:p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+            className="tf-hbtn p-1.5 sm:p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
             aria-label={`Theme: ${THEME_LABEL[theme ?? 'light'] ?? 'Light'}. Switch to ${THEME_LABEL[nextTheme(theme)]}`}
           >
-            {theme === 'system'
-              ? <Monitor className="w-4 h-4 sm:w-5 sm:h-5" />
-              : theme === 'dark'
-                ? <Moon className="w-4 h-4 sm:w-5 sm:h-5" />
-                : <Sun className="w-4 h-4 sm:w-5 sm:h-5" />}
+            <ThemeAnimatedIcon
+              mode={theme === 'system' ? 'system' : theme === 'dark' ? 'dark' : 'light'}
+              className="w-4 h-4 sm:w-5 sm:h-5"
+            />
           </button>
         </Tooltip>
 

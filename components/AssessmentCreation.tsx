@@ -19,7 +19,7 @@ import type { JDResponse } from '@/lib/services/jdService';
 import api from '@/lib/services/api';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
@@ -36,7 +36,8 @@ import { loadJobAssessmentHierarchy } from '@/lib/utils/jobAssessmentHierarchy';
 import AssessmentJobBinding from '@/components/assessments/AssessmentJobBinding';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
-import JobEligibilityNote from '@/components/jobs/JobEligibilityNote';
+import JobEligibilityNote, { ASSESSMENT_ELIGIBILITY_LEGEND } from '@/components/jobs/JobEligibilityNote';
+import { PageHeader } from '@/components/ui/page-header';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import ListPagination from '@/components/ListPagination';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -1194,7 +1195,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       } catch (error) {
         console.error('Failed to load assessment for edit:', error);
         setEditLoadSettled(true);
-        toast.error('Failed to load assessment for editing. Please try again.');
+        showErrorToast(error, "Couldn't load the assessment for editing");
         /* In a popup, "back" is closing it — the recruiter is already on the
            record they were editing and navigating away from it would be a
            worse answer than the toast. */
@@ -1327,7 +1328,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   const [newHRQuestion, setNewHRQuestion] = useState<HRQuestionFormState>(EMPTY_HR_QUESTION_FORM);
   const [isSavingHRQuestion, setIsSavingHRQuestion] = useState(false);
 
-  const loadHRQuestionBank = useCallback(async () => {
+  const loadHRQuestionBank = useCallback(async function loadBank(): Promise<HRBankQuestion[]> {
     try {
       const response = await api.get('/hr-question-bank');
       const data = Array.isArray(response.data) ? response.data : [];
@@ -1346,7 +1347,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
     } catch (error) {
       console.error('[AssessmentCreation] Failed to load HR question bank:', error);
       setHrQuestionBank([]);
-      toast.error('Failed to load HR Question Bank');
+      showErrorToast(error, "Couldn't load the HR question bank", {
+        id: 'hr-question-bank-load',
+        retry: () => loadBank(),
+      });
       return [];
     }
   }, []);
@@ -1444,7 +1448,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       toast.success('Question added to HR Question Bank');
       closeAddHRQuizModal();
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't add HR question. Please try again."));
+      showErrorToast(error, "Couldn't add HR question");
     } finally {
       setIsSavingHRQuestion(false);
     }
@@ -1681,7 +1685,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       // couldn't produce one — a transient failure, or the index disagreeing
       // with /assessments (e.g. the record was since deleted). Say that, rather
       // than pointing at a page we can't open.
-      toast.error('This job already has an assessment, but it could not be opened. Please try again.');
+      showErrorToast(null, "Couldn't open this job's existing assessment");
       router.replace(fallback);
     })();
   };
@@ -3113,7 +3117,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       console.error('Failed to create/update assessment:', error);
       setIsGenerating(false);
       setGeneratingAction(null);
-      toast.error(`Couldn't ${isEditMode ? 'update' : 'create'} assessment. ${friendlyErrorMessage(error, 'Please try again.')}`);
+      showErrorToast(error, `Couldn't ${isEditMode ? 'update' : 'create'} assessment`);
     }
   };
 
@@ -3540,57 +3544,47 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               items={buildBreadcrumbItems()}
             />
             <div className="w-full">
-          <div className="mb-6 sm:mb-8">
-            <h1 className="tf-page-title mb-2">{isEditMode ? 'Edit Assessment' : 'Create New Assessment'}</h1>
-            <p className="tf-body-secondary sm:text-base">
-              {isEditMode
-                ? 'Update the assessment configuration. Changes will create a new version.'
-                : 'Select a Job Description to create an AI-powered assessment'}
-            </p>
-          </div>
+          {/* Header — the shared PageHeader, same as Resume Scoring's Score Resumes. */}
+          <PageHeader
+            icon={<ClipboardList className="h-5 w-5" />}
+            title={isEditMode ? 'Edit Assessment' : 'Create New Assessment'}
+            description={isEditMode
+              ? 'Update the assessment configuration. Changes will create a new version.'
+              : 'Select a job and let AI generate the assessment.'}
+            actions={
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!canCreateJd) return;
+                  handleCreateNewJD();
+                }}
+                aria-disabled={!canCreateJd}
+                title={!canCreateJd ? 'You do not have permission to create job descriptions' : undefined}
+                className={`flex-shrink-0 ${!canCreateJd ? 'opacity-50 cursor-not-allowed' : ''}`}
+                icon={<Plus className="w-4 h-4" />}
+              >
+                <span className="hidden sm:inline">Create New Job</span>
+                <span className="sm:hidden">New Job</span>
+              </Button>
+            }
+          />
 
-          <div className="bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 flex items-start gap-2 sm:gap-3">
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0 mt-0.5" />
-            <div>
-              <div className="text-sm text-brand-blue font-medium mb-1">AI-Powered Assessment Generation</div>
-              <div className="tf-body">
-                Automatically generate questions based on the JD, adjusting difficulty, topics, and time allocation based on your configuration. <strong>Each candidate receives a unique, freshly generated question set</strong> to ensure fairness and prevent question sharing.
-              </div>
-            </div>
-          </div>
-
-          <div className="tf-card-soft">
-            <div className="p-4 sm:p-6 border-b border-gray-100">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-                <div className="min-w-0">
-                  <h2 className="tf-section-title sm:text-lg tracking-tight">Select Job Description</h2>
-                </div>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    if (!canCreateJd) return;
-                    handleCreateNewJD();
-                  }}
-                  aria-disabled={!canCreateJd}
-                  title={!canCreateJd ? 'You do not have permission to create job descriptions' : undefined}
-                  className={`flex-shrink-0 ${!canCreateJd ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  icon={<Plus className="w-4 h-4" />}
-                >
-                  <span className="hidden sm:inline">Create New Job</span>
-                  <span className="sm:hidden">New Job</span>
-                </Button>
-              </div>
+          {/* Score Resumes' card: Job Eligibility on top, then one row with
+              "Select a Job Opening" + count on the left and Search Jobs on the
+              right, then the list. */}
+          <div className="tf-card mb-5 overflow-hidden" role="region" aria-label="Select Job Description">
+            <div className="px-3 pt-3 sm:px-4 sm:pt-4">
               {/* The list's rule, in the Job Eligibility note the Score Resume
-                  lists use, worded for this list. Its own full-width row under
-                  the heading and Create New Job - inside the heading column it
-                  ran into the button. */}
+                  lists use, worded for this list. */}
               <JobEligibilityNote
-                className="mt-3"
+                className="mb-4"
+                showLegend
+                legend={ASSESSMENT_ELIGIBILITY_LEGEND}
                 description="Only Published (or Republished) job versions without an assessment are listed. Archived jobs are shown greyed out for reference; Disabled, Draft and already-assessed jobs are hidden. A job with only one available version is selected straight from its card; View Versions appears when there are versions to choose from, and the eye icon shows a job's full history."
               />
             </div>
 
-            <div className="p-4 sm:p-6">
+            <div className="px-3 pb-3 sm:px-4 sm:pb-4">
               {isLoadingJobs ? (
                 <div className="space-y-3">
                   {/* Search Jobs field */}
@@ -3621,22 +3615,6 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 </div>
               ) : (
               <div className="space-y-3" ref={jdListRef}>
-                {/* Search Jobs — the Apply to Job dialog's own field, down to
-                    the label, the icon and what it searches. */}
-                <div className="mb-4">
-                  <label className="block tf-label mb-2">Search Jobs</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Search by JD number, role, department or location..."
-                      value={jdSearch}
-                      onChange={e => setJdSearch(e.target.value)}
-                      className="tf-input pl-10 pr-4"
-                    />
-                  </div>
-                </div>
-
                 {/* A failed read, with a way to retry - the shared picker's own
                     banner. Without it a network error read as "you have no
                     published jobs". */}
@@ -3659,21 +3637,23 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 )}
                 {/* The count follows the search, so it always describes exactly
                     what is listed — no total beside it, nothing hardcoded. */}
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <span className="tf-label">
-                    Select a Job Opening
-                    {filteredAvailableJobs.length > 0 && !isLoadingMoreJobs && (
-                      <span className="ml-2 font-normal text-gray-500 whitespace-nowrap">
-                        &mdash; {filteredAvailableJobs.length} available
-                      </span>
-                    )}
-                    {isLoadingMoreJobs && (
-                      <span className="ml-2 inline-flex items-center gap-1 font-normal text-gray-500 dark:text-slate-400">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        Loading jobs...
-                      </span>
-                    )}
-                  </span>
+                {/* Score Resumes' row (JobOpeningPickerList layout="page"):
+                    heading + count left, Search Jobs right — one line from md,
+                    stacked on phones. */}
+                <div className="mb-3 flex flex-col gap-2 border-b border-[var(--border)] pb-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">Select a Job Opening</span>
+                  {filteredAvailableJobs.length > 0 && !isLoadingMoreJobs && (
+                    <span className="tf-stat-chip tf-stat-chip-info !py-0 tabular-nums">
+                      {filteredAvailableJobs.length} available
+                    </span>
+                  )}
+                  {isLoadingMoreJobs && (
+                    <span className="inline-flex items-center gap-1 tf-meta">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Loading jobs...
+                    </span>
+                  )}
                   {/* The only unconditional way back to "nothing selected".
                       Clicking the ticked radio also lets go of it, but that
                       radio can be a page or a search away — and while it is
@@ -3693,6 +3673,21 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                       </button>
                     </div>
                   )}
+                </div>
+                {/* "Search Jobs" sits to the left of the search box, on one row. */}
+                <label className="flex w-full items-center gap-2 md:w-[25rem] lg:w-[29rem]">
+                  <span className="tf-meta shrink-0 whitespace-nowrap !font-semibold !text-[var(--text-primary)]">Search Jobs</span>
+                  <span className="relative min-w-0 flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Search by JD number, role, department or location..."
+                      value={jdSearch}
+                      onChange={e => setJdSearch(e.target.value)}
+                      className="tf-input pl-10 pr-4"
+                    />
+                  </span>
+                </label>
                 </div>
 
                 {/* Say what the pick is when it isn't on screen — otherwise a

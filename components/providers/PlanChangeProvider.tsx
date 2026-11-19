@@ -7,6 +7,7 @@ import { isOnline, isTransientNetworkError, withNetworkRetry } from '@/lib/utils
 import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 import { focusRefreshDue, markRefreshed } from '@/lib/utils/focusRefresh';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import type {
   PlanChangeNotification,
   PlanChangeUrgency,
@@ -206,7 +207,7 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
       return true;
     } catch (error) {
       console.error('[PlanChange] Failed to accept change:', error);
-      toast.error('Failed to accept plan changes. Please try again.');
+      showErrorToast(error, "Couldn't accept the plan changes");
       return false;
     }
   }, [currentChange]);
@@ -229,7 +230,7 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
       return true;
     } catch (error) {
       console.error('[PlanChange] Failed to reject change:', error);
-      toast.error('Failed to reject plan changes. Please try again.');
+      showErrorToast(error, "Couldn't reject the plan changes");
       return false;
     }
   }, [currentChange]);

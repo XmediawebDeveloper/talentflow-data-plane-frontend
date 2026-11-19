@@ -23,6 +23,7 @@ import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import CandidateResultCard, { CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS } from '@/components/assessments/CandidateResultCard';
 import { MobileRecordCard, MobileStatChip, useMobileRecordCardVariant } from '@/components/ui/mobile-record-card';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import ExportColumnsModal from '@/components/ExportColumnsModal';
@@ -1050,6 +1051,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       } else if (!silentRefreshRef.current) {
         setIsFetching(true);
       }
+      const silent = silentRefreshRef.current;
       silentRefreshRef.current = false;
       try {
         // Build server-side filter parameters
@@ -1255,6 +1257,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       } catch (error) {
         console.error('Failed to fetch assessment results:', error);
         if (requestId !== resultsRequestRef.current) return;
+        if (!silent) {
+          showErrorToast(error, "Couldn't load assessment results", {
+            id: 'assessment-results-load',
+            retry: () => setRefreshTick((t) => t + 1),
+          });
+        }
         // Keep empty results on error
         setCandidateResults([]);
       } finally {
@@ -1343,8 +1351,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       toast.success(`Result for ${candidateName} deleted successfully.`);
     } catch (error: any) {
       console.error('Failed to delete result:', error);
-      const msg = error?.message || 'Failed to delete result. Please try again.';
-      toast.error(msg);
+      showErrorToast(error, `Couldn't delete the result for ${candidateName}`);
     } finally {
       setIsDeleting(null);
     }
@@ -1397,7 +1404,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download PDF:', error);
-      toast.error('Failed to download PDF report. Please try again.');
+      showErrorToast(error, "Couldn't download the PDF report", {
+        retry: () => handleDownloadPDF(candidateId, candidateDisplayId),
+      });
     } finally {
       setDownloadingPDF(null);
     }
@@ -1454,7 +1463,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       setSelectedRows([]);
     } catch (error) {
       console.error('Failed to download bulk PDFs:', error);
-      toast.error('Failed to download PDF reports. Please try again.');
+      showErrorToast(error, "Couldn't download the PDF reports", { retry: handleDownloadBulkPDFs });
     } finally {
       setDownloadingBulkPDF(false);
     }
@@ -1552,9 +1561,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     } catch (error) {
       console.error('Failed to export all results:', error);
       const msg = error instanceof Error ? error.message : '';
-      toast.error(/permission|forbidden|403/i.test(msg)
-        ? EXPORT_DENIED_REASON
-        : 'Failed to export results. Please try again.', { id: _toastId });
+      if (/permission|forbidden|403/i.test(msg)) {
+        showErrorToast(error, "Couldn't export results", { id: _toastId, description: EXPORT_DENIED_REASON });
+      } else {
+        showErrorToast(error, "Couldn't export results", {
+          id: _toastId,
+          retry: () => handleExportAllFiltered(columnIds),
+        });
+      }
     } finally {
       setIsExporting(false);
     }

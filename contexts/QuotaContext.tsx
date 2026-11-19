@@ -248,6 +248,10 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
         if (!networkRetriedRef.current) {
           networkRetriedRef.current = true;
           setTimeout(() => { void fetchQuotaData(true); }, 5000);
+        } else if (!quotaDataRef.current) {
+          // The retry failed too and there is nothing to show: say so, or the
+          // Usage page (loading = no data && no error) stays a skeleton forever.
+          setError('Failed to fetch quota data');
         }
         return;
       }

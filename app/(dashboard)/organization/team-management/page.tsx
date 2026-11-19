@@ -13,10 +13,10 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import FeatureGate from '@/components/shared/FeatureGate';
 import teamService, { Team, TeamStats, TeamUsageSummary } from '@/lib/services/teamService';
-import { RANGE_PRESETS, rememberRangePreset } from '@/components/teams/reportControls';
+import { rememberBillingPeriod, useTeamUnitsPeriod } from '@/components/teams/reportControls';
 import type { TeamStatsCardKey } from '@/components/teams/TeamStatsCards';
 import { formatTeamUnits, formatTeamDateTime, type TeamUnits } from '@/components/teams/TeamCard';
 import { UNIT_KEYS } from '@/lib/constants/unitColors';
@@ -65,9 +65,10 @@ async function fetchAllActiveUsers(): Promise<ApiUser[]> {
   return userService.listAllActiveUsers();
 }
 
-/** Units per team over the last 30 days (all teams for admins, own teams otherwise). */
-async function fetchTeamUnits30(isAdmin: boolean): Promise<Record<string, TeamUnits>> {
-  const { from, to } = RANGE_PRESETS.find((p) => p.id === '30d')!.range();
+/** Units per team over `range` — the current billing period, see
+ *  useTeamUnitsPeriod (all teams for admins, own teams otherwise). */
+async function fetchTeamUnits(isAdmin: boolean, range: { from: string; to: string }): Promise<Record<string, TeamUnits>> {
+  const { from, to } = range;
   const res = isAdmin ? await teamService.getAllTeamsUsage(from, to) : await teamService.getMyTeamsUsage(from, to);
   const out: Record<string, TeamUnits> = {};
   for (const t of (res.teams ?? []) as TeamUsageSummary[]) {
@@ -106,7 +107,9 @@ const TEAM_LIST_VIEWS: TeamListView[] = ['teams-all', 'members', 'unassigned'];
 // '' = all teams; the other two are the "needs attention" slices.
 type TeamAttention = '' | 'no-lead' | 'empty';
 
-const TEAMS_EXPORT_HEADERS = ['Team', 'Description', 'Team Lead', 'Lead Email', 'Members', 'Member Names', 'Units (last 30 days)', 'Created', 'Created By'];
+/** `unitsPeriod`: what the Units column covers ("billing period", or "last 30 days" without one). */
+const teamsExportHeaders = (unitsPeriod: string) =>
+  ['Team', 'Description', 'Team Lead', 'Lead Email', 'Members', 'Member Names', `Units (${unitsPeriod})`, 'Created', 'Created By'];
 const MEMBERS_EXPORT_HEADERS = ['Member', 'Email', 'Team', 'Role', 'Team Lead'];
 const UNASSIGNED_EXPORT_HEADERS = ['Name', 'Email', 'Role'];
 
@@ -120,17 +123,10 @@ const TEAM_SORTS: { value: TeamSort; label: string }[] = [
   { value: 'name', label: 'Name (A–Z)' },
   { value: 'newest', label: 'Newest first' },
   { value: 'members', label: 'Most members' },
-  { value: 'units', label: 'Most units (30 days)' },
+  // Shown as "Most units (<period>)" — the period comes from useTeamUnitsPeriod.
+  { value: 'units', label: 'Most units' },
 ];
 
-
-const getErrorDetail = (error: unknown): string | undefined => {
-  if (typeof error !== 'object' || error === null || !('response' in error)) {
-    return undefined;
-  }
-  const response = (error as { response?: { data?: { detail?: string } } }).response;
-  return response?.data?.detail;
-};
 
 export default function TeamManagementPage() {
   const router = useRouter();
@@ -142,10 +138,28 @@ export default function TeamManagementPage() {
     avg_members_per_team: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  // Bumped by the load-failure toast's Retry to re-run the page load.
+  const [reloadKey, setReloadKey] = useState(0);
   const [availableUsers, setAvailableUsers] = useState<ApiUser[]>([]);
-  // Units per team (last 30 days). null = not loaded or no access to usage —
-  // the Units column / box is then left out entirely.
+  // Units per team over the current billing period (the report tabs' default
+  // range). null = not loaded or no access to usage — the Units column / box
+  // is then left out entirely.
   const [unitsByTeam, setUnitsByTeam] = useState<Record<string, TeamUnits> | null>(null);
+  const unitsPeriod = useTeamUnitsPeriod();
+  const unitsRangeKey = `${unitsPeriod.range.from}|${unitsPeriod.range.to}`;
+  // Units column — only for users who may see team usage (and the page:
+  // View Teams); best effort. Waits for the billing period, and reloads if it
+  // changes (a new period starts).
+  const canSeeTeamUnits = !authLoading && (isTenantAdmin || (hasPermission('canViewTeams') && hasPermissionCode('teams:view_reports')));
+  useEffect(() => {
+    if (!canSeeTeamUnits || !unitsPeriod.ready) return;
+    let live = true;
+    fetchTeamUnits(isTenantAdmin, unitsPeriod.range)
+      .then((u) => { if (live) setUnitsByTeam(u); })
+      .catch(() => { /* column stays hidden */ });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSeeTeamUnits, unitsPeriod.ready, unitsRangeKey, isTenantAdmin]);
   // Team id → creator's name (admins only; null = not available → column hidden).
   const [createdBy, setCreatedBy] = useState<Record<string, string> | null>(null);
   // Every active user, for the Unassigned view. null = not loaded / no access to
@@ -201,8 +215,8 @@ export default function TeamManagementPage() {
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('grid');
   const openListView = (card: TeamStatsCardKey) => {
     if (card === 'units') {
-      // Same numbers as the card: Team Usage on "Last 30 days".
-      rememberRangePreset('30d');
+      // Same numbers as the card: Team Usage on the current billing period.
+      rememberBillingPeriod();
       setActiveTab('usage');
       return;
     }
@@ -257,7 +271,7 @@ export default function TeamManagementPage() {
       const hasAccess = isTenantAdmin || hasPermission('canViewTeams');
 
       if (!hasAccess) {
-        router.replace('/organization/team-chat');
+        router.replace('/chat');
         return;
       }
 
@@ -271,12 +285,8 @@ export default function TeamManagementPage() {
         if (!isMounted) return;
         setTeams(teamsData);
         setStats(statsData);
-        // Units column — only for users who may see team usage; best effort.
-        if (isTenantAdmin || hasPermissionCode('teams:view_reports')) {
-          fetchTeamUnits30(isTenantAdmin)
-            .then((u) => { if (isMounted) setUnitsByTeam(u); })
-            .catch(() => { /* column stays hidden */ });
-        }
+        // Units column: loaded by its own effect below, once the billing
+        // period is known.
         // "Created by" — read from the team history, which only tenant admins can read.
         if (isTenantAdmin) {
           fetchTeamCreators()
@@ -290,7 +300,7 @@ export default function TeamManagementPage() {
       } catch (error: unknown) {
         console.error('Error fetching data:', error);
         if (!isMounted) return;
-        toast.error('Failed to load teams data');
+        showErrorToast(error, "Couldn't load teams", { id: 'teams-load', retry: () => setReloadKey((k) => k + 1) });
         setTeams([]);
         setStats({ total_teams: 0, total_members: 0, avg_members_per_team: 0 });
       } finally {
@@ -304,7 +314,7 @@ export default function TeamManagementPage() {
     };
     // Keyed on the user's id, so a background permission refresh doesn't reload the page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, authUser?.id, router]);
+  }, [authLoading, authUser?.id, router, reloadKey]);
 
   const filteredTeams = useMemo(() => {
     let result = teams;
@@ -527,7 +537,7 @@ export default function TeamManagementPage() {
       setAllUsers(users);
     } catch (error: unknown) {
       console.error('Error fetching users:', error);
-      toast.error('Failed to load available users');
+      showErrorToast(error, "Couldn't load available users", { id: 'teams-available-users', retry: fetchAvailableUsers });
     } finally {
       setIsLoadingUsers(false);
     }
@@ -546,15 +556,13 @@ export default function TeamManagementPage() {
         fetchTeamCreators().then(setCreatedBy).catch(() => { /* keep the last names */ });
       }
       if (unitsByTeam !== null) {
-        fetchTeamUnits30(isTenantAdmin).then(setUnitsByTeam).catch(() => { /* keep the last numbers */ });
+        fetchTeamUnits(isTenantAdmin, unitsPeriod.range).then(setUnitsByTeam).catch(() => { /* keep the last numbers */ });
       }
       return true;
     } catch (error) {
       console.error('Error refreshing data:', error);
       // The save itself worked — say the list may be out of date and offer a retry.
-      toast.error('Could not refresh the team list', {
-        action: { label: 'Retry', onClick: () => { void refreshData(); } },
-      });
+      showErrorToast(error, "Couldn't refresh the team list", { id: 'teams-load', retry: refreshData });
       return false;
     }
   };
@@ -583,7 +591,7 @@ export default function TeamManagementPage() {
 
   // Exports what the current list shows (its search and filters applied).
   const exportTitle = listView === 'members' ? 'Export Team Members' : listView === 'unassigned' ? 'Export Unassigned Users' : 'Export Teams';
-  const exportHeaders = listView === 'members' ? MEMBERS_EXPORT_HEADERS : listView === 'unassigned' ? UNASSIGNED_EXPORT_HEADERS : TEAMS_EXPORT_HEADERS;
+  const exportHeaders = listView === 'members' ? MEMBERS_EXPORT_HEADERS : listView === 'unassigned' ? UNASSIGNED_EXPORT_HEADERS : teamsExportHeaders(unitsPeriod.label);
   const exportCount = listView === 'members' ? sortedMembers.length : listView === 'unassigned' ? filteredUnassigned.length : filteredTeams.length;
   const runExport = async (format: ExportFileFormat) => {
     const date = toISODateIST(new Date());
@@ -605,7 +613,7 @@ export default function TeamManagementPage() {
         formatTeamDateTime(t.created_at),
         createdBy?.[t.id] ?? '',
       ]);
-      await exportRows(format, TEAMS_EXPORT_HEADERS, rows, `teams-${date}`, { sheetName: 'Teams' });
+      await exportRows(format, teamsExportHeaders(unitsPeriod.label), rows, `teams-${date}`, { sheetName: 'Teams' });
     }
     setShowExportModal(false);
   };
@@ -642,7 +650,7 @@ export default function TeamManagementPage() {
       await refreshData();
     } catch (error: unknown) {
       console.error('Error creating team:', error);
-      toast.error(friendlyErrorMessage(getErrorDetail(error), "Couldn't create team. Please try again."));
+      showErrorToast(error, "Couldn't create team");
     } finally {
       setIsCreating(false);
     }
@@ -664,8 +672,13 @@ export default function TeamManagementPage() {
         setSelectedTeam(team);
         setTeamModal(mode);
       }
-    } catch {
-      if (!listed) toast.error(mode === 'view' ? 'Failed to load team details' : 'Failed to load team data');
+    } catch (error) {
+      if (!listed) {
+        showErrorToast(error, mode === 'view' ? "Couldn't load team details" : "Couldn't load team data", {
+          id: 'team-popup-load',
+          retry: () => openTeamPopup(teamId, mode),
+        });
+      }
     }
   };
 
@@ -726,7 +739,7 @@ export default function TeamManagementPage() {
       }
     } catch (error: unknown) {
       console.error('Error updating team:', error);
-      toast.error(friendlyErrorMessage(getErrorDetail(error), "Couldn't update team. Please try again."));
+      showErrorToast(error, "Couldn't update team");
     } finally {
       setIsUpdating(false);
     }
@@ -745,11 +758,12 @@ export default function TeamManagementPage() {
     canManage: canEditTeams,
     maxMembers,
     unitsByTeam,
+    unitsPeriod: unitsPeriod.label,
     createdBy,
-    // Units click → Team Usage on "Last 30 days", that team expanded (same numbers).
+    // Units click → Team Usage on the current billing period, that team expanded (same numbers).
     onOpenUsage: canViewUsageTab
       ? (teamId: string) => {
-          rememberRangePreset('30d');
+          rememberBillingPeriod();
           setUsageFocusTeamId(teamId);
           setActiveTab('usage');
         }
@@ -768,7 +782,7 @@ export default function TeamManagementPage() {
       await refreshData();
     } catch (error: unknown) {
       console.error('Error deleting team:', error);
-      toast.error(friendlyErrorMessage(getErrorDetail(error), "Couldn't delete team. Please try again."));
+      showErrorToast(error, "Couldn't delete team");
     } finally {
       setIsDeleting(false);
     }
@@ -925,6 +939,7 @@ export default function TeamManagementPage() {
                   unassignedUsers={allUsers ? unassignedUsers.length : (stats?.unassigned_users ?? null)}
                   noLeadTeams={attentionCounts.noLead}
                   units30={units30Total}
+                  unitsPeriod={unitsPeriod.label}
                   onCardClick={openListView}
                   nonClickable={canViewUsageTab ? [] : ['units']}
                   activeCard={
@@ -1023,7 +1038,7 @@ export default function TeamManagementPage() {
                       <ToolbarFilterSelect value={sortBy} onChange={(v) => applyTeamSort(v as TeamSort)} ariaLabel="Sort teams">
                         {TEAM_SORTS.filter((o) => o.value !== 'units' || unitsByTeam).map((option) => (
                           <option key={option.value} value={option.value}>
-                            {option.label}
+                            {option.value === 'units' ? `Most units (${unitsPeriod.label})` : option.label}
                           </option>
                         ))}
                       </ToolbarFilterSelect>
@@ -1268,6 +1283,7 @@ export default function TeamManagementPage() {
           canDelete={canDeleteTeams}
           showUnits={!!unitsByTeam}
           units={selectedTeam ? unitsByTeam?.[selectedTeam.id] : undefined}
+          unitsPeriod={unitsPeriod.label}
           createdByName={selectedTeam ? createdBy?.[selectedTeam.id] : undefined}
         />
 

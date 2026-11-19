@@ -9,7 +9,8 @@ import { DISABLED_REASON_MESSAGE } from '@/lib/navigation/menuSections';
 /**
  * Shared tab bar for the organization area, in two groups:
  *   'users' — User Management: Users, Roles & Permissions, Usage History
- *   'teams' — Teams: Teams, Chat (reached from the dashboard's Teams tile)
+ *   'teams' — Teams: just Teams now, so no bar is drawn (Chat moved to its
+ *             own page, /chat). Kept as a group so a future Teams tab slots in.
  *
  * Tabs navigate between routes — each target page keeps its own content — and
  * the active tab is derived from the pathname.
@@ -20,7 +21,7 @@ import { DISABLED_REASON_MESSAGE } from '@/lib/navigation/menuSections';
  * breadcrumb's measured height (useBreadcrumbOffset). The bar must then be a
  * DIRECT child of the page card (a sticky element only travels inside its
  * parent), and it paints the card's background edge to edge so content scrolls
- * cleanly underneath. Omit it on pages whose header never scrolls (Chat).
+ * cleanly underneath. Omit it on pages whose header never scrolls.
  */
 export type OrganizationTabGroup = 'users' | 'teams';
 
@@ -45,7 +46,7 @@ export default function OrganizationTabs({ stickyTop, group = 'users' }: { stick
     // lib/navigation/routeAccess.ts and the company-wide usage endpoints.
     // Plan-gated: stays visible but disabled (hover explains) when the plan lacks Teams.
     { id: 'team-management', group: 'teams', label: 'Teams', short: 'Teams', href: '/organization/team-management', visible: isTenantAdmin || hasPermission('canViewTeams'), deniedMessage: 'You do not have permission to view teams', planLocked: !planLoading && !hasPlanFeature('teams') },
-    { id: 'team-chat', group: 'teams', label: 'Chat', short: 'Chat', href: '/organization/team-chat', visible: true },
+    // Chat is its own page now (/chat), no longer a tab beside Teams.
   ];
   const tabs = allTabs.filter((t) => t.group === group);
   const navLabel = group === 'teams' ? 'Teams tabs' : 'User management tabs';

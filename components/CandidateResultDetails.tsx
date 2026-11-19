@@ -9,6 +9,7 @@ import { proctoringService, ProctoringEvent, AssessmentShareBarCheck } from '@/l
 import { RecordingPlayer, EMPTY_RECORDING_SOURCE, type RecordingSource } from '@/components/recording/RecordingPlayer';
 import { formatISTDate, formatISTTime, formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/components/providers/AuthProvider';
 import RecordPager from '@/components/RecordPager';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
@@ -742,7 +743,7 @@ export default function CandidateResultDetails({
         markResumeUnavailable();
       } else {
         console.error('[CandidateResultDetails] Failed to load resume:', err);
-        toast.error('Could not load the resume. Please try again.');
+        showErrorToast(err, "Couldn't load the resume", { retry: handleViewResume });
       }
     } finally {
       setIsLoadingResume(false);
@@ -1321,7 +1322,7 @@ export default function CandidateResultDetails({
                         });
                       } catch (error) {
                         console.error('Failed to build result PDF:', error);
-                        toast.error('Failed to export result PDF. Please try again.');
+                        showErrorToast(error, "Couldn't export the result PDF");
                       }
                       return;
                     }
@@ -1338,7 +1339,7 @@ export default function CandidateResultDetails({
                       document.body.removeChild(a);
                     } catch (error) {
                       console.error('Failed to export result PDF:', error);
-                      toast.error('Failed to export result PDF. Please try again.');
+                      showErrorToast(error, "Couldn't export the result PDF");
                     }
                   }}
                   className={`tf-btn tf-btn-primary px-3 sm:px-4 py-2 text-sm bg-brand-blue border border-brand-blue hover:bg-brand-blue-2 transition-colors flex gap-1.5 shadow-none ${!canDownloadReport ? 'opacity-50 cursor-not-allowed' : ''}`}

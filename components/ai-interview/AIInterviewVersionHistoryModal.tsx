@@ -6,7 +6,7 @@ import {
   Archive, BarChart3, CheckCircle, Clock, Eye, FileText, Info, Loader2,
   RefreshCw, Video, X
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
@@ -121,7 +121,7 @@ export default function AIInterviewVersionHistoryModal({
      first by default); Created By / Rounds / Status by name, count, status. */
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'created', dir: 'desc' });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     try {
       const listAll = async (status?: string) => {
@@ -138,8 +138,8 @@ export default function AIInterviewVersionHistoryModal({
          them used to lose the rest. A failure here still shows the live
          versions, but says the list may be missing archived ones rather than
          passing it off as complete. */
-      const archived = await listAll('archived').catch(() => {
-        toast.error('Archived interview versions could not be loaded — the list may be incomplete.');
+      const archived = await listAll('archived').catch((err) => {
+        showErrorToast(err, "Couldn't load archived versions — the list may be incomplete", { id: 'ai-interview-versions-archived-load', retry: () => { void load(); } });
         return [] as AIInterviewResponse[];
       });
       const seen = new Set<string>();
@@ -148,8 +148,8 @@ export default function AIInterviewVersionHistoryModal({
       const versions = jobInterviewConfigs(all, jobId);
       const entries = await Promise.all(versions.map(async (c) => [c.id, await loadStats(c.id).catch(() => null)] as const));
       setStats(Object.fromEntries(entries.filter(([, v]) => v !== null)) as Record<string, VersionStats>);
-    } catch {
-      toast.error('Could not load the interview version history.');
+    } catch (err) {
+      showErrorToast(err, "Couldn't load the interview version history", { id: 'ai-interview-versions-load', retry: () => { void load(); } });
     } finally {
       setLoading(false);
     }

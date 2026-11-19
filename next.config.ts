@@ -102,6 +102,16 @@ const nextConfig: NextConfig = {
     return config;
   },
 
+  /* Chat moved out of the Teams tabs to its own page. Old links — bookmarks and
+     the action_url stored on existing chat notifications — keep working; the
+     query string (e.g. ?channel=<id>) is passed through, so they still open the
+     right conversation. Temporary (307), so nothing is cached for good. */
+  async redirects() {
+    return [
+      { source: '/organization/team-chat', destination: '/chat', permanent: false },
+    ];
+  },
+
   async headers() {
     return [
       /* Production only: in dev, Next.js warns that a custom Cache-Control
