@@ -54,7 +54,7 @@ import RowInviteItems from '@/components/talent-match-invite/RowInviteItems';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, RowDetailsPanel, RowDetailsToggle } from '@/components/ResultRowDetails';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/lib/services/aiInterviewService';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
@@ -619,7 +619,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
      or page changed while it was in flight), or a 5s poll that started before
      the latest load, is dropped instead of overwriting newer rows and cards. */
   const loadSeqRef = useRef(0);
-  const loadSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (): Promise<void> => {
     const seq = ++loadSeqRef.current;
     const isStale = () => seq !== loadSeqRef.current;
     setIsLoading(true);
@@ -661,7 +661,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       });
     } catch (error: any) {
       if (isStale()) return;
-      toast.error(friendlyErrorMessage(error, "Couldn't load candidate sessions. Please try again."));
+      showErrorToast(error, "Couldn't load candidate sessions", { id: 'ai-interview-results-load', retry: () => { void loadSessions(); } });
     } finally {
       // A stale run leaves the spinner to the run that replaced it.
       if (!isStale()) setIsLoading(false);
@@ -787,7 +787,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         return;
       }
       console.error('[AIInterviewResults] report download failed:', err);
-      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the report. Please try again.');
+      showErrorToast(err, "Couldn't download the report", isForbiddenError(err)
+        ? { description: AI_REPORT_DOWNLOAD_DENIED }
+        : { retry: () => { void handleDownloadReport(sessionId); } });
     } finally {
       setDownloadingReportId(null);
     }
@@ -894,7 +896,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       // Export done — clear the ticks, which also hides the bulk bar.
       setSelected(new Map());
     } catch (error) {
-      toast.error(friendlyErrorMessage(error, "Couldn't export results. Please try again."));
+      showErrorToast(error, "Couldn't export results", { retry: () => { void handleExport(columnIds); } });
     } finally {
       setIsExporting(false);
     }
@@ -921,6 +923,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     setIsBulkWorking(true);
     let done = 0;
     let failed = 0;
+    let firstError: unknown = null;
     const failedSessions: AIInterviewResponse[] = [];
     // One at a time: each resend emails a candidate, and one failure must not
     // stop the rest.
@@ -929,7 +932,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         if (action === 'revoke') await aiInterviewService.revokeInvitation(session.id);
         else await aiInterviewService.sendSessionEmail(session.id, { base_url: window.location.origin });
         done++;
-      } catch {
+      } catch (err) {
+        if (failed === 0) firstError = err;
         failed++;
         failedSessions.push(session);
       }
@@ -940,7 +944,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         : `New invitation link${done === 1 ? '' : 's'} sent to ${done} candidate${done === 1 ? '' : 's'}.`);
     }
     if (failed > 0) {
-      toast.error(`${failed} invitation${failed === 1 ? '' : 's'} could not be ${action === 'revoke' ? 'revoked' : 'resent'}.`);
+      showErrorToast(firstError, `Couldn't ${action === 'revoke' ? 'revoke' : 'resend'} ${failed} invitation${failed === 1 ? '' : 's'}`);
     }
     // Reload first, so the table is already current when the dialog closes
     // and the selection clears (rows no longer flash their old status).
@@ -978,7 +982,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       if (downloaded > 0 && failed === 0) setSelected(new Map());
     } catch (err) {
       console.error('[AIInterviewResults] Bulk PDF download failed:', err);
-      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');
+      showErrorToast(err, "Couldn't download the reports", isForbiddenError(err)
+        ? { description: AI_REPORT_DOWNLOAD_DENIED }
+        : { retry: () => { void handleDownloadSelectedPdfs(); } });
     } finally {
       setDownloadingPdfs(null);
     }

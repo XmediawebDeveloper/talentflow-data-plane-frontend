@@ -104,6 +104,12 @@ export default function BulkActionsBar({
   const folderMenuRef = useRef<HTMLDivElement | null>(null);
 
   const closeFolderMenu = () => {
+    // A pending hover-intent timer would otherwise re-populate openPath
+    // after close, so the next open would start with a stale flyout.
+    if (hoverIntentTimer.current) {
+      clearTimeout(hoverIntentTimer.current);
+      hoverIntentTimer.current = null;
+    }
     setShowFolderMenu(false);
     setFolderMenuAnchor(null);
     setFolderMenuPosition(null);
@@ -155,11 +161,23 @@ export default function BulkActionsBar({
       if (target?.closest?.('[data-move-folder-menu]')) return;
       closeFolderMenu();
     };
+    /* The backdrop below is z-40 but this bar is sticky z-50, so a click on
+       another bulk action (Score Resume, Invite, …) lands on that button,
+       never on the backdrop — the folder menu stayed open on top of the
+       popup the action opened. Close on any press outside the menu system
+       and its own trigger (the trigger toggles itself in its onClick). */
+    const dismissOnOutsidePress = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (target?.closest?.('[data-move-folder-menu], [data-move-folder-trigger]')) return;
+      closeFolderMenu();
+    };
     window.addEventListener('scroll', dismiss, true);
     window.addEventListener('resize', dismiss);
+    document.addEventListener('pointerdown', dismissOnOutsidePress, true);
     return () => {
       window.removeEventListener('scroll', dismiss, true);
       window.removeEventListener('resize', dismiss);
+      document.removeEventListener('pointerdown', dismissOnOutsidePress, true);
     };
   }, [showFolderMenu]);
 
@@ -304,6 +322,7 @@ export default function BulkActionsBar({
                   setFolderMenuPosition(null);
                   setShowFolderMenu(true);
                 }}
+                data-move-folder-trigger
                 aria-disabled={!!onMoveToFolderDisabled}
                 className={`${actionBtn} ${onMoveToFolderDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 aria-label="Move to Folder" title={onMoveToFolderDisabled ? (onMoveToFolderDisabledReason || 'You do not have permission to move resumes to a folder') : 'Move to Folder'}

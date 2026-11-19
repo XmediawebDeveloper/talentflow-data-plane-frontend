@@ -26,7 +26,7 @@ import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ResumeVersionsModal from '@/components/ResumeVersionsModal';
 import { useResumeUploadFlow } from '@/components/resumes/useResumeUploadFlow';
 import { convertApiFolderToTree } from '@/lib/utils/resumeMappers';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { FOLDER_NAME_MAX_LENGTH } from '@/components/FolderTree';
 import { TeamMemberEmailBadge } from '@/components/ui/team-member-badge';
 import { archiveResumeToArchivedFolder, folderService, resumeService, type Folder } from '@/lib/services/resumeService';
@@ -622,7 +622,7 @@ export default function ServerCandidatePicker({
       onSelectionChange({ mode: 'ids', picked });
       if (!filters.exclude_invited) setFilters(f);
     } catch (err) {
-      toast.error((err as Error)?.message || 'Could not select the candidates.');
+      showErrorToast(err, "Couldn't select the candidates", { retry: selectAllMatching });
     } finally {
       setSelectingAll(false);
     }
@@ -865,7 +865,7 @@ export default function ServerCandidatePicker({
       toast.success('Folder created');
       return true;
     } catch (err) {
-      toast.error(`Couldn't create folder. ${friendlyErrorMessage(err, 'Please try again.')}`);
+      showErrorToast(err, "Couldn't create folder");
       return false;
     }
   };
@@ -883,7 +883,7 @@ export default function ServerCandidatePicker({
       toast.success('Folder renamed');
       return true;
     } catch (err) {
-      toast.error(`Couldn't rename folder. ${friendlyErrorMessage(err, 'Please try again.')}`);
+      showErrorToast(err, "Couldn't rename folder");
       return false;
     }
   };
@@ -928,8 +928,11 @@ export default function ServerCandidatePicker({
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       toast.success('Resume downloaded', { id: 'download' });
-    } catch {
-      toast.error('Failed to download resume', { id: 'download' });
+    } catch (error) {
+      showErrorToast(error, "Couldn't download the resume", {
+        id: 'download',
+        retry: () => downloadResume(id, name),
+      });
     }
   };
   const archiveResume = async (id: string) => {
@@ -941,7 +944,7 @@ export default function ServerCandidatePicker({
       unpick(id);
       toast.success('Resume archived successfully');
     } catch (err) {
-      toast.error(`Couldn't archive resume. ${friendlyErrorMessage(err, 'Please try again.')}`);
+      showErrorToast(err, "Couldn't archive resume");
     } finally {
       setReloadTick((n) => n + 1);
       void reloadFolders();
@@ -959,7 +962,7 @@ export default function ServerCandidatePicker({
         toast.success('Resume deleted');
       }
     } catch (err) {
-      toast.error(`Couldn't delete resume. ${friendlyErrorMessage(err, 'Please try again.')}`);
+      showErrorToast(err, "Couldn't delete resume");
     } finally {
       if (archived) setArchivedReload((n) => n + 1); else setReloadTick((n) => n + 1);
       void reloadFolders();
@@ -1025,7 +1028,7 @@ export default function ServerCandidatePicker({
       // Succeeded: drop these from the archived-tab ticks (a failure keeps them for a retry).
       setArchivedPicks((s) => { const next = new Set(s); ids.forEach((id) => next.delete(id)); return next; });
     } catch (err) {
-      toast.error((err as Error)?.message || 'Failed to unarchive resumes');
+      showErrorToast(err, "Couldn't unarchive resumes");
     } finally {
       setUnarchiving((s) => { const next = new Set(s); ids.forEach((id) => next.delete(id)); return next; });
       // Folder counts and the archived list read again.

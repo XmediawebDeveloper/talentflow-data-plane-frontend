@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { Users, Mail, Phone, Briefcase, Layers, Eye, Loader2, Lightbulb } from 'lucide-react';
 import { Resume } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 
@@ -127,8 +127,8 @@ export default function SelectedCandidatesPanel({
         return;
       }
       setVersionViewer({ id: resume.id, name: resume.name, versions: list });
-    } catch {
-      toast.error('Could not load the versions for this candidate');
+    } catch (error) {
+      showErrorToast(error, `Couldn't load the versions for ${resume.name || 'this candidate'}`, { retry: () => handleView(resume) });
     } finally {
       setLoadingViewFor(null);
     }

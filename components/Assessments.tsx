@@ -123,7 +123,7 @@ import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import { useBackgroundResend } from '@/components/bulk-invite/useBackgroundResend';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, isJdDisabled } from '@/lib/utils/assessmentJobLock';
 import JobStatusBadge, { jobLockBadgeFor, type JobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -2456,7 +2456,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download invitation report:', error);
-      toast.error('Failed to download the report. Please try again.');
+      showErrorToast(error, "Couldn't download the report", { retry: () => downloadInviteReport(inv) });
     } finally {
       setDownloadingInviteReportId(null);
     }
@@ -2518,7 +2518,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setSelectedInviteIds(new Set());
     } catch (error) {
       console.error('Failed to download invitation report PDFs:', error);
-      toast.error('Could not download the reports. Please try again.');
+      showErrorToast(error, "Couldn't download the reports", { retry: () => handleDownloadInviteReportPdfs(rows) });
     } finally {
       setDownloadingInvitePdfs(false);
     }
@@ -2785,7 +2785,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setSelectedResultKeys(new Set());
     } catch (error) {
       console.error('Failed to download result PDFs:', error);
-      toast.error('Could not download the reports. Please try again.');
+      showErrorToast(error, "Couldn't download the reports", { retry: handleDownloadResultPdfs });
     } finally {
       setDownloadingResultPdfs(false);
     }
@@ -2975,6 +2975,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     } catch (error) {
       if (isStale()) return;
       console.log('[TalentFlow] Failed to load assessments:', error);
+      showErrorToast(error, "Couldn't load assessments", {
+        id: 'assessments-load',
+        retry: () => loadAssessmentsPage(page, 'reload'),
+      });
       setApiAssessments([]);
     } finally {
       if (!isStale()) setIsLoading(false);
@@ -3036,6 +3040,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
   const totalJobsPaged = usePagedList<AssessmentResponse, unknown, AssessmentPageParams>({
     name: 'assessments:total-jobs',
+    errorToast: "Couldn't load configured jobs",
     query: totalJobsQuery,
     fetchPage: (q) => assessmentService.listPage(q),
     /* After the restore, and once a restored search has settled: one page
@@ -3230,6 +3235,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     } catch (error) {
       if (isStale()) return;
       console.error('Failed to load invitations:', error);
+      if (!silent) {
+        showErrorToast(error, "Couldn't load invitations", {
+          id: 'tracking-invitations-load',
+          retry: () => loadTrackingInvitations(assessment, page, filters),
+        });
+      }
       /* The summary cards are not touched here: they have their own request
          (`loadTrackingInvitationSummary`), which may well have succeeded, and
          zeroing them on a failed LIST put the popup's counts at 0. */
@@ -3407,7 +3418,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       });
       setSelectedResultKeys(new Set(refs.map(keyOf)));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not select every result');
+      showErrorToast(err, "Couldn't select every result");
     } finally {
       setSelectingAllResults(false);
     }
@@ -4166,7 +4177,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await syncAssessmentAfterStatusChange(assessmentId, null);
     } catch (error) {
       console.error('Failed to delete assessment:', error);
-      toast.error(`Couldn't delete assessment. ${friendlyErrorMessage(error, 'Only draft assessments can be deleted.')}`);
+      showErrorToast(error, "Couldn't delete assessment");
       setOpenMenuId(null);
     }
   };
@@ -4181,7 +4192,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
       console.error('Failed to pause assessment:', error);
-      toast.error(`Couldn't pause assessment. ${friendlyErrorMessage(error, 'Please try again.')}`);
+      showErrorToast(error, "Couldn't pause assessment");
       setOpenMenuId(null);
     }
   };
@@ -4282,12 +4293,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       });
     } catch (error: any) {
       console.error('Failed to duplicate assessment:', error);
-      const msg =
-        error?.response?.data?.detail?.message ||
-        error?.response?.data?.message ||
-        (typeof error?.response?.data?.detail === 'string' ? error.response.data.detail : null) ||
-        'Failed to duplicate assessment. Please try again.';
-      toast.error(msg);
+      showErrorToast(error, "Couldn't duplicate assessment");
     } finally {
       setIsCloning(false);
     }
@@ -4353,7 +4359,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setRevokeTargetAssessment(null);
     } catch (error) {
       console.error('Failed to revoke pending invites:', error);
-      toast.error('Failed to revoke pending invites. Please try again.');
+      showErrorToast(error, "Couldn't revoke pending invites");
     } finally {
       setIsRevoking(false);
     }
@@ -4367,7 +4373,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
       console.error('Failed to activate assessment:', error);
-      toast.error(`Couldn't activate assessment. ${friendlyErrorMessage(error, 'Please try again.')}`);
+      showErrorToast(error, "Couldn't activate assessment");
       setOpenMenuId(null);
     }
   };
@@ -4394,7 +4400,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
       console.error('Failed to unarchive assessment:', error);
-      toast.error(`Couldn't unarchive assessment. ${friendlyErrorMessage(error, 'Please try again.')}`);
+      showErrorToast(error, "Couldn't unarchive assessment");
       setOpenMenuId(null);
     }
   };
@@ -4420,7 +4426,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
       console.error('Failed to archive assessment:', error);
-      toast.error(`Couldn't archive assessment. ${friendlyErrorMessage(error, 'Please try again.')}`);
+      showErrorToast(error, "Couldn't archive assessment");
       setOpenMenuId(null);
     }
   };
@@ -4531,7 +4537,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const handleResendInvitation = async (invitation: any) => {
     const assessmentId = invitation._assessment_id || selectedAssessmentForTracking?.id;
     if (!assessmentId) {
-      toast.error('Could not tell which assessment this invitation belongs to.');
+      showErrorToast(null, "Couldn't find the assessment for this invitation");
       setResendTargetInvitation(null);
       return;
     }
@@ -4545,12 +4551,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await refreshInviteSurfaces();
     } catch (error: any) {
       console.error('Failed to resend invitation:', error);
-      const detail = error?.response?.data?.detail;
-      const msg =
-        (typeof detail === 'object' && detail?.message) ||
-        (typeof detail === 'string' && detail) ||
-        'Failed to resend invitation. Please try again.';
-      toast.error(msg);
+      showErrorToast(error, "Couldn't resend invitation");
     } finally {
       setIsResending(false);
       setResendTargetInvitation(null);
@@ -4600,7 +4601,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       toast.success(`Revoked ${revoked} invitation${revoked === 1 ? '' : 's'}.`);
     }
     if (failedCount > 0) {
-      toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
+      showErrorToast(null, `Couldn't revoke ${failedCount} invitation${failedCount === 1 ? '' : 's'}`);
     }
     return { revoked, failedCount, failedIds };
   };
@@ -4684,12 +4685,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await refreshInviteSurfaces();
     } catch (error: any) {
       console.error('Failed to update email:', error);
-      const msg =
-        error?.response?.data?.detail?.message ||
-        error?.response?.data?.message ||
-        (typeof error?.response?.data?.detail === 'string' ? error.response.data.detail : null) ||
-        'Failed to update email. Please try again.';
-      toast.error(msg);
+      showErrorToast(error, "Couldn't update email");
     } finally {
       setIsSendingChangeEmail(false);
     }

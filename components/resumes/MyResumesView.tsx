@@ -19,6 +19,7 @@ import FilterSelect from '@/components/ui/filter-select';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 import { type ResumeVersionFilter, RESUME_VERSION_FILTER_OPTIONS, keepByVersion } from '@/components/resumes/resumeVersionFilter';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
+import { useResumeSelection } from '@/components/resumes/ResumeSelectionContext';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import { useResumeUploadFlow } from '@/components/resumes/useResumeUploadFlow';
@@ -37,7 +38,7 @@ import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
@@ -926,7 +927,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const { isPlanLocked } = usePlanLock();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
-  const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
+  // Shared with the Shared Database tab (see ResumeSelectionContext); the row
+  // cache lets bulk actions read ticked resumes that are not on screen.
+  const { selectedResumes, setSelectedResumes, rowById, selectedRows } = useResumeSelection(resumes);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   // The folder id the currently-rendered `resumes` actually belong to. Set in
   // lockstep with setResumes in fetchData — unlike `selectedFolder`, which
@@ -1187,7 +1190,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           router.replace('/recruitment/resume-database?tab=my-resumes', { scroll: false });
         } catch (error) {
           console.error('Error fetching resume from URL:', error);
-          toast.error('Could not find the requested resume');
+          showErrorToast(error, "Couldn't open the requested resume", { id: `resume-${resumeIdFromUrl}-open`, retry: openResume });
         }
       };
       openResume();
@@ -1656,7 +1659,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
-      toast.error('Failed to load resumes');
+      showErrorToast(error, "Couldn't load resumes", { id: 'my-resumes-load', retry: () => fetchData(searchTerm, currentFilters, folderId) });
     } finally {
       setLoading(false);
       isFetchingRef.current = false; // Reset flag to allow next fetch
@@ -1842,7 +1845,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
   const handleDeleteResumes = (ids: string[]) => {
     const names = ids.map(id => {
-      const r = resumes.find(r => r.id === id);
+      const r = rowById(id);
       return r?.candidate_name || r?.file_name || 'this resume';
     });
     setDeleteResumeConfirm({ isOpen: true, ids, names });
@@ -1860,8 +1863,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         // was the only pick); RESUMES_CHANGED refetches the list.
         setSelectedResumes(prev => prev.filter(id => !ids.includes(id)));
         toast.success(`Version ${version.version} deleted`);
-      } catch {
-        toast.error(`Couldn't delete version ${version.version}. Please try again.`);
+      } catch (error) {
+        showErrorToast(error, `Couldn't delete version ${version.version}`);
       }
       return;
     }
@@ -1900,7 +1903,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
       toast.success(ids.length === 1 ? 'Resume deleted' : `${ids.length} resume(s) deleted`);
     } catch (error) {
-      toast.error('Failed to delete resume(s)');
+      showErrorToast(error, ids.length === 1 ? "Couldn't delete the resume" : `Couldn't delete ${ids.length} resumes`);
     }
   };
 
@@ -1969,7 +1972,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         setCurrentPage(1);
       }
     } catch (error) {
-      toast.error('Failed to move resumes');
+      showErrorToast(error, "Couldn't move the resumes");
     }
   };
 
@@ -2077,7 +2080,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
          that queue and race the listener's. */
       toast.success(`${resumeIds.length} resume(s) archived`);
     } catch (error) {
-      toast.error('Failed to archive resumes');
+      showErrorToast(error, "Couldn't archive the resumes");
     }
   };
 
@@ -2176,7 +2179,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             : `${resumeIds.length} resume(s) unarchived (${restoredToOriginal} restored, ${resumeIds.length - restoredToOriginal} to Root)`
       );
     } catch (error) {
-      toast.error('Failed to unarchive resumes');
+      showErrorToast(error, "Couldn't unarchive the resumes");
     }
   };
 
@@ -2194,7 +2197,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     toast.loading('Downloading resume...', { id: 'bulk-download' });
     try {
       const resumeId = selectedResumes[0];
-      const resume = resumes.find(r => r.id === resumeId);
+      const resume = rowById(resumeId);
       const blob = await resumeService.download(resumeId);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -2209,7 +2212,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       setSelectedResumes([]);
     } catch (error) {
       console.error('Download failed:', error);
-      toast.error('Failed to download resume', { id: 'bulk-download' });
+      showErrorToast(error, "Couldn't download the resume", { id: 'bulk-download', retry: handleBulkDownload });
     }
   };
 
@@ -2229,7 +2232,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       // Download each resume and add to ZIP
       for (let i = 0; i < selectedResumes.length; i++) {
         const resumeId = selectedResumes[i];
-        const resume = resumes.find(r => r.id === resumeId);
+        const resume = rowById(resumeId);
         // Use original fileName to preserve file extension (pdf, doc, docx, etc.)
         const fileName = resume?.fileName || `${resume?.name || `resume_${i + 1}`}_resume`;
         const zipPath = `resumes/${fileName}`;
@@ -2261,7 +2264,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       setIsZipDownloadModalOpen(false);
     } catch (error) {
       console.error('ZIP download failed:', error);
-      toast.error('Failed to create ZIP file', { id: 'zip-download' });
+      showErrorToast(error, "Couldn't create the ZIP file", { id: 'zip-download', retry: handleZipDownload });
     } finally {
       setIsDownloadingZip(false);
     }
@@ -2272,8 +2275,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
      The row mapper fills blanks with "No email" / "No phone" placeholders,
      so those are stripped back to empty here. */
   const selectedInviteCandidates = (): InviteCandidate[] =>
-    resumes
-      .filter((r) => selectedResumes.includes(r.id))
+    selectedRows
       .map((r) => {
         const email = typeof r.email === 'string' && r.email.includes('@') ? r.email.trim() : '';
         const rawPhone = (r as any).phone;
@@ -2296,15 +2298,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       return;
     }
     // An archived resume can't be assessed, same rule Score and AI Interview apply.
-    const archivedCount = resumes
-      .filter(r => selectedResumes.includes(r.id))
+    const archivedCount = selectedRows
       .filter(r => isResumeArchived(r)).length;
     if (archivedCount > 0) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an assessment. Please select active resumes only.`);
       return;
     }
-    const tenantUserCount = resumes
-      .filter(r => selectedResumes.includes(r.id))
+    const tenantUserCount = selectedRows
       .filter(r => isTenantUserEmailResume(r)).length;
     if (tenantUserCount > 0) {
       toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be invited to an assessment.`);
@@ -2327,15 +2327,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     }
     // An archived resume can't be put in front of an interviewer, same rule the
     // scoring action applies.
-    const archivedCount = resumes
-      .filter(r => selectedResumes.includes(r.id))
+    const archivedCount = selectedRows
       .filter(r => isResumeArchived(r)).length;
     if (archivedCount > 0) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an AI interview. Please select active resumes only.`);
       return;
     }
-    const tenantUserCount = resumes
-      .filter(r => selectedResumes.includes(r.id))
+    const tenantUserCount = selectedRows
       .filter(r => isTenantUserEmailResume(r)).length;
     if (tenantUserCount > 0) {
       toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be invited to an AI interview.`);
@@ -2380,7 +2378,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       setPublishedJobs(convertedJobs);
     } catch (error) {
       console.error('Failed to fetch jobs:', error);
-      toast.error('Failed to load jobs');
+      showErrorToast(error, "Couldn't load jobs", { id: 'my-resumes-jobs-load', retry: fetchPublishedJobs });
     } finally {
       setLoadingJobs(false);
     }
@@ -2409,7 +2407,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     if (selectedResumes.length === 0) return;
 
     // Check if any selected resumes are archived (by flag or folder)
-    const selectedResumeObjects = resumes.filter(r => selectedResumes.includes(r.id));
+    const selectedResumeObjects = selectedRows;
     const archivedCount = selectedResumeObjects.filter(r => isResumeArchived(r)).length;
 
     if (archivedCount > 0) {
@@ -2474,7 +2472,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     const names: Record<string, string> = {};
     const versions: Record<string, number> = {};
     resumeIds.forEach((id, i) => {
-      const resume: any = resumes.find(r => r.id === id) || resumes.find(r => r.id === sourceResumeIds?.[i]);
+      const resume: any = rowById(id) || rowById(sourceResumeIds?.[i] ?? '');
       names[id] = resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown';
       const version = resumeVersions?.[i];
       if (version) versions[id] = version;
@@ -2521,7 +2519,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       toast.success(`Scoring started for ${resumeItems.length} resume${resumeItems.length !== 1 ? 's' : ''}.`);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
+      showErrorToast(error, "Couldn't start scoring");
     }
   };
 
@@ -2624,8 +2622,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       toast.success('Folder created');
     } catch (error: any) {
       console.error('[DEBUG] Failed to create folder:', error);
-      const message = error?.response?.data?.detail || error?.message || 'Unknown error';
-      toast.error(`Failed to create folder: ${message}`);
+      showErrorToast(error, "Couldn't create the folder");
     }
   };
 
@@ -2742,7 +2739,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       setFolders(prev => renameInTree(prev));
       toast.success('Folder renamed');
     } catch (error) {
-      toast.error('Failed to rename folder');
+      showErrorToast(error, "Couldn't rename the folder");
     }
   };
 
@@ -2907,7 +2904,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       if (result.deleted_resumes > 0) parts.push(`${result.deleted_resumes} resume${result.deleted_resumes !== 1 ? 's' : ''} deleted`);
       toast.success(parts.join(', '));
     } catch (error) {
-      toast.error('Failed to delete folder');
+      showErrorToast(error, "Couldn't delete the folder");
     }
 
     // Close dialog
@@ -3082,6 +3079,21 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       if (via === 'upload') setResumes(prev => [convertApiResume(resume), ...prev]);
     },
   });
+
+  /* `?upload=1` — the header's Quick actions → "Upload Resumes" lands here and
+     opens the upload dialog straight away. The param is dropped right after,
+     so a refresh or Back doesn't reopen the dialog. */
+  useEffect(() => {
+    if (searchParams.get('upload') !== '1') return;
+    router.replace('/recruitment/resume-database?tab=my-resumes', { scroll: false });
+    if (canUploadMyResumes) {
+      openUploadToFolder(undefined);
+    } else {
+      toast.error('You do not have permission to upload resumes. Ask your admin for upload access.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per arrival with the param
+  }, [searchParams]);
+
   if (loading) {
     // Structure-matched skeleton mirroring the real My Resumes page: same
     // outer wrapper / white card, the same header block (icon box, title +
@@ -3228,7 +3240,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           const isArchivedContext =
             !!archivedFolder &&
             (selectedFolder === archivedFolder.id ||
-              selectedResumes.every(id => resumes.find(r => r.id === id)?.isArchived));
+              selectedResumes.every(id => rowById(id)?.isArchived));
           return (
           <BulkActionsBar
             selectedCount={selectedResumes.length}
@@ -4127,7 +4139,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               ? [singleResumeToApply]
               : uploadedResumeToScore
                 ? resumes.filter(r => r.id === uploadedResumeToScore.id)
-                : resumes.filter(r => selectedResumes.includes(r.id))
+                : selectedRows
           }
           jobs={publishedJobs}
           /* Scores the resumes — so the scoring title, steps and button. */

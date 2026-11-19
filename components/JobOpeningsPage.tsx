@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import api from '@/lib/services/api';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
@@ -160,7 +161,7 @@ export default function JobOpeningsPage() {
         });
       } catch (error) {
         console.error('Failed to fetch jobs:', error);
-        toast.error('Failed to load job openings');
+        showErrorToast(error, "Couldn't load job openings", { id: 'job-openings-load', retry: fetchJobs });
       } finally {
         setLoading(false);
       }
@@ -208,7 +209,7 @@ export default function JobOpeningsPage() {
       // Trigger refetch
       setRefetchKey(prev => prev + 1);
     } catch (error) {
-      toast.error('Failed to update status');
+      showErrorToast(error, "Couldn't update the job status");
     }
     setActiveDropdown(null);
   };

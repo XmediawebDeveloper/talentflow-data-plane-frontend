@@ -27,6 +27,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import MyResumesView from '@/components/resumes/MyResumesView';
 import InternalDatabaseView from '@/components/resumes/InternalDatabaseView';
+import { ResumeSelectionProvider } from '@/components/resumes/ResumeSelectionContext';
 import { resumeService, RESUMES_CHANGED_EVENT } from '@/lib/services/resumeService';
 import type { Permission } from '@/lib/types/tenant';
 import {
@@ -259,11 +260,15 @@ export default function ResumeDatabasePage() {
   // it generates no box, so the views stay direct flex children of the layout.
   return (
     <div className="contents" style={{ '--crumb-h': `${crumbHeight}px` } as CSSProperties}>
-      {activeTab === 'my-resumes' ? (
-        <MyResumesView header={header} />
-      ) : (
-        <InternalDatabaseView header={header} />
-      )}
+      {/* One selection across both tabs: tick some in My Resumes, switch to
+          Shared Database, tick more, and the bulk actions act on all of them. */}
+      <ResumeSelectionProvider>
+        {activeTab === 'my-resumes' ? (
+          <MyResumesView header={header} />
+        ) : (
+          <InternalDatabaseView header={header} />
+        )}
+      </ResumeSelectionProvider>
     </div>
   );
 }

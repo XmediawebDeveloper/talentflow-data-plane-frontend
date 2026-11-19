@@ -9,6 +9,7 @@ import { resumeService, folderService } from '@/lib/services/resumeService';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import { Resume, Folder } from '@/lib/types/types';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { parseIST } from '@/lib/utils/dateUtils';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
@@ -545,6 +546,8 @@ export default function ResumeScoringRoute() {
     } catch (error) {
       if (isStale()) return;
       console.error('Failed to load scored history from API:', error);
+      // Without this the page reads "No Scoring History Yet" — wrong, it just failed to load.
+      showErrorToast(error, "Couldn't load your scoring history", { id: 'scored-history-load', retry: loadScoredHistory });
       // Fallback to localStorage if API fails
       try {
         const saved = localStorage.getItem('scoredHistory');
@@ -674,6 +677,14 @@ export default function ResumeScoringRoute() {
       });
     } catch (error) {
       console.error('[loadJdScores] Failed to load scores for JD:', jdId, error);
+      if (isStale()) return;
+      // Not loaded after all — so opening the job again (or Retry) refetches
+      // instead of treating it as done and showing an empty table.
+      loadedJdScoresRef.current.delete(jdId);
+      showErrorToast(error, "Couldn't load the scores for this job", {
+        id: `jd-scores-${jdId}`,
+        retry: () => loadJdScores(jdId, jdTitle),
+      });
     }
   };
 
@@ -773,7 +784,7 @@ export default function ResumeScoringRoute() {
 
     } catch (error) {
       console.error('Failed to fetch data:', error);
-      toast.error('Failed to load data from database');
+      showErrorToast(error, "Couldn't load your jobs and resumes", { id: 'resume-scoring-data', retry: fetchData });
     } finally {
       setLoading(false);
       setJobsLoaded(true);
@@ -810,6 +821,7 @@ export default function ResumeScoringRoute() {
       console.log('[ResumeScoringRoute] Refreshed resumes from API:', convertedResumes.length);
     } catch (error) {
       console.error('[ResumeScoringRoute] Failed to refresh resumes:', error);
+      showErrorToast(error, "Couldn't refresh the resume list", { id: 'resume-scoring-resumes', retry: refreshResumes });
     }
   };
 

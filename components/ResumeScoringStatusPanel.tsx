@@ -613,10 +613,11 @@ export default function ResumeScoringStatusPanel({
               {onMinimize && (
                 <button
                   onClick={onMinimize}
-                  className="mr-4 p-2 hover:bg-white/20 rounded-lg transition-colors"
+                  className="mr-4 p-2 sm:px-3 hover:bg-white/20 rounded-lg transition-colors inline-flex items-center gap-1.5"
                   aria-label="Minimize" title="Minimize"
                 >
                   <Minus className="w-5 h-5 text-white" />
+                  <span className="hidden sm:inline text-sm font-medium text-white">Minimize</span>
                 </button>
               )}
               <div className="text-right">

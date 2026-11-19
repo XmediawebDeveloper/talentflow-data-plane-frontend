@@ -4,7 +4,7 @@ import { Users, Mail, Play, Check, CheckCircle, Clock, Eye, TrendingUp, RefreshC
 import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
 import { assessmentInviteSource, InviteSourceValue } from '@/components/AIInterviewInviteTable';
@@ -409,6 +409,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       setLoadedAt(Date.now());
     } catch (error) {
       console.error('Failed to load invitations:', error);
+      if (!silent) {
+        showErrorToast(error, "Couldn't load invitations", {
+          id: 'track-invites-load',
+          retry: () => loadInvitations(),
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -423,7 +429,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       setSelectedIds(new Set());
     } catch (error: any) {
       console.error('Failed to resend invitation:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't resend invitation. Please try again."));
+      showErrorToast(error, "Couldn't resend invitation");
     } finally {
       setResendingId(null);
       setResendTarget(null);
@@ -655,7 +661,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       }
     }
     if (sent > 0) toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
-    if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
+    if (failedCount > 0) showErrorToast(null, `Couldn't resend ${failedCount} invitation${failedCount === 1 ? '' : 's'}`);
     setShowBulkResendConfirm(false);
     setIsBulkResending(false);
     /* Any success: reload (clears the selection), then keep only the failed
@@ -690,7 +696,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       }
     }
     if (revoked > 0) toast.success(`Revoked ${revoked} invitation${revoked === 1 ? '' : 's'}.`);
-    if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
+    if (failedCount > 0) showErrorToast(null, `Couldn't revoke ${failedCount} invitation${failedCount === 1 ? '' : 's'}`);
     setShowBulkRevokeConfirm(false);
     setIsBulkRevoking(false);
     /* Any success: reload (clears the selection), then keep only the failed

@@ -8,7 +8,7 @@ import {
   CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet, Send, CheckCircle2, FileSearch
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { listAssessmentsBatched } from '@/lib/utils/jobAssessmentHierarchy';
 import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, ASSESSMENT_JOB_DISABLED_MESSAGE, ASSESSMENT_JOB_ARCHIVED_MESSAGE } from '@/lib/utils/assessmentJobLock';
 import JobStatusBadge, { jobLockBadgeFor, type JobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
@@ -794,7 +794,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       onMutated?.();
     } catch (err) {
       console.error(`Failed to ${verb} assessment:`, err);
-      toast.error(`Couldn't ${verb} assessment. ${friendlyErrorMessage(err, 'Please try again.')}`);
+      showErrorToast(err, `Couldn't ${verb} assessment`);
     } finally {
       setBusyRowId(null);
     }

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { candidateAIInterviewService, getAiClientSessionId } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
 import dynamic from 'next/dynamic';
@@ -1519,7 +1519,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       setInterview(result);
       setStep('identity');
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't record consent. Please try again."));
+      showErrorToast(err, "Couldn't record your consent", { id: 'ai-interview-consent-error' });
     } finally {
       setConsentSubmitting(false);
     }
@@ -1554,7 +1554,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       // Advance immediately once backend identity verification succeeds.
       setStep('system_check');
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't verify identity. Please try again."));
+      showErrorToast(err, "Couldn't verify your identity", { id: 'ai-interview-identity-error' });
     } finally {
       setIdentitySubmitting(false);
     }
@@ -2285,11 +2285,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       const detail = err?.response?.data?.detail || 'Failed to start interview';
       if (detail.includes('completed') || detail.includes('cancelled') || detail.includes('expired')) {
         await loadInterview();
-      } else if (err?.response?.status === 409) {
-        // The job behind this interview is disabled — retrying won't help.
-        toast.error(detail);
       } else {
-        toast.error(detail + ' Please try again.');
+        // A 409 means the job behind this interview is disabled — the backend's
+        // reason is shown as the description, and there is no Retry button.
+        showErrorToast(err, "Couldn't start the interview", { id: 'ai-interview-start-error' });
       }
     } finally {
       setStartSubmitting(false);

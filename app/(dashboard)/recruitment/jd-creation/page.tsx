@@ -11,7 +11,7 @@ import AppModal from '@/components/ui/app-modal';
 import { getJDUsageModules } from '@/lib/utils/jdUsageModules';
 import { isFreshDraftVersion } from '@/lib/utils/jdDraftVersion';
 import { toast } from '@/components/ui/enhanced-toast';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 
@@ -618,10 +618,7 @@ function JDCreationContent() {
                   return;
                 }
                 console.error('[TalentFlow] Could not open a working copy of the published JD:', copyError);
-                toast.error({
-                  title: 'Could not open this JD for editing',
-                  description: friendlyErrorMessage(copyError, "Please try again."),
-                });
+                showErrorToast(copyError, "Couldn't open this JD for editing");
                 router.push('/recruitment/job-openings');
                 setLoading(false);
                 return;
@@ -634,6 +631,7 @@ function JDCreationContent() {
             setEditingJD(jd);
           } catch (error) {
             console.error('Failed to fetch JD:', error);
+            showErrorToast(error, "Couldn't load this job description", { id: `jd-${jdId}-load`, retry: checkAccess });
           }
         } else {
           // Fresh "Create JD" (no id) — clear any stale edit state left in the
@@ -655,6 +653,7 @@ function JDCreationContent() {
             setEditingJD(jd);
           } catch (fetchError) {
             console.error('Failed to fetch JD:', fetchError);
+            showErrorToast(fetchError, "Couldn't load this job description", { id: `jd-${jdId}-load`, retry: checkAccess });
           }
         } else {
           setEditingJD(null);
@@ -912,10 +911,7 @@ function JDCreationContent() {
         setBeingEdited(null);
       } catch (error) {
         console.error('[TalentFlow] Take over failed:', error);
-        toast.error({
-          title: 'Could not take over this JD',
-          description: friendlyErrorMessage(error, "Please try again."),
-        });
+        showErrorToast(error, "Couldn't take over this JD");
       } finally {
         setTakingOver(false);
       }

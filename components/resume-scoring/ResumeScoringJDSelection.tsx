@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { jdService, JDResponse } from '@/lib/services/jdService';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { formatEmploymentType } from '@/lib/utils/jobOpeningDisplay';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -39,7 +39,7 @@ export default function ResumeScoringJDSelection() {
       setJds(result.items || []);
     } catch (error) {
       console.error('Failed to load JDs:', error);
-      toast.error('Failed to load job descriptions');
+      showErrorToast(error, "Couldn't load job descriptions", { id: 'resume-scoring-jds-load' });
     } finally {
       setLoadingJds(false);
     }

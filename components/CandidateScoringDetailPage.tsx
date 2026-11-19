@@ -20,7 +20,7 @@ import CreateInviteTargetModal from './resume-scoring/CreateInviteTargetModal';
 import { buildCreateUrl, clearInviteHandoff, readInviteHandoff, saveInviteHandoff, withResumeInviteMarker, RESUME_INVITE_PARAM, type InviteHandoffKind } from '@/lib/utils/resumeScoringInviteHandoff';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { toExternalUrl } from '@/lib/utils/externalUrl';
 import RecordPager from '@/components/RecordPager';
 import ReactMarkdown from 'react-markdown';
@@ -536,7 +536,7 @@ export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitl
       setVersionPreview({ id: version.id, versionNumber, fileName: version.fileName, text });
     } catch (err) {
       console.error('[CandidateScoringDetailPage] Failed to load version preview:', err);
-      toast.error('Failed to load preview');
+      showErrorToast(err, "Couldn't load the preview", { retry: () => handleVersionPreview(version, versionNumber) });
     } finally {
       setVersionPreviewLoadingId(null);
     }
@@ -558,7 +558,7 @@ export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitl
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('[CandidateScoringDetailPage] Failed to download version:', err);
-      toast.error('Failed to download version');
+      showErrorToast(err, "Couldn't download this version", { retry: () => handleVersionDownload(version, versionNumber) });
     }
   };
 
@@ -1100,7 +1100,7 @@ export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitl
       );
     } catch (err) {
       console.error('[CandidateScoringDetailPage] Failed to open the resume preview:', err);
-      toast.error('Could not load the resume. Please try again.');
+      showErrorToast(err, "Couldn't load the resume", { retry: handleViewResume });
     } finally {
       setLoadingResumeDetail(false);
     }
@@ -1186,11 +1186,11 @@ Best regards`);
         toast.success('Resume shared successfully');
         closeShareModal();
       } else {
-        toast.error(result.message || 'Failed to send email');
+        showErrorToast(result.message || null, "Couldn't send the email");
       }
     } catch (error: any) {
       console.error('[CandidateScoringDetailPage] Failed to share resume:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't send email. Please try again."));
+      showErrorToast(error, "Couldn't send the email");
     } finally {
       setIsSendingEmail(false);
     }
@@ -1360,18 +1360,8 @@ Best regards`);
       const errorData = await response.json().catch(() => null);
       console.error('[Scorecard] Failed:', response.status, errorData);
 
-      // Provide user-friendly error message
-      let errorMessage = 'Failed to download scorecard. Please try again later.';
-
-      if (response.status === 404) {
-        errorMessage = 'Scorecard not found. The score may have been deleted.';
-      } else if (response.status === 500) {
-        errorMessage = 'Server error while generating scorecard. Our team has been notified.';
-      } else if (response.status === 403) {
-        errorMessage = 'You do not have permission to download this scorecard.';
-      }
-
-      toast.error(errorMessage, { id: toastId, duration: 5000 });
+      // The helper picks the next step from the status (404 / 403 / 5xx …).
+      showErrorToast({ status: response.status, detail: errorData?.detail }, "Couldn't generate the scorecard", { id: toastId });
       return null;
     }
 
@@ -1393,7 +1383,7 @@ Best regards`);
       toast.dismiss(toastId);
     } catch (error) {
       console.error('[Scorecard] Preview error:', error);
-      toast.error('Failed to open the scorecard. Please try again.', { id: toastId });
+      showErrorToast(error, "Couldn't open the scorecard", { id: toastId, retry: handlePreviewScorecard });
     } finally {
       setLoadingScorecardPreview(false);
     }
@@ -1427,7 +1417,7 @@ Best regards`);
       console.log('[Download] PDF downloaded successfully');
     } catch (error) {
       console.error('[Download] Error:', error);
-      toast.error('Failed to download scorecard. Please try again.', { id: toastId });
+      showErrorToast(error, "Couldn't download the scorecard", { id: toastId, retry: handleDownloadScorecard });
     }
   };
 
