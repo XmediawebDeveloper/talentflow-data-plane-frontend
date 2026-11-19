@@ -4,6 +4,7 @@
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
 import { ensureUnitsAvailable } from './unitGuard';
+import type { JDLineageVersion } from './jdService';
 
 /**
  * Normalizes a scoring batch/item status string from the backend into one of
@@ -284,6 +285,13 @@ export interface ScoredJdListParams {
   sort_by?: 'scored' | 'title' | 'jdId' | 'candidates' | 'exact' | 'partial' | 'none';
   sort_dir?: 'asc' | 'desc';
   include_facets?: boolean;
+  /** Also return `lineages` + `version_counts` (see ScoredJdListResponse). */
+  include_lineages?: boolean;
+  /** Lineage mode: also return `versions` - every scored version of the
+   *  lineages on this page (see ScoredJdListResponse). */
+  expand_versions?: boolean;
+  /** Comma-separated JD version ids: only the lineages they belong to. */
+  lineage_of?: string;
   page?: number;
   page_size?: number;
 }
@@ -295,6 +303,18 @@ export interface ScoredJdListResponse {
   page_size: number;
   total_pages: number;
   facets?: { locations: string[]; industries: string[]; work_modes: string[]; job_types: string[]; creators: string[] };
+  /** `include_lineages` only: GET /jd/lineages' answer for the rows' jd_id.
+   *  Absent when the user lacks jd:read or the server could not build it. */
+  lineages?: Record<string, JDLineageVersion[]>;
+  /** `include_lineages` only: GET /scoring/jd/counts' answer for the
+   *  archived/disabled versions in `lineages`. */
+  version_counts?: Record<string, { total: number; top: { scored_by_name: string; created_at: string | null } | null }>;
+  /** `expand_versions` only: every scored version (version-mode rows, row
+   *  filters not applied) of the lineages in `items`. Absent on an older
+   *  backend, which is how the page knows to fall back to the full index. */
+  versions?: ScoredJdRow[];
+  /** Anything scored at all, before search / filters. */
+  any_scored?: boolean;
 }
 
 /** Drop empty / undefined params so they never reach the query string. */

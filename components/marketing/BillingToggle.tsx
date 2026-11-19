@@ -14,7 +14,13 @@ export function BillingToggle({
   onChange,
   savePercent,
   disabled = false,
+  thumbClassName = "bg-mkt-ink",
+  selectedClassName = "bg-mkt-ink text-mkt-canvas",
 }: {
+  /** Fill of the sliding thumb (defaults to the marketing ink). */
+  thumbClassName?: string;
+  /** Fill + text of the chosen option before the thumb is placed; keep its bg in step with the thumb. */
+  selectedClassName?: string;
   isYearly: boolean;
   onChange: (yearly: boolean) => void;
   /** Best real saving on offer; the badge is hidden when 0. */
@@ -66,7 +72,7 @@ export function BillingToggle({
       <span
         ref={thumbRef}
         aria-hidden="true"
-        className="absolute left-0 top-1 h-[calc(100%-0.5rem)] rounded-full bg-mkt-ink"
+        className={`absolute left-0 top-1 h-[calc(100%-0.5rem)] rounded-full ${thumbClassName}`}
       />
       {options.map((option) => {
         const selected = option.yearly === isYearly;
@@ -81,7 +87,7 @@ export function BillingToggle({
             className={`relative z-10 inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid disabled:cursor-not-allowed ${
               selected
                 // Until the thumb is placed, the chosen option paints its own fill.
-                ? "bg-mkt-ink text-mkt-canvas group-data-[ready]:bg-transparent"
+                ? `${selectedClassName} group-data-[ready]:bg-transparent`
                 : "text-slate-600 hover:text-mkt-ink dark:text-slate-400"
             }`}
           >

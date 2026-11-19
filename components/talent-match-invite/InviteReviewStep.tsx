@@ -13,7 +13,8 @@ import {
   type BulkInviteReviewStatus,
 } from '@/lib/services/bulkInviteService';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
-import { SOURCE_META, SourceIcon, sourceFromLabel } from './inviteSources';
+import { SourceIcon, sourceFromLabel } from './inviteSources';
+import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 import type { InviteKind } from './inviteVersions';
 
 export type ReviewCounts = BulkInviteReviewPage['counts'];
@@ -300,7 +301,7 @@ export default function InviteReviewStep({
                 </th>
                 <th className="tf-th-cell text-left font-semibold">Name</th>
                 <th className="tf-th-cell hidden md:table-cell text-left font-semibold">Email</th>
-                <th className="tf-th-cell hidden md:table-cell w-40 text-left font-semibold">Source</th>
+                <th className="tf-th-cell hidden md:table-cell w-40 text-left font-semibold">Invite Source</th>
                 <th className="tf-th-cell w-32 sm:w-48 text-left font-semibold">Status</th>
               </tr>
             </thead>
@@ -308,7 +309,6 @@ export default function InviteReviewStep({
               {items.map((r) => {
                 const skipped = r.status === 'skipped';
                 const on = !skipped && isIn(r);
-                const src = sourceFromLabel(r.group);
                 return (
                 <tr
                   key={r.key}
@@ -345,9 +345,8 @@ export default function InviteReviewStep({
                   </td>
                   <td className="tf-td hidden md:table-cell"><span className="block truncate" title={r.email}>{r.email || '—'}</span></td>
                   <td className="tf-td hidden md:table-cell">
-                    <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 tf-micro-hint" title={r.group}>
-                      <SourceIcon source={src} className="w-3 h-3" />
-                      <span className="truncate">{src ? SOURCE_META[src].label : r.group}</span>
+                    <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 tf-micro-hint">
+                      <InviteSourceValue inv={{ invite_source: r.resume_id ? 'resume' : 'email' }} iconClassName="w-3 h-3" />
                     </span>
                   </td>
                   <td className="tf-td">
@@ -383,7 +382,6 @@ export default function InviteReviewStep({
               <span className="tf-meta">Select this page</span>
             </div>
                   {items.map((r) => {
-                    const src = sourceFromLabel(r.group);
                     const skipped = r.status === 'skipped';
                     const on = !skipped && isIn(r);
                     return (
@@ -405,9 +403,8 @@ export default function InviteReviewStep({
                         }
                         badges={
                           <>
-                            <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 tf-micro-hint" title={r.group}>
-                              <SourceIcon source={src} className="w-3 h-3" />
-                              <span className="truncate">{src ? SOURCE_META[src].label : r.group}</span>
+                            <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 tf-micro-hint">
+                              <InviteSourceValue inv={{ invite_source: r.resume_id ? 'resume' : 'email' }} iconClassName="w-3 h-3" />
                             </span>
                             {skipped ? (
                               <span title={r.reason ?? undefined} className="tf-badge max-w-full border border-warning-line bg-warning-subtle text-2xs text-warning-strong">

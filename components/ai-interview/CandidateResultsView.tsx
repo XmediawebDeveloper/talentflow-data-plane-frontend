@@ -63,7 +63,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ViewResumeButton from '@/components/ui/view-resume-button';
-import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, pickResumeByEmail, resumeEmailOf, verifyResumeBelongsToInvite } from '@/lib/utils/resumeEmailMatch';
+import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, resumeEmailOf } from '@/lib/utils/resumeEmailMatch';
+import { resolveInviteResumeId } from '@/components/ai-interview/useInviteResumePreview';
 import ResumeHoverPreview from '@/components/ResumeHoverPreview';
 import TruncatedTextCell from './TruncatedTextCell';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
@@ -2004,42 +2005,17 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // contradict, the same identity rule the interview agent applies
   // (_names_plausibly_same_person), so a reused address can't surface a
   // stranger's resume. No match → no resume.
+  // The shared lookup (useInviteResumePreview.tsx) — the same rule the Results
+  // and Track tables' row ⋮ › View Resume use.
   const resolveResumeId = async (): Promise<string | null> => {
     setResumeEmailMismatch(false);
-    const email = inviteEmail();
-    if (!email) return null;
-    const { resumeService } = await import('@/lib/services/resumeService');
-
-    const linked = liveSession.resume_id || interview.resume_id;
-    if (linked) {
-      try {
-        // get(id) without logView — an availability check, not a view.
-        const verified = await verifyResumeBelongsToInvite(linked, email, id => resumeService.get(id));
-        if (verified) return verified;
-        setResumeEmailMismatch(true);
-      } catch (err) {
-        // Couldn't verify the link — never show it unverified; the email
-        // search below can still find the same resume.
-        console.warn('[CandidateResultsView] Linked resume check failed:', err);
-      }
-    }
-
-    // Exact email is the rule, whatever the invite source — the name only
-    // breaks a tie (pickResumeByEmail).
-    try {
-      // include_archived: an archived resume still exists — the resume_id
-      // path opens it, so the email path must find it too (naveen's resume was
-      // archived, so his direct-email invite showed "invited via Direct Email").
-      const results = await resumeService.list({ search: email, page_size: 50, include_archived: true });
-      const items = results.items || [];
-      const match: any = pickResumeByEmail(items as any[], email, interview.candidate_name || liveSession.candidate_name);
-      console.info('[CandidateResultsView] resume lookup by e-mail', { email, hits: items.length, matched: match?.id ?? null });
-      if (match?.id) setResumeEmailMismatch(false);
-      return match?.id || null;
-    } catch (err) {
-      console.warn('[CandidateResultsView] Resume search failed:', err);
-      return null;
-    }
+    const { id, mismatch } = await resolveInviteResumeId({
+      resumeId: liveSession.resume_id || interview.resume_id,
+      email: inviteEmail(),
+      name: interview.candidate_name || liveSession.candidate_name,
+    });
+    setResumeEmailMismatch(!id && mismatch);
+    return id;
   };
 
   // Prev/Next re-renders this same instance with a different interview, so
@@ -2604,8 +2580,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
               active). Desktop (lg+): a sticky vertical rail on the left with the
               content on the right. top-12 clears the sticky breadcrumb. */}
           <div className="lg:sticky lg:top-12 lg:self-start tf-card-soft">
-            <nav className="p-2 sm:p-3" aria-label="Candidate result sections">
-              <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
+            <nav className="p-1.5 2xs:p-2 sm:p-3" aria-label="Candidate result sections">
+              <div className="flex flex-wrap items-center gap-1 2xs:gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
                 {tabs.map(tab => {
                   const isActive = activeTab === tab.key;
                   const isAlertTab = tab.key === 'violations' || tab.key === 'verification';
@@ -2625,7 +2601,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           : `${tabPill(isActive)} whitespace-nowrap`
                       /* Below lg: each pill grows to share its row, so the
                          wrapped rows fill the width whatever the phone's size. */
-                      } max-lg:flex-auto max-lg:justify-center lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:whitespace-normal lg:shadow-none ${
+                      } max-lg:flex-auto max-lg:justify-center max-2xs:gap-1 max-2xs:px-2 max-2xs:py-1 max-2xs:text-xs lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:whitespace-normal lg:shadow-none ${
                         isActive
                           ? isAlertTab
                             ? 'lg:bg-destructive-subtle lg:text-destructive lg:font-medium lg:ring-1 lg:ring-destructive-line'
@@ -4024,7 +4000,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   <button
                     onClick={() => setTranscriptView(value)}
                     aria-pressed={transcriptView === value}
-                    className={`relative z-10 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors duration-300 ${
+                    className={`relative z-10 flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-medium rounded-md transition-colors duration-300 ${
                       transcriptView === value ? 'text-brand-blue' : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
@@ -4186,22 +4162,24 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 return (
                   <div className="w-full">
                     {/* Header with view toggle */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-gray-100">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center text-white font-semibold text-2xs">
+                    {/* Phones: smaller avatars / text, and the controls take a
+                        full line of their own under the names. */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 sm:mb-4 sm:pb-3 border-b border-gray-100">
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                          <div className="w-6 h-6 sm:w-7 sm:h-7 shrink-0 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center text-white font-semibold text-2xs">
                             B
                           </div>
-                          <span className="tf-meta">Bina (AI Interviewer)</span>
+                          <span className="tf-meta max-sm:text-xs truncate">Bina (AI Interviewer)</span>
                         </div>
                         <span className="text-gray-200">·</span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                           <NameAvatar name={candidateName} size="sm" />
-                          <span className="tf-meta">{candidateName}</span>
+                          <span className="tf-meta max-sm:text-xs truncate">{candidateName}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="tf-hint">{messages.length} messages</span>
+                      <div className="flex items-center gap-2 sm:gap-3 max-sm:w-full">
+                        <span className="tf-hint whitespace-nowrap max-sm:text-xs">{messages.length} messages</span>
                         <div className="relative inline-grid grid-cols-2 bg-slate-100 rounded-lg p-0.5 ring-1 ring-slate-200">
                           <span
                             aria-hidden
@@ -4220,7 +4198,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             onClick={() => { if (canDownloadReports) setChatDownloadOpen(true); }}
                             aria-disabled={!canDownloadReports}
                             title={canDownloadReports ? 'Download full chat transcript' : "You can view this interview, but your role can't download reports"}
-                            className={!canDownloadReports ? 'opacity-50 cursor-not-allowed' : undefined}
+                            className={`whitespace-nowrap max-sm:ml-auto max-2xs:px-2 max-2xs:text-xs ${!canDownloadReports ? 'opacity-50 cursor-not-allowed' : ''}`}
                           >
                             <Download className="w-3.5 h-3.5" />
                             Chat Download
@@ -4256,24 +4234,24 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     </div>
 
                     {transcriptView === 'chat' && (
-                      <div className="space-y-4 w-full animate-in fade-in duration-300 motion-reduce:animate-none">
+                      <div className="space-y-3 sm:space-y-4 w-full animate-in fade-in duration-300 motion-reduce:animate-none">
                         {labeled.map(({ msg, label, isFollowUp, qtype }, idx) => {
                           const { isAssistant, ts, content, rawContent, language, noScorableEnglish, hasCorrection, diff, skipNote } = chatItems[idx];
 
                           return (
                             <div
                               key={idx}
-                              className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'} ${isFollowUp ? `pl-6 border-l-2 ml-3 ${qtype === 'deepdive' ? 'border-brand-teal/30' : 'border-brand-cyan/30'}` : ''}`}
+                              className={`flex gap-2 sm:gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'} ${isFollowUp ? `pl-3 ml-1.5 sm:pl-6 sm:ml-3 border-l-2 ${qtype === 'deepdive' ? 'border-brand-teal/30' : 'border-brand-cyan/30'}` : ''}`}
                             >
                               {isAssistant ? (
-                                <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ring-1 ring-white/20 shadow-sm bg-brand-blue text-white shadow-brand-blue/20">
+                                <div className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ring-1 ring-white/20 shadow-sm bg-brand-blue text-white shadow-brand-blue/20">
                                   B
                                 </div>
                               ) : (
                                 <NameAvatar name={candidateName} size="sm" className="mt-0.5" />
                               )}
 
-                              <div className={`max-w-[75%] ${isAssistant ? '' : 'items-end flex flex-col'}`}>
+                              <div className={`min-w-0 max-w-[85%] sm:max-w-[75%] ${isAssistant ? '' : 'items-end flex flex-col'}`}>
                                 {(label || language) && (
                                   <div className={`flex items-center gap-1.5 mb-1 ${isAssistant ? '' : 'flex-row-reverse'}`}>
                                     {label && (
@@ -4293,7 +4271,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                                 {isAssistant ? (
                                   <>
-                                    <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-[#08132e]/5 text-[#08132e] rounded-tl-sm whitespace-pre-line">
+                                    <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-2xl text-[13px] sm:text-sm leading-relaxed bg-[#08132e]/5 text-[#08132e] rounded-tl-sm whitespace-pre-line">
                                       {content}
                                     </div>
                                     {skipNote && (
@@ -4314,7 +4292,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                     {/* Original (raw ASR) — ALWAYS shown, even when the
                                         enhancer made no change, so the recruiter can always
                                         see exactly what the ASR engine produced. */}
-                                    <div className="px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-sky-50 border border-sky-200 text-gray-800">
+                                    <div className="px-3 py-2 sm:px-4 sm:py-3 rounded-2xl rounded-tr-sm text-[13px] sm:text-sm leading-relaxed bg-sky-50 border border-sky-200 text-gray-800">
                                       <div className="flex items-center gap-1.5 mb-1.5 text-xs font-bold text-sky-700 uppercase tracking-wide">
                                         <AudioLines className="w-4 h-4" /> Original (ASR)
                                       </div>
@@ -4326,7 +4304,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                         raw ASR it simply repeats the same text (no correction).
                                         For a non-English discard there is no scorable English,
                                         so it shows a muted "not scored" marker instead of text. */}
-                                    <div className="mt-2 px-4 py-3 rounded-2xl text-sm leading-relaxed bg-success-subtle/70 border border-success-line text-gray-800">
+                                    <div className="mt-2 px-3 py-2 sm:px-4 sm:py-3 rounded-2xl text-[13px] sm:text-sm leading-relaxed bg-success-subtle/70 border border-success-line text-gray-800">
                                       <div className="flex items-center gap-1.5 mb-1.5 text-xs font-bold text-success uppercase tracking-wide">
                                         <span className="grid place-items-center w-4 h-4 rounded-full bg-success text-white">
                                           <Check className="w-2.5 h-2.5" strokeWidth={3.5} />

@@ -61,6 +61,7 @@ import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import ExportColumnsModal from '@/components/ExportColumnsModal';
+import { invitedViaResume, useInviteResumePreview } from '@/components/ai-interview/useInviteResumePreview';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from './ColumnFilterFields';
 import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge, InviteTimelineLines, hasMoreTimelineHistory, loadInterviewHistory } from '@/components/AIInterviewInviteTable';
@@ -320,6 +321,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   const EXPORT_DENIED = 'You do not have permission to export AI interviews';
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Row ⋮ › View Resume (Via Resume candidates): the result page's lookup and preview popup.
+  const resumePreview = useInviteResumePreview();
   const [totalSessions, setTotalSessions] = useState(0);
   /* The host's record-count listener, in a ref so an inline callback does not
      change loadSessions' identity (and re-fetch) on every host render. */
@@ -1034,6 +1037,22 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           <Eye className="w-4 h-4 text-menu-icon-view" />
           <span>View Details</span>
         </DropdownMenuItem>
+        {/* View Resume — only for candidates invited from a resume ("Via
+            Resume"); a direct-email invite has no resume behind it. */}
+        {invitedViaResume(session) && (
+          <DropdownMenuItem
+            className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
+            disabled={resumePreview.loadingId === session.id}
+            onClick={() => { void resumePreview.openResume(session); }}
+          >
+            {resumePreview.loadingId === session.id ? (
+              <Loader2 className="w-4 h-4 animate-spin text-menu-icon-view" />
+            ) : (
+              <FileText className="w-4 h-4 text-menu-icon-view" />
+            )}
+            <span>View Resume</span>
+          </DropdownMenuItem>
+        )}
         {onOpenInviteDialog && (
           <>
             <DropdownMenuSeparator className="my-1 bg-gray-100" />
@@ -2080,12 +2099,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         /* Clicking a row opens the candidate's result, as on the
                            AI Interviews page's Candidate Results table. */
                         onClick={() => handleViewDetails(session)}
-                        /* Row styled to the AI Talent Match reference table:
-                           plain white/dark rows (no zebra), hover:bg-gray-50,
-                           selected tint bg-blue-50. */
-                        className={`transition-colors cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 ${
-                          selected.has(session.id) ? 'bg-blue-50 dark:bg-slate-800/50' : 'bg-white dark:bg-slate-900'
-                        }`}
+                        /* Plain rows (no zebra) with a hover and a selected
+                           tint. tf-row-match paints them with the same colours
+                           as the pinned Select / Actions cells, so those never
+                           show as a different-coloured layer (dark mode). */
+                        data-row-selected={selected.has(session.id) ? 'true' : undefined}
+                        className="tf-row-match transition-colors cursor-pointer"
                       >
                         <td className="tf-td w-10 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                           <input
@@ -2373,6 +2392,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           onClose={() => setShowExportModal(false)}
         />
       )}
+      {resumePreview.modal}
     </>
   );
 

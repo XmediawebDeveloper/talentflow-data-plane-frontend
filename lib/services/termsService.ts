@@ -6,6 +6,7 @@
  */
 
 import api from './api';
+import { takeBootstrapPart } from './shellBootstrap';
 import type {
   TermsAndConditions,
   TermsAcceptanceStatus,
@@ -120,8 +121,14 @@ export const termsService = {
     }
 
     try {
-      const response = await api.get(`/public/terms-and-conditions/status?document_type=${documentType}`);
-      const data: TermsAcceptanceStatus = response.data?.data || response.data;
+      // First load of the page: the app-shell /bootstrap carries all three statuses.
+      const boot = forceRefresh
+        ? { hit: false as const }
+        : await takeBootstrapPart<{ data?: TermsAcceptanceStatus } & TermsAcceptanceStatus>(`terms_${documentType}`);
+      const body = boot.hit
+        ? boot.data
+        : (await api.get(`/public/terms-and-conditions/status?document_type=${documentType}`)).data;
+      const data: TermsAcceptanceStatus = body?.data || body;
       setCachedStatus(documentType, data);
       return data;
     } catch (error) {
