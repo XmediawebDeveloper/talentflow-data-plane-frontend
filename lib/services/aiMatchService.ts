@@ -38,6 +38,10 @@ export interface AIMatchResultItem {
   concerns: string[];
   rank: number;
   status: string;
+  /** The account owner deleted this resume (2026-11-19): the match was erased
+   *  (GDPR), only name + email remain, scores are null. Shown as a placeholder
+   *  until the job is run again. */
+  resume_deleted?: boolean;
   /* Resume details. `GET /sessions/{id}` and `POST /run` join them server-side;
      absent (older backend, or the join failed) means the row still needs
      `enrichCandidatesWithResumeDetails`. */
@@ -229,6 +233,8 @@ export interface AIMatchCandidateJob {
   resume_id?: string | null;
   candidate_id: string;
   score_id?: string | null;
+  /** This job's match row is a deleted resume's placeholder. */
+  resume_deleted?: boolean;
 }
 
 export interface AIMatchCandidateItem {
@@ -290,6 +296,8 @@ export interface MatchedCandidate {
   aiScore?: number;
   concerns?: string[];
   rank?: number;  // Rating (1-10 scale)
+  /** The account owner deleted this resume: no score, placeholder row only. */
+  resumeDeleted?: boolean;
   /** The resume record's own current version number (distinct from the JD's
    *  version) — same field ScoredResumesTable's "Resume Version" column reads. */
   resumeVersion?: number;
@@ -331,7 +339,10 @@ export interface VectorMatchResult {
 // Transform backend response to frontend format
 function transformResultToCandidate(result: AIMatchResultItem): MatchedCandidate {
   // Calculate match score from final_score (0-100) or similarity (0-1)
-  const matchScore = result.final_score
+  // A deleted resume's placeholder has no score (0 keeps it last in score sorts).
+  const matchScore = result.resume_deleted
+    ? 0
+    : result.final_score
     ? Math.round(result.final_score)
     : Math.round((result.similarity_score || 0) * 100);
 
@@ -355,6 +366,7 @@ function transformResultToCandidate(result: AIMatchResultItem): MatchedCandidate
     concerns: result.concerns,
     attachmentCount: 1,
     rank: result.rank,  // Rating (1-10 scale) from backend
+    resumeDeleted: !!result.resume_deleted,
     isArchived: !!result.is_archived,
     isTenantUserEmail: !!result.is_tenant_user_email,
   };

@@ -110,7 +110,11 @@ export interface ScoringResponse {
   overall_rating_10?: number;
   rating_cap_applied?: boolean;
   rating_summary_text?: string;
-  match_status: 'excellent' | 'partial' | 'no_match' | 'exact_match' | 'partial_match';
+  match_status: 'excellent' | 'partial' | 'no_match' | 'exact_match' | 'partial_match' | 'resume_deleted';
+  // The account owner deleted this resume (2026-11-19): score erased (GDPR),
+  // only name + email remain. Scores are null and lists are empty on such a row.
+  resume_deleted?: boolean;
+  resume_deleted_message?: string;
   ai_summary?: string;
   strengths: string[];
   gaps: string[];

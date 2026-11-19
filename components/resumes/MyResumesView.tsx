@@ -59,6 +59,7 @@ import { rememberScoringOrigin } from '@/lib/utils/resumeActivityTrail';
 import { useInPageScoringProgress } from '@/components/resumes/useInPageScoringProgress';
 import ScoringStartSummary, { type ScoringStartRequest } from '@/components/resumes/ScoringStartSummary';
 import { NoFoldersState, NoFoldersMatchState, NoMatchingResumesState } from '@/components/resumes/ResumeEmptyStates';
+import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
 
 const formatDateIST = formatISTDate;
 
@@ -914,7 +915,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   // my_resumes:update isn't a role-editor code; Resume Upload Access (my_resumes:upload)
   // covers folder rename / move too (2026-11-10).
   const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload');
-  const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
+  const canDeleteMyResumes = canDeleteResumes(isTenantAdmin);
   const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
   // Viewing isn't downloading (2026-11-10): own uploads need Resume Upload access.
@@ -3245,7 +3246,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onDeleteDisabled={!canDeleteMyResumes}
-            onDeleteDisabledReason="You do not have permission to delete resumes"
+            onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
             folders={folders.filter(f => f.id !== 'all')}
             onAssessment={!isArchivedContext ? handleAssessment : undefined}
             onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment')))}
@@ -3482,7 +3483,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onDelete={(id) => handleDelete(id)}
                   onDeleteDisabled={!canDeleteMyResumes}
                   canDownload={canDownloadMyResumes}
-                  onDeleteDisabledReason="You do not have permission to delete resumes"
+                  onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
                   onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                   onViewDetails={(resume) => {
@@ -4027,7 +4028,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
                             onDelete={(id) => handleDelete(id)}
                             onDeleteDisabled={!canDeleteMyResumes}
-                            onDeleteDisabledReason="You do not have permission to delete resumes"
+                            onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
                             onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                             onViewDetails={(resume) => {
