@@ -183,11 +183,12 @@ export default function AITalentMatchProgressPanel({
             variant="secondary"
             size="sm"
             onClick={minimize}
-            className="w-8 !px-0 absolute top-3 right-3 sm:top-4 sm:right-4"
+            className="w-8 !px-0 sm:w-auto sm:!px-3 absolute top-3 right-3 sm:top-4 sm:right-4"
             aria-label="Minimize"
             title="Minimize — matching carries on; follow it from the icon bottom right"
           >
             <Minus className="w-4 h-4" />
+            <span className="hidden sm:inline">Minimize</span>
           </Button>
         )}
         {/* Header */}

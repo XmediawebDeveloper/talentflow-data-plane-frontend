@@ -69,44 +69,23 @@ function getMCount(m: TeamMemberUsage, key: 'RS' | 'AS' | 'AIU' | 'RU') {
   return m.by_type[key]?.consumption_count ?? 0;
 }
 
-/** Net units (used − returned, e.g. a deleted resume gives its 1 RU back) —
- *  what actually left the quota. Team values use the same rule, so a team's
- *  total is the sum of its members and matches the organisation's quota. */
+/**
+ * Units used — every charge, append-only, for all four types. Team values use
+ * the same rule, so a team's total is the sum of its members.
+ *
+ * Usage never goes down: deleting a resume frees storage (its 1 RU goes back
+ * to the quota) but doesn't undo the upload. This matches the Analytics tab
+ * and Usage History's Team-Wise tab. Returned units are still itemised in the
+ * member's Unit activity log.
+ */
 function getMUnits(m: TeamMemberUsage, key: 'RS' | 'AS' | 'AIU' | 'RU') {
-  const t = m.by_type[key];
-  if (!SHOWS_RETURNS(key)) return t?.total_consumed ?? 0;
-  return t?.net_consumed ?? t?.total_consumed ?? 0;
-}
-
-/** AI Assessment and AI Interview show units deducted only — never returned or net. */
-function SHOWS_RETURNS(key: 'RS' | 'AS' | 'AIU' | 'RU') {
-  return key !== 'AS' && key !== 'AIU';
+  return m.by_type[key]?.total_consumed ?? 0;
 }
 
 
 /** Units consumed, as shown under a count: whole numbers stay whole, fractions get one decimal. */
 function formatUnits(units: number) {
   return Number.isInteger(units) ? String(units) : units.toFixed(1);
-}
-
-/** Green "+N returned" under a member's unit cell, when units were credited back
- *  (a deleted resume returns its 1 RU). Hidden when nothing was returned. */
-function ReturnedNote({ member, k }: { member: TeamMemberUsage; k: 'RS' | 'AS' | 'AIU' | 'RU' }) {
-  const t = member.by_type[k];
-  const returned = SHOWS_RETURNS(k) ? t?.units_returned ?? 0 : 0;
-  if (returned <= 0) return null;
-  const used = t?.total_consumed ?? 0;
-  const net = t?.net_consumed ?? used - returned;
-  const why = k === 'RU' ? ' — resumes deleted, so their upload units came back' : '';
-  return (
-    <p
-      className="text-xs font-medium text-success whitespace-nowrap"
-      title={`${formatUnits(used)} used, ${formatUnits(returned)} returned${why}. Net ${formatUnits(net)}.`}
-    >
-      {/* The cell's number is already net (in Units mode), so show what was used. */}
-      +{formatUnits(returned)} returned · {formatUnits(used)} used
-    </p>
-  );
 }
 
 // ─── Measure: actions (how many times) or units (how much was consumed) ─────
@@ -122,23 +101,7 @@ const MeasureContext = createContext<Measure>('units');
 function teamValue(t: TeamUsageSummary, k: UnitKey, m: Measure) {
   const u = t.by_type[k];
   if (m !== 'units') return getCount(t, k);
-  return SHOWS_RETURNS(k) ? u?.net_consumed ?? u?.total_consumed ?? 0 : u?.total_consumed ?? 0;
-}
-
-/** Green "+N returned" under a team's unit cell (units credited back this period). */
-function TeamReturnedNote({ team, k }: { team: TeamUsageSummary; k: UnitKey }) {
-  const u = team.by_type[k];
-  const returned = SHOWS_RETURNS(k) ? u?.units_returned ?? 0 : 0;
-  if (returned <= 0) return null;
-  const used = u?.total_consumed ?? 0;
-  return (
-    <p
-      className="mt-0.5 text-xs font-medium text-success"
-      title={`${formatUnits(used)} used, ${formatUnits(returned)} returned. Net ${formatUnits(used - returned)}.`}
-    >
-      +{formatUnits(returned)} returned
-    </p>
-  );
+  return u?.total_consumed ?? 0;
 }
 function teamTotalBy(t: TeamUsageSummary, m: Measure) {
   return UNIT_KEYS.reduce((sum, k) => sum + teamValue(t, k, m), 0);
@@ -672,7 +635,6 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
               ${ru > 0 ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-200' : 'bg-gray-100 text-gray-400'}`}>
               {formatMeasure(ru, measure)}
             </span>
-            <ReturnedNote member={member} k="RU" />
           </div>
         </td>
 
@@ -683,7 +645,6 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
               ${rs > 0 ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-100 text-gray-400'}`}>
               {formatMeasure(rs, measure)}
             </span>
-            <ReturnedNote member={member} k="RS" />
           </div>
         </td>
 
@@ -694,7 +655,6 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
               ${as_ > 0 ? 'bg-brand-cyan/15 text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan ring-1 ring-brand-cyan/30' : 'bg-gray-100 text-gray-400'}`}>
               {formatMeasure(as_, measure)}
             </span>
-            <ReturnedNote member={member} k="AS" />
           </div>
         </td>
 
@@ -705,7 +665,6 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
               ${aiu > 0 ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-gray-100 text-gray-400'}`}>
               {formatMeasure(aiu, measure)}
             </span>
-            <ReturnedNote member={member} k="AIU" />
           </div>
         </td>
 
@@ -854,9 +813,8 @@ function TeamRow({
         {([['RU', ru], ['RS', rs], ['AS', as_], ['AIU', aiu]] as ['RS' | 'AS' | 'AIU' | 'RU', number][]).map(([key, val]) => (
           <td key={key} className="tf-td whitespace-nowrap">
             {val > 0
-              ? <span title={`${UNIT_FULL_NAME[key]}: ${formatMeasure(val, measure)} ${measure === 'units' ? 'net units' : measure}`} className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-md border ${UNIT_COLORS[key]}`}>{formatMeasure(val, measure)}</span>
+              ? <span title={`${UNIT_FULL_NAME[key]}: ${formatMeasure(val, measure)} ${measure === 'units' ? 'units' : measure}`} className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-md border ${UNIT_COLORS[key]}`}>{formatMeasure(val, measure)}</span>
               : <span className="text-gray-300 dark:text-slate-500 text-sm">—</span>}
-            <TeamReturnedNote team={team} k={key} />
           </td>
         ))}
         <td className="tf-td whitespace-nowrap">
@@ -1123,11 +1081,6 @@ function MobileTeamCard({
               return (
                 <MobileStatChip key={k} tone={val > 0 ? 'info' : 'neutral'}>
                   {UNIT_FULL_NAME[k]} <span className="tabular-nums">{formatMeasure(val, measure)}</span>
-                  {SHOWS_RETURNS(k) && (team.by_type[k]?.units_returned ?? 0) > 0 && (
-                    <span className="font-medium text-success" title="Units credited back this period (e.g. deleted resumes)">
-                      +{formatUnits(team.by_type[k]?.units_returned ?? 0)} returned
-                    </span>
-                  )}
                 </MobileStatChip>
               );
             })}
@@ -1480,7 +1433,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
   const { isTenantAdmin, hasPermissionCode } = useAuth();
   const canExport = isTenantAdmin || hasPermissionCode('teams:export');
   // Range and Actions / Units are shared with the Analytics tab (same session values).
-  const { fromDate, toDate, setFromDate, setToDate, applyPreset, activePresetId } = useTeamReportRange();
+  const { fromDate, toDate, setFromDate, setToDate, applyPreset, activePresetId, presets: rangePresets } = useTeamReportRange();
   const [teams, setTeams] = useState<TeamUsageSummary[]>([]);
   // Same-length period just before the range — null when it couldn't load.
   
@@ -1715,7 +1668,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
         </div>
         {/* Quick ranges, and next to them: totals come from team membership, so usage by users in no team is left out. */}
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
-          <RangePresets activeId={activePresetId} onPick={applyPreset} />
+          <RangePresets activeId={activePresetId} onPick={applyPreset} presets={rangePresets} />
           {/* Same info note style as the Usage page. */}
           <div className="flex items-start gap-2 self-start rounded-lg bg-brand-blue/[0.04] px-3 py-2 tf-meta ring-1 ring-brand-blue/10 dark:bg-slate-800/50 dark:ring-slate-700 lg:self-auto">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" />

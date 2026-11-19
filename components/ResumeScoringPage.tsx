@@ -29,6 +29,7 @@ import api, { dispatchUnitsConsumed } from '@/lib/services/api';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import type { ScoredJdListParams } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import RecordPager from '@/components/RecordPager';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { useFreshQuota } from '@/lib/hooks/useFreshQuota';
@@ -57,7 +58,7 @@ import { BulkActionConfirmModal, useScoringActionPermissions, renderInviteTarget
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { clearInviteHandoff, readInviteHandoff, RESUME_INVITE_PARAM, type InviteHandoff } from '@/lib/utils/resumeScoringInviteHandoff';
-import { downloadScorecardPdf, downloadScorecardsZip, formatFileDate, scorecardVersionTag } from '@/lib/utils/scorecardDownload';
+import { downloadScorecardPdf, downloadScorecardsZipWithToast, formatFileDate, scorecardVersionTag } from '@/lib/utils/scorecardDownload';
 import { TableSkeleton, Skeleton } from '@/components/ui/skeleton';
 import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
@@ -515,7 +516,7 @@ export default function ResumeScoringPage({
   scoreCounts = null,
   onSaveScores,
   onRefreshHistory,
-  onLoadJdScores,
+  onLoadJdScores: onLoadJdScoresProp,
   onNavigateToAITalentMatch,
   onBack,
   tenant,
@@ -527,6 +528,28 @@ export default function ResumeScoringPage({
   batchProgress = null
 }: ResumeScoringPageProps) {
   const router = useRouter();
+  /* Every per-JD score fetch goes through this wrapper, which records the JD
+     ids still in flight. The job page's table shows skeleton rows while its
+     own JD is among them — whichever way the page got there (refresh on a
+     ?jd_id URL, a list row, the version switch) — instead of flashing
+     "No Scored Resumes Yet" before the rows land. Settles on failure too, so
+     a failed load ends on the real state, not an endless skeleton. */
+  /* jdId → fetches in flight (a count, so two overlapping loads of one JD
+     don't end the skeleton when the first settles). */
+  const [jdScoresInFlight, setJdScoresInFlight] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const onLoadJdScores = onLoadJdScoresProp
+    ? (jdId: string, jdTitle?: string): Promise<void> => {
+        setJdScoresInFlight(prev => new Map(prev).set(jdId, (prev.get(jdId) ?? 0) + 1));
+        return onLoadJdScoresProp(jdId, jdTitle).finally(() => {
+          setJdScoresInFlight(prev => {
+            const next = new Map(prev);
+            const n = (next.get(jdId) ?? 1) - 1;
+            if (n > 0) next.set(jdId, n); else next.delete(jdId);
+            return next;
+          });
+        });
+      }
+    : undefined;
   /* A score opened from a resume's Candidate Activity card keeps that resume's
      trail (Resume Database › My Resumes › <candidate>) and returns to it. */
   const resumeTrail = useResumeActivityTrail(useSearchParams());
@@ -1433,7 +1456,12 @@ export default function ResumeScoringPage({
       setGlobalFailed(true);
       // Let the next need (another tick / expand) try again.
       globalPrefetchedRef.current = false;
-      if (!silent) toast.error('Failed to load all scored candidates');
+      if (!silent) {
+        showErrorToast(error, "Couldn't load all scored candidates", {
+          id: 'global-scored-resumes',
+          retry: () => fetchGlobalScoredResumes(),
+        });
+      }
     } finally {
       setIsLoadingGlobal(false);
       setGlobalSettled(true);
@@ -1521,7 +1549,10 @@ export default function ResumeScoringPage({
       }
     }
     if (!row) {
-      toast.error('Could not open this scoring result. Please try again.');
+      showErrorToast(null, "Couldn't open this scoring result", {
+        description: 'The result may still be saving. Wait a few seconds and try again.',
+        retry: () => openProgressResult(item),
+      });
       return;
     }
     // Hide the popup (the run itself is left alone) and open the result.
@@ -2169,7 +2200,7 @@ export default function ResumeScoringPage({
       } catch (err) {
         console.error(`[ResumeScoringPage] Failed to dispatch scoring batch:`, err);
         // Show the reason (e.g. not enough Resume Scoring units) when there is one.
-        toast.error(err instanceof Error && err.message ? err.message : 'Failed to start scoring. Please try again.');
+        showErrorToast(err, "Couldn't start scoring");
         // Mark all queued items as failed so the modal shows the error
         for (let i = 0; i < newItemStatuses.length; i++) {
           newItemStatuses[i].status = 'failed';
@@ -2521,7 +2552,7 @@ export default function ResumeScoringPage({
   const convertToScoredResumesFormat = (scoredData: ScoredResumeData) => {
     console.log('[ResumeScoringPage] Converting scored resumes:', scoredData.scoredResumes);
     return scoredData.scoredResumes.map((resume, index) => {
-      console.log('[ResumeScoringPage] Resume:', resume.id, 'candidateName:', resume.candidateName, 'candidateEmail:', resume.candidateEmail);
+      console.log('[ResumeScoringPage] Resume:', resume.id);
       const getResumeVersion = () => {
         if (resume.name === 'Sarah Johnson') return 'Current';
         if (resume.name === 'Michael Chen') return 'Version 2';
@@ -2975,7 +3006,11 @@ export default function ResumeScoringPage({
       : allScoredResumesData;
     const goToVersion = (versionId: string, versionTitle: string) => {
       if (versionId === selectedHistoryItem.jobId) return;
-      const stub: ScoredResumeData = {
+      /* The version's own history entry when there is one (keeps its counts
+         and JD metadata in the header while its rows load); a stub only for
+         a version with no entry yet. */
+      const known = scoredHistory.find(h => h.jobId === versionId);
+      const stub: ScoredResumeData = known ?? {
         id: versionId,
         jobId: versionId,
         jobTitle: versionTitle,
@@ -2987,7 +3022,7 @@ export default function ResumeScoringPage({
       setSelectedHistoryItem(stub);
       setSelectedScoredResumes([]);
       setSelectedStatusFilter('all');
-      onLoadJdScores?.(versionId, versionTitle);
+      if (!known?.scoresLoaded) void onLoadJdScores?.(versionId, versionTitle);
       try { localStorage.setItem('lastViewedScoringJdId', versionId); } catch (e) {}
       router.push(`/recruitment/resume-scoring?jd_id=${versionId}`);
     };
@@ -3034,6 +3069,17 @@ export default function ResumeScoringPage({
               setSelectedScoredResumes([]);
               setSelectedStatusFilter('all');
               onLoadJdScores?.(item.jobId, item.jobTitle);
+              /* Keep the address bar on the job shown. It used to stay on the
+                 job the user started from, so a refresh — or a breadcrumb
+                 that returns here — landed back on that first job. Only jd_id
+                 changes (other params, e.g. where the page was opened from,
+                 stay). Replace, not push: stepping through jobs shouldn't
+                 stack Back entries. */
+              try { localStorage.setItem('lastViewedScoringJdId', item.jobId); } catch { /* storage blocked */ }
+              const params = new URLSearchParams(window.location.search);
+              params.set('jd_id', item.jobId);
+              params.delete('score_id');
+              router.replace(`/recruitment/resume-scoring?${params.toString()}`, { scroll: false });
             };
             return (
               <RecordPager
@@ -3198,7 +3244,19 @@ export default function ResumeScoringPage({
              screen in the popup (this page's version unless another is
              being previewed). */
           showGoToJd
-          goToJdTab="scored-resumes"
+          /* Lands on the JD page with the trail Resume Scoring › <job> ›
+             job — same as AI Interview details' Go to JD. */
+          goToJdOrigin={{
+            module: 'resume-scoring',
+            title: selectedHistoryItem.jobTitle,
+            /* This page's query with jd_id pinned to the job on screen. */
+            query: (() => {
+              const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+              params.set('jd_id', selectedHistoryItem.jobId);
+              params.delete('score_id');
+              return params.toString();
+            })(),
+          }}
         />
 
         {inviteDialogEl}
@@ -3222,6 +3280,18 @@ export default function ResumeScoringPage({
         {/* Scored Resumes Table */}
         <ScoredResumesTable
           resumes={scoredResumesData}
+          /* Switching version (or folding in All versions): skeleton rows in
+             the table's own layout until that version's scores arrive. */
+          loading={
+            (jdScoresInFlight.has(selectedHistoryItem.jobId) && !selectedHistoryItem.scoresLoaded)
+            /* The fetch has landed in scoredHistory but the sync effect hasn't
+               copied it into selectedHistoryItem yet — one render where the
+               page still holds the empty stub. Without this the empty state
+               flashed for that frame before the rows appeared. */
+            || (!selectedHistoryItem.scoresLoaded
+                && !!scoredHistory.find(h => h.jobId === selectedHistoryItem.jobId)?.scoresLoaded)
+            || (showingAllVersions && isLoadingAllVersions)
+          }
           /* No "Scored Resumes" heading: the job card above names the list. */
           title=""
           /* Row Invite ▸ and the selection's Actions → Create / Send
@@ -3393,7 +3463,7 @@ export default function ResumeScoringPage({
                       }
                     : p
                 ));
-                toast.error(`Failed to retry scoring for ${item.candidateName}`);
+                showErrorToast(error, `Couldn't re-score ${item.candidateName}`);
               }
             }}
           />
@@ -3702,14 +3772,16 @@ export default function ResumeScoringPage({
           const base = singleSelectedJob
             ? `${jdCodeOf(singleSelectedJob) ? `${jdCodeOf(singleSelectedJob)}_` : ''}${singleSelectedJob.jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_')}`
             : 'Selected_Jobs';
-          await downloadScorecardsZip(rows, `${base}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
-          toast.success(`${rows.length} scorecards downloaded`);
+          // Live progress / partial-failure / error toasts come from the helper;
+          // keep the selection when nothing at all could be downloaded.
+          const ok = await downloadScorecardsZipWithToast(rows, `${base}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
+          if (!ok) return;
         }
         // Download is read-only: untick the jobs (hides the Actions bar), no refresh.
         clearJobSelection();
       } catch (error) {
         console.error('Error downloading scorecards:', error);
-        toast.error('Failed to download scorecards');
+        showErrorToast(error, "Couldn't download the scorecard", { retry: () => runJobBulkDownload(rows) });
       } finally {
         setJobBulkDownloading(false);
       }
@@ -4509,7 +4581,7 @@ export default function ResumeScoringPage({
                   setShowProgressModal(true);
                 } catch (error) {
                   console.error('[ResumeScoringPage] Failed to load job progress:', error);
-                  toast.error('Failed to load scoring progress for this job');
+                  showErrorToast(error, "Couldn't load scoring progress for this job", { retry: openWholeJobProgress });
                 } finally {
                   setLoadingProgressJobId(null);
                 }
@@ -5480,7 +5552,7 @@ export default function ResumeScoringPage({
                       }
                     : p
                 ));
-                toast.error(`Failed to retry scoring for ${item.candidateName}`);
+                showErrorToast(error, `Couldn't re-score ${item.candidateName}`);
               }
             }}
           />
@@ -5712,11 +5784,8 @@ export default function ResumeScoringPage({
                     aria-label="Refresh"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingHistoryModal ? 'animate-spin' : ''}`} />
-                    {/* The label swaps to "Refreshing..." mid-request, and the
-                        longer word used to widen the button and shove the
-                        close X sideways. The span reserves the wider word's
-                        width in both states, so the header never moves. */}
-                    <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+                    {/* Label hugs its text — no reserved width. */}
+                    <span className="hidden sm:inline">
                       {isRefreshingHistoryModal ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
@@ -6342,7 +6411,7 @@ export default function ResumeScoringPage({
                     }
                   : p
               ));
-              toast.error(`Failed: ${errorMsg}`);
+              showErrorToast(error, `Couldn't re-score ${item.candidateName}`);
             }
           }}
         />

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import api, { handleUnauthorized, UNITS_CONSUMED_EVENT } from '@/lib/services/api';
+import api, { handleUnauthorized, UNITS_CONSUMED_EVENT, getAccessToken } from '@/lib/services/api';
 import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 
 interface FeatureItem {
@@ -160,7 +160,7 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (!token) {
       // Right after login, this provider's mount effect can run before the
       // token write it depends on is visible — a genuinely logged-out visitor
@@ -248,6 +248,10 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
         if (!networkRetriedRef.current) {
           networkRetriedRef.current = true;
           setTimeout(() => { void fetchQuotaData(true); }, 5000);
+        } else if (!quotaDataRef.current) {
+          // The retry failed too and there is nothing to show: say so, or the
+          // Usage page (loading = no data && no error) stays a skeleton forever.
+          setError('Failed to fetch quota data');
         }
         return;
       }

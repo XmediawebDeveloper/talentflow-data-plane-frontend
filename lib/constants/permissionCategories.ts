@@ -375,7 +375,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
         ],
       },
       {
-        name: 'Dispute History',
+        name: 'Payment Disputes',
         actions: [
           { code: 'dispute_history:read', label: 'View' },
         ],

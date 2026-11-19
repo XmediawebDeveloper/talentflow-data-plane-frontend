@@ -1,8 +1,9 @@
-import { Sparkles, ArrowRight, Info } from 'lucide-react';
+import { Sparkles, ArrowLeft, Info } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
 import JobOpeningPickerList, { type JobSelection } from '@/components/jobs/JobOpeningPickerList';
 import JobEligibilityNote, { MATCH_ELIGIBILITY } from '@/components/jobs/JobEligibilityNote';
 
@@ -83,45 +84,44 @@ export default function AITalentMatchPageJobsList({
               { label: 'Select Job Description' },
             ]}
           />
-      {/* Header */}
-      <div className="mb-4 sm:mb-6">
-        <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-          {onBack && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onBack}
-             
-              aria-label="Back to Dashboard" title="Back to Dashboard"
-            >
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 rotate-180" />
-            </Button>
-          )}
-          <div className="w-9 h-9 sm:w-12 sm:h-12 bg-brand-blue rounded-lg sm:rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
-            <Sparkles className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="tf-page-title tf-section-title truncate">AI Talent Match - Select Job</h1>
-            <p className="tf-body-secondary truncate">Choose a job to find the best matching candidates using AI</p>
-          </div>
+      {/* Header — the shared PageHeader, same as Resume Scoring's Score Resumes. */}
+      <PageHeader
+        icon={<Sparkles className="h-5 w-5" />}
+        title="AI Talent Match"
+        description="Select a job and let AI find the best matching candidates."
+        actions={onBack ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onBack}
+            aria-label="Back to Dashboard" title="Back to Dashboard"
+            icon={<ArrowLeft className="w-4 h-4" />}
+          >
+            Back
+          </Button>
+        ) : undefined}
+      />
+
+      {/* Job list — Score Resumes' card: Job Eligibility (with the status
+          chips) on top, then the picker. */}
+      <section className="tf-card mb-5 overflow-hidden" aria-label="Select Job Description">
+        <div className="p-3 sm:p-4">
+        <JobEligibilityNote className="mb-4" showLegend description={MATCH_ELIGIBILITY} />
+        {/* Running a match is free — said up front, before a job is picked.
+            The Resume Scoring units the results screen checks are spent only
+            when matched resumes are submitted for scoring. Same info tokens
+            as the eligibility card above it. */}
+        <div className="mb-4 flex items-start gap-2 rounded-sm border border-[var(--info-line)] bg-[var(--info-subtle)] px-3 py-2.5">
+          <Info className="h-4 w-4 mt-0.5 shrink-0 text-[var(--info-strong)]" />
+          <p className="min-w-0 tf-meta leading-relaxed">
+            <span className="font-semibold text-[var(--info-strong)]">Note:</span>{' '}
+            Running AI Talent Match uses no units. Units are used only when you score matched resumes — 1 unit per resume.
+          </p>
         </div>
-      </div>
-
-      {/* Running a match is free — said up front, before a job is picked. The
-          Resume Scoring units the results screen checks are spent only when
-          matched resumes are submitted for scoring. */}
-      <div className="mb-4 sm:mb-6 flex items-start gap-2.5 rounded-xl border border-brand-blue/15 bg-gradient-to-r from-brand-blue/[0.07] via-brand-cyan/[0.05] to-white dark:from-brand-blue/10 dark:via-brand-cyan/5 dark:to-slate-900 px-3 sm:px-4 py-3 ring-1 ring-black/[0.02]">
-        <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-brand-blue" />
-        <p className="min-w-0 tf-body">
-          <span className="font-semibold text-gray-900 dark:text-slate-50">Note:</span>{' '}
-          Running AI Talent Match uses no units. Units are used only when you score matched resumes — 1 unit per resume.
-        </p>
-      </div>
-
-      {/* Job list */}
-      <div className="tf-card-soft p-3 sm:p-4 lg:p-5">
-        <JobEligibilityNote className="mb-3" description={MATCH_ELIGIBILITY} />
         <JobOpeningPickerList
+          /* Score Resumes' layout: "Select a Job Opening" + count left,
+             Search Jobs right, on one row. */
+          layout="page"
           excludeDraftsOnly
           showCandidateCounts
           /* Coloured like the Job Openings badges, applicants read "scored". */
@@ -134,7 +134,8 @@ export default function AITalentMatchPageJobsList({
           proceedLabel="Run AI Match"
           proceedDisabled={!canRunAiMatch}
         />
-      </div>
+        </div>
+      </section>
 
       </div>
       </div>

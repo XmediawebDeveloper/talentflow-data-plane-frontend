@@ -1,9 +1,9 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
 /**
- * Loading state for /organization/team-chat — the chat window only
- * (conversation list | conversation). The card, breadcrumb and organization
- * tabs come from app/(dashboard)/organization/layout.tsx and stay on screen.
+ * Loading state for /chat — the chat window only
+ * (conversation list | conversation). The card and breadcrumb come from
+ * app/(dashboard)/chat/layout.tsx and stay on screen.
  */
 export default function TeamChatSkeleton() {
   return (

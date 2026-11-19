@@ -15,7 +15,7 @@ import { isJdDisabled, assessmentJobLockMessage } from '@/lib/utils/assessmentJo
 import { JobVersionsLockBanner, splitJobVersions } from '@/components/jobs/JobLockNotice';
 import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { formatIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
@@ -32,7 +32,6 @@ import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import InviteFilterBar, {
   EMPTY_INVITE_FILTERS,
-  ASSESSMENT_INVITE_STATUS_OPTIONS,
   type InviteFilterState,
 } from '@/components/InviteFilterBar';
 import { RevokeInvitationDialog, EditInvitationModal } from '@/components/AssessmentInviteActions';
@@ -210,6 +209,22 @@ interface Section {
 // IST timezone constant
 const INDIA_TIMEZONE = 'Asia/Kolkata';
 
+/* One option per stat card below (Total Invited, Invited, In Progress,
+   Completed, Expired, Terminated, Revoked), in the cards' own keys — so
+   picking any card's bucket from the dropdown always shows that card's name
+   there. ASSESSMENT_INVITE_STATUS_OPTIONS used 'abandoned'/no 'sent' or
+   'revoked' at all, which is why Invited/Terminated/Revoked were missing
+   here. */
+const ASSESSMENT_DETAILS_STATUS_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'sent', label: 'Invited' },
+  { value: 'started', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'expired', label: 'Invite Expired' },
+  { value: 'terminated', label: 'Terminated' },
+  { value: 'revoked', label: 'Revoked' },
+];
+
 /**
  * THE ASSESSMENTS AUTHORED AGAINST ONE JOB VERSION, deduped by assessment id.
  *
@@ -384,7 +399,7 @@ export default function AssessmentDetailsView({
       await onRefresh?.();
     } catch (err) {
       console.error('Failed to archive assessment:', err);
-      toast.error(`Couldn't archive assessment. ${friendlyErrorMessage(err, 'Please try again.')}`);
+      showErrorToast(err, "Couldn't archive assessment");
     } finally {
       setIsArchiving(false);
     }
@@ -401,7 +416,7 @@ export default function AssessmentDetailsView({
       await onRefresh?.();
     } catch (err) {
       console.error('Failed to unarchive assessment:', err);
-      toast.error(`Couldn't unarchive assessment. ${friendlyErrorMessage(err, 'Please try again.')}`);
+      showErrorToast(err, "Couldn't unarchive assessment");
     } finally {
       setIsUnarchiving(false);
     }
@@ -424,12 +439,7 @@ export default function AssessmentDetailsView({
       toast.success(`Assessment duplicated: "${response.cloned_title}"`);
       router.push(`/recruitment/assessments/${response.cloned_id}${originQuery}`, { scroll: false });
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.detail?.message ||
-        err?.response?.data?.message ||
-        (typeof err?.response?.data?.detail === 'string' ? err.response.data.detail : null) ||
-        friendlyErrorMessage(err, 'Failed to duplicate assessment. Please try again.');
-      toast.error(msg);
+      showErrorToast(err, "Couldn't duplicate assessment");
     } finally {
       setIsDuplicating(false);
     }
@@ -747,7 +757,7 @@ export default function AssessmentDetailsView({
       router.push(`/recruitment/assessments/${newest.id}${originQuery}`, { scroll: false });
     } catch (error) {
       console.error('[TalentFlow] Failed to open the assessment for that job version:', error);
-      toast.error('Could not open that job version');
+      showErrorToast(error, "Couldn't open that job version");
       setVersionSwitching(null);
     }
   };
@@ -1089,6 +1099,10 @@ export default function AssessmentDetailsView({
       }
     } catch (error) {
       console.error('Failed to load invitations:', error);
+      showErrorToast(error, "Couldn't load invitations", {
+        id: 'assessment-details-invitations-load',
+        retry: () => loadInviteRows(assessmentId, page, filters),
+      });
       setInviteRows([]);
       setInviteTotal(0);
       setInviteTotalPages(1);
@@ -1194,14 +1208,6 @@ export default function AssessmentDetailsView({
     );
   };
 
-  const errorMessageOf = (error: any, fallback: string) => {
-    const detail = error?.response?.data?.detail;
-    return (typeof detail === 'object' && detail?.message)
-      || (typeof detail === 'string' && detail)
-      || error?.response?.data?.message
-      || fallback;
-  };
-
   const handleResendInvite = async (invitation: any) => {
     setIsResending(true);
     try {
@@ -1210,7 +1216,7 @@ export default function AssessmentDetailsView({
       await reloadInvites();
     } catch (error: any) {
       console.error('Failed to resend invitation:', error);
-      toast.error(errorMessageOf(error, 'Failed to resend invitation. Please try again.'));
+      showErrorToast(error, "Couldn't resend invitation");
     } finally {
       setIsResending(false);
       setResendTarget(null);
@@ -1247,7 +1253,7 @@ export default function AssessmentDetailsView({
       }
     }
     if (sent > 0) toast.success(`New invitation link sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
-    if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
+    if (failedCount > 0) showErrorToast(null, `Couldn't resend ${failedCount} invitation${failedCount === 1 ? '' : 's'}`);
     setIsBulkResendingInvites(false);
     setShowInviteBulkResend(false);
     /* Any success: keep only the failed rows ticked (retry) and reload.
@@ -1287,7 +1293,7 @@ export default function AssessmentDetailsView({
       }
     }
     if (revoked > 0) toast.success(`Revoked ${revoked} invitation${revoked === 1 ? '' : 's'}.`);
-    if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
+    if (failedCount > 0) showErrorToast(null, `Couldn't revoke ${failedCount} invitation${failedCount === 1 ? '' : 's'}`);
     setIsBulkRevokingInvites(false);
     setShowInviteBulkRevoke(false);
     /* Any success: keep only the failed rows ticked (retry) and reload.
@@ -1311,7 +1317,7 @@ export default function AssessmentDetailsView({
       await reloadInvites();
     } catch (error: any) {
       console.error('Failed to update email:', error);
-      toast.error(errorMessageOf(error, 'Failed to update email. Please try again.'));
+      showErrorToast(error, "Couldn't update email");
     } finally {
       setIsSendingChangeEmail(false);
     }
@@ -1434,6 +1440,10 @@ export default function AssessmentDetailsView({
         setVersionHistory(response.items || []);
       } catch (error) {
         console.error('Failed to fetch version history:', error);
+        showErrorToast(error, "Couldn't load version history", {
+          id: 'assessment-version-history-load',
+          retry: fetchVersions,
+        });
       } finally {
         setVersionsLoading(false);
       }
@@ -2864,7 +2874,7 @@ export default function AssessmentDetailsView({
                 className="w-fit shrink-0"
                 icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${inviteRefreshing ? 'animate-spin' : ''}`} />}
               >
-                <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+                <span className="hidden sm:inline">
                   {inviteRefreshing ? 'Refreshing...' : 'Refresh'}
                 </span>
               </Button>
@@ -2901,11 +2911,9 @@ export default function AssessmentDetailsView({
                 setInviteFilters(nextFilters);
                 setInvitePage(1);
               }}
-              /* The popup's trimmed list — one option per stat card above, so
-                 picking one can never return rows the cards cannot explain. */
-              statusOptions={ASSESSMENT_INVITE_STATUS_OPTIONS.filter(
-                (option) => !['failed', 'abandoned'].includes(option.value)
-              )}
+              /* One option per stat card above, so picking one can never
+                 return rows the cards cannot explain. */
+              statusOptions={ASSESSMENT_DETAILS_STATUS_OPTIONS}
               searchPlaceholder="Search by candidate name, email, or CID..."
             />
 

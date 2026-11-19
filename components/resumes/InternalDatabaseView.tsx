@@ -29,7 +29,7 @@ import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeS
 import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import DeleteResumeDialog, { type DeleteResumeVersionTarget } from '@/components/resumes/DeleteResumeDialog';
 import FeatureGate from '@/components/shared/FeatureGate';
@@ -45,6 +45,7 @@ import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 import { getResumeFilterChips } from '@/components/SearchFilterBarCompact';
 import { type ResumeVersionFilter, keepByVersion, versionFilterChips, ResumeVersionFilterSelect } from '@/components/resumes/resumeVersionFilter';
 import { usePagedList } from '@/lib/hooks/usePagedList';
+import { useResumeSelection } from '@/components/resumes/ResumeSelectionContext';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { NoMatchingResumesState, NoResumesYetState } from '@/components/resumes/ResumeEmptyStates';
 import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
@@ -190,7 +191,6 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   // never hidden — see usePlanLock.
   const { isPlanLocked } = usePlanLock();
   const [folders, setFolders] = useState<Folder[]>([]);
-  const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [isDownloadingSelection, setIsDownloadingSelection] = useState(false);
   // ZIP download confirmation modal — shown when more than one resume is selected.
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
@@ -231,6 +231,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   );
   const paged = usePagedList<ApiResume, null, InternalDbQuery>({
     name: 'resumes:internal-db',
+    errorToast: "Couldn't load the resume database",
     query: listQuery,
     fetchPage: async (q) => {
       const { version_filter, unfiltered, ...apiQuery } = q as InternalDbQuery & { version_filter: ResumeVersionFilter; unfiltered: boolean };
@@ -265,15 +266,10 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const loading = paged.loading || paged.refreshing;
   const refreshList = paged.refresh;
 
-  /* Every row this view has shown, by id. Selection survives paging, so bulk
-     actions on a selection spanning pages read the ticked rows from here, not
-     from the 10 on screen. */
-  const seenRowsRef = useRef<Map<string, Resume>>(new Map());
-  resumes.forEach((r) => seenRowsRef.current.set(r.id, r));
-  const rowById = (id: string): Resume | undefined => seenRowsRef.current.get(id);
-  const selectedRows: Resume[] = selectedResumes
-    .map((id) => rowById(id))
-    .filter((r): r is Resume => !!r);
+  /* Selection is shared with the My Resumes tab (see ResumeSelectionContext)
+     and survives paging, so bulk actions read the ticked rows from the shared
+     row cache, not from the 10 on screen. */
+  const { selectedResumes, setSelectedResumes, rowById, selectedRows } = useResumeSelection(resumes);
 
   // Track if initial load is done
   const initialLoadDone = useRef(false);
@@ -410,8 +406,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         // was the only pick); the list refreshes via usePagedList's invalidation.
         setSelectedResumes(prev => prev.filter(r => !ids.includes(r)));
         toast.success(`Version ${version.version} deleted`);
-      } catch {
-        toast.error(`Couldn't delete version ${version.version}. Please try again.`);
+      } catch (error) {
+        showErrorToast(error, `Couldn't delete version ${version.version}`);
       }
       return;
     }
@@ -420,7 +416,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       setSelectedResumes(prev => prev.filter(r => !ids.includes(r)));
       toast.success(ids.length === 1 ? 'Resume deleted' : `${ids.length} resume(s) deleted`);
     } catch (error) {
-      toast.error('Failed to delete resume(s)');
+      showErrorToast(error, ids.length === 1 ? "Couldn't delete the resume" : `Couldn't delete ${ids.length} resumes`);
     }
   };
 
@@ -604,6 +600,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       setJobs(convertedJobs);
     } catch (error) {
       console.error('Failed to fetch jobs:', error);
+      showErrorToast(error, "Couldn't load jobs", { id: 'db-jobs-load', retry: fetchJobs });
     }
   };
 
@@ -729,7 +726,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       setSelectedResumes([]);
     } catch (error) {
       console.error('[TalentFlow] Download failed:', error);
-      toast.error('Failed to download resume', { id: 'db-download' });
+      showErrorToast(error, "Couldn't download the resume", { id: 'db-download', retry: handleBulkDownload });
     }
   };
 
@@ -760,7 +757,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       }
 
       if (Object.keys(files).length === 0) {
-        toast.error('Could not download any of the selected resumes', { id: 'db-download' });
+        showErrorToast(null, "Couldn't download any of the selected resumes", { id: 'db-download', retry: handleZipDownload });
         return;
       }
 
@@ -784,7 +781,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       setIsZipDownloadModalOpen(false);
     } catch (error) {
       console.error('[TalentFlow] ZIP download failed:', error);
-      toast.error('Failed to prepare the download', { id: 'db-download' });
+      showErrorToast(error, "Couldn't prepare the download", { id: 'db-download', retry: handleZipDownload });
     } finally {
       setIsDownloadingSelection(false);
     }
@@ -911,7 +908,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       toast.success(`Scoring started for ${resumeItems.length} resume${resumeItems.length !== 1 ? 's' : ''}.`);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
+      showErrorToast(error, "Couldn't start scoring");
     }
   };
 
@@ -933,7 +930,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       setFolders(prev => [...prev, converted]);
       toast.success('Folder created');
     } catch (error) {
-      toast.error('Failed to create folder');
+      showErrorToast(error, "Couldn't create the folder");
     }
   };
 
@@ -995,7 +992,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       setShowVersionHistory(true);
     } catch (error) {
       console.error('Failed to fetch versions:', error);
-      toast.error('Failed to load version history');
+      showErrorToast(error, "Couldn't load version history", { retry: () => handleShowVersionHistory(resume) });
     } finally {
       setIsLoadingVersions(false);
     }
@@ -1317,7 +1314,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
               toast.success('Resume downloaded', { id: 'download' });
             } catch (error) {
               console.error('Download failed:', error);
-              toast.error('Failed to download resume', { id: 'download' });
+              showErrorToast(error, "Couldn't download the resume", { id: 'download' });
             }
           }}
         />

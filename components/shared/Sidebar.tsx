@@ -67,7 +67,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
   }, []);
 
   // Debug: Log user permissions on sidebar render
-  console.log('[SIDEBAR] User:', user?.email, 'Role:', user?.role, 'Permissions:', user?.permissions, 'ForceRender:', forceRender);
+  console.log('[SIDEBAR] Role:', user?.role, 'Permissions:', user?.permissions, 'ForceRender:', forceRender);
 
   /**
    * PERMISSION CHECKING LOGIC:

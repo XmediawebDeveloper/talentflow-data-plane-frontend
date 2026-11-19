@@ -226,7 +226,7 @@ import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/r
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
@@ -795,7 +795,7 @@ export default function ResumeViewPage() {
     } catch (err: any) {
       console.error('Failed to fetch resume:', err);
       setError(err?.message || 'Failed to load resume');
-      toast.error('Failed to load resume');
+      showErrorToast(err, "Couldn't load this resume", { id: `resume-${resumeId}-load`, retry: fetchResume });
     } finally {
       setLoading(false);
     }
@@ -897,7 +897,7 @@ export default function ResumeViewPage() {
   const handleDownload = async (
     targetResumeId: string = resumeId,
     targetFileName: string = resume?.fileName || `resume-${resumeId}.${resume?.fileType || 'pdf'}`,
-    errorMessage: string = 'Failed to download resume'
+    errorMessage: string = "Couldn't download the resume"
   ) => {
     try {
       const blob = await resumeService.download(targetResumeId);
@@ -909,8 +909,8 @@ export default function ResumeViewPage() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch {
-      toast.error(errorMessage);
+    } catch (error) {
+      showErrorToast(error, errorMessage, { retry: () => handleDownload(targetResumeId, targetFileName, errorMessage) });
     }
   };
 
@@ -960,11 +960,11 @@ Best regards`);
         setShareEmail('');
         setShareMessage('');
       } else {
-        toast.error(result.message || 'Failed to send email');
+        showErrorToast(result.message || null, "Couldn't send the email");
       }
     } catch (error: any) {
       console.error('Failed to share resume:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't send email. Please try again."));
+      showErrorToast(error, "Couldn't send the email");
     } finally {
       setIsSendingEmail(false);
     }
@@ -984,7 +984,7 @@ Best regards`);
         toast.success('Resume deleted');
         router.push('/recruitment/resume-database?tab=my-resumes');
       } catch (err) {
-        toast.error('Failed to delete resume');
+        showErrorToast(err, "Couldn't delete the resume");
       }
     }
   };
@@ -1017,7 +1017,7 @@ Best regards`);
       setPublishedJobs(convertedJobs);
     } catch (error) {
       console.error('Failed to fetch jobs:', error);
-      toast.error('Failed to load jobs');
+      showErrorToast(error, "Couldn't load jobs", { id: 'resume-view-jobs-load', retry: fetchPublishedJobs });
     }
   };
 
@@ -1098,7 +1098,7 @@ Best regards`);
       setScoreTableResume(toScoredResumeDetail(found, jobForInvite?.jdTitle || jobDetailsTitle));
     } catch (error) {
       console.error('[ResumeView] Failed to load the score table:', error);
-      toast.error('Failed to load score table');
+      showErrorToast(error, "Couldn't load the score table", { id: 'resume-view-score-table', retry: openScoreTable });
     } finally {
       setLoadingScoreTable(false);
     }
@@ -1301,7 +1301,7 @@ Best regards`);
       if (error?.message?.includes('QUOTA') || error?.response?.status === 403) {
         toast.error('Resume scoring quota exhausted. Please upgrade your plan.');
       } else {
-        toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
+        showErrorToast(error, "Couldn't start scoring");
       }
     } finally {
       setSelectedVersionForApply(null);
@@ -2460,7 +2460,7 @@ Best regards`);
                                     document.body.removeChild(link);
                                     window.URL.revokeObjectURL(url);
                                   } catch (err) {
-                                    toast.error('Failed to download version');
+                                    showErrorToast(err, "Couldn't download this version");
                                   }
                                 }}
                                 className={`p-2 rounded-md transition-colors ${
@@ -2922,7 +2922,7 @@ Best regards`);
             setAiTalentMatchJob(null);
           }}
           onError={(error) => {
-            toast.error(error || 'Failed to run AI Talent Match');
+            showErrorToast(error || null, "Couldn't run AI Talent Match");
             setAiTalentMatchJob(null);
           }}
         />

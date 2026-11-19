@@ -9,6 +9,7 @@ import {
 import { aiInterviewService, AIInterviewAuditActivity } from '@/lib/services/aiInterviewService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import ListToolbar from '@/components/ui/list-toolbar';
 import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -200,6 +201,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
       }
     } catch (error) {
       console.log('[TalentFlow] Failed to load AI interview audit trail:', error);
+      showErrorToast(error, "Couldn't load activity logs", { id: 'ai-interview-audit-load', retry: () => { void loadAuditTrail(); } });
     } finally {
       setIsLoading(false);
     }

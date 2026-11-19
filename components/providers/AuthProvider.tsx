@@ -3,11 +3,10 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
 import { User, Tenant, Permission, FeatureFlags, UserRole } from '@/lib/types/tenant';
 import { authService, clearTokens } from '@/lib/services';
-import { handleUnauthorized, dispatchAccessRestrictedEvent, ApiError } from '@/lib/services/api';
+import { handleUnauthorized, dispatchAccessRestrictedEvent, ApiError, getAccessToken, restoreSession as restoreSessionToken } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { mockTenant } from '@/lib/mockData/tenantData';
 import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/services/authService';
-import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 import { forceNavigate } from '@/lib/utils/forcedNavigation';
 import { focusRefreshDue, markRefreshed } from '@/lib/utils/focusRefresh';
@@ -65,7 +64,7 @@ const clearTenantFromStorage = () => {
 const isTokenExpired = (): boolean => {
   if (typeof window === 'undefined') return false;
 
-  const token = localStorage.getItem('accessToken');
+  const token = getAccessToken();
   if (!token) return false;
 
   try {
@@ -437,9 +436,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Ensure cookies are synced with localStorage (cross-browser token recovery)
-      // This fixes token loss in Firefox, Safari, iOS Safari, Arc, Brave, etc.
-      ensureTokenCookies();
+      // The access token lives in memory only (sheet #5): get one for this page
+      // from the httpOnly session cookie before anything calls the API. A
+      // session that was revoked or expired comes back false and clears the
+      // "signed in" flag, so the checks below treat the user as signed out.
+      await restoreSessionToken();
 
       // First, try to restore from localStorage (fast path)
       const storedUser = getUserFromStorage();
@@ -787,7 +788,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]); // Re-run if user changes (login/logout)
 
   const login = useCallback((userData: User, tenantName?: string) => {
-    console.log('[AUTH] Login called for:', userData.email, 'tenant:', tenantName);
+    console.log('[AUTH] Login called for tenant:', tenantName);
     // A fresh login hands us server-issued permissions — nothing stale to wait on.
     setPermissionsVerified(true);
 

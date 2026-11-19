@@ -8,7 +8,9 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { getLoginUrl } from '@/lib/services/authService';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import type { DocumentType } from '@/lib/services/termsService';
+import { sanitizeHtml } from '@/lib/utils/sanitizeHtml';
 
 const DOC_META: Record<DocumentType, { label: string; checkboxText: string; Icon: IconComponent }> = {
   TERMS_AND_CONDITIONS: {
@@ -81,10 +83,10 @@ export default function TermsAcceptanceModal() {
         const docLabel = currentDocumentType ? DOC_META[currentDocumentType].label : 'document';
         toast.success(`${docLabel} accepted successfully`);
       } else {
-        toast.error('Failed to accept. Please try again.');
+        showErrorToast(null, `Couldn't accept the ${currentDocumentType ? DOC_META[currentDocumentType].label : 'document'}`);
       }
-    } catch {
-      toast.error('Failed to accept. Please try again.');
+    } catch (err) {
+      showErrorToast(err, `Couldn't accept the ${currentDocumentType ? DOC_META[currentDocumentType].label : 'document'}`);
     } finally {
       setAccepting(false);
     }
@@ -165,7 +167,7 @@ export default function TermsAcceptanceModal() {
           ref={contentRef}
           onScroll={handleScroll}
           className="flex-1 overflow-y-auto px-6 py-5 prose prose-sm max-w-none"
-          dangerouslySetInnerHTML={{ __html: currentTerms.content_html }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(currentTerms.content_html) }}
         />
 
         {/* Footer */}

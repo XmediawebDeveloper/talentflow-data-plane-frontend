@@ -241,7 +241,7 @@ export default function DashboardLayout({
     return !!permissions?.[permission];
   }, [isTenantAdmin, user]);
 
-  console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
+  console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
 
   // Initialize subscription status immediately based on tenant data
   useEffect(() => {

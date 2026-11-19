@@ -6,6 +6,7 @@
 import { useState, useCallback } from 'react';
 import { unitPoolService, UnitType } from '@/lib/services/unitPoolService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 
 export interface ValidationResult {
   valid: boolean;
@@ -93,9 +94,7 @@ export function useUnitValidation(): UseUnitValidationReturn {
         return true;
       } catch (error: any) {
         console.error('Unit validation error:', error);
-        toast.error('Failed to validate unit availability', {
-          description: error.message || 'Please try again',
-        });
+        showErrorToast(error, "Couldn't check your unit balance");
         return false;
       } finally {
         setIsValidating(false);
@@ -121,7 +120,7 @@ export function useUnitValidation(): UseUnitValidationReturn {
         return true;
       } catch (error: any) {
         console.error('Availability check error:', error);
-        toast.error('Failed to check unit availability');
+        showErrorToast(error, "Couldn't check your unit balance");
         return false;
       } finally {
         setIsValidating(false);

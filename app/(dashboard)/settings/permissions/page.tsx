@@ -3,13 +3,14 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Shield, Users, Check, X, Edit2, Save, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { clearRbacSessionCache } from '@/lib/utils/rbacSessionCache';
+import { showErrorToast } from '@/lib/utils/errorToast';
 
 // Neutral-gray skeleton mirroring the Permissions & Roles layout:
 // hero + 3-col grid (Roles list, then the module permissions panel).
@@ -144,7 +145,7 @@ export default function PermissionsPage() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) {
         setError('Not authenticated. Please log in.');
         setLoading(false);
@@ -193,7 +194,7 @@ export default function PermissionsPage() {
 
   const fetchRoleDetails = async (roleId: number, headers?: Record<string, string>) => {
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       const reqHeaders = headers || {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -213,6 +214,10 @@ export default function PermissionsPage() {
       setIsEditing(false);
     } catch (err) {
       console.error('[Permissions] Error fetching role details:', err);
+      showErrorToast(err, "Couldn't load role details", {
+        id: 'permissions-role-details',
+        retry: () => fetchRoleDetails(roleId, headers),
+      });
     }
   };
 
@@ -243,7 +248,7 @@ export default function PermissionsPage() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) {
         throw new Error('Not authenticated');
       }

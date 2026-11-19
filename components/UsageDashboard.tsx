@@ -19,10 +19,11 @@ import FilterSelect from '@/components/ui/filter-select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
 import { useRouter } from 'next/navigation';
 import { inviteUnitsReturnUrl, useInviteUnitsHandoff } from '@/lib/utils/inviteUnitsHandoff';
+import { getAccessToken } from '@/lib/services/api';
 
 // Addon interface
 interface Addon {
@@ -353,7 +354,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
   };
 
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     const apiKey = getApiKey();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -369,7 +370,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
 
   // Record usage via backend API (which proxies to admin API)
   const recordUsage = async (request: RecordUsageRequest): Promise<boolean> => {
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (!token) {
       setRecordError('Not authenticated. Please log in again.');
       return false;
@@ -628,6 +629,15 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
   // Combined loading state - show loading if quota data hasn't arrived yet
   const loading = !contextQuotaData && !quotaError;
 
+  // Quota never loaded: the page below would read as all zeros — say it failed.
+  useEffect(() => {
+    if (!quotaError || contextQuotaData) return;
+    showErrorToast(null, "Couldn't load your usage and quotas", {
+      id: 'usage-quotas-load',
+      retry: () => refetchQuota(),
+    });
+  }, [quotaError, contextQuotaData, refetchQuota]);
+
   // Scroll-only persistence: dashboard has no list filters/pagination to restore.
   const rootRef = useScrollRestoration<HTMLElement>('sub-usage-quotas', !loading);
 
@@ -851,7 +861,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
     setPaymentCaptured(false);
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) {
         setAddonPurchaseError('Not authenticated. Please log in again.');
         setPurchasingAddon(false);
@@ -905,8 +915,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
           const { toast } = await import('sonner');
           toast.info('Payment cancelled');
         } else {
-          const { toast } = await import('sonner');
-          toast.error(friendlyErrorMessage(checkoutErr, "Payment failed. Please try again."));
+          showErrorToast(checkoutErr, "Couldn't complete the add-on payment");
         }
         return;
       }

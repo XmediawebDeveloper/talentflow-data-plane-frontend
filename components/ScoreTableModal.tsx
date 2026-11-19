@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, BarChart3, ArrowLeft } from 'lucide-react';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { jdService } from '@/lib/services/jdService';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -69,7 +69,7 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
       })
       .catch((err: any) => {
         console.error('[ScoreTableModal] Failed to load score detail:', err);
-        if (!cancelled) toast.error('Failed to load score table');
+        if (!cancelled) showErrorToast(err, "Couldn't load the score table", { id: 'score-table-load' });
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

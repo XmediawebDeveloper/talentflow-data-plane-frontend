@@ -10,7 +10,7 @@ import {
   Share2, ArrowRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { Button } from '@/components/ui/button';
 import type {
@@ -305,7 +305,7 @@ export default function AIInterviewPreview() {
   const [interviewVersion, setInterviewVersion] = useState<number | undefined>(undefined);
 
   /* Load data */
-  const loadInterview = useCallback(async () => {
+  const loadInterview = useCallback(async (): Promise<void> => {
     if (!id) return;
     setLoading(true);
     try {
@@ -351,8 +351,8 @@ export default function AIInterviewPreview() {
       } else {
         setInterviewMode(modeFromDuration(data.duration_minutes));
       }
-    } catch {
-      toast.error('Failed to load interview configuration');
+    } catch (err) {
+      showErrorToast(err, "Couldn't load the interview configuration", { id: 'ai-interview-preview-load', retry: () => { void loadInterview(); } });
     } finally {
       setLoading(false);
     }
@@ -490,8 +490,8 @@ export default function AIInterviewPreview() {
          marked published locally so the share form treats it as live. */
       setInterview(prev => (prev ? { ...prev, status: 'published' } : prev));
       setPublished(true);
-    } catch {
-      toast.error('Failed to publish');
+    } catch (err) {
+      showErrorToast(err, "Couldn't publish AI interview");
     } finally {
       setPublishing(false);
     }
@@ -540,8 +540,8 @@ export default function AIInterviewPreview() {
         save_and_exit: true,
       });
       return true;
-    } catch {
-      toast.error('Failed to save draft');
+    } catch (err) {
+      showErrorToast(err, "Couldn't save draft");
       return false;
     }
   };
@@ -555,7 +555,7 @@ export default function AIInterviewPreview() {
       try {
         message = await keepWizardChanges(id, interview?.status);
       } catch (err) {
-        toast.error(friendlyErrorMessage(err, 'Failed to save draft'));
+        showErrorToast(err, "Couldn't save draft");
         return;
       }
     }

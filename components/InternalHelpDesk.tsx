@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { internalTicketService, InternalTicket, InternalTicketStats, InternalTicketCategory, InternalTicketPriority } from '@/lib/services';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { forwardTeamLabel } from '@/lib/services/internalTicketService';
@@ -153,7 +154,7 @@ export default function InternalHelpDesk() {
           router.replace('/help-desk', { scroll: false });
         } catch (error) {
           console.error('Error fetching ticket from URL:', error);
-          toast.error('Could not find the requested ticket');
+          showErrorToast(error, "Couldn't open the requested ticket");
         }
       };
       openTicketFromUrl();
@@ -176,6 +177,7 @@ export default function InternalHelpDesk() {
       if (isStale()) return;
       console.error('Error fetching tickets:', error);
       setTickets([]);
+      showErrorToast(error, "Couldn't load your tickets", { id: 'help-desk-tickets-load', retry: fetchTickets });
     } finally {
       if (!isStale()) setLoading(false);
     }
@@ -198,6 +200,10 @@ export default function InternalHelpDesk() {
       setSelectedTicket(ticket);
     } catch (error) {
       console.error('Error fetching ticket detail:', error);
+      showErrorToast(error, "Couldn't load the full ticket — showing the summary from the list", {
+        id: `help-desk-ticket-detail-${ticketId}`,
+        retry: () => fetchTicketDetail(ticketId),
+      });
     }
   };
 
@@ -243,7 +249,7 @@ export default function InternalHelpDesk() {
       fetchStats();
     } catch (error: any) {
       console.error('Error creating ticket:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't create ticket. Please try again."));
+      showErrorToast(error, "Couldn't create the ticket");
     } finally {
       setSubmitting(false);
     }
@@ -269,7 +275,7 @@ export default function InternalHelpDesk() {
       toast.success('Reply sent successfully');
     } catch (error) {
       console.error('Error sending reply:', error);
-      toast.error(friendlyErrorMessage(error, 'Failed to send reply'));
+      showErrorToast(error, "Couldn't send your reply");
     } finally {
       setReplySending(false);
     }
@@ -280,7 +286,7 @@ export default function InternalHelpDesk() {
     try {
       saveBlob(await internalTicketService.downloadAttachment(selectedTicket.id, file.id), file.file_name);
     } catch (error) {
-      toast.error(friendlyErrorMessage(error, 'Could not download the file'));
+      showErrorToast(error, `Couldn't download ${file.file_name}`, { retry: () => handleDownload(file) });
     }
   };
 

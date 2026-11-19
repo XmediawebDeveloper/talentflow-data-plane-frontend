@@ -40,24 +40,10 @@ interface TeamMemberUsageProps {
 
 const UNIT_TYPE_CONFIG = {
   RS: { label: 'Resume Scoring', icon: FileText, color: 'bg-blue-500', textColor: 'text-blue-600' },
-  AS: { label: 'Assessment', icon: ClipboardCheck, color: 'bg-success', textColor: 'text-success' },
+  AS: { label: 'AI Assessment', icon: ClipboardCheck, color: 'bg-success', textColor: 'text-success' },
   AIU: { label: 'AI Interview', icon: Users, color: 'bg-purple-500', textColor: 'text-purple-600' },
   RU: { label: 'Resume Units', icon: Upload, color: 'bg-orange-500', textColor: 'text-orange-600' },
 };
-
-/** Green "+N returned · net M" under a cell when units were credited back
- *  (a deleted resume returns its 1 RU). `used` / `returned` are unit totals.
- *  Not used for AI Assessment / AI Interview — those show units deducted only. */
-function ReturnedLine({ used, returned, net }: { used: number; returned?: number; net?: number }) {
-  if (!returned || returned <= 0) return null;
-  const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
-  const netValue = net ?? used - returned;
-  return (
-    <div className="text-xs font-medium text-success" title={`${fmt(used)} used, ${fmt(returned)} returned (e.g. deleted resumes). Net ${fmt(netValue)}.`}>
-      +{fmt(returned)} returned · net {fmt(netValue)}
-    </div>
-  );
-}
 
 export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberUsageProps) {
   const [isLoading, setIsLoading] = useState(true);
@@ -256,7 +242,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
           {/* Clear sort — only when moved off the default (Total, highest first) */}
           <ClearSortChip
             sort={sort}
-            labels={{ name: 'Member', RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview', RU: 'Resume Units', jds: 'JDs', assessments: 'Assessments', total: 'Total', recent: 'Last Active' }}
+            labels={{ name: 'Member', RS: 'Resume Scoring', AS: 'AI Assessment', AIU: 'AI Interview', RU: 'Resume Units', jds: 'JDs', assessments: 'Assessments', total: 'Total', recent: 'Last Active' }}
             isDefault={sort.sortKey === 'total' && sort.sortDir === 'desc'}
             onClear={() => sort.clearSort?.()}
           />
@@ -307,7 +293,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   <SortableHeader label="Resume Scoring" column="RS" sort={sort} align="center" />
                 </th>
                 <th className="tf-th-cell text-center tf-th" aria-sort={ariaSort(sort, 'AS')}>
-                  <SortableHeader label="Assessment" column="AS" sort={sort} align="center" />
+                  <SortableHeader label="AI Assessment" column="AS" sort={sort} align="center" />
                 </th>
                 <th className="tf-th-cell text-center tf-th" aria-sort={ariaSort(sort, 'AIU')}>
                   <SortableHeader label="AI Interview" column="AIU" sort={sort} align="center" />
@@ -354,7 +340,6 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="tf-meta">
                       {member.by_type.RS?.consumption_count || 0} actions
                     </div>
-                    <ReturnedLine used={member.by_type.RS?.total_consumed || 0} returned={member.by_type.RS?.units_returned} net={member.by_type.RS?.net_consumed} />
                   </td>
                   <td className="tf-td whitespace-nowrap text-center">
                     <div className="text-sm font-medium text-success tabular-nums">
@@ -379,7 +364,6 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="tf-meta">
                       {member.by_type.RU?.consumption_count || 0} actions
                     </div>
-                    <ReturnedLine used={member.by_type.RU?.total_consumed || 0} returned={member.by_type.RU?.units_returned} net={member.by_type.RU?.net_consumed} />
                   </td>
                   <td className="tf-td whitespace-nowrap text-center">
                     <div className="text-sm font-medium text-indigo-600 dark:text-indigo-400 tabular-nums">
@@ -400,7 +384,6 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="tf-meta">
                       {member.total_actions} total
                     </div>
-                    <ReturnedLine used={member.total_consumed} returned={member.total_returned} net={member.total_net} />
                   </td>
                   <td className="tf-td whitespace-nowrap text-right">
                     <div className="flex items-center justify-end gap-1 tf-body-secondary">
@@ -433,18 +416,16 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   value: (
                     <>
                       {Math.round(member.by_type.RS?.total_consumed || 0)} ({member.by_type.RS?.consumption_count || 0} actions)
-                      <ReturnedLine used={member.by_type.RS?.total_consumed || 0} returned={member.by_type.RS?.units_returned} net={member.by_type.RS?.net_consumed} />
                     </>
                   ),
                 },
-                { label: 'Assessment', value: `${(member.by_type.AS?.total_consumed || 0).toFixed(1)} (${member.by_type.AS?.consumption_count || 0} actions)` },
+                { label: 'AI Assessment', value: `${(member.by_type.AS?.total_consumed || 0).toFixed(1)} (${member.by_type.AS?.consumption_count || 0} actions)` },
                 { label: 'AI Interview', value: `${Math.round(member.by_type.AIU?.total_consumed || 0)} (${member.by_type.AIU?.consumption_count || 0} actions)` },
                 {
                   label: 'Resume Units',
                   value: (
                     <>
                       {Math.round(member.by_type.RU?.total_consumed || 0)} ({member.by_type.RU?.consumption_count || 0} actions)
-                      <ReturnedLine used={member.by_type.RU?.total_consumed || 0} returned={member.by_type.RU?.units_returned} net={member.by_type.RU?.net_consumed} />
                     </>
                   ),
                 },
@@ -456,12 +437,16 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   </MobileStatChip>
                   <MobileStatChip tone="neutral" icon={<Briefcase className="h-3 w-3" />}>{member.jds_created || 0} JDs</MobileStatChip>
                   <MobileStatChip tone="success" icon={<ClipboardCheck className="h-3 w-3" />}>{member.assessments_created || 0} Assessments</MobileStatChip>
-                  <ReturnedLine used={member.total_consumed} returned={member.total_returned} net={member.total_net} />
                 </>
               }
             />
           ))}
         </MobileRecordList>
+        {/* Same rule as Usage History and the Teams page: usage only goes up. */}
+        <p className="mt-3 text-xs text-gray-500 dark:text-slate-400">
+          Usage counts every charge and never goes down: deleting a resume gives its unit back to your quota but
+          doesn&apos;t undo the upload. Every deduction and return is listed in the audit logs.
+        </p>
         </>
       ) : (
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-8 text-center">

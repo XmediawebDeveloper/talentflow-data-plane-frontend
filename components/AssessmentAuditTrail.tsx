@@ -9,6 +9,7 @@ import {
 import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } from '@/lib/services';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListToolbar from '@/components/ui/list-toolbar';
 /* Puts the row below into the host page's one toolbar position — on the
@@ -322,7 +323,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
         setSelectedKeys(new Set());
       } catch (error) {
         console.error('Failed to export selected audit logs:', error);
-        toast.error('Failed to export activity logs. Please try again.');
+        showErrorToast(error, "Couldn't export activity logs", { retry: () => handleExportAuditLogs(exportFormat) });
       } finally {
         setIsExporting(false);
       }
@@ -349,9 +350,11 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
     } catch (error) {
       console.error('Failed to export audit logs:', error);
       const msg = error instanceof Error ? error.message : '';
-      toast.error(/permission|forbidden|403/i.test(msg)
-        ? EXPORT_DENIED_REASON
-        : 'Failed to export activity logs. Please try again.');
+      if (/permission|forbidden|403/i.test(msg)) {
+        showErrorToast(error, "Couldn't export activity logs", { description: EXPORT_DENIED_REASON });
+      } else {
+        showErrorToast(error, "Couldn't export activity logs", { retry: () => handleExportAuditLogs(exportFormat) });
+      }
     } finally {
       setIsExporting(false);
     }

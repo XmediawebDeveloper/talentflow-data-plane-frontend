@@ -62,3 +62,9 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Backup / leftover copies (may hold old secrets) - "full application" #19
+*.bak
+*.orig
+*.old
+*~
