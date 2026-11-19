@@ -7401,7 +7401,7 @@ export default function AITalentMatchPage({
                     aria-label="Refresh"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${loadingHistoryJobId === modalKey ? 'animate-spin' : ''}`} />
-                    <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+                    <span className="hidden sm:inline">
                       {loadingHistoryJobId === modalKey ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
@@ -8063,7 +8063,13 @@ export default function AITalentMatchPage({
           jdTitle={resultsJobTitle}
           initialVersionNumber={resultsVersionNumber}
           showGoToJd
-          goToJdTab="ai-talent-match"
+          /* Trail AI Talent Match › <job> › job — same as AI Interview
+             details' Go to JD. */
+          goToJdOrigin={{
+            module: 'ai-talent-match',
+            title: resultsJobTitle || 'Results',
+            query: `jdId=${encodeURIComponent(selectedJob)}&view=results`,
+          }}
         />
       )}
       {showResultsColumnModal && (

@@ -311,6 +311,10 @@ export interface ScoredResume {
 
 interface ScoredResumesTableProps {
   resumes: ScoredResume[];
+  /** The rows are still being fetched (e.g. just switched to another JD
+   *  version): draw skeleton rows / cards in the current layout instead of
+   *  the "No Scored Resumes Yet" empty state. */
+  loading?: boolean;
   jobTitle: string;
   jobId?: string;
   /** The readable job code (e.g. "JD-151") for this single-job host, used to
@@ -708,6 +712,7 @@ export function useScoringActionPermissions(canCarryAIInterview: boolean) {
 
 export default function ScoredResumesTable({
   resumes: rawResumes,
+  loading = false,
   jobTitle: rawJobTitle,
   jobId = 'jd-1',
   jobCode,
@@ -2140,6 +2145,135 @@ Best regards`);
       </>
     );
 
+  /** While `loading`: the same shells the real views draw — the grid's card
+   *  tiles, or the table (its real column headers, skeleton cells shaped like
+   *  each column's content) on desktop and record cards below lg — so the
+   *  rows drop in with no layout jump and no "No Scored Resumes Yet" flash. */
+  const renderLoadingSkeleton = () => {
+    const rows = 5;
+    const cellSkeleton = (colId: string, r: number) => {
+      switch (colId) {
+        case 'candidateName':
+          return (
+            <div className="space-y-1.5">
+              <Skeleton className="h-4" style={{ width: `${55 + (r * 13) % 35}%` }} />
+              <Skeleton className="h-3 w-3/4" />
+            </div>
+          );
+        case 'jdId':
+          return <Skeleton className="h-6 w-16 rounded-md" />;
+        case 'jobTitle':
+          return <Skeleton className="h-4" style={{ width: `${60 + (r * 11) % 30}%` }} />;
+        case 'jobVersion':
+        case 'version':
+          return <Skeleton className="h-6 w-10 rounded-full mx-auto" />;
+        case 'matchStatus':
+          return <Skeleton className="h-6 w-24 rounded-full" />;
+        case 'scorePercentage':
+          return <Skeleton className="h-4 w-10 mx-auto" />;
+        case 'scoredDate':
+          return (
+            <div className="space-y-1.5">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+          );
+        default:
+          return <Skeleton className="h-4 w-3/4" />;
+      }
+    };
+
+    if (displayMode === 'grid') {
+      return (
+        <div className="tf-card overflow-hidden" aria-busy="true" aria-label="Loading scored resumes">
+          <div className="tf-grid-4 p-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 flex flex-col gap-3">
+                <div className="space-y-1.5 px-7">
+                  <Skeleton className="h-4" style={{ width: `${55 + (i * 13) % 35}%` }} />
+                  <Skeleton className="h-3 w-3/4" />
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <Skeleton className="h-6 w-16 rounded-md" />
+                  <Skeleton className="h-6 w-24 rounded-full" />
+                </div>
+                <Skeleton className="h-3 w-5/6" />
+                <div className="mt-auto flex items-center justify-between pt-2 border-t border-gray-100 dark:border-slate-700/60">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div aria-busy="true" aria-label="Loading scored resumes">
+        {/* Desktop: the real table header, skeleton body rows. */}
+        <div className="hidden lg:block tf-card overflow-hidden">
+          <div className="overflow-x-auto tf-table-shell">
+            <table className="w-full table-auto">
+              <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                <tr>
+                  <th className="tf-th-cell text-left w-10 tf-th" aria-label="Select" />
+                  {enabledColumns.map((col) => (
+                    <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle`}>
+                      {col.label}
+                    </th>
+                  ))}
+                  <th className="tf-th-cell text-left tf-th">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: rows }).map((_, r) => (
+                  <tr key={r} className="border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                    <td className="tf-td"><Skeleton className="h-4 w-4 rounded" /></td>
+                    {enabledColumns.map((col) => (
+                      <td key={col.id} className="tf-td">{cellSkeleton(col.id, r)}</td>
+                    ))}
+                    <td className="tf-td"><Skeleton className="h-9 w-9 rounded-lg" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Below lg: record-card shaped placeholders. */}
+        <div className="lg:hidden space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="tf-panel p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <Skeleton className="h-5 w-5 rounded shrink-0" />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-5 w-16 rounded-md" />
+                    <Skeleton className="h-4" style={{ width: `${40 + (i * 17) % 30}%` }} />
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {Array.from({ length: 4 }).map((__, f) => (
+                  <Skeleton key={f} className="h-3" style={{ width: `${55 + ((i + f) * 9) % 40}%` }} />
+                ))}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Skeleton className="h-10 w-40 rounded-lg" />
+                <Skeleton className="h-10 w-10 rounded-lg" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   /* The selection's actions — Download and Invite. Shown once rows are
      picked: after the view pills when the host has them, else inside the
      search/filter row itself, so either way they share one line. */
@@ -2460,7 +2594,10 @@ Best regards`);
                   })()}
                 </>
               )
-              : standaloneSelectAll
+              /* With the host's view pills (Resume Scoring's Candidates tab)
+                 Select All leads that pills row instead — where View by Job
+                 has it — so it isn't on this line. */
+              : standaloneSelectAll && !viewPillsSlot
                 ? <div className="max-sm:hidden">{standaloneSelectAll}</div>
                 : undefined
           }
@@ -2721,8 +2858,14 @@ Best regards`);
         <div className={`${embedded ? '' : 'tf-jobs-row2 '}${!embedded && !row2OnDesktop ? 'sm:hidden ' : ''}mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2`}>
           {/* Standalone: Select All leads this row on phones only — laptop /
               desktop carry it on the toolbar line above. */}
+          {/* Beside the host's view pills (Resume Scoring's Candidates tab) it
+              leads this row at every size, then a divider — exactly as View by
+              Job's row 2: Select All | verdict pills | View by. */}
           {standaloneSelectAll && (
-            <div className="tf-jobs-select sm:!hidden">{standaloneSelectAll}</div>
+            <div className={`tf-jobs-select${viewPillsSlot ? '' : ' sm:!hidden'}`}>{standaloneSelectAll}</div>
+          )}
+          {standaloneSelectAll && viewPillsSlot && (
+            <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
           )}
           {viewPillsSlot}
           {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
@@ -2777,7 +2920,9 @@ Best regards`);
         return toolbarPortal ? createPortal(toolbarBlock, toolbarPortal) : toolbarBlock;
       })()}
 
-      {displayMode === 'grid' ? (
+      {loading ? (
+        renderLoadingSkeleton()
+      ) : displayMode === 'grid' ? (
         <div className="tf-card overflow-hidden">
           {gridRows.length === 0 ? (
             <ListEmptyState

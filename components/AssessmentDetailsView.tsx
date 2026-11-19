@@ -2864,7 +2864,7 @@ export default function AssessmentDetailsView({
                 className="w-fit shrink-0"
                 icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${inviteRefreshing ? 'animate-spin' : ''}`} />}
               >
-                <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+                <span className="hidden sm:inline">
                   {inviteRefreshing ? 'Refreshing...' : 'Refresh'}
                 </span>
               </Button>

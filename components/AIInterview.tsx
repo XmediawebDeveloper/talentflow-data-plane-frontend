@@ -5174,14 +5174,14 @@ export default function AIInterview() {
                   ) : (
                     <>
                       <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
+                        <div className="flex items-center justify-between gap-4 mb-4">
+                          <div className="min-w-0">
                             <h3 className="text-gray-900 dark:text-slate-50 font-medium">Proctoring Settings</h3>
                             <p className="tf-body-muted mt-1">
                               Configure security monitoring for AI interview sessions
                             </p>
                           </div>
-                          <label className="flex items-center gap-3 cursor-pointer">
+                          <label className="flex items-center gap-3 cursor-pointer shrink-0">
                             <span className="tf-body-secondary">Master Toggle</span>
                             <div className="relative">
                               <input
@@ -5190,8 +5190,11 @@ export default function AIInterview() {
                                 onChange={(e) => setProctoringEnabled(e.target.checked)}
                                 className="sr-only"
                               />
-                              <div className={`w-11 h-6 rounded-full transition-colors ${proctoringEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}>
-                                <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${proctoringEnabled ? 'translate-x-5' : 'translate-x-0.5'} mt-0.5`} />
+                              {/* Track: 44×24 with 2px padding on every side; the 20px knob
+                                  slides 20px, so it sits 2px from either end and is
+                                  vertically centred by flex. */}
+                              <div className={`flex items-center w-11 h-6 p-0.5 rounded-full transition-colors ${proctoringEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300 dark:bg-slate-600'}`}>
+                                <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${proctoringEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
                               </div>
                             </div>
                           </label>

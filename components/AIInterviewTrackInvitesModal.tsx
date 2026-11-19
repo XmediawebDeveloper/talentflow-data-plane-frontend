@@ -757,8 +757,8 @@ export default function AIInterviewTrackInvitesModal({
               aria-label="Refresh"
               icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshing ? 'animate-spin' : ''}`} />}
             >
-              {/* Reserves the wider word so the header never shifts. */}
-              <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+              {/* Label hugs its text — no reserved width. */}
+              <span className="hidden sm:inline">
                 {isRefreshing ? 'Refreshing...' : 'Refresh'}
               </span>
             </Button>

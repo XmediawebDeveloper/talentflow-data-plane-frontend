@@ -237,6 +237,25 @@ function JobDetailsContent() {
     const s = kept.toString();
     return s ? `?${s}` : '';
   })();
+  /* Opened from Resume Scoring's / AI Talent Match's job page (Go to JD in
+     its View Job Detail popup): the trail is <Module> › <job> › this job,
+     the same shape as `ai-interview-details`. The module path is fixed here;
+     only its query (the job / view that page was on) comes from the URL. */
+  const moduleOrigin = (() => {
+    const from = searchParams.get('from');
+    const base = from === 'resume-scoring-details'
+      ? { label: 'Resume Scoring', path: '/recruitment/resume-scoring' }
+      : from === 'ai-talent-match-details'
+        ? { label: 'AI Talent Match', path: '/recruitment/ai-talent-match' }
+        : null;
+    if (!base) return null;
+    const query = new URLSearchParams(searchParams.get('origin_query') || '').toString();
+    return {
+      ...base,
+      title: searchParams.get('origin_title') || '',
+      href: query ? `${base.path}?${query}` : base.path,
+    };
+  })();
   const resultAssessmentId = searchParams.get('assessment_id') || '';
   const resultAssessmentTitle = searchParams.get('assessment_title') || '';
   const resultCandidateName = searchParams.get('candidate_name') || '';
@@ -814,6 +833,13 @@ function JobDetailsContent() {
               href: `/recruitment/ai-interviews/${encodeURIComponent(interviewId)}${interviewQuery}`,
             }]
           : []),
+        { label: job.title || 'Job Details' },
+      ]
+    : moduleOrigin
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: moduleOrigin.label, href: moduleOrigin.path },
+        ...(moduleOrigin.title ? [{ label: moduleOrigin.title, href: moduleOrigin.href }] : []),
         { label: job.title || 'Job Details' },
       ]
     : fromAiInterview

@@ -34,6 +34,17 @@ interface JDVersionHistoryModalProps {
    * Match. Omitted, it opens the page's default tab.
    */
   goToJdTab?: string;
+  /**
+   * The module page Go to JD leaves from, so the JD page's breadcrumb
+   * continues that page's own trail — Resume Scoring › <job> › this job —
+   * the way AI Interview details' Go to JD does (`from=ai-interview-details`).
+   * `title` is the crumb's label; `query` is the module page's query for the
+   * job on screen (e.g. `jd_id=…`), so the crumb returns to THAT job. Built
+   * by the host from its own state, not read off the address bar: Prev/Next
+   * there switch jobs without updating the URL, so the address bar still
+   * named the job the user started on.
+   */
+  goToJdOrigin?: { module: 'resume-scoring' | 'ai-talent-match'; title: string; query: string };
   /** Swap the header's Close (X) icon for a Cancel button in the footer.
    *  Both just close the popup. */
   cancelInFooter?: boolean;
@@ -335,6 +346,7 @@ export default function JDVersionHistoryModal({
   initialVersionNumber,
   showGoToJd = false,
   goToJdTab,
+  goToJdOrigin,
   cancelInFooter = false,
 }: JDVersionHistoryModalProps) {
   const { isTenantAdmin, hasPermissionCode } = useAuth();
@@ -584,11 +596,15 @@ export default function JDVersionHistoryModal({
                 size="sm"
                 onClick={() => {
                   const targetId = selectedVersion?.id || jdId;
+                  const params = new URLSearchParams({ id: targetId });
+                  if (goToJdTab) params.set('tab', goToJdTab);
+                  if (goToJdOrigin) {
+                    params.set('from', `${goToJdOrigin.module}-details`);
+                    params.set('origin_title', goToJdOrigin.title);
+                    if (goToJdOrigin.query) params.set('origin_query', goToJdOrigin.query);
+                  }
                   closeModal();
-                  router.push(
-                    `/recruitment/job-details?id=${encodeURIComponent(targetId)}` +
-                    (goToJdTab ? `&tab=${encodeURIComponent(goToJdTab)}` : ''),
-                  );
+                  router.push(`/recruitment/job-details?${params.toString()}`);
                 }}
                 title={selectedVersion ? `Open version ${selectedVersion.version_number} of this job` : 'Open this job'}
                 icon={<Briefcase className="w-4 h-4" />}
@@ -630,11 +646,20 @@ export default function JDVersionHistoryModal({
         </div>
 
         {/* Viewing one version of a multi-version JD: every version one click
-            away as a tab, and a straight Compare with its neighbour. */}
+            away as a tab, and Compare Versions. With exactly two versions
+            there is only one pair, so it opens that comparison straight away;
+            with more, it goes to the version list with this version ticked so
+            the user picks the second one. A single-version JD has nothing to
+            compare — this whole row (and the button) is hidden then. */}
         {!busy && selectedVersion && versions.length > 1 && (() => {
-          const idx = versions.findIndex((v) => v.id === selectedVersion.id);
-          // versions are newest first: idx + 1 is the older neighbour.
-          const other = versions[idx + 1] ?? versions[idx - 1];
+          const compareVersions = () => {
+            if (versions.length === 2) {
+              openComparison(versions[0], versions[1]);
+              return;
+            }
+            setCompareChecked([selectedVersion.id]);
+            setSelectedVersion(null);
+          };
           return (
             <div className="flex-shrink-0 flex flex-wrap items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10">
               <div role="tablist" aria-label="Versions" className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
@@ -654,24 +679,25 @@ export default function JDVersionHistoryModal({
                     >
                       v{v.version_number}
                       {latest && <span className={on ? 'text-white/80' : 'text-brand-blue'}>· Latest</span>}
-                      {v.id === jdId && !on && <span className="text-gray-400 dark:text-slate-500">· this page</span>}
+                      {/* Always marks the page's own version — selected tab or not. */}
+                      {v.id === jdId && <span className={on ? 'text-white/80' : 'text-gray-400 dark:text-slate-500'}>· Viewing</span>}
                     </button>
                   );
                 })}
               </div>
-              {other && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => openComparison(selectedVersion, other)}
-                  title={`See what changed between v${Math.min(selectedVersion.version_number, other.version_number)} and v${Math.max(selectedVersion.version_number, other.version_number)}`}
-                  className="whitespace-nowrap"
-                >
-                  <History className="w-3.5 h-3.5" />
-                  Compare v{selectedVersion.version_number} ↔ v{other.version_number}
-                </Button>
-              )}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={compareVersions}
+                title={versions.length === 2
+                  ? `See what changed between v${Math.min(versions[0].version_number, versions[1].version_number)} and v${Math.max(versions[0].version_number, versions[1].version_number)}`
+                  : 'Pick two versions to compare'}
+                className="whitespace-nowrap"
+              >
+                <History className="w-3.5 h-3.5" />
+                Compare Versions
+              </Button>
             </div>
           );
         })()}
@@ -680,7 +706,9 @@ export default function JDVersionHistoryModal({
           <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 tf-meta">
             <History className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
             <span>
-              All available JD versions are shown. Tick any two versions to compare them.
+              {versions.length > 1
+                ? 'All available JD versions are shown. Tick any two versions to compare them.'
+                : 'This JD has a single version — nothing to compare yet.'}
             </span>
           </div>
         )}

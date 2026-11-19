@@ -474,7 +474,7 @@ export default function ResumeScoringPage({
   scoreCounts = null,
   onSaveScores,
   onRefreshHistory,
-  onLoadJdScores,
+  onLoadJdScores: onLoadJdScoresProp,
   onNavigateToAITalentMatch,
   onBack,
   tenant,
@@ -486,6 +486,28 @@ export default function ResumeScoringPage({
   batchProgress = null
 }: ResumeScoringPageProps) {
   const router = useRouter();
+  /* Every per-JD score fetch goes through this wrapper, which records the JD
+     ids still in flight. The job page's table shows skeleton rows while its
+     own JD is among them — whichever way the page got there (refresh on a
+     ?jd_id URL, a list row, the version switch) — instead of flashing
+     "No Scored Resumes Yet" before the rows land. Settles on failure too, so
+     a failed load ends on the real state, not an endless skeleton. */
+  /* jdId → fetches in flight (a count, so two overlapping loads of one JD
+     don't end the skeleton when the first settles). */
+  const [jdScoresInFlight, setJdScoresInFlight] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const onLoadJdScores = onLoadJdScoresProp
+    ? (jdId: string, jdTitle?: string): Promise<void> => {
+        setJdScoresInFlight(prev => new Map(prev).set(jdId, (prev.get(jdId) ?? 0) + 1));
+        return onLoadJdScoresProp(jdId, jdTitle).finally(() => {
+          setJdScoresInFlight(prev => {
+            const next = new Map(prev);
+            const n = (next.get(jdId) ?? 1) - 1;
+            if (n > 0) next.set(jdId, n); else next.delete(jdId);
+            return next;
+          });
+        });
+      }
+    : undefined;
   /* A score opened from a resume's Candidate Activity card keeps that resume's
      trail (Resume Database › My Resumes › <candidate>) and returns to it. */
   const resumeTrail = useResumeActivityTrail(useSearchParams());
@@ -2857,7 +2879,11 @@ export default function ResumeScoringPage({
       : allScoredResumesData;
     const goToVersion = (versionId: string, versionTitle: string) => {
       if (versionId === selectedHistoryItem.jobId) return;
-      const stub: ScoredResumeData = {
+      /* The version's own history entry when there is one (keeps its counts
+         and JD metadata in the header while its rows load); a stub only for
+         a version with no entry yet. */
+      const known = scoredHistory.find(h => h.jobId === versionId);
+      const stub: ScoredResumeData = known ?? {
         id: versionId,
         jobId: versionId,
         jobTitle: versionTitle,
@@ -2869,7 +2895,7 @@ export default function ResumeScoringPage({
       setSelectedHistoryItem(stub);
       setSelectedScoredResumes([]);
       setSelectedStatusFilter('all');
-      onLoadJdScores?.(versionId, versionTitle);
+      if (!known?.scoresLoaded) void onLoadJdScores?.(versionId, versionTitle);
       try { localStorage.setItem('lastViewedScoringJdId', versionId); } catch (e) {}
       router.push(`/recruitment/resume-scoring?jd_id=${versionId}`);
     };
@@ -2912,6 +2938,17 @@ export default function ResumeScoringPage({
               setSelectedScoredResumes([]);
               setSelectedStatusFilter('all');
               onLoadJdScores?.(item.jobId, item.jobTitle);
+              /* Keep the address bar on the job shown. It used to stay on the
+                 job the user started from, so a refresh — or a breadcrumb
+                 that returns here — landed back on that first job. Only jd_id
+                 changes (other params, e.g. where the page was opened from,
+                 stay). Replace, not push: stepping through jobs shouldn't
+                 stack Back entries. */
+              try { localStorage.setItem('lastViewedScoringJdId', item.jobId); } catch { /* storage blocked */ }
+              const params = new URLSearchParams(window.location.search);
+              params.set('jd_id', item.jobId);
+              params.delete('score_id');
+              router.replace(`/recruitment/resume-scoring?${params.toString()}`, { scroll: false });
             };
             return (
               <RecordPager
@@ -3076,7 +3113,19 @@ export default function ResumeScoringPage({
              screen in the popup (this page's version unless another is
              being previewed). */
           showGoToJd
-          goToJdTab="scored-resumes"
+          /* Lands on the JD page with the trail Resume Scoring › <job> ›
+             job — same as AI Interview details' Go to JD. */
+          goToJdOrigin={{
+            module: 'resume-scoring',
+            title: selectedHistoryItem.jobTitle,
+            /* This page's query with jd_id pinned to the job on screen. */
+            query: (() => {
+              const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+              params.set('jd_id', selectedHistoryItem.jobId);
+              params.delete('score_id');
+              return params.toString();
+            })(),
+          }}
         />
 
         {inviteDialogEl}
@@ -3100,6 +3149,18 @@ export default function ResumeScoringPage({
         {/* Scored Resumes Table */}
         <ScoredResumesTable
           resumes={scoredResumesData}
+          /* Switching version (or folding in All versions): skeleton rows in
+             the table's own layout until that version's scores arrive. */
+          loading={
+            (jdScoresInFlight.has(selectedHistoryItem.jobId) && !selectedHistoryItem.scoresLoaded)
+            /* The fetch has landed in scoredHistory but the sync effect hasn't
+               copied it into selectedHistoryItem yet — one render where the
+               page still holds the empty stub. Without this the empty state
+               flashed for that frame before the rows appeared. */
+            || (!selectedHistoryItem.scoresLoaded
+                && !!scoredHistory.find(h => h.jobId === selectedHistoryItem.jobId)?.scoresLoaded)
+            || (showingAllVersions && isLoadingAllVersions)
+          }
           /* No "Scored Resumes" heading: the job card above names the list. */
           title=""
           /* Row Invite ▸ and the selection's Actions → Create / Send
@@ -5527,11 +5588,8 @@ export default function ResumeScoringPage({
                     aria-label="Refresh"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingHistoryModal ? 'animate-spin' : ''}`} />
-                    {/* The label swaps to "Refreshing..." mid-request, and the
-                        longer word used to widen the button and shove the
-                        close X sideways. The span reserves the wider word's
-                        width in both states, so the header never moves. */}
-                    <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+                    {/* Label hugs its text — no reserved width. */}
+                    <span className="hidden sm:inline">
                       {isRefreshingHistoryModal ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
