@@ -36,7 +36,7 @@ import JobIdBadge, { JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { getCreationMethodConfig, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { useJobCandidateCountsFor } from '@/lib/hooks/useJobCandidateCounts';
+import { useJobCandidateCountsFor, seedJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -577,6 +577,9 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     enabled: listStateRestored,
     fetchPage: async (q) => {
       const res = await jdService.listJobs(q);
+      // Chips' counts came in this response: seed them so the hook below does
+      // not ask /jd/candidate-counts after the list (one round trip, not two).
+      seedJobCandidateCounts(res.candidate_counts);
       const meta = res.versions_meta ?? {};
       return {
         items: (res.items ?? []).map((jd) => ({

@@ -7,6 +7,8 @@ import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 import { fetchAllPages } from '@/lib/utils/fetchPagesParallel';
 import { cachedList, listCacheKey, listReadOptions, withListCacheInvalidation, type ListReadOptions } from '@/lib/utils/listCache';
 import { announceBeingEdited, isStaging, markPendingThisVisit } from '@/lib/utils/aiInterviewEditSession';
+import { primeLineages, primeVersionCounts } from '@/lib/utils/jdLineagePrime';
+import type { JDLineageVersion } from '@/lib/services/jdService';
 
 /** Another user is editing this config in the wizard right now (409 INTERVIEW_BEING_EDITED). */
 export class InterviewBeingEditedError extends Error {
@@ -418,6 +420,17 @@ export interface AIInterviewListResponse {
   page: number;
   page_size: number;
   total_pages: number;
+  /* GET /configs `include=` extras — present only when asked for. */
+  /** Every version (status all) of the jobs on the page (`include=job_versions`). */
+  job_versions?: AIInterviewResponse[] | null;
+  /** The job short ids `job_versions` covers. */
+  job_versions_for?: string[] | null;
+  /** GET /jd/lineages' answer for the rows' jd_ids (`include=lineages`). */
+  lineages?: Record<string, JDLineageVersion[]> | null;
+  /** GET /jd/version-counts' answer (`include=version_counts`). */
+  version_counts?: Record<string, { total: number; active: number }> | null;
+  /** GET /ai-interview/invitation-counts' answer for the page + job_versions (`include=invitation_counts`). */
+  invitation_counts?: Record<string, { total: number; completed: number }> | null;
 }
 
 export interface AIInterviewInvitationListResponse extends AIInterviewListResponse {
@@ -426,6 +439,9 @@ export interface AIInterviewInvitationListResponse extends AIInterviewListRespon
   terminated: number;
   cancelled: number;
   average_score: number | null;
+  /* Echoed only when `also` was sent: every config the rows were read across.
+     Missing on an older backend that ignored `also` (its rows cover ONE config). */
+  scoped_config_ids?: string[];
 }
 
 export interface AIInterviewStatsResponse {
@@ -450,6 +466,53 @@ export interface AIInterviewStatsResponse {
   invited_configs?: number;
   /** Configs in completed / cancelled status. */
   completed_configs?: number;
+}
+
+/** GET /ai-interview/all-invitations — the Invitation Status tab, server-paged. */
+export interface AllInvitationsQuery {
+  page: number;
+  page_size: number;
+  search?: string;
+  /** Card bucket: invited | expired | in_progress | completed | terminated | revoked. */
+  status?: string;
+  /** JD short id. */
+  job?: string;
+  jd_version?: number | string;
+  interview_version?: number | string;
+  invite_source?: string;
+  /** pass | fail | unscored */
+  result?: string;
+  invite_date_from?: string;
+  invite_date_to?: string;
+  /** Comma-separated session ids. */
+  ids?: string;
+  /** desc (newest, default) | asc */
+  sort_dir?: 'asc' | 'desc';
+  include_stats?: boolean;
+}
+
+export interface AllInvitationsStats {
+  total: number;
+  invited: number;
+  expired: number;
+  in_progress: number;
+  completed: number;
+  terminated: number;
+  revoked: number;
+}
+
+export interface AllInvitationsPage {
+  items: any[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  stats?: AllInvitationsStats;
+  filter_options?: {
+    jobs: { value: string; title: string }[];
+    job_versions: number[];
+    interview_versions: number[];
+  };
 }
 
 /**
@@ -480,6 +543,8 @@ export interface AIConfigListQuery extends AIConfigListFilters {
   sort_dir?: 'asc' | 'desc';
   status_first?: 'published' | 'active' | 'draft';
   collapse?: 'lineage';
+  /** Extras folded into the page: job_versions, lineages, version_counts, invitation_counts. */
+  include?: string;
   [k: string]: unknown;
 }
 
@@ -692,10 +757,14 @@ export const aiInterviewService = {
   /**
    * Get dashboard stats
    */
-  async getStats(): Promise<AIInterviewStatsResponse> {
+  async getStats(opts?: ListReadOptions): Promise<AIInterviewStatsResponse> {
     try {
-      const response = await api.get<AIInterviewStatsResponse>('/ai-interview/stats');
-      return response.data;
+      // `reuseRecent`: the Dashboard reuses a read from the last 30 s (writes clear it).
+      return await cachedList(
+        listCacheKey('ai-interview|stats'),
+        async () => (await api.get<AIInterviewStatsResponse>('/ai-interview/stats')).data,
+        listReadOptions(opts),
+      );
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -1046,6 +1115,10 @@ export const aiInterviewService = {
       const response = await api.get<AIInterviewListResponse>('/ai-interview/configs', {
         params: { compact: true, ...cleanAIConfigParams(query) },
       });
+      /* Lineages / version counts folded into the page answer the follow-up
+         GET /jd/lineages and /jd/version-counts without a round trip. */
+      primeLineages(response.data?.lineages);
+      primeVersionCounts(response.data?.version_counts);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -1320,6 +1393,10 @@ export const aiInterviewService = {
     page?: number;
     page_size?: number;
     compact?: boolean;
+    /** More config ids read in the same request (a job's Track Invites). */
+    also?: string;
+    /** 'invited' = newest invited first (default: newest created first). */
+    order?: 'invited';
   }): Promise<AIInterviewInvitationListResponse> {
     try {
       const response = await api.get<AIInterviewInvitationListResponse>(
@@ -1339,26 +1416,22 @@ export const aiInterviewService = {
    * the Interview list reads per config.
    */
   /**
-   * Every invitation of every interview, in as few requests as the backend
-   * allows (normally ONE) — instead of one `getConfigInvitations` per
-   * interview. Rows are the per-interview endpoint's own rows; each carries its
-   * `config_id`. Throws when the endpoint is unavailable (an older backend), so
-   * the caller can fall back to the per-interview path.
+   * ONE page of the Invitation Status tab (every invitation of every
+   * interview), filtered / sorted / paged on the server. Rows carry the labels
+   * the tab shows (_config_id, _config_title, _jd_id, _jd_short_id,
+   * _jd_version, _interview_version) and the job's `jd_status`.
+   * `include_stats` also returns the seven cards (over the whole set, not the
+   * filter) and the filter options. `ids` narrows to those sessions (export
+   * of rows ticked on other pages).
    */
-  async getAllInvitations(): Promise<AIInterviewResponse[]> {
-    const PAGE_SIZE = 5000;
+  async listAllInvitationsPage(params: AllInvitationsQuery): Promise<AllInvitationsPage> {
     try {
-      const rows: AIInterviewResponse[] = [];
-      for (let page = 1; page <= 40; page += 1) {
-        const response = await api.get<{ items: AIInterviewResponse[]; total: number; total_pages?: number }>(
-          '/ai-interview/all-invitations',
-          { params: { page, page_size: PAGE_SIZE } },
-        );
-        const items = response.data?.items ?? [];
-        rows.push(...items);
-        if (items.length < PAGE_SIZE || rows.length >= (response.data?.total ?? rows.length)) break;
-      }
-      return rows;
+      const clean: Record<string, string | number | boolean> = {};
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '' && v !== 'all') clean[k] = v as string | number | boolean;
+      });
+      const response = await api.get<AllInvitationsPage>('/ai-interview/all-invitations', { params: clean });
+      return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
     }

@@ -422,7 +422,7 @@ export default function UserManagement() {
     // instead of waiting on it. They're what the Users/Active/Inactive count
     // cards actually read; the sync result itself is never rendered anywhere.
     loadUsers({ fromMount: true }); // also refreshes userCounts (see loadUsers)
-    loadRoles();
+    loadRoles({ reuseRecent: true });
 
     // Reconciles this tenant's user count against the external Admin API
     // (two possible remote round trips, each up to 10s) and only ever
@@ -459,9 +459,10 @@ export default function UserManagement() {
   // GET /rbac/roles: every role with its effective access (permission_codes),
   // holders and the tenant's role limit. Returns the list so callers can act on
   // the fresh data (e.g. select a role created a moment ago).
-  const loadRoles = async (): Promise<RoleListItem[]> => {
+  // `reuseRecent` on arrival only; reloads after a role change ask the server.
+  const loadRoles = async (opts?: { reuseRecent?: boolean }): Promise<RoleListItem[]> => {
     try {
-      const data = await rbacService.getRoles();
+      const data = await rbacService.getRoles(opts);
       setAvailableRoles(data.roles);
       if (typeof data.role_limit === 'number' && data.role_limit > 0) setRoleLimit(data.role_limit);
       return data.roles;
@@ -539,7 +540,9 @@ export default function UserManagement() {
     // until a manual page refresh. Fired in parallel and independent of the
     // list fetch so it still updates even if the list request fails.
     const countsSeq = ++userCountsSeqRef.current;
-    userService.getUserCounts({ fresh: !fromMount }).then((counts) => {
+    // On arrival, reuse what was read in the last 30 s (e.g. coming back from
+    // Usage history); any later reload follows a change and asks the server.
+    userService.getUserCounts(fromMount ? { reuseRecent: true } : { fresh: true }).then((counts) => {
       if (countsSeq !== userCountsSeqRef.current) return;
       setUserCounts(counts);
       setUserCountsFailed(false);
@@ -562,7 +565,7 @@ export default function UserManagement() {
         for (let page = 1; page <= 20; page++) {
           const res = await userService.listUsersPaged(
             { page, page_size: USERS_PAGE_SIZE },
-            { fresh: !fromMount },
+            fromMount ? { reuseRecent: true } : { fresh: true },
           );
           const pageUsers: any[] = res.items || [];
           rawUsers.push(...pageUsers);

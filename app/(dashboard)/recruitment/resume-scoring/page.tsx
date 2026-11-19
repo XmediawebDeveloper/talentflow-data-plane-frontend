@@ -7,6 +7,8 @@ import ResumeScoringPage from '@/components/ResumeScoringPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
+import type { ScoredJdListParams, ScoredJdListResponse, ScoredJdRow } from '@/lib/services/scoringService';
+import type { ScoredJobsPage } from '@/components/ResumeScoringPage';
 import { Resume, Folder } from '@/lib/types/types';
 import { toast } from 'sonner';
 import { showErrorToast } from '@/lib/utils/errorToast';
@@ -52,6 +54,34 @@ interface ScoredResumeData {
   /** True once `scoredResumes` holds this version's own scores (loadJdScores). */
   scoresLoaded?: boolean;
 }
+
+/** One GET /scoring/jds version row as the page's history entry (no scores yet). */
+const scoredJdRowToHistory = (row: ScoredJdRow): ScoredResumeData => ({
+  id: row.jd_id,
+  jobId: row.jd_id,
+  jobTitle: row.jd_title || 'Unknown Job',
+  scoredAt: parseIST(row.latest_scored_at || new Date().toISOString()),
+  source: 'database',
+  jdStatus: row.jd_status || 'published',
+  jdJobId: row.jd_job_id,
+  jdCreationMethod: row.jd_creation_method,
+  jdCurrentVersion: row.jd_current_version,
+  jdVersionNumber: row.jd_version_number,
+  jdDepartment: row.jd_department,
+  jdIndustryType: row.jd_industry_type,
+  jdEmploymentType: row.jd_employment_type,
+  jdRemoteType: row.jd_remote_type,
+  jdLocation: row.jd_location,
+  jdPublishedAt: row.jd_published_at || undefined,
+  jdCreatedByName: row.jd_created_by_name || undefined,
+  totalScored: row.scored_count || 0,
+  scoredResumes: [],
+  verdictCounts: { exact: row.exact_count || 0, partial: row.partial_count || 0, none: row.no_match_count || 0 },
+  latestScoredBy: row.latest_scored_by_name,
+});
+
+/** View by Job's server query before the page sends its own (restored) one. */
+const DEFAULT_HISTORY_QUERY: ScoredJdListParams = { page: 1, page_size: 10 };
 
 interface Job {
   id: string;
@@ -105,6 +135,22 @@ export default function ResumeScoringRoute() {
   const { loading: planFeatureLoading } = usePlanFeature('resume_scoring');
   const [pageMounted, setPageMounted] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
+  /* Lineages + archived/disabled version counts that came WITH the scored-JD
+     index (include_lineages) — handed to the page so its View by Job rows do
+     not ask /jd/lineages and then /scoring/jd/counts after the list. */
+  const [historyLineageSeed, setHistoryLineageSeed] = useState<{
+    lineages?: ScoredJdListResponse['lineages'];
+    versionCounts?: ScoredJdListResponse['version_counts'];
+  } | null>(null);
+  /* View by Job's current server page (GET /scoring/jds, one row per job,
+     search / filters / sort / paging applied on the server). null until the
+     first page lands, and for good on an older backend without
+     `expand_versions` - the page then pages the full index itself. */
+  const [historyPage, setHistoryPage] = useState<ScoredJobsPage | null>(null);
+  const historyQueryRef = useRef<ScoredJdListParams>(DEFAULT_HISTORY_QUERY);
+  /* Set once a response shows the backend has no `expand_versions`: from then
+     on the whole scored-version index is loaded, as before. */
+  const legacyIndexRef = useRef(false);
   const [initialJdId, setInitialJdId] = useState<string | null>(null);
   const [initialScoreId, setInitialScoreId] = useState<string | null>(null);
   const [showProgress, setShowProgress] = useState(false);
@@ -219,6 +265,7 @@ export default function ResumeScoringRoute() {
               status: item.status,
               score: item.overall_score,
               overallRating10: item.overall_rating_10,
+              resumeDeleted: item.resume_deleted,
               matchStatus: item.match_status,
               errorMessage: item.error_message,
             }));
@@ -307,6 +354,8 @@ export default function ResumeScoringRoute() {
     // folder fetch for no reason before even starting. Each manages its own
     // loading state, so firing both together is safe.
     fetchData();
+    // The default first page goes out now; the page's own query (restored
+    // filters / page) replaces it only if it differs.
     loadScoredHistory();
     // The URL-derived state above is now set, so <ResumeScoringPage> can mount
     // with it (see the render gate at the bottom).
@@ -459,84 +508,133 @@ export default function ResumeScoringRoute() {
      drops back to an empty list. */
   const loadedJdScoresRef = useRef(new Set<string>());
 
+  /** Merge GET /scoring/jds version rows into the history, keeping the scores
+   *  already loaded for a job that is open (loadJdScores). */
+  const mergeHistoryVersions = (rows: ScoredJdRow[]) => {
+    if (rows.length === 0) return;
+    setScoredHistory(prev => {
+      const byId = new Map(prev.map(h => [h.jobId, h]));
+      for (const row of rows) {
+        const next = scoredJdRowToHistory(row);
+        const old = byId.get(row.jd_id);
+        byId.set(row.jd_id, old?.scoresLoaded ? { ...next, scoredResumes: old.scoredResumes, scoresLoaded: true } : next);
+      }
+      return Array.from(byId.values())
+        .sort((a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime());
+    });
+  };
+
+  /** Lineages / version counts that came with a response, for the page's
+   *  version-lineage hook (which merges them into what it already holds). */
+  const seedHistoryLineages = (res: ScoredJdListResponse) => {
+    if (res.lineages) setHistoryLineageSeed({ lineages: res.lineages, versionCounts: res.version_counts });
+  };
+
+  /** The four cards (GET /scoring/stats). */
+  const loadScoreCounts = async () => {
+    try {
+      const stats = await scoringService.getScoringStats();
+      setScoreCounts({
+        total: stats.total || 0,
+        exact: stats.exact_match || 0,
+        partial: stats.partial_match || 0,
+        none: stats.no_match || 0,
+        people: stats.candidates ? {
+          all: stats.candidates.all || 0,
+          exact: stats.candidates.exact_match || 0,
+          partial: stats.candidates.partial_match || 0,
+          none: stats.candidates.no_match || 0,
+        } : undefined,
+      });
+    } catch (err) {
+      console.warn('[ResumeScoringRoute] stats failed', err);
+    }
+  };
+
   /**
-   * The landing: the four cards (GET /scoring/stats) and the scored-job index
-   * (GET /scoring/jds?group_by=version — one light row per scored JD version
-   * with its server-counted Exact / Partial / No Match), in parallel.
-   *
-   * This used to be a page_size:1 probe of /scoring/all for the cards plus the
-   * ENTIRE scored-resume table (every score, with resume details) just to
-   * group it by JD in the browser — and ResumeScoringPage fetched that table a
-   * second time in the background. The per-JD scores now load on demand
-   * (loadJdScores) and the cross-job candidate list only when it is opened.
+   * Older backend only (no `expand_versions`): the whole scored-version index
+   * (GET /scoring/jds?group_by=version, every page) — the page then filters,
+   * groups and pages it itself, as it did before server paging.
    */
-  const loadScoredHistory = async () => {
+  const loadLegacyIndex = async (isStale: () => boolean, reloadScores: boolean) => {
+    const index = await fetchAllRows((page_size, page) =>
+      scoringService.listScoredJds({ group_by: 'version', include_facets: false, include_lineages: true, page_size, page }),
+    );
+    if (isStale()) return;
+    setHistoryLineageSeed(index.lineages
+      ? { lineages: index.lineages, versionCounts: index.version_counts }
+      : null);
+    const validHistory = (index.items || []).map(scoredJdRowToHistory);
+    validHistory.sort((a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime());
+    // Keep the scores already loaded for an opened job on screen, then
+    // re-read them (they may have just changed — this runs after scoring).
+    setScoredHistory(prev => {
+      const loaded = new Map(prev.filter(h => h.scoresLoaded).map(h => [h.jobId, h]));
+      return validHistory.map(h => {
+        const old = loaded.get(h.jobId);
+        return old ? { ...h, scoredResumes: old.scoredResumes, scoresLoaded: true } : h;
+      });
+    });
+    if (reloadScores) {
+      Array.from(loadedJdScoresRef.current)
+        .filter(id => validHistory.some(h => h.jobId === id))
+        .forEach(id => { void loadJdScores(id); });
+    }
+  };
+
+  /**
+   * View by Job's current page (GET /scoring/jds?group_by=lineage): one row
+   * per job with its lineage-wide counts, search / filters / verdict / sort /
+   * paging done on the server, plus every scored version of just those jobs
+   * (`expand_versions`) and their lineages (`include_lineages`). This used to
+   * download EVERY scored JD version (page_size 10000) with lineages for all
+   * of them, and filter / group / page it in the browser.
+   *
+   * `reloadScores`: after scoring — also re-read the scores of jobs already
+   * opened this session, so an open job page never shows stale scores.
+   */
+  const loadHistoryList = async (reloadScores: boolean) => {
     const seq = ++historySeqRef.current;
     const isStale = () => seq !== historySeqRef.current;
     setHistoryLoading(true);
     try {
-      const statsRequest = scoringService.getScoringStats()
-        .then((stats) => {
-          if (isStale()) return;
-          setScoreCounts({
-            total: stats.total || 0,
-            exact: stats.exact_match || 0,
-            partial: stats.partial_match || 0,
-            none: stats.no_match || 0,
-            people: stats.candidates ? {
-              all: stats.candidates.all || 0,
-              exact: stats.candidates.exact_match || 0,
-              partial: stats.candidates.partial_match || 0,
-              none: stats.candidates.no_match || 0,
-            } : undefined,
-          });
-        })
-        .catch((err) => console.warn('[ResumeScoringRoute] stats failed', err));
-      const index = await fetchAllRows((page_size, page) =>
-        scoringService.listScoredJds({ group_by: 'version', include_facets: false, page_size, page }),
-      );
-      await statsRequest;
-      if (isStale()) return;
-
-      const validHistory: ScoredResumeData[] = (index.items || []).map((row) => ({
-        id: row.jd_id,
-        jobId: row.jd_id,
-        jobTitle: row.jd_title || 'Unknown Job',
-        scoredAt: parseIST(row.latest_scored_at || new Date().toISOString()),
-        source: 'database',
-        jdStatus: row.jd_status || 'published',
-        jdJobId: row.jd_job_id,
-        jdCreationMethod: row.jd_creation_method,
-        jdCurrentVersion: row.jd_current_version,
-        jdVersionNumber: row.jd_version_number,
-        jdDepartment: row.jd_department,
-        jdIndustryType: row.jd_industry_type,
-        jdEmploymentType: row.jd_employment_type,
-        jdRemoteType: row.jd_remote_type,
-        jdLocation: row.jd_location,
-        jdPublishedAt: row.jd_published_at || undefined,
-        jdCreatedByName: row.jd_created_by_name || undefined,
-        totalScored: row.scored_count || 0,
-        scoredResumes: [],
-        verdictCounts: { exact: row.exact_count || 0, partial: row.partial_count || 0, none: row.no_match_count || 0 },
-        latestScoredBy: row.latest_scored_by_name,
-      }));
-
-      // Sort by scored date (most recent first)
-      validHistory.sort((a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime());
-
-      // Keep the scores already loaded for an opened job on screen, then
-      // re-read them (they may have just changed — this runs after scoring).
-      setScoredHistory(prev => {
-        const loaded = new Map(prev.filter(h => h.scoresLoaded).map(h => [h.jobId, h]));
-        return validHistory.map(h => {
-          const old = loaded.get(h.jobId);
-          return old ? { ...h, scoredResumes: old.scoredResumes, scoresLoaded: true } : h;
-        });
+      if (legacyIndexRef.current) {
+        await loadLegacyIndex(isStale, reloadScores);
+        return;
+      }
+      const res = await scoringService.listScoredJds({
+        ...historyQueryRef.current,
+        group_by: 'lineage',
+        expand_versions: true,
+        include_facets: true,
+        include_lineages: true,
       });
-      const reload = Array.from(loadedJdScoresRef.current).filter(id => validHistory.some(h => h.jobId === id));
-      reload.forEach(id => { void loadJdScores(id); });
-
+      if (isStale()) return;
+      if (!res.versions) {
+        // Older backend: no per-page versions to open the jobs with.
+        legacyIndexRef.current = true;
+        setHistoryPage(null);
+        await loadLegacyIndex(isStale, reloadScores);
+        return;
+      }
+      seedHistoryLineages(res);
+      mergeHistoryVersions(res.versions);
+      setHistoryPage({
+        rows: (res.items || []).map(r => ({
+          jdId: r.jd_id,
+          counts: { exact: r.exact_count || 0, partial: r.partial_count || 0, none: r.no_match_count || 0 },
+          lineageMaxVersion: r.lineage_max_version,
+        })),
+        total: res.total || 0,
+        anyScored: res.any_scored ?? (res.total || 0) > 0,
+        facets: res.facets,
+      });
+      if (reloadScores) {
+        const onPage = new Set(res.versions.map(v => v.jd_id));
+        Array.from(loadedJdScoresRef.current)
+          .filter(id => onPage.has(id))
+          .forEach(id => { void loadJdScores(id); });
+      }
       // Clear old localStorage data to ensure consistency with API data
       try {
         localStorage.removeItem('scoredHistory');
@@ -566,6 +664,65 @@ export default function ResumeScoringRoute() {
       // A stale run leaves the loading state to the run that replaced it.
       if (!isStale()) setHistoryLoading(false);
     }
+  };
+
+  /** Refresh (landing, after scoring, the page's Refresh): the cards and the
+   *  current page, re-reading the scores of jobs already opened. */
+  const loadScoredHistory = async () => {
+    await Promise.all([loadScoreCounts(), loadHistoryList(true)]);
+  };
+
+  /** The page's View by Job query changed (search, filters, verdict, sort,
+   *  page). Ignored when it is the one already loaded — the landing sends the
+   *  default first page before the page has restored its own state. */
+  const queryScoredHistory = (query: ScoredJdListParams) => {
+    if (JSON.stringify(query) === JSON.stringify(historyQueryRef.current)) return;
+    historyQueryRef.current = query;
+    if (legacyIndexRef.current) return; // the full index is already in hand
+    void loadHistoryList(false);
+  };
+
+  /**
+   * Every scored version of the job a JD version belongs to — for opening a
+   * job that is not on the current page (a ?jd_id link, a just-finished
+   * scoring run, a result opened from the progress popup).
+   */
+  const ensureHistoryJd = async (jdId: string): Promise<void> => {
+    if (legacyIndexRef.current) return; // the full index already has it, if it was scored
+    try {
+      const res = await scoringService.listScoredJds({
+        group_by: 'version',
+        lineage_of: jdId,
+        include_facets: false,
+        include_lineages: true,
+        page: 1,
+        page_size: 500,
+      });
+      seedHistoryLineages(res);
+      mergeHistoryVersions(res.items || []);
+    } catch (error) {
+      console.warn('[ResumeScoringRoute] could not load the job of', jdId, error);
+    }
+  };
+
+  /**
+   * Select All over every job the current search / filters match (not just
+   * this page): those jobs and their versions, loaded once, on demand.
+   * Returns the jobs' representative versions, in list order.
+   */
+  const fetchAllHistoryJobs = async (): Promise<ScoredResumeData[]> => {
+    const res = await fetchAllRows((page_size, page) => scoringService.listScoredJds({
+      ...historyQueryRef.current,
+      group_by: 'lineage',
+      expand_versions: true,
+      include_facets: false,
+      include_lineages: true,
+      page_size,
+      page,
+    }));
+    seedHistoryLineages(res);
+    mergeHistoryVersions(res.versions || []);
+    return (res.items || []).map(scoredJdRowToHistory);
   };
 
   // Load ALL scores for a specific JD on-demand via /jd/{jd_id} (paginated, deduped latest-per-resume)
@@ -619,6 +776,7 @@ export default function ResumeScoringRoute() {
           matchStatus: matchStatus,
           scorePercentage: matchScore,
           overallRating10: item.overall_rating_10,
+          resumeDeleted: item.resume_deleted,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by_name || item.scored_by || 'System',
           scoredByEmail: item.scored_by,
@@ -857,6 +1015,11 @@ export default function ResumeScoringRoute() {
         folders={folders}
         scoredHistory={scoredHistory}
         historyLoading={historyLoading}
+        historyLineageSeed={historyLineageSeed}
+        historyPage={historyPage}
+        onQueryHistory={queryScoredHistory}
+        onEnsureHistoryJd={ensureHistoryJd}
+        onFetchAllHistoryJobs={fetchAllHistoryJobs}
         scoreCounts={scoreCounts}
         onSaveScores={saveScoredHistory}
         onRefreshHistory={loadScoredHistory}

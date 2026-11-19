@@ -97,6 +97,7 @@ import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 import { toOneDecimalScore } from '@/lib/utils/score';
 import NameAvatar from '@/components/ui/name-avatar';
 import { AssessmentIllustration, InterviewIllustration, ScoredResumesIllustration, TalentMatchIllustration } from '@/components/jobs/JobResultsIllustrations';
+import DeletedResumeRows from '@/components/resumes/DeletedResumeRows';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -1721,6 +1722,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           matchStatus: matchStatus,
           scorePercentage: Number((item.overall_score || 0).toFixed(1)),  // Keep 1 decimal for consistency
           overallRating10: item.overall_rating_10,
+          resumeDeleted: item.resume_deleted,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by || item.scored_by_name || 'System',
           // Identifies one scoring trigger, where the API sends it — Recent
@@ -4681,10 +4683,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       )}
 
       {/* AI Talent Match Tab Content */}
+      {/* Results whose resume the account owner deleted (2026-11-19): name +
+          email only, listed apart until the job is run again. */}
+      {activeTab === 'ai-talent-match' && (
+        <DeletedResumeRows
+          rows={aiMatchCandidates.filter((c) => c.resumeDeleted).map((c) => ({ id: c.id, name: c.name, email: c.email }))}
+          className="mb-3"
+        />
+      )}
       {activeTab === 'ai-talent-match' && (
         <AIMatchTabContent
           toolbarPortal={tabToolbarSlot}
-          candidates={aiMatchCandidates}
+          candidates={aiMatchCandidates.filter((c) => !c.resumeDeleted)}
           scoredResumes={scoredResumes}
           scoredResumesLoaded={scoredResumesLoaded && !loadingScoredResumes}
           jobTitle={job.title}
@@ -4701,7 +4711,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onScoreSelected={(selected) => { if (selected.length > 0) setAiMatchScoreReview(selected); }}
           onScoreAll={() => {
             const scoredIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
-            const unscored = aiMatchCandidates.filter((c) => !scoredIds.has(c.resumeId));
+            const unscored = aiMatchCandidates.filter((c) => !c.resumeDeleted && !scoredIds.has(c.resumeId));
             if (unscored.length > 0) setAiMatchScoreReview(unscored);
           }}
           onViewCandidate={(candidate) => {

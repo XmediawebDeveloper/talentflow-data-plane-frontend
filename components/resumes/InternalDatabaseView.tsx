@@ -48,6 +48,7 @@ import { usePagedList } from '@/lib/hooks/usePagedList';
 import { useResumeSelection } from '@/components/resumes/ResumeSelectionContext';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { NoMatchingResumesState, NoResumesYetState } from '@/components/resumes/ResumeEmptyStates';
+import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
 
 interface SearchFilters {
   skills?: string[];
@@ -1095,8 +1096,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             onDownloadDisabled={!canDownloadShared}
             onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
             onDelete={() => handleDeleteResumes(selectedResumes)}
-            onDeleteDisabled={!(isTenantAdmin || hasPermissionCode('internal_db:delete'))}
-            onDeleteDisabledReason="You do not have permission to delete resumes"
+            onDeleteDisabled={!canDeleteResumes(isTenantAdmin)}
+            onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
           />
         </div>
       )}
@@ -1182,8 +1183,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           canShare={isTenantAdmin || hasPermissionCode('internal_db:share')}
           canDownload={canDownloadShared}
           onDelete={(id) => handleDelete(id)}
-          onDeleteDisabled={!(isTenantAdmin || hasPermissionCode('internal_db:delete'))}
-          onDeleteDisabledReason="You do not have permission to delete resumes"
+          onDeleteDisabled={!canDeleteResumes(isTenantAdmin)}
+          onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
           onViewDetails={(resume) => {
             sessionStorage.setItem('resumeNavList', JSON.stringify(paginatedResumes.map((r) => r.id)));
             sessionStorage.setItem('resumeNavSource', 'resume-database');
@@ -1241,8 +1242,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           resume={viewingResume}
           onClose={() => setViewingResume(null)}
           onDelete={(id) => handleDelete(id)}
-          onDeleteDisabled={!(isTenantAdmin || hasPermissionCode('internal_db:delete'))}
-          onDeleteDisabledReason="You do not have permission to delete resumes"
+          onDeleteDisabled={!canDeleteResumes(isTenantAdmin)}
+          onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
         />
       )}
 

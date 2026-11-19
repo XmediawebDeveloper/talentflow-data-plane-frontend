@@ -58,6 +58,8 @@ import { resumeService } from '@/lib/services/resumeService';
 import { jdService, JDLineageVersion } from '@/lib/services/jdService';
 import RecordPager from '@/components/RecordPager';
 import { toast } from 'sonner';
+import DeletedResumeRows from '@/components/resumes/DeletedResumeRows';
+import { RESUME_DELETED_BADGE_CLASS, RESUME_DELETED_BADGE_LABEL, RESUME_DELETED_ROW_MESSAGE } from '@/lib/permissions/resumeDelete';
 import { showErrorToast } from '@/lib/utils/errorToast';
 import { assessmentService } from '@/lib/services';
 import type { Resume } from '@/lib/types/types';
@@ -427,7 +429,7 @@ interface CandidateMatchRow {
    *  attachment details so this roll-up can show the same columns as the
    *  per-job match table. */
   best: MatchedCandidateWithVersions;
-  jobs: Array<{ historyId: string; jobId: string; jobTitle: string; score: number; matchedAt: Date; matchedByName?: string; resumeVersion?: number; resumeId?: string; candidateId?: string }>;
+  jobs: Array<{ historyId: string; jobId: string; jobTitle: string; score: number; matchedAt: Date; matchedByName?: string; resumeVersion?: number; resumeId?: string; candidateId?: string; resumeDeleted?: boolean }>;
 }
 
 /** A session this visit has seen: a matched-jobs row, or a candidate's job entry. */
@@ -500,6 +502,8 @@ function toCandidateRow(item: AIMatchCandidateItem): CandidateMatchRow {
       resumeVersion: j.resume_version ?? undefined,
       resumeId: j.resume_id || undefined,
       candidateId: j.candidate_id,
+      // The account owner deleted this resume: no rating, placeholder badge only.
+      resumeDeleted: !!j.resume_deleted,
     })),
   };
 }
@@ -2786,6 +2790,9 @@ export default function AITalentMatchPage({
       : getResolvedHistoryCandidates(selectedHistoryItem);
 
     const filtered = candidates.filter(candidate => {
+      // A deleted resume's placeholder is shown apart (DeletedResumeRows), never
+      // as an actionable result.
+      if (candidate.resumeDeleted) return false;
       // Existing filters
       const matchesThreshold = filterRatingBand === 'all' ||
         matchBandForRating(toMatchRating(candidate.matchScore)) === filterRatingBand;
@@ -2845,6 +2852,16 @@ export default function AITalentMatchPage({
     viewMode, matchedCandidates, selectedHistoryItem, filterRatingBand, searchQuery,
     filterScored, scoredResumeIds, filterExperienceMin, filterExperienceMax, sortBy
   ]);
+
+  // Results whose resume the account owner deleted (2026-11-19): name + email
+  // only, shown as placeholders above the list until the job is run again.
+  const deletedResultCandidates = useMemo(
+    () => (viewMode === 'results' ? matchedCandidates : getResolvedHistoryCandidates(selectedHistoryItem))
+      .filter((c) => c.resumeDeleted)
+      .map((c) => ({ id: c.id, name: c.name, email: c.email })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewMode, matchedCandidates, selectedHistoryItem],
+  );
 
   // Calculate pagination values
   const totalFilteredCandidates = filteredCandidatesMemo.length;
@@ -3198,7 +3215,7 @@ export default function AITalentMatchPage({
       const matchesLocation = candidateFilterLocation === 'all' || row.location === candidateFilterLocation;
       const matchesJob = candidateFilterJob === 'all' || job.jobTitle === candidateFilterJob;
       const matchesScore = toMatchRating(job.score) >= candidateFilterMinScore;
-      const matchesRatingBand = !candidateRatingBand || matchBandForRating(toMatchRating(job.score)) === candidateRatingBand;
+      const matchesRatingBand = !candidateRatingBand || (!job.resumeDeleted && matchBandForRating(toMatchRating(job.score)) === candidateRatingBand);
       const matchesMultiJob = !candidateFilterMultiJob || row.jobs.length > 1;
 
       const matchesPhone = candidateFilterPhone === '' ||
@@ -3349,8 +3366,8 @@ export default function AITalentMatchPage({
        a count and the rows it opens can't disagree. */
     const bandOf = (c: { matchScore?: number }): RatingBand => matchBandForRating(toMatchRating(c.matchScore ?? 0));
     // A candidate's matched jobs under the rating pill (View by Candidates).
-    const bandJobsOf = <T extends { score: number }>(list: T[]): T[] =>
-      candidateRatingBand ? list.filter(j => matchBandForRating(toMatchRating(j.score)) === candidateRatingBand) : list;
+    const bandJobsOf = <T extends { score: number; resumeDeleted?: boolean }>(list: T[]): T[] =>
+      candidateRatingBand ? list.filter(j => !j.resumeDeleted && matchBandForRating(toMatchRating(j.score)) === candidateRatingBand) : list;
     /** A candidate's matched jobs (under the rating pill), in its inner table's sort order. */
     const innerJobsOf = (rowKey: string, list: CandidateMatchRow['jobs']): CandidateMatchRow['jobs'] => {
       const sort = candJobSortByRow[rowKey] ?? DEFAULT_CAND_JOB_SORT;
@@ -3407,7 +3424,10 @@ export default function AITalentMatchPage({
     };
     const jobLoaded = (item: MatchHistory) =>
       (item.totalMatches || 0) <= 0 || historyCandidatesById[item.id] !== undefined || failedHistorySessionIds.has(item.id);
-    const jobCandidates = (item: MatchHistory): MatchedCandidateWithVersions[] => historyCandidatesById[item.id] ?? [];
+    // A deleted resume's placeholder (resumeDeleted) is not a candidate here: it
+    // has no rating, and is listed apart on the job's results page instead.
+    const jobCandidates = (item: MatchHistory): MatchedCandidateWithVersions[] =>
+      (historyCandidatesById[item.id] ?? []).filter(c => !c.resumeDeleted);
     // A job's band tally: the server's counts for a row on this page, else
     // counted from its loaded candidates.
     const jobTally = (item: MatchHistory): Record<RatingBand, number> => {
@@ -4622,9 +4642,13 @@ export default function AITalentMatchPage({
                                                   })()}
                                                 </td>
                                                 <td className="tf-td text-center tf-sticky-col-left">
-                                                  <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
+                                                  {job.resumeDeleted ? (
+                                                    <span className={RESUME_DELETED_BADGE_CLASS} title={RESUME_DELETED_ROW_MESSAGE}>{RESUME_DELETED_BADGE_LABEL}</span>
+                                                  ) : (
+                                                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
                                                     {toMatchRating(job.score)}
                                                   </span>
+                                                  )}
                                                 </td>
                                                 <td className="tf-td whitespace-nowrap">
                                                   {jobRecord?.jobId
@@ -4854,9 +4878,13 @@ export default function AITalentMatchPage({
                                           </span>
                                         </div>
                                         <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                                          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
+                                          {job.resumeDeleted ? (
+                                            <span className={RESUME_DELETED_BADGE_CLASS} title={RESUME_DELETED_ROW_MESSAGE}>{RESUME_DELETED_BADGE_LABEL}</span>
+                                          ) : (
+                                            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
                                             {toMatchRating(job.score)}
                                           </span>
+                                          )}
                                           {jobScoreId ? (
                                             <span className="tf-badge bg-success-subtle text-success border border-success/20">
                                               <CheckCircle2 className="w-3 h-3" />
@@ -5403,9 +5431,13 @@ export default function AITalentMatchPage({
                           </div>
                           <p className="tf-meta truncate">{row.email || '—'}</p>
                         </div>
-                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
+                        {job.resumeDeleted ? (
+                          <span className={RESUME_DELETED_BADGE_CLASS} title={RESUME_DELETED_ROW_MESSAGE}>{RESUME_DELETED_BADGE_LABEL}</span>
+                        ) : (
+                          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
                           {toMatchRating(job.score)}
                         </span>
+                        )}
                       </div>
 
                       <button
@@ -5535,9 +5567,13 @@ export default function AITalentMatchPage({
                               index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800'
                             }`}
                           >
-                            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
+                            {job.resumeDeleted ? (
+                              <span className={RESUME_DELETED_BADGE_CLASS} title={RESUME_DELETED_ROW_MESSAGE}>{RESUME_DELETED_BADGE_LABEL}</span>
+                            ) : (
+                              <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
                               {toMatchRating(job.score)}
                             </span>
+                            )}
                           </td>
                           <td className="tf-td whitespace-nowrap">
                             <div className="flex items-center gap-3">
@@ -5760,9 +5796,13 @@ export default function AITalentMatchPage({
                         { icon: <MapPin />, label: row.location || null },
                       ]}
                       footer={
-                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
+                        job.resumeDeleted ? (
+                          <span className={RESUME_DELETED_BADGE_CLASS} title={RESUME_DELETED_ROW_MESSAGE}>{RESUME_DELETED_BADGE_LABEL}</span>
+                        ) : (
+                          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
                           {toMatchRating(job.score)}
                         </span>
+                        )
                       }
                     />
                   ))}
@@ -8039,7 +8079,7 @@ export default function AITalentMatchPage({
     };
     const excellentCount = matchedCandidates.filter(c => c.matchScore >= 85).length;
     const goodCount = matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
-    const moderateCount = matchedCandidates.filter(c => c.matchScore < 70).length;
+    const moderateCount = matchedCandidates.filter(c => !c.resumeDeleted && c.matchScore < 70).length;
     const historyItemForSelectedJob = findHistoryByJd(selectedJob);
     const isLoadingResultsFromHistory =
       loadingHistorySessionId !== null &&
@@ -8214,7 +8254,7 @@ export default function AITalentMatchPage({
                   <div className="flex flex-wrap items-center gap-2 tf-meta">
                     <span className="inline-flex items-center gap-1">
                       <User className="w-3.5 h-3.5" />
-                      {matchedCandidates.length} matches
+                      {matchedCandidates.filter(c => !c.resumeDeleted).length} matches
                     </span>
                     {/* Who ran this match — the session's `run_by_name`, the
                         same value the Matched Jobs row and Match History show.
@@ -8523,6 +8563,9 @@ export default function AITalentMatchPage({
 
           {/* Candidates List */}
           <div>
+          {!isLoadingResultsFromHistory && currentPage === 1 && (
+            <DeletedResumeRows rows={deletedResultCandidates} className="mb-3" />
+          )}
           {isLoadingResultsFromHistory ? (
             /* Selected-job candidates: select, Matched Rating, Candidate Name,
                Email, Phone, Location, Job Title, Job Version, Skills,

@@ -31,6 +31,7 @@ const protectedRoutes = [
   '/dashboard',
   '/recruitment',
   '/organization',
+  '/chat',          // Chat (was /organization/team-chat)
   '/subscription',
   '/settings',
   '/analytics',
@@ -118,7 +119,7 @@ function getRequestHostname(request: NextRequest): { hostname: string; source: s
 }
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  let { pathname } = request.nextUrl;
   const isDocumentRequest = request.method === 'GET' || request.method === 'HEAD';
 
   // Public assets in /public (e.g. /linda-3.png, /linda-avatar.webp) must never
@@ -252,11 +253,20 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Subdomain root (acme.0sms.com/) → redirect to login page
-  if (tenantSubdomain && pathname === '/') {
+  // Subdomain root (acme.0sms.com/) → the login page, served IN PLACE (rewrite)
+  // rather than a 302 to /login: the redirect cost the visitor a full extra
+  // round trip (~380 ms) before the first byte of the page. Signed in → straight
+  // to the dashboard (one hop instead of / → /login → /dashboard). The rewrite
+  // falls through the rest of this proxy (token check, tf-subdomain cookies)
+  // exactly as a request for /login would; only the final response differs.
+  const serveLoginAtRoot = Boolean(tenantSubdomain) && pathname === '/';
+  if (serveLoginAtRoot && request.cookies.get('accessToken')?.value) {
     const url = request.nextUrl.clone();
-    url.pathname = '/login';
+    url.pathname = '/dashboard';
     return NextResponse.redirect(url);
+  }
+  if (serveLoginAtRoot) {
+    pathname = '/login';
   }
 
   // Subdomain: only /login, /reset-password, /assessment, /ai-interview, /verify
@@ -376,7 +386,9 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set('x-tenant-subdomain', tenantSubdomain);
   }
 
-  const res = NextResponse.next({ request: { headers: requestHeaders } });
+  const res = serveLoginAtRoot
+    ? NextResponse.rewrite(new URL('/login' + request.nextUrl.search, request.url), { request: { headers: requestHeaders } })
+    : NextResponse.next({ request: { headers: requestHeaders } });
 
   // Set/clear tf-subdomain cookie for client-side access in Login component.
   //

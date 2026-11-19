@@ -116,7 +116,7 @@ export function TeamSizeBar({ count, max, className }: { count: number; max: num
   );
 }
 
-/** A team's units in the last 30 days, per unit type and in total. */
+/** A team's units over the Teams list's period (current billing period), per unit type and in total. */
 export type TeamUnits = Record<UnitKey, number> & { total: number };
 
 /** Whole numbers stay whole; fractions get one decimal. */
@@ -185,8 +185,10 @@ export interface TeamActionHandlers {
   canManage?: boolean;
   /** Member count of the largest team — scales the size bar. */
   maxMembers?: number;
-  /** Units per team (last 30 days). null = not available to this user — hidden. */
+  /** Units per team over `unitsPeriod`. null = not available to this user — hidden. */
   unitsByTeam?: Record<string, TeamUnits> | null;
+  /** What the units cover: "billing period" (default range), or "last 30 days" without one. */
+  unitsPeriod?: string;
   /** Opens the team in Team Usage. */
   onOpenUsage?: (teamId: string) => void;
   /** Who created each team (from the history's "Team Created" events). null = not available. */
@@ -197,7 +199,7 @@ interface TeamCardProps extends TeamActionHandlers {
   team: Team;
 }
 
-export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false, maxMembers = 0, unitsByTeam = null, onOpenUsage, createdBy = null }: TeamCardProps) {
+export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false, maxMembers = 0, unitsByTeam = null, unitsPeriod = 'last 30 days', onOpenUsage, createdBy = null }: TeamCardProps) {
   const created = formatTeamDate(team.created_at);
   // Members + units only — the Teams module is about people and unit usage.
   const metrics = [
@@ -253,7 +255,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
       <TeamSizeBar count={team.member_count} max={maxMembers} className="mt-3" />
       {unitsByTeam && (
         <div className="mt-3 flex items-end justify-between gap-2">
-          <span className="tf-meta">Units · last 30 days</span>
+          <span className="tf-meta">Units · {unitsPeriod}</span>
           <TeamUnitsSummary
             units={unitsByTeam[team.id]}
             onOpen={onOpenUsage ? () => onOpenUsage(team.id) : undefined}

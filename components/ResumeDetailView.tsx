@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toExternalUrl } from '@/lib/utils/externalUrl';
+import { RESUME_DELETE_OWNER_ONLY_REASON } from '@/lib/permissions/resumeDelete';
 
 interface ResumeDetailViewProps {
   resume: Resume;
@@ -171,7 +172,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                 onClick={handleDelete}
                 aria-disabled={!!onDeleteDisabled}
                 className={`${(onDeleteDisabled ? 'opacity-50 !cursor-not-allowed' : '')} disabled:opacity-50 hover:opacity-90`}
-                title={onDeleteDisabled ? (onDeleteDisabledReason || 'You do not have permission to delete resumes') : undefined}
+                title={onDeleteDisabled ? (onDeleteDisabledReason || RESUME_DELETE_OWNER_ONLY_REASON) : undefined}
                 icon={<Trash2 className="w-4 h-4" />}
               >
                 Delete

@@ -26,10 +26,16 @@ import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiI
 import type { AssessmentResponse } from '@/lib/services/assessmentService';
 import AssessmentPicker from '@/components/assessments/AssessmentPicker';
 import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
-import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
 import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components/ai-interview/AIInterviewPicker';
-import ConfigurePreviewDialog from '@/components/ai-interview/ConfigurePreviewDialog';
-import AIInterviewWizardDialog from '@/components/ai-interview/AIInterviewWizardDialog';
+import dynamic from 'next/dynamic';
+
+/* Opened only from a click inside the popup (View / Edit / Create). Loaded on
+   that click: statically they were ~570 KB gzipped of the ~920 KB this popup
+   warms on every dashboard page (ConfigurePreviewDialog alone pulls the AI
+   interview details + evaluation report + recharts). */
+const AssessmentConfigureModal = dynamic(() => import('@/components/AssessmentConfigureModal'), { ssr: false, loading: () => null });
+const ConfigurePreviewDialog = dynamic(() => import('@/components/ai-interview/ConfigurePreviewDialog'), { ssr: false, loading: () => null });
+const AIInterviewWizardDialog = dynamic(() => import('@/components/ai-interview/AIInterviewWizardDialog'), { ssr: false, loading: () => null });
 import { AssessmentJobStatusBadge, VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { formatJobVersionExperience } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';

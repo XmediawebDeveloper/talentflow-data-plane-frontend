@@ -95,6 +95,16 @@ export interface JobVersionLineage {
    * Batched into ONE request per call. Safe on every render.
    */
   ensureVersionCounts: (jdIds: string[]) => void;
+  /**
+   * Lineages (keyed as `filterLineages`) and per-version scored counts that
+   * arrived WITH a list response (GET /scoring/jds?include_lineages=true).
+   * Seeded keys/ids are never asked for again by `ensureFilterLineages` /
+   * `ensureVersionApplicants` — the landing then needs no extra waves.
+   */
+  seedFilterData: (seed: {
+    lineages?: Record<string, JDLineageVersion[]> | null;
+    versionCounts?: Record<string, { total: number; top: { scored_by_name: string; created_at: string | null } | null }> | null;
+  }) => void;
 }
 
 export function useJobVersionLineage(): JobVersionLineage {
@@ -117,6 +127,11 @@ export function useJobVersionLineage(): JobVersionLineage {
   /* Same reasoning as the two refs above: in-flight tracking must not re-render
      the list. One entry per JD id, cleared when its batch settles. */
   const versionCountsInFlight = useRef<Set<string>>(new Set());
+  /* Keys / version ids whose data came with a list response (seedFilterData).
+     Refs, read synchronously: the seed and the ensure* effects run in the same
+     commit, before the seeded state is visible to the ensure* closures. */
+  const seededLineageKeys = useRef<Set<string>>(new Set());
+  const seededVersionIds = useRef<Set<string>>(new Set());
 
   /* Deliberately not cached the way the JD record is: scoring a resume changes
      this number, so it is re-counted every time the panel is opened. A failure
@@ -156,6 +171,7 @@ export function useJobVersionLineage(): JobVersionLineage {
       const wanted = Array.from(new Set(versionIds.filter(Boolean))).filter(
         (versionId) =>
           !Object.prototype.hasOwnProperty.call(versionApplicants, versionId) &&
+          !seededVersionIds.current.has(versionId) &&
           !versionApplicantsInFlight.current.has(versionId),
       );
       if (wanted.length === 0) return;
@@ -219,7 +235,7 @@ export function useJobVersionLineage(): JobVersionLineage {
     (targets: { key: string; jobId: string }[]) => {
       const wanted = targets.filter(({ key, jobId }) => {
         if (!key || !jobId) return false;
-        if (filterLineages[key] || filterLineagesInFlight.current.has(key)) return false;
+        if (filterLineages[key] || seededLineageKeys.current.has(key) || filterLineagesInFlight.current.has(key)) return false;
         filterLineagesInFlight.current.add(key);
         return true;
       });
@@ -329,6 +345,32 @@ export function useJobVersionLineage(): JobVersionLineage {
     [expandedKeys, lineages, loadingKeys, loadLineage, refreshVersionApplicantsBatch],
   );
 
+  const seedFilterData = useCallback<JobVersionLineage['seedFilterData']>(({ lineages: seedLineages, versionCounts: seedCounts }) => {
+    if (seedLineages && Object.keys(seedLineages).length > 0) {
+      Object.keys(seedLineages).forEach((key) => seededLineageKeys.current.add(key));
+      /* Seeded rows replace earlier ones: a reload after scoring brings the
+         current lineage, which must win over the one cached at landing. */
+      setFilterLineages(prev => ({ ...prev, ...seedLineages }));
+    }
+    if (seedCounts && Object.keys(seedCounts).length > 0) {
+      const ids = Object.keys(seedCounts);
+      ids.forEach((id) => seededVersionIds.current.add(id));
+      setVersionApplicants(prev => {
+        const next = { ...prev };
+        ids.forEach((id) => { next[id] = seedCounts[id]?.total ?? 0; });
+        return next;
+      });
+      setVersionScoredBy(prev => {
+        const next = { ...prev };
+        ids.forEach((id) => {
+          const top = seedCounts[id]?.top;
+          next[id] = top ? { name: top.scored_by_name || 'Unknown', scoredAt: top.created_at ?? '' } : null;
+        });
+        return next;
+      });
+    }
+  }, []);
+
   const ensureLoaded = useCallback(
     (key: string, jobId: string) => {
       void loadLineage(key, jobId, !!lineages[key], loadingKeys.has(key));
@@ -351,5 +393,6 @@ export function useJobVersionLineage(): JobVersionLineage {
     filterLineages,
     ensureFilterLineages,
     ensureVersionApplicants,
+    seedFilterData,
   };
 }

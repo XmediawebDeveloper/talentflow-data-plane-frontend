@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { NoResumesFoundState } from '@/components/resumes/ResumeEmptyStates';
+import { RESUME_DELETE_OWNER_ONLY_REASON } from '@/lib/permissions/resumeDelete';
 /* Loading placeholder that mirrors THIS table's real structure — the same
    columns in the same order (checkbox, Candidate Name, Role, Email, Phone,
    Skills, Experience, Source, Upload Date, Uploaded By, Files, Actions) and the
@@ -1158,7 +1159,7 @@ export default function ResumeTable({
                                   closeActionMenu();
                                 }}
                                 aria-disabled={!!onDeleteDisabled}
-                                title={onDeleteDisabled ? (onDeleteDisabledReason || 'You do not have permission to delete resumes') : ''}
+                                title={onDeleteDisabled ? (onDeleteDisabledReason || RESUME_DELETE_OWNER_ONLY_REASON) : ''}
                                 className={onDeleteDisabled ? `${resumeActionMenuItemRedClass} !text-gray-400 cursor-not-allowed opacity-60` : resumeActionMenuItemRedClass}
                               >
                                 <Trash2 className="w-4 h-4" />

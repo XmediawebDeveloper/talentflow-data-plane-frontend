@@ -35,6 +35,7 @@ import { useScoringProgress, toMatchResult } from '@/contexts/ScoringProgressCon
 import { Skeleton } from '@/components/ui/skeleton';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import ResumeBulkConfirmModal, { type ResumeBulkConfirmKind } from '@/components/resumes/ResumeBulkConfirmModal';
+import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
 
 // Folder-tree pane sizing. Kept in step with FolderTree's own clamp
 // (200–400px) so a width restored from storage is one the tree will honour.
@@ -186,7 +187,7 @@ export default function SelectSourceModal({
      gate its ⋮ menu, so the popup offers a user exactly the actions that page
      would. */
   const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update');
-  const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
+  const canDeleteMyResumes = canDeleteResumes(isTenantAdmin);
   const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
   const canDownloadMine = canDownloadResume({ isTenantAdmin, hasPermissionCode, own: true });
   const canDownloadShared = canDownloadResume({ isTenantAdmin, hasPermissionCode, own: false });
@@ -1563,7 +1564,7 @@ export default function SelectSourceModal({
                                     setDeleteResumeTarget({ ids: [...actionIds], names: actionIds.map(resumeName) });
                                   }}
                                   aria-disabled={!canDeleteMyResumes || busy}
-                                  title={!canDeleteMyResumes ? 'You do not have permission to delete resumes' : ''}
+                                  title={!canDeleteMyResumes ? RESUME_DELETE_OWNER_ONLY_REASON : ''}
                                   className={item(canDeleteMyResumes && !busy, true)}
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -1701,7 +1702,7 @@ export default function SelectSourceModal({
                   onArchiveDisabled={!canArchiveMyResumes}
                   onArchiveDisabledReason="You do not have permission to archive resumes"
                   onDeleteDisabled={!canDeleteMyResumes}
-                  onDeleteDisabledReason="You do not have permission to delete resumes"
+                  onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
                   onDelete={
                     activeTab === 'my-resumes'
                       ? (id) => {

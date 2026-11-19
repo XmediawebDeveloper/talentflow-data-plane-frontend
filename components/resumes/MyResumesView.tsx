@@ -60,6 +60,7 @@ import { rememberScoringOrigin } from '@/lib/utils/resumeActivityTrail';
 import { useInPageScoringProgress } from '@/components/resumes/useInPageScoringProgress';
 import ScoringStartSummary, { type ScoringStartRequest } from '@/components/resumes/ScoringStartSummary';
 import { NoFoldersState, NoFoldersMatchState, NoMatchingResumesState } from '@/components/resumes/ResumeEmptyStates';
+import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
 
 const formatDateIST = formatISTDate;
 
@@ -915,7 +916,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   // my_resumes:update isn't a role-editor code; Resume Upload Access (my_resumes:upload)
   // covers folder rename / move too (2026-11-10).
   const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload');
-  const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
+  const canDeleteMyResumes = canDeleteResumes(isTenantAdmin);
   const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
   // Viewing isn't downloading (2026-11-10): own uploads need Resume Upload access.
@@ -1495,13 +1496,31 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         };
       };
 
+      /* Landing: the folder-badge reconcile below needs GET /resumes/stats,
+         and used to ask for it only after the list + folders came back — a
+         second round trip on every open. Start it now, beside them (not
+         awaited); reconcileFolderCounts' own call then picks up this response
+         through the api client's GET sharing. Only before the first reconcile:
+         later fetches on an unchanged tree skip the reconcile anyway. */
+      if (
+        !lastReconciledRef.current
+        && versionFilter === 'all'
+        && Object.keys(searchParams).every(key => BASE_SEARCH_PARAM_KEYS.includes(key))
+      ) {
+        fetchMyResumeStats().catch(() => {});
+      }
+
       const [resumeResponse, folderResponse] = await Promise.all([
         listResumes(),
         // Same Uploaded By value the resume list was just sent — so a
         // folder's badge always matches what opening that folder under the
         // same filter actually lists (see folderService.list's own note).
+        // Folder / page / sort / search clicks (the params effect, `dedupe`)
+        // change no folder, so they reuse a tree read in the last 30s instead
+        // of re-reading /folders on every click. Writes always re-read.
         folderService.list(
           searchParams.uploaded_by_name ? { uploaded_by_name: searchParams.uploaded_by_name } : undefined,
+          opts?.dedupe ? { reuseMs: 30_000 } : undefined,
         ).catch(() => []),
       ]);
 
@@ -3257,7 +3276,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onDeleteDisabled={!canDeleteMyResumes}
-            onDeleteDisabledReason="You do not have permission to delete resumes"
+            onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
             folders={folders.filter(f => f.id !== 'all')}
             onAssessment={!isArchivedContext ? handleAssessment : undefined}
             onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment')))}
@@ -3494,7 +3513,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onDelete={(id) => handleDelete(id)}
                   onDeleteDisabled={!canDeleteMyResumes}
                   canDownload={canDownloadMyResumes}
-                  onDeleteDisabledReason="You do not have permission to delete resumes"
+                  onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
                   onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                   onViewDetails={(resume) => {
@@ -4039,7 +4058,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
                             onDelete={(id) => handleDelete(id)}
                             onDeleteDisabled={!canDeleteMyResumes}
-                            onDeleteDisabledReason="You do not have permission to delete resumes"
+                            onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
                             onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                             onViewDetails={(resume) => {

@@ -143,6 +143,24 @@ export function useJobCandidateCounts(enabled = true): JobCandidateCounts | null
 /* Per-id counts already fetched by useJobCandidateCountsFor, so paging back to
    a page seen this visit paints its chips at once (then refreshes). */
 const countsById: JobCandidateCounts = {};
+/* When each id's counts last came inline with its list page (GET /jd?view=jobs
+   returns them). Ids seeded this recently are not asked for again. */
+const seededAt: Record<string, number> = {};
+const SEED_FRESH_MS = 5000;
+
+/**
+ * Counts that arrived WITH the list page (GET /jd?view=jobs `candidate_counts`).
+ * Call before the rows reach state: the hook then paints them at once and skips
+ * its own /jd/candidate-counts request — no second round trip after the list.
+ */
+export function seedJobCandidateCounts(counts: JobCandidateCounts | null | undefined): void {
+  if (!counts) return;
+  const now = Date.now();
+  for (const [id, c] of Object.entries(counts)) {
+    countsById[id] = { assessed: c?.assessed || 0, interviewed: c?.interviewed || 0 };
+    seededAt[id] = now;
+  }
+}
 
 /**
  * "N assessed" / "N interviewed" for just these JD ids (the rows on screen),
@@ -169,6 +187,10 @@ export function useJobCandidateCountsFor(jdIds: string[], enabled = true): JobCa
     if (!key) return;
     let cancelled = false;
     setCounts(known());
+    const now = Date.now();
+    if (key.split(',').every((id) => now - (seededAt[id] ?? 0) < SEED_FRESH_MS)) {
+      return; // came with the list page just now — nothing to ask
+    }
     jdService
       .getCandidateCounts(key.split(','))
       .then((fresh) => {

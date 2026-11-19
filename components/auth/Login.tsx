@@ -627,7 +627,10 @@ export default function Login({ onBackToPublic }: LoginProps) {
           {!show2FA && (
             <div className="tf-auth-footer tf-auth-footer--outside">
               Don&apos;t have an account?{' '}
-              <Link href="/contact" className="tf-auth-link">
+              {/* No prefetch: on a tenant subdomain /contact is a marketing page the
+                  proxy bounces to /login, so prefetching it from here only cost a
+                  ~0.8 s request on every login visit. */}
+              <Link href="/contact" prefetch={false} className="tf-auth-link">
                 Contact your administrator
               </Link>
             </div>

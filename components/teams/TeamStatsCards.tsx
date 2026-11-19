@@ -14,8 +14,10 @@ interface TeamStatsCardsProps {
   unassignedUsers?: number | null;
   /** Teams with no team lead. */
   noLeadTeams?: number;
-  /** Units used by all teams in the last 30 days. null = not loaded — card hidden. */
+  /** Units used by all teams over `unitsPeriod`. null = not loaded — card hidden. */
   units30?: number | null;
+  /** What the units cover: "billing period", or "last 30 days" without one. */
+  unitsPeriod?: string;
   isLoading?: boolean;
   // When provided, each card becomes a button that calls back with its key —
   // lets the team-management page drill into a list view (mirrors the
@@ -31,14 +33,14 @@ const CARD_TITLES: Record<TeamStatsCardKey, string> = {
   members: 'Show team members',
   unassigned: 'Show users in no team',
   'no-lead': 'Show teams without a lead',
-  units: 'Open Team Usage for the last 30 days',
+  units: 'Open Team Usage for this period',
 };
 
 /**
  * Teams tab summary — five cards in the same card and grid as Team Usage and
  * Analytics, so all three tabs line up.
  */
-export default function TeamStatsCards({ stats, unassignedUsers = null, noLeadTeams = 0, units30 = null, isLoading, onCardClick, activeCard, nonClickable = [] }: TeamStatsCardsProps) {
+export default function TeamStatsCards({ stats, unassignedUsers = null, noLeadTeams = 0, units30 = null, unitsPeriod = 'last 30 days', isLoading, onCardClick, activeCard, nonClickable = [] }: TeamStatsCardsProps) {
   const { isTenantAdmin } = useAuth();
   const cards: { key: TeamStatsCardKey; label: string; value: number | null; icon: typeof Users }[] = [
     { key: 'total', label: 'Total Teams', value: stats.total_teams, icon: Users },
@@ -46,7 +48,7 @@ export default function TeamStatsCards({ stats, unassignedUsers = null, noLeadTe
     // Optional cards: shown only when their number is actually known.
     { key: 'unassigned', label: 'Unassigned Users', value: unassignedUsers, icon: UserMinus },
     { key: 'no-lead', label: 'Teams Without Lead', value: noLeadTeams, icon: Crown },
-    { key: 'units', label: 'Units · Last 30 Days', value: units30, icon: TOTAL_UNITS_ICON },
+    { key: 'units', label: `Units · ${unitsPeriod.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}`, value: units30, icon: TOTAL_UNITS_ICON },
   ];
 
   return (
@@ -65,7 +67,7 @@ export default function TeamStatsCards({ stats, unassignedUsers = null, noLeadTe
             loading={isLoading}
             onClick={onCardClick && !nonClickable.includes(c.key) ? () => onCardClick(c.key) : undefined}
             active={activeCard === c.key}
-            title={CARD_TITLES[c.key]}
+            title={c.key === 'units' ? `Open Team Usage for the ${unitsPeriod}` : CARD_TITLES[c.key]}
           />
         ))}
     </div>

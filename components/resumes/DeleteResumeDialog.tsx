@@ -117,7 +117,8 @@ export default function DeleteResumeDialog({ open, names, resumeId, onCancel, on
                   </span>
                   <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
                   <p className="tf-body">
-                    All associated data will be <span className="font-semibold text-red-600">permanently removed</span>.
+                    Its <span className="font-semibold text-red-600">Resume Scoring and AI Talent Match results are deleted too</span>;
+                    only the candidate&apos;s name and email stay there. Assessments and AI Interviews are kept.
                   </p>
                 </div>
               </div>

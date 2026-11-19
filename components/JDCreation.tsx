@@ -5159,6 +5159,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     needsLeavePromptRef.current = needsLeavePrompt;
   });
 
+  /* Generation (Step 1's AI call) is in flight. While this is true, leaving must
+     not raise the Leave dialog at all — the JD record that exists right now is
+     mid-write, so "Discard"/"Delete" would act on a draft the generation call is
+     still filling in. Read via a ref by the popstate/click listeners below. */
+  const isGeneratingNowRef = useRef(false);
+  useEffect(() => {
+    isGeneratingNowRef.current = isGenerating || isStreaming;
+  }, [isGenerating, isStreaming]);
+
   /* A draft version forked from a published JD just for this visit (Edit on a
      published JD - see lib/utils/jdDraftVersion.ts). Left untouched it is removed
      again on leave, silently; once edited, Discard removes it and the published
@@ -5245,6 +5254,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             e.preventDefault();
             e.stopPropagation();
 
+            if (isGeneratingNowRef.current) {
+              toast.error({
+                title: 'Generation in progress',
+                description: 'Please wait until the JD finishes generating before leaving this page.',
+              });
+              return;
+            }
+
             if (dropFork) {
               void dropUntouchedForkRef.current().then(() => router.push(href));
               return;
@@ -5297,7 +5314,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return;
       }
 
-      if (needsLeavePromptRef.current()) {
+      if (isGeneratingNowRef.current) {
+        // Absorb the Back press and re-plant the trap, same as the dialog case
+        // below, but without raising the dialog — generation is still writing
+        // to the record the Leave options would otherwise act on.
+        window.history.pushState(TRAP_STATE, '', window.location.href);
+        toast.error({
+          title: 'Generation in progress',
+          description: 'Please wait until the JD finishes generating before leaving this page.',
+        });
+      } else if (needsLeavePromptRef.current()) {
         // Cancel the visual back-navigation (there isn't one yet — the trap
         // absorbed it) and re-plant the trap for the next attempt.
         window.history.pushState(TRAP_STATE, '', window.location.href);
@@ -8615,6 +8641,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Prevent multiple clicks from creating multiple JDs
     if (isNavigatingBack || isSavingDraft) {
       console.log('[DEBUG] handleBackClick - already navigating or saving, ignoring click');
+      return;
+    }
+
+    if (isGenerating || isStreaming) {
+      toast.error({
+        title: 'Generation in progress',
+        description: 'Please wait until the JD finishes generating before leaving this page.',
+      });
       return;
     }
 

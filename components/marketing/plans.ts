@@ -303,10 +303,21 @@ export function planQuotaRows(
 /** Signup link for the selected billing period, matching the pricing page. */
 export function planCheckoutHref(plan: MarketingPlan, isYearly: boolean): string {
   if (plan.isTrial) return "/signup?plan=free_trial";
+  const { planId, billing } = planCheckoutTarget(plan, isYearly);
+  return `/signup?plan=${encodePlanId(planId)}&billing=${billing}`;
+}
 
+/**
+ * The concrete plan id and billing period to sign up with. Falls back to the
+ * other period when the plan isn't sold for the chosen one.
+ */
+export function planCheckoutTarget(
+  plan: MarketingPlan,
+  isYearly: boolean
+): { planId: string; billing: "MONTHLY" | "ANNUAL" } {
   const { hasMonthly, hasAnnual } = planAvailability(plan);
   let planId = plan.id;
-  let billing = isYearly ? "ANNUAL" : "MONTHLY";
+  let billing: "MONTHLY" | "ANNUAL" = isYearly ? "ANNUAL" : "MONTHLY";
 
   if (isYearly && hasAnnual && plan.annualPlanId) {
     planId = plan.annualPlanId;
@@ -322,5 +333,5 @@ export function planCheckoutHref(plan: MarketingPlan, isYearly: boolean): string
     billing = "MONTHLY";
   }
 
-  return `/signup?plan=${encodePlanId(planId)}&billing=${billing}`;
+  return { planId, billing };
 }

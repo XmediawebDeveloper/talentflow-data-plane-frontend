@@ -35,6 +35,15 @@ const nextConfig: NextConfig = {
 
   experimental: {
     agentUpgrade: 'security',
+    /* Fewer, larger JS files per route. A hard refresh of a dashboard page
+       requested ~30 entry chunks (default cap 40 per chunk group); every request
+       costs a round trip to the origin, while most of these chunks are a few KB. */
+    turbopackChunking: {
+      maxChunkCountPerGroup: 15,
+      minChunkSize: 150000,
+      requestCost: 400000,
+      priorityRoutes: [/^\/dashboard/, /^\/recruitment\//],
+    },
     // Optimize barrel file imports — avoids bundling entire libraries when only a few exports are used.
     // Critical for lucide-react (1000+ icons) and all @radix-ui packages.
     optimizePackageImports: [
@@ -91,6 +100,16 @@ const nextConfig: NextConfig = {
     );
 
     return config;
+  },
+
+  /* Chat moved out of the Teams tabs to its own page. Old links — bookmarks and
+     the action_url stored on existing chat notifications — keep working; the
+     query string (e.g. ?channel=<id>) is passed through, so they still open the
+     right conversation. Temporary (307), so nothing is cached for good. */
+  async redirects() {
+    return [
+      { source: '/organization/team-chat', destination: '/chat', permanent: false },
+    ];
   },
 
   async headers() {

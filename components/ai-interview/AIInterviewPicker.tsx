@@ -19,7 +19,11 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { jdActionLockReason } from '@/lib/services/aiInterviewService';
 import JobStatusBadge, { jobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
-import ConfigurePreviewDialog from './ConfigurePreviewDialog';
+import dynamic from 'next/dynamic';
+/* Opened only from a row's View: loaded on that click. Statically it put the
+   AI interview details + evaluation report + recharts (~470 KB gzipped) into
+   the invite popup that every dashboard page warms in the background. */
+const ConfigurePreviewDialog = dynamic(() => import('./ConfigurePreviewDialog'), { ssr: false, loading: () => null });
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 

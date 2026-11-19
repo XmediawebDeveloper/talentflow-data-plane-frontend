@@ -42,7 +42,7 @@ import { ListToolbarPortal, ListBulkActions } from '@/components/ui/list-toolbar
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { DateField } from '@/components/ui/date-field';
-import { assessmentService, type AssessmentResponse, type AssessmentListFilterParams, type AssessmentPageParams, type AssessmentListSortKey, type AssessmentFilterOptions } from '@/lib/services/assessmentService';
+import { assessmentService, ASSESSMENT_PAGE_INCLUDE, type AssessmentResponse, type AssessmentListFilterParams, type AssessmentPageParams, type AssessmentListSortKey, type AssessmentFilterOptions } from '@/lib/services/assessmentService';
 import { usePagedList } from '@/lib/hooks/usePagedList';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
@@ -500,7 +500,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const paged = usePagedList<AssessmentResponse, unknown, AssessmentPageParams>({
     name: `assessments:table:${fixedStatus ?? 'all'}`,
     query: pagedQuery,
-    fetchPage: (q) => assessmentService.listPage(q),
+    /* The page's jobs' versions, lineages and version counts ride along
+       (`include`), so the host's follow-up reads need no round trip. */
+    fetchPage: (q) => assessmentService.listPage({ ...q, include: ASSESSMENT_PAGE_INCLUDE }),
   });
   const rows = useMemo(() => {
     /* Offset paging over a list that can change under it can repeat a row. */
