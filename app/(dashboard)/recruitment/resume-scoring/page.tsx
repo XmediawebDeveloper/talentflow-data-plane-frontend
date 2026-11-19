@@ -218,6 +218,7 @@ export default function ResumeScoringRoute() {
               status: item.status,
               score: item.overall_score,
               overallRating10: item.overall_rating_10,
+              resumeDeleted: item.resume_deleted,
               matchStatus: item.match_status,
               errorMessage: item.error_message,
             }));
@@ -616,6 +617,7 @@ export default function ResumeScoringRoute() {
           matchStatus: matchStatus,
           scorePercentage: matchScore,
           overallRating10: item.overall_rating_10,
+          resumeDeleted: item.resume_deleted,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by_name || item.scored_by || 'System',
           scoredByEmail: item.scored_by,

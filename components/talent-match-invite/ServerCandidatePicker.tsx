@@ -45,6 +45,7 @@ import {
 } from '@/lib/services/bulkInviteService';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
+import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
 
 const PAGE_SIZE = 50;
 
@@ -87,9 +88,10 @@ const loadJobScored = async (jdId: string): Promise<ServerInviteCandidate[]> => 
   const status = (m?: string): ServerMatchStatus =>
     m === 'exact_match' || m === 'excellent' ? 'exact_match' : m === 'partial_match' || m === 'partial' ? 'partial_match' : 'no_match';
   /* A scored resume as `/jd/{id}/scored-resumes` returns it (the fields read here). */
-  type ScoredItem = { resume_id?: string; candidate_name?: string; candidate_email?: string; phone?: string; overall_score?: number; match_status?: string; created_at?: string; resume_version?: number; is_archived?: boolean };
+  type ScoredItem = { resume_id?: string; candidate_name?: string; candidate_email?: string; phone?: string; overall_score?: number; match_status?: string; created_at?: string; resume_version?: number; is_archived?: boolean; resume_deleted?: boolean };
   return [first, ...rest].flatMap((r: { items?: ScoredItem[] }) => r?.items ?? [])
-    .filter((it) => it?.resume_id)
+    // A deleted resume's emptied score (2026-11-19) can't be invited.
+    .filter((it) => it?.resume_id && !it.resume_deleted)
     .map((it) => ({
       resume_id: it.resume_id!,
       name: it.candidate_name || 'Unknown',
@@ -141,7 +143,8 @@ const loadScoredTab = async (jdId: string, p: ListParams, signal?: AbortSignal):
 const loadJdMatched = async (jdId: string): Promise<ServerInviteCandidate[]> => {
   const { candidates } = await aiMatchService.listJdCandidates(jdId, 5000);
   return candidates
-    .filter((c) => c.resumeId)
+    // A deleted resume's placeholder can't be invited (2026-11-19).
+    .filter((c) => c.resumeId && !c.resumeDeleted)
     .map((c) => ({
       resume_id: c.resumeId,
       name: c.name || 'Unknown',
@@ -403,7 +406,7 @@ export default function ServerCandidatePicker({
   const canUploadMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
   // Folders: created with the upload permission, renamed with update — the page's rules.
   const canUpdateMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload');
-  const canDeleteMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:delete');
+  const canDeleteMyResumes = canDeleteResumes(isTenantAdmin);
   const tabAccess: Record<InviteCandidateSourceTab, boolean> = {
     // AI Talent Match's own Invite permission for this kind, which the server
     // also enforces for talent-match candidates (2026-11-10).
@@ -993,7 +996,7 @@ export default function ServerCandidatePicker({
       label: 'Delete Resume',
       icon: <Trash2 className="w-4 h-4" />,
       danger: true,
-      disabledReason: canDeleteMyResumes ? null : 'You do not have permission to delete resumes',
+      disabledReason: canDeleteMyResumes ? null : RESUME_DELETE_OWNER_ONLY_REASON,
       onSelect: () => askFor(setDeleteAsk)({ id, name, archived: where === 'archived' }),
     }] : []),
   ];

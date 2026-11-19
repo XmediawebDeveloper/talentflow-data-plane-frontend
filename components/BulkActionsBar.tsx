@@ -4,6 +4,7 @@ import { FolderInput, FolderRoot, ChevronRight, Download, Trash2, ClipboardList,
 import { Folder } from '@/lib/types/types';
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { RESUME_DELETE_OWNER_ONLY_REASON } from '@/lib/permissions/resumeDelete';
 
 // Geometry for the portalled folder-picker menu — mirrors FolderTree's
 // folder-actions menu and ResumeTable's row-actions menu.
@@ -551,7 +552,7 @@ export default function BulkActionsBar({
                 }}
                 aria-disabled={!!onDeleteDisabled}
                 className={`${toneBtn('bg-red-500/90 hover:bg-red-600')} border border-red-400/30 ${onDeleteDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                aria-label="Delete" title={onDeleteDisabled ? (onDeleteDisabledReason || 'You do not have permission to delete resumes') : 'Delete'}
+                aria-label="Delete" title={onDeleteDisabled ? (onDeleteDisabledReason || RESUME_DELETE_OWNER_ONLY_REASON) : 'Delete'}
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span className="hidden lg:inline">Delete</span>

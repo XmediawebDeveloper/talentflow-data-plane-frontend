@@ -928,6 +928,7 @@ export default function ResumeScoringPage({
       errorReason: item.errorMessage,
       score: item.score,
       overallRating10: item.overallRating10,
+      resumeDeleted: item.resumeDeleted,
       scoredDateTime: item.status === 'already_scored' && item.scoredAt
         ? new Date(item.scoredAt)
         : normalizeScoringStatus(item.status) === 'completed'
@@ -1296,6 +1297,7 @@ export default function ResumeScoringPage({
         matchStatus: item.match_status || 'No Match',
         scorePercentage: Math.round(item.overall_score || 0),
         overallRating10: item.overall_rating_10,
+        resumeDeleted: item.resume_deleted,
         scoredDate: item.created_at || new Date().toISOString(),
         scoredBy: item.scored_by_name || item.scored_by || 'AI Engine',
         // Source, Status, Error Reason fields
@@ -1408,6 +1410,7 @@ export default function ResumeScoringPage({
             jobVersion: item.jobVersion,
             matchStatus: hit.match_status,
             overallRating10: hit.overall_rating_10,
+            resumeDeleted: hit.resume_deleted,
             resumeVersion: hit.resume_version || item.resumeVersion,
             scoredDate: hit.created_at,
           };
@@ -1928,6 +1931,7 @@ export default function ResumeScoringPage({
         errorReason: item.errorMessage,
         score: item.score,
         overallRating10: item.overallRating10,
+        resumeDeleted: item.resumeDeleted,
         scoredDateTime: item.status === 'already_scored' && item.scoredAt
           ? new Date(item.scoredAt)
           : normalizeScoringStatus(item.status) === 'completed'
@@ -2138,6 +2142,7 @@ export default function ResumeScoringPage({
       errorReason: item.errorMessage,
       score: item.score,
       overallRating10: item.overallRating10,
+      resumeDeleted: item.resumeDeleted,
       matchResult: item.matchStatus
         ? convertMatchStatus(item.matchStatus)
         : undefined, // Stay "Pending" until real match_status is fetched after completion
@@ -2431,6 +2436,7 @@ export default function ResumeScoringPage({
         matchStatus: matchStatus,
         scorePercentage: Math.round(scoreValue),
         overallRating10: resume.overallRating10 ?? resume.overall_rating_10,
+        resumeDeleted: resume.resumeDeleted ?? resume.resume_deleted,
         // Keep ISO string for timestamp - let display component format it
         scoredDate: resume.scoredDate || resume.created_at || scoredData.scoredAt,
         // Use scored_by_name from API for recruiter attribution
@@ -4310,6 +4316,7 @@ export default function ResumeScoringPage({
                       matchResult: convertMatchStatus(resume.match_status),
                       score: resume.overall_score || 0,
                       overallRating10: resume.overall_rating_10 ?? resume.overallRating10,
+                      resumeDeleted: resume.resumeDeleted ?? resume.resume_deleted,
                     }));
                   }));
                   const allProgressItems: ScoringProgressItem[] = perVersion
