@@ -31,6 +31,7 @@ import { useQuota } from '@/contexts/QuotaContext';
 import { getQuotaTotalLimit } from '@/lib/services/usageTrackingService';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { Button } from '@/components/ui/button';
 
 interface RecruiterDashboardProps {
@@ -68,6 +69,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
         if (!cancelled) setMyJDs(res.items || []);
       } catch (err) {
         console.error('[RecruiterDashboard] failed to load JDs', err);
+        if (!cancelled) showErrorToast(err, "Couldn't load your published jobs", { id: 'recruiter-dashboard-jds', retry: fetchJDs });
       } finally {
         if (!cancelled) setLoadingJDs(false);
       }

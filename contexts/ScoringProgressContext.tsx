@@ -49,6 +49,10 @@ export interface ScoringJob {
   /** Picked up from the server (GET /scoring/batches/mine) rather than started
    *  in this browser — so no page here polls it; the provider does. */
   serverTracked?: boolean;
+  /** When the "scored successfully" toast was shown for this run. Saved with
+   *  the run, so a reload never shows it again; starting the job again (new
+   *  resumes on the same JD, or a new batch) clears it. */
+  announcedAt?: string;
 }
 
 /** Optional details a run can be started with. */
@@ -65,6 +69,12 @@ interface ScoringProgressContextType {
   isMinimized: boolean;
   hasActiveScoring: boolean;
   isMainPanelOpen: boolean;  // True when center panel is visible (not minimized)
+  /** The signed-in user whose saved runs are now in `activeScoringJobs`
+   *  (null until they are read from storage after mount / a user switch).
+   *  Until then the list is a placeholder `[]`, not "no runs". */
+  restoredFor: string | null;
+  /** Record that these runs' finish was announced (see `ScoringJob.announcedAt`). */
+  markAnnounced: (jobIds: string[]) => void;
 
   // Actions
   startScoringJob: (jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string, meta?: ScoringJobMeta) => void;
@@ -116,8 +126,12 @@ const storageKey = (identity: string) => `${LEGACY_STORAGE_KEY}:${identity}`;
 /** How long a finished run stays available in the corner before it is forgotten. */
 const JOB_RETENTION_MS = 24 * 60 * 60 * 1000;
 
-/** How often the server is asked for this user's running batches. */
+/** How often the server is asked for this user's running batches — only while
+    a run is going. With nothing running, the corner asks once on load and on
+    tab focus (at most every FOCUS_SYNC_MIN_MS) to pick up a run started on
+    another device; a 15s poll on every page for no run cost a round trip each. */
 const SERVER_SYNC_MS = 15000;
+const FOCUS_SYNC_MIN_MS = 30000;
 /** Cap on remembered "removed from the corner" batch ids. */
 const MAX_DISMISSED = 200;
 
@@ -354,6 +368,8 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
         completed: mergedItems.filter(i => i.status === 'Scored successfully').length,
         failed: mergedItems.filter(i => i.status === 'Failed').length,
         returnUrl: returnUrl || existing.returnUrl,
+        // A new round of scoring: its finish is announced afresh.
+        announcedAt: undefined,
         ...meta,
       };
       const updated = [...prev];
@@ -371,14 +387,24 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
       /* `startedAt` is kept from the first sighting — it is what the retention
          window ages a finished run out on, and taking it from each snapshot
          would keep pushing that expiry forward. */
+      const sameBatch = !incoming.batchId || !existing?.batchId || incoming.batchId === existing.batchId;
       const next: ScoringJob = {
         ...incoming,
         batchId: incoming.batchId ?? existing?.batchId,
         startedAt: existing?.startedAt || incoming.startedAt || new Date().toISOString(),
+        // A snapshot of the same run keeps "already announced"; a new batch does not.
+        announcedAt: sameBatch ? existing?.announcedAt : undefined,
       };
       if (!existing) return [...prev, next];
       return prev.map(job => (job.jobId === incoming.jobId ? next : job));
     });
+  }, []);
+
+  const markAnnounced = useCallback((jobIds: string[]) => {
+    if (!jobIds.length) return;
+    const at = new Date().toISOString();
+    setActiveScoringJobs(prev => prev.map(job =>
+      jobIds.includes(job.jobId) && !job.announcedAt ? { ...job, announcedAt: at } : job));
   }, []);
 
   const updateItemStatus = useCallback((
@@ -436,10 +462,12 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
   const jobsRef = useRef(activeScoringJobs);
   useEffect(() => { jobsRef.current = activeScoringJobs; }, [activeScoringJobs]);
   const syncBusy = useRef(false);
+  const lastPullAt = useRef(0);
   const pullServerJobs = useCallback(async () => {
     const who = identityRef.current;
     if (!who || loadedFor !== who || syncBusy.current || !getTokens().accessToken) return;
     syncBusy.current = true;
+    lastPullAt.current = Date.now();
     try {
       const running = await scoringService.getMyBatches({ status: 'active', page_size: 50 });
       const current = jobsRef.current;
@@ -472,19 +500,32 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     }
   }, [loadedFor, syncScoringJob]);
 
+  // Once per sign-in, then on focus — throttled, since focus and
+  // visibilitychange both fire on one tab switch.
   useEffect(() => {
     if (!identity || loadedFor !== identity) return;
     void pullServerJobs();
-    const onVisible = () => { if (document.visibilityState !== 'hidden') void pullServerJobs(); };
+    const onVisible = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (Date.now() - lastPullAt.current < FOCUS_SYNC_MIN_MS) return;
+      void pullServerJobs();
+    };
     window.addEventListener('focus', onVisible);
     document.addEventListener('visibilitychange', onVisible);
-    const t = setInterval(onVisible, SERVER_SYNC_MS);
     return () => {
-      clearInterval(t);
       window.removeEventListener('focus', onVisible);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [identity, loadedFor, pullServerJobs]);
+
+  // The steady poll runs only while a run is going (started here or picked up).
+  useEffect(() => {
+    if (!identity || loadedFor !== identity || !hasActiveScoring) return;
+    const t = setInterval(() => {
+      if (document.visibilityState !== 'hidden') void pullServerJobs();
+    }, SERVER_SYNC_MS);
+    return () => clearInterval(t);
+  }, [identity, loadedFor, hasActiveScoring, pullServerJobs]);
 
   const setMinimized = useCallback((minimized: boolean) => {
     setIsMinimized(minimized);
@@ -508,11 +549,15 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     setOnRestorePanelState(() => callback);
   }, []);
 
+  const restoredFor = identity && loadedFor === identity ? identity : null;
+
   const contextValue = useMemo<ScoringProgressContextType>(() => ({
     activeScoringJobs,
     isMinimized,
     hasActiveScoring,
     isMainPanelOpen,
+    restoredFor,
+    markAnnounced,
     startScoringJob,
     syncScoringJob,
     updateItemStatus,
@@ -528,6 +573,8 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     isMinimized,
     hasActiveScoring,
     isMainPanelOpen,
+    restoredFor,
+    markAnnounced,
     startScoringJob,
     syncScoringJob,
     updateItemStatus,

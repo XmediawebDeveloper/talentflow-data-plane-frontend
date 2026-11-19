@@ -23,12 +23,14 @@ import ResumeVersionsModal from './ResumeVersionsModal';
 import VersionEyeBadge from '@/components/ui/version-eye-badge';
 import ShareResumeModal from './ShareResumeModal';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { resumeService, archiveResumeToArchivedFolder } from '@/lib/services/resumeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { NoResumesFoundState } from '@/components/resumes/ResumeEmptyStates';
+import { RESUME_DELETE_OWNER_ONLY_REASON } from '@/lib/permissions/resumeDelete';
 /* Loading placeholder that mirrors THIS table's real structure — the same
    columns in the same order (checkbox, Candidate Name, Role, Email, Phone,
    Skills, Experience, Source, Upload Date, Uploaded By, Files, Actions) and the
@@ -648,7 +650,7 @@ export default function ResumeTable({
       setVersionHistoryResume({ ...resume, versions });
     } catch (error) {
       console.error('Failed to fetch versions:', error);
-      toast.error('Failed to load version history');
+      showErrorToast(error, "Couldn't load version history", { retry: () => handleShowVersionHistory(resume) });
     } finally {
       setIsLoadingVersions(false);
     }
@@ -1089,7 +1091,7 @@ export default function ResumeTable({
                                     toast.success('Resume downloaded', { id: 'download' });
                                   } catch (error) {
                                     console.error('Download failed:', error);
-                                    toast.error('Failed to download resume', { id: 'download' });
+                                    showErrorToast(error, "Couldn't download the resume", { id: 'download' });
                                   }
                                 }}
                                 aria-disabled={!canDownload}
@@ -1157,7 +1159,7 @@ export default function ResumeTable({
                                   closeActionMenu();
                                 }}
                                 aria-disabled={!!onDeleteDisabled}
-                                title={onDeleteDisabled ? (onDeleteDisabledReason || 'You do not have permission to delete resumes') : ''}
+                                title={onDeleteDisabled ? (onDeleteDisabledReason || RESUME_DELETE_OWNER_ONLY_REASON) : ''}
                                 className={onDeleteDisabled ? `${resumeActionMenuItemRedClass} !text-gray-400 cursor-not-allowed opacity-60` : resumeActionMenuItemRedClass}
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -1479,7 +1481,7 @@ export default function ResumeTable({
                       await archiveResumeToArchivedFolder(selectedResumeForAction.id, selectedResumeForAction.folderId);
                       toast.success('Resume archived successfully');
                     } catch (error) {
-                      toast.error('Failed to archive resume');
+                      showErrorToast(error, "Couldn't archive the resume");
                     }
                   }
                   setShowArchiveModal(false);

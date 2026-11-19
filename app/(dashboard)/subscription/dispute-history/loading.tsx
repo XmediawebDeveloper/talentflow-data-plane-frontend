@@ -1,6 +1,6 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Neutral-gray skeleton mirroring the Dispute History page: 3 stat cards + a
+// Neutral-gray skeleton mirroring the Payment Disputes page: 3 stat cards + a
 // table with the same columns (Dispute #, Date, Original Invoice, Reason,
 // Amount, Status, Actions).
 export default function Loading() {

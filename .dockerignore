@@ -22,3 +22,9 @@ docker-compose*.yml
 .dockerignore
 .gitlab/
 README.md
+
+# Backup / leftover copies (may hold old secrets) - "full application" #19
+*.bak
+*.orig
+*.old
+*~

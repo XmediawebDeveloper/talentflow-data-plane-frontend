@@ -20,6 +20,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import FilterSelect from '@/components/ui/filter-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { showErrorToast } from '@/lib/utils/errorToast';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -37,6 +38,8 @@ export default function NotificationsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [clearingAll, setClearingAll] = useState(false);
+  // Bumped by the load-failure toast's Retry to re-run the first-page load.
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Persist scroll + filter state so returning to this page restores it exactly.
   const rootRef = useScrollRestoration<HTMLElement>('notifications', !loading);
@@ -71,7 +74,8 @@ export default function NotificationsPage() {
         20,
         offset,
         filter === 'unread',
-        categoryFilter
+        categoryFilter,
+        { throwOnError: true },
       );
       if (isStale()) return;
 
@@ -85,6 +89,13 @@ export default function NotificationsPage() {
       setHasMore(response.has_more);
     } catch (error) {
       console.error('Error fetching notifications:', error);
+      if (!isStale()) {
+        showErrorToast(error, reset ? "Couldn't load notifications" : "Couldn't load more notifications", {
+          id: 'notifications-load',
+          // Retry the first page by re-running the load effect; Load More stays on screen to tap again.
+          retry: reset ? () => setReloadKey((k) => k + 1) : undefined,
+        });
+      }
     } finally {
       // A stale run leaves the spinners to the run that replaced it.
       if (!isStale()) {
@@ -96,7 +107,7 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     fetchNotifications(true);
-  }, [filter, categoryFilter]);
+  }, [filter, categoryFilter, reloadKey]);
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {
@@ -109,6 +120,7 @@ export default function NotificationsPage() {
       window.dispatchEvent(new CustomEvent('notificationTrigger'));
     } catch (error) {
       console.error('Error marking as read:', error);
+      showErrorToast(error, "Couldn't mark notification as read");
     }
   };
 
@@ -120,6 +132,7 @@ export default function NotificationsPage() {
       window.dispatchEvent(new CustomEvent('notificationTrigger'));
     } catch (error) {
       console.error('Error marking all as read:', error);
+      showErrorToast(error, "Couldn't mark all notifications as read");
     }
   };
 
@@ -131,6 +144,7 @@ export default function NotificationsPage() {
       window.dispatchEvent(new CustomEvent('notificationTrigger'));
     } catch (error) {
       console.error('Error deleting notification:', error);
+      showErrorToast(error, "Couldn't delete notification");
     }
   };
 
@@ -161,6 +175,7 @@ export default function NotificationsPage() {
       }
     } catch (error) {
       console.error('Error clearing notifications:', error);
+      showErrorToast(error, "Couldn't clear notifications");
     } finally {
       setClearingAll(false);
     }

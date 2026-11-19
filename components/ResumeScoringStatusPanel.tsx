@@ -368,7 +368,7 @@ export default function ResumeScoringStatusPanel({
         console.log('[Scoring] All resumes completed successfully, auto-closing popup immediately');
         console.log('[Scoring] Building final results, scoringResumes:', scoringResumes);
         const scoredResults = scoringResumes.map(resume => {
-          console.log('[Scoring] Resume data:', resume.id, 'candidateName:', resume.candidateName, 'candidateEmail:', resume.candidateEmail);
+          console.log('[Scoring] Resume data:', resume.id);
           console.log('[Scoring] Scoring data:', 'score:', resume.score, 'criteriaScores:', resume.criteriaScores);
           console.log('[Scoring] Extended data:', 'professionalSummary:', resume.professionalSummary, 'technicalSkills:', resume.technicalSkills, 'languages:', resume.languages);
           return {
@@ -613,10 +613,11 @@ export default function ResumeScoringStatusPanel({
               {onMinimize && (
                 <button
                   onClick={onMinimize}
-                  className="mr-4 p-2 hover:bg-white/20 rounded-lg transition-colors"
+                  className="mr-4 p-2 sm:px-3 hover:bg-white/20 rounded-lg transition-colors inline-flex items-center gap-1.5"
                   aria-label="Minimize" title="Minimize"
                 >
                   <Minus className="w-5 h-5 text-white" />
+                  <span className="hidden sm:inline text-sm font-medium text-white">Minimize</span>
                 </button>
               )}
               <div className="text-right">

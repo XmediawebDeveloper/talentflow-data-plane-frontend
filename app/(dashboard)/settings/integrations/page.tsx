@@ -4,6 +4,7 @@ import { Link as LinkIcon, Plus, Settings, Trash2, Loader2, Sparkles } from 'luc
 import { useState, useEffect } from 'react';
 import { integrationsApi, Integration } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,10 @@ export default function IntegrationsPage() {
       setIntegrations(response.integrations);
     } catch (error) {
       console.error('Error loading integrations:', error);
-      toast.error('Failed to load integrations');
+      showErrorToast(error, "Couldn't load integrations", {
+        id: 'integrations-load',
+        retry: () => loadIntegrations(category),
+      });
     } finally {
       setIsLoading(false);
     }
@@ -55,7 +59,7 @@ export default function IntegrationsPage() {
       toast.success('Integration connected successfully');
     } catch (error) {
       console.error('Error connecting integration:', error);
-      toast.error('Failed to connect integration');
+      showErrorToast(error, "Couldn't connect integration");
     } finally {
       setConnectingId(null);
     }
@@ -71,7 +75,7 @@ export default function IntegrationsPage() {
       toast.success('Integration disconnected');
     } catch (error) {
       console.error('Error disconnecting integration:', error);
-      toast.error('Failed to disconnect integration');
+      showErrorToast(error, "Couldn't disconnect integration");
     } finally {
       setDisconnectingId(null);
     }

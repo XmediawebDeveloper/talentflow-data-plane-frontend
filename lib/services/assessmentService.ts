@@ -3,7 +3,9 @@
  */
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
-import { withListCacheInvalidation } from '@/lib/utils/listCache';
+import { onListCacheInvalidate, withListCacheInvalidation } from '@/lib/utils/listCache';
+import { primeLineages, primeVersionCounts } from '@/lib/utils/jdLineagePrime';
+import type { JDLineageVersion } from './jdService';
 
 // A configured HR topic: either a plain topic label or a full question object.
 // Mirrors the backend's `List[Any]` (app/schemas/assessment.py).
@@ -123,7 +125,40 @@ export interface AssessmentListResponse {
   page: number;
   page_size: number;
   total_pages: number;
+  /* `include=` extras (GET /assessments) — absent on an older backend. */
+  /** Every assessment of the page's jobs (`include=job_versions`). */
+  job_versions?: AssessmentResponse[] | null;
+  /** The job short ids `job_versions` covers. */
+  job_versions_for?: string[] | null;
+  /** GET /jd/lineages' answer for the rows' jd_ids (`include=lineages`). */
+  lineages?: Record<string, JDLineageVersion[]> | null;
+  /** GET /jd/version-counts' answer for the rows' jd_ids (`include=version_counts`). */
+  version_counts?: Record<string, { total: number; active: number }> | null;
 }
+
+/** What the list pages ask GET /assessments to fold into each page. */
+export const ASSESSMENT_PAGE_INCLUDE = 'job_versions,lineages,version_counts';
+
+/* Every assessment of a job (by short id), from a page's `job_versions`
+   extra — what `listJobVersions` would otherwise fetch. Same lifetime rules
+   as jdLineagePrime: short TTL, cleared by any write. */
+const JOB_VERSIONS_PRIME_TTL_MS = 30_000;
+let primedJobVersions = new Map<string, { rows: AssessmentResponse[]; at: number }>();
+onListCacheInvalidate(() => { primedJobVersions = new Map(); });
+const primeFromListResponse = (data: AssessmentListResponse | undefined) => {
+  if (!data) return;
+  primeLineages(data.lineages);
+  primeVersionCounts(data.version_counts);
+  if (data.job_versions && data.job_versions_for?.length) {
+    const at = Date.now();
+    const byJob = new Map<string, AssessmentResponse[]>(data.job_versions_for.map((j) => [j, []]));
+    for (const row of data.job_versions) {
+      const job = (row as { jd_short_id?: string }).jd_short_id;
+      if (job && byJob.has(job)) byJob.get(job)!.push(row);
+    }
+    byJob.forEach((rows, job) => primedJobVersions.set(job, { rows, at }));
+  }
+};
 
 export const ASSESSMENT_ARCHIVED_ACTION_MESSAGE = 'This assessment is archived. Invitation actions are disabled.';
 
@@ -257,6 +292,43 @@ export interface AssessmentResultsListResponse {
   in_progress_count: number;
   pending_count: number;  // Invited but not started
   average_score?: number;
+}
+
+/** GET /assessments/all-invitations?view=status — the Invitation Status tab. */
+export interface InvitationStatusPageQuery {
+  page: number;
+  page_size: number;
+  search?: string;
+  /** Chip: sent | revoked | expired | started | completed | failed. */
+  status?: string;
+  invite_date_from?: string;
+  invite_date_to?: string;
+  /** Comma-separated invitation ids. */
+  ids?: string;
+  /** desc (newest, default) | asc */
+  sort_dir?: 'asc' | 'desc';
+  include_stats?: boolean;
+  id_list?: boolean;
+}
+
+export interface InvitationStatusStats {
+  total: number;
+  sent: number;
+  revoked: number;
+  expired: number;
+  started: number;
+  completed: number;
+  failed: number;
+}
+
+export interface InvitationStatusPage {
+  items: any[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  stats?: InvitationStatusStats;
+  ids?: { id: string; jd_id: string | null }[];
 }
 
 export interface AssessmentInvitationListResponse {
@@ -475,6 +547,8 @@ export interface AssessmentPageParams extends AssessmentListFilterParams {
   ids?: string;
   /** 'lineage' = one row per job, in the Total Jobs order. */
   collapse?: 'lineage';
+  /** Extras folded into the page (ASSESSMENT_PAGE_INCLUDE). */
+  include?: string;
 }
 
 export interface AssessmentFilterOptions {
@@ -728,10 +802,26 @@ export const assessmentService = {
   async listPage(params: AssessmentPageParams): Promise<AssessmentListResponse> {
     try {
       const response = await api.get<AssessmentListResponse>('/assessments', { params: compactParams(params) });
+      primeFromListResponse(response.data);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /**
+   * Every assessment of these jobs (short ids) — the row menus' gates read
+   * them. Answered from a page's `job_versions` extra when every job is
+   * there; otherwise ONE request (GET /assessments?job=...).
+   */
+  async listJobVersions(jobs: string[]): Promise<AssessmentResponse[]> {
+    const now = Date.now();
+    const primed = jobs.map((j) => primedJobVersions.get(j));
+    if (jobs.length > 0 && primed.every((e) => e && now - e.at < JOB_VERSIONS_PRIME_TTL_MS)) {
+      return primed.flatMap((e) => e!.rows);
+    }
+    const res = await assessmentService.listPage({ job: jobs.join(','), page: 1, page_size: 500 });
+    return res.items || [];
   },
 
   /** Card counts for the list's filters (same WHERE as `listPage`). */
@@ -970,6 +1060,29 @@ export const assessmentService = {
         if (items.length < PAGE_SIZE || rows.length >= (response.data?.total ?? rows.length)) break;
       }
       return rows;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Invitation Status tab, server-paged (GET /assessments/all-invitations
+   * ?view=status). `status` is a chip (sent | revoked | expired | started |
+   * completed | failed) decided on the server by the row's Timeline, the same
+   * rule the browser's badge uses. `include_stats` adds the chip counts over
+   * the whole set; `id_list` adds every matching {id, jd_id} (Select all);
+   * `ids` narrows to those invitations (rows ticked on other pages). Rows
+   * carry the labels the tab shows (_assessment_*, _jd_*). An older backend
+   * answers without `stats`, which is the caller's cue to fall back.
+   */
+  async listInvitationStatusPage(params: InvitationStatusPageQuery): Promise<InvitationStatusPage> {
+    try {
+      const clean: Record<string, string | number | boolean> = { view: 'status' };
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '' && v !== 'all') clean[k] = v as string | number | boolean;
+      });
+      const response = await api.get<InvitationStatusPage>('/assessments/all-invitations', { params: clean });
+      return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
     }

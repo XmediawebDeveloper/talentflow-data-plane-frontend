@@ -128,7 +128,7 @@ export function buildMenuSections(isTenantAdmin: boolean): NavSection[] {
       label: 'SUBSCRIPTION & BILLING',
       items: [
         { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', permission: 'canViewCurrentPlan' },
-        // Usage & Quotas, Payment Methods, Billing History, Refund History, Dispute History and Unit Disputes
+        // Usage & Quotas, Payment Methods, Billing History, Refund History, Payment Disputes and Unit Disputes
         // are reached from the quick links on the Current Plan (/subscription/current-plan) page.
       ],
     },

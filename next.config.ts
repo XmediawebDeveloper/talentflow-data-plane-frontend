@@ -35,6 +35,15 @@ const nextConfig: NextConfig = {
 
   experimental: {
     agentUpgrade: 'security',
+    /* Fewer, larger JS files per route. A hard refresh of a dashboard page
+       requested ~30 entry chunks (default cap 40 per chunk group); every request
+       costs a round trip to the origin, while most of these chunks are a few KB. */
+    turbopackChunking: {
+      maxChunkCountPerGroup: 15,
+      minChunkSize: 150000,
+      requestCost: 400000,
+      priorityRoutes: [/^\/dashboard/, /^\/recruitment\//],
+    },
     // Optimize barrel file imports — avoids bundling entire libraries when only a few exports are used.
     // Critical for lucide-react (1000+ icons) and all @radix-ui packages.
     optimizePackageImports: [
@@ -91,6 +100,16 @@ const nextConfig: NextConfig = {
     );
 
     return config;
+  },
+
+  /* Chat moved out of the Teams tabs to its own page. Old links — bookmarks and
+     the action_url stored on existing chat notifications — keep working; the
+     query string (e.g. ?channel=<id>) is passed through, so they still open the
+     right conversation. Temporary (307), so nothing is cached for good. */
+  async redirects() {
+    return [
+      { source: '/organization/team-chat', destination: '/chat', permanent: false },
+    ];
   },
 
   async headers() {
@@ -172,6 +191,18 @@ const nextConfig: NextConfig = {
             key: 'Permissions-Policy',
             value: 'fullscreen=*',
           },
+          // "full application" #12. The CSP is limited to directives that can't
+          // break the app (no script-src: inline scripts, WASM models, avatar
+          // and proctoring libraries; no object-src: blob-URL PDF previews use
+          // the browser's PDF plugin); it blocks framing by other sites and
+          // <base> hijacking.
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'; base-uri 'self'" },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          ...(process.env.NODE_ENV === 'production'
+            ? [{ key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' }]
+            : []),
         ],
       },
     ];

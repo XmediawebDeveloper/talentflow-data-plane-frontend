@@ -2535,7 +2535,7 @@ html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gra
   background-color: #ffffff;
 }
 .dark .tf-table-shell thead th {
-  background-color: oklch(0.208 0.042 265.755); /* slate-900, matches dark card surfaces */
+  background-color: var(--tf-sticky-surface, oklch(0.208 0.042 265.755)); /* slate-900, matches dark card surfaces */
 }
 .tf-table-shell th,
 .tf-table-shell td {
@@ -2613,7 +2613,13 @@ html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gra
    one or the row scrolls visibly through it. Unlayered, like the rest of
    this file's structural table rules, so it beats the Tailwind utilities
    (`@layer utilities`) already sitting on these cells regardless of the
-   utilities' own specificity. */
+   utilities' own specificity.
+
+   Dark mode paints them (and a .tf-table-shell's sticky header) slate-900,
+   the dark card surface. A table sitting on a different surface sets
+   `--tf-sticky-surface` on an ancestor so the pinned parts match it instead
+   of showing as darker slabs — e.g. the AI Interview job page's Invitation
+   Status tab, which sits on the page sheet's var(--surface). */
 .tf-sticky-col {
   position: sticky;
   right: 0;
@@ -2624,7 +2630,7 @@ html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gra
   box-shadow: -1px 0 0 0 var(--border);
 }
 .dark .tf-sticky-col {
-  background-color: oklch(0.208 0.042 265.755); /* slate-900, matches dark card surfaces */
+  background-color: var(--tf-sticky-surface, oklch(0.208 0.042 265.755)); /* slate-900, matches dark card surfaces */
 }
 .tf-sticky-col-left {
   position: sticky;
@@ -2635,7 +2641,7 @@ html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gra
   box-shadow: 1px 0 0 0 var(--border);
 }
 .dark .tf-sticky-col-left {
-  background-color: oklch(0.208 0.042 265.755);
+  background-color: var(--tf-sticky-surface, oklch(0.208 0.042 265.755));
 }
 
 /* A sticky <thead>'s own pinned cell has to clear the body's pinned cells,
@@ -2657,7 +2663,7 @@ tbody tr:hover > .tf-sticky-col-left {
 }
 .dark tbody tr:hover > .tf-sticky-col,
 .dark tbody tr:hover > .tf-sticky-col-left {
-  background-color: color-mix(in srgb, var(--brand-blue) 5%, oklch(0.208 0.042 265.755));
+  background-color: color-mix(in srgb, var(--brand-blue) 5%, var(--tf-sticky-surface, oklch(0.208 0.042 265.755)));
 }
 
 /* A selected row tints its whole background (checked checkbox, a picked
@@ -2675,7 +2681,7 @@ tbody tr[data-row-selected="true"] > .tf-sticky-col-left {
 }
 .dark tbody tr[data-row-selected="true"] > .tf-sticky-col,
 .dark tbody tr[data-row-selected="true"] > .tf-sticky-col-left {
-  background-color: color-mix(in srgb, var(--brand-blue) 8%, oklch(0.208 0.042 265.755));
+  background-color: color-mix(in srgb, var(--brand-blue) 8%, var(--tf-sticky-surface, oklch(0.208 0.042 265.755)));
 }
 tbody tr[data-row-selected="true"]:hover > .tf-sticky-col,
 tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
@@ -2683,8 +2689,24 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
 }
 .dark tbody tr[data-row-selected="true"]:hover > .tf-sticky-col,
 .dark tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
-  background-color: color-mix(in srgb, var(--brand-blue) 12%, oklch(0.208 0.042 265.755));
+  background-color: color-mix(in srgb, var(--brand-blue) 12%, var(--tf-sticky-surface, oklch(0.208 0.042 265.755)));
 }
+
+/* ── Rows that match their pinned cells ────────────────────────────────
+   Opt-in `tf-row-match` on a <tr> paints the row with exactly the colours
+   the pinned cells above use — resting, hover and selected
+   (`data-row-selected="true"`), light and dark, and `--tf-sticky-surface` —
+   so a pinned Select / Actions cell never reads as a different-coloured
+   layer from the rest of its row. Use it instead of bg-/hover:bg- utilities
+   on the row (this rule is unlayered, so it wins over them anyway). */
+tbody tr.tf-row-match { background-color: #ffffff; }
+tbody tr.tf-row-match:hover { background-color: #fafbfc; }
+tbody tr.tf-row-match[data-row-selected="true"] { background-color: color-mix(in srgb, var(--brand-blue) 8%, #ffffff); }
+tbody tr.tf-row-match[data-row-selected="true"]:hover { background-color: color-mix(in srgb, var(--brand-blue) 12%, #ffffff); }
+.dark tbody tr.tf-row-match { background-color: var(--tf-sticky-surface, oklch(0.208 0.042 265.755)); }
+.dark tbody tr.tf-row-match:hover { background-color: color-mix(in srgb, var(--brand-blue) 5%, var(--tf-sticky-surface, oklch(0.208 0.042 265.755))); }
+.dark tbody tr.tf-row-match[data-row-selected="true"] { background-color: color-mix(in srgb, var(--brand-blue) 8%, var(--tf-sticky-surface, oklch(0.208 0.042 265.755))); }
+.dark tbody tr.tf-row-match[data-row-selected="true"]:hover { background-color: color-mix(in srgb, var(--brand-blue) 12%, var(--tf-sticky-surface, oklch(0.208 0.042 265.755))); }
 
 /* ── Premium zebra table ───────────────────────────────────────────────
    Opt-in, scoped by `.tf-premium-table` on the <table>, for the airy
@@ -4085,4 +4107,112 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-method > div { flex: 1 1 auto !important; }
   .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-refresh { order: 3; flex: 1 1 auto; min-width: 0; margin-left: 0 !important; justify-content: center; }
   .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-status-tabs { order: 4; flex: 1 1 100%; }
+}
+
+/* ── Header icon buttons (Chat, Notifications, Theme) ─────────────────────
+   components/icons/HeaderAnimatedIcons.tsx. Outline at rest; on hover,
+   keyboard focus, or while the button's menu is open (data-active="true")
+   the shape fills to solid and each icon plays its own small animation.
+   Colour comes from the button (grey → brand blue on hover). */
+.tf-hicon { overflow: visible; }
+.tf-hicon-fill {
+  fill: currentColor;
+  fill-opacity: 0;
+  transition: fill-opacity 0.25s ease;
+}
+.tf-hbtn:is(:hover, :focus-visible, [data-active="true"]) .tf-hicon-fill { fill-opacity: 1; }
+
+/* Chat — dots sit in the outline bubble; on a filled bubble they turn light
+   (dark on dark mode's light-blue fill) and bounce one after another. */
+.tf-hicon-chat .tf-hicon-dot { fill: currentColor; transition: fill 0.25s ease; }
+.tf-hbtn:is(:hover, :focus-visible, [data-active="true"]) .tf-hicon-chat .tf-hicon-dot { fill: #ffffff; }
+.dark .tf-hbtn:is(:hover, :focus-visible, [data-active="true"]) .tf-hicon-chat .tf-hicon-dot { fill: #0f172a; }
+.tf-hbtn:is(:hover, :focus-visible) .tf-hicon-chat { animation: tf-hicon-pop 0.42s ease-out; }
+.tf-hbtn:is(:hover, :focus-visible) .tf-hicon-chat .tf-hicon-dot { animation: tf-hicon-dot 0.5s ease-in-out; }
+.tf-hbtn:is(:hover, :focus-visible) .tf-hicon-chat .tf-hicon-dot:nth-of-type(2) { animation-delay: 0.08s; }
+.tf-hbtn:is(:hover, :focus-visible) .tf-hicon-chat .tf-hicon-dot:nth-of-type(3) { animation-delay: 0.16s; }
+
+/* Bell — swings from the top, settling back. */
+.tf-hicon-bell { transform-origin: 50% 2px; }
+.tf-hbtn:is(:hover, :focus-visible) .tf-hicon-bell { animation: tf-hicon-ring 0.7s ease-in-out; }
+
+/* Sun — the rays turn an eighth around the filled core. */
+.tf-hicon-sun .tf-hicon-rays { transform-origin: 12px 12px; transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.tf-hbtn:is(:hover, :focus-visible) .tf-hicon-sun .tf-hicon-rays { transform: rotate(45deg); }
+
+/* Moon — rocks back and forth once. */
+.tf-hicon-moon { transform-origin: 50% 50%; }
+.tf-hbtn:is(:hover, :focus-visible) .tf-hicon-moon { animation: tf-hicon-rock 0.6s ease-in-out; }
+
+/* Monitor — lifts a touch. */
+.tf-hicon-monitor { transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+.tf-hbtn:is(:hover, :focus-visible) .tf-hicon-monitor { transform: translateY(-1.5px); }
+
+@keyframes tf-hicon-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+@keyframes tf-hicon-dot {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.6px); }
+}
+@keyframes tf-hicon-ring {
+  0% { transform: rotate(0); }
+  15% { transform: rotate(14deg); }
+  30% { transform: rotate(-12deg); }
+  45% { transform: rotate(8deg); }
+  60% { transform: rotate(-5deg); }
+  75% { transform: rotate(2deg); }
+  100% { transform: rotate(0); }
+}
+@keyframes tf-hicon-rock {
+  0% { transform: rotate(0); }
+  35% { transform: rotate(-16deg); }
+  70% { transform: rotate(6deg); }
+  100% { transform: rotate(0); }
+}
+
+/* Reduced motion: the outline → solid fill stays, the motion goes. */
+@media (prefers-reduced-motion: reduce) {
+  .tf-hbtn .tf-hicon,
+  .tf-hbtn .tf-hicon * { animation: none !important; transition-property: fill-opacity, fill !important; }
+  .tf-hbtn:is(:hover, :focus-visible) .tf-hicon-sun .tf-hicon-rays,
+  .tf-hbtn:is(:hover, :focus-visible) .tf-hicon-monitor { transform: none; }
+}
+
+/* Create JD mode cards (components/jobs/JDModeIcons.tsx): the selected card's
+   icon moves — AI sparkles twinkle, the pencil writes its line. Only under
+   [data-active=true]; still under reduced motion. */
+.tf-mode-star-main, .tf-mode-star-a, .tf-mode-star-b,
+.tf-mode-ink, .tf-mode-pencil { transform-box: fill-box; }
+.tf-mode-star-main, .tf-mode-star-a, .tf-mode-star-b { transform-origin: center; }
+.tf-mode-ink { transform-origin: left center; }
+[data-active="true"] .tf-mode-star-main { animation: tf-mode-star-main 2.4s ease-in-out infinite; }
+[data-active="true"] .tf-mode-star-a { animation: tf-mode-twinkle 1.6s ease-in-out infinite; }
+[data-active="true"] .tf-mode-star-b { animation: tf-mode-twinkle 1.6s ease-in-out .8s infinite both; }
+@keyframes tf-mode-star-main {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(.86) rotate(12deg); }
+}
+@keyframes tf-mode-twinkle {
+  0%, 100% { transform: scale(.4); opacity: .35; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+[data-active="true"] .tf-mode-ink { animation: tf-mode-ink 2.2s cubic-bezier(.22,1,.36,1) infinite; }
+[data-active="true"] .tf-mode-pencil { animation: tf-mode-pencil 2.2s cubic-bezier(.22,1,.36,1) infinite; }
+@keyframes tf-mode-ink {
+  0% { transform: scaleX(0); opacity: 1; }
+  55% { transform: scaleX(1); opacity: 1; }
+  85% { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+@keyframes tf-mode-pencil {
+  0% { transform: translateX(-10px); }
+  55%, 85% { transform: translateX(0); }
+  100% { transform: translateX(-10px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-active="true"] .tf-mode-star-main, [data-active="true"] .tf-mode-star-a, [data-active="true"] .tf-mode-star-b,
+  [data-active="true"] .tf-mode-ink, [data-active="true"] .tf-mode-pencil { animation: none; }
 }

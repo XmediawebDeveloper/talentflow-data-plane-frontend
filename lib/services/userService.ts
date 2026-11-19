@@ -3,6 +3,7 @@
  */
 
 import api, { handleApiError } from './api';
+import { cachedList, listCacheKey, listReadOptions, type ListReadOptions } from '@/lib/utils/listCache';
 
 // ✅ GRANULAR PERMISSIONS: Removed all "manage" permissions, using only granular CRUD
 export interface UserPermissions {
@@ -309,11 +310,15 @@ export const userService = {
    * these from `listUsers()`'s response, which defaults to (and never
    * exceeds) `page_size=100` and would silently undercount past that.
    */
-  async getUserCounts(options?: { fresh?: boolean }): Promise<{ active_users: number; inactive_users: number; total_users: number }> {
+  async getUserCounts(options?: ListReadOptions): Promise<{ active_users: number; inactive_users: number; total_users: number }> {
     try {
-      const response = await api.get<{ active_users: number; inactive_users: number; total_users: number }>('/users/count',
-        options?.fresh ? { dedupe: false } : undefined);
-      return response.data;
+      // `reuseRecent`: arriving on User Management reuses an answer from the last 30 s.
+      return await cachedList(
+        listCacheKey('users|count'),
+        async () => (await api.get<{ active_users: number; inactive_users: number; total_users: number }>('/users/count',
+          options?.fresh ? { dedupe: false } : undefined)).data,
+        listReadOptions(options),
+      );
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -350,13 +355,17 @@ export const userService = {
     page_size?: number;
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
-  }, options?: { fresh?: boolean }): Promise<{ items: ApiUser[]; total: number; page: number; page_size: number }> {
+  }, options?: ListReadOptions): Promise<{ items: ApiUser[]; total: number; page: number; page_size: number }> {
     try {
-      const response = await api.get<{ items: ApiUser[]; total: number; page: number; page_size: number }>('/users/paged', {
-        params,
-        ...(options?.fresh ? { dedupe: false } : {}),
-      });
-      return response.data;
+      // `reuseRecent`: arriving on User Management reuses a page read in the last 30 s.
+      return await cachedList(
+        listCacheKey('users|paged', params ?? {}),
+        async () => (await api.get<{ items: ApiUser[]; total: number; page: number; page_size: number }>('/users/paged', {
+          params,
+          ...(options?.fresh ? { dedupe: false } : {}),
+        })).data,
+        listReadOptions(options),
+      );
     } catch (error) {
       throw new Error(handleApiError(error));
     }

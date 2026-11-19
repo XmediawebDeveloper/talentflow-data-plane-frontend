@@ -3,7 +3,7 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Shield, Search, Clock, CheckCircle2, XCircle, AlertCircle, Download, ExternalLink, RefreshCw, Plus, Copy } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -179,7 +179,7 @@ export default function UnitDisputesView({ embedded = false }: { embedded?: bool
   );
 
   const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (!token) return null;
     return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
   }, []);
@@ -364,11 +364,13 @@ export default function UnitDisputesView({ embedded = false }: { embedded?: bool
     const consumed = d.record?.units_consumed ?? d.units_to_refund;
     const asked = d.units_to_refund;
     const result =
-      d.status === 'APPROVED'
-        ? { label: 'Returned', value: d.units_restored || asked, cls: 'text-success-strong' }
-        : d.status === 'REJECTED'
-          ? { label: 'Rejected', value: asked, cls: 'text-destructive' }
-          : { label: 'Pending', value: asked, cls: 'text-warning-strong' };
+      d.status === 'APPROVED' && d.units_restored
+        ? { label: 'Pool credited', value: d.units_restored, cls: 'text-success-strong' }
+        : d.status === 'APPROVED'
+          ? { label: 'Credit processing', value: asked, cls: 'text-warning-strong' }
+          : d.status === 'REJECTED'
+            ? { label: 'Rejected', value: asked, cls: 'text-destructive' }
+            : { label: 'Pending', value: asked, cls: 'text-warning-strong' };
     return (
       <dl className="inline-grid grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-xs tabular-nums">
         <dt className="text-gray-500 dark:text-slate-400">Consumed</dt>
@@ -781,11 +783,13 @@ function DecisionBanner({ dispute }: { dispute: UnitDispute }) {
   const restored = dispute.units_restored ?? 0;
   const label = dispute.record?.unit_label || unitLabel(dispute.unit_type);
   const text =
-    dispute.status === 'APPROVED'
-      ? `Approved — ${restored || dispute.units_to_refund} ${label} unit${(restored || dispute.units_to_refund) === 1 ? '' : 's'} returned to your balance${dispute.resolved_at ? ` on ${formatDate(dispute.resolved_at)}` : ''}.`
-      : dispute.status === 'REJECTED'
-        ? `Not approved${dispute.resolved_at ? ` on ${formatDate(dispute.resolved_at)}` : ''}. No units were returned.`
-        : "Under review — we'll decide within 2–3 business days.";
+    dispute.status === 'APPROVED' && restored > 0
+      ? `Approved — ${restored} ${label} unit${restored === 1 ? '' : 's'} credited to your pool${dispute.resolved_at ? ` on ${formatDate(dispute.resolved_at)}` : ''}.`
+      : dispute.status === 'APPROVED'
+        ? `Approved${dispute.resolved_at ? ` on ${formatDate(dispute.resolved_at)}` : ''} — your credit is still processing and will reflect in your balance shortly.`
+        : dispute.status === 'REJECTED'
+          ? `Not approved${dispute.resolved_at ? ` on ${formatDate(dispute.resolved_at)}` : ''}. No units were returned.`
+          : "Under review — we'll decide within 2–3 business days.";
   const tone =
     dispute.status === 'APPROVED' ? 'border-success-line bg-success-subtle/60 text-success-strong'
       : dispute.status === 'REJECTED' ? 'border-destructive-line bg-destructive-subtle/60 text-destructive'

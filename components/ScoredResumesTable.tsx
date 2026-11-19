@@ -1,19 +1,21 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Mail, Briefcase, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, History, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
+import { Mail, Briefcase, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, History, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3, Columns3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useJobActionLock } from '@/components/jobs/JobActionLock';
-import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { RESUME_DELETED_ROW_MESSAGE, RESUME_DELETED_BADGE_LABEL, RESUME_DELETED_BADGE_CLASS } from '@/lib/permissions/resumeDelete';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import ScoredResumesExportModal from './ScoredResumesExportModal';
+import ColumnCustomizationModal from './ColumnCustomizationModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
-import ListEmptyState from '@/components/ui/list-empty-state';
+import ListEmptyState, { NO_MATCHES_ILLUSTRATION } from '@/components/ui/list-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
@@ -46,7 +48,7 @@ import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 const ARCHIVED_RESUME_MESSAGE = 'This resume is archived — unarchive it first to use this action';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
-import { downloadScorecardsZip as downloadScorecardsZipShared } from '@/lib/utils/scorecardDownload';
+import { downloadScorecardsZipWithToast } from '@/lib/utils/scorecardDownload';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import {
   DropdownMenu,
@@ -146,10 +148,38 @@ export const JOB_TAB_FILTER_CONTROL_CLASS =
 const FILTER_SELECT_TRIGGER_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-md sm:rounded-md border-gray-300';
 const JOB_TAB_FILTER_SELECT_TRIGGER_CLASS = 'w-full sm:w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 px-3 sm:px-3 rounded-lg sm:rounded-lg hover:border-brand-blue/40 text-black dark:text-slate-50';
 
-/* The table's columns — FIXED, in this order (Actions follows as its own
-   sticky column). No per-user customization: every recruiter sees the same
-   table. "Candidate" carries the email under the name rather than spending a
-   column on it. */
+/* The table's columns, in this order (Actions follows as its own sticky
+   column). "Candidate" carries the email under the name rather than spending a
+   column on it. Users pick which ones show via Customize Columns (UI/UX
+   guidelines §7) — except LOCKED_COLUMNS, which identify the row. */
+const LOCKED_COLUMNS = new Set(['candidateName', 'scorePercentage']);
+/* Hidden by default in single-job tables: same value on every row. */
+const SINGLE_JOB_DEFAULT_HIDDEN = ['jdId', 'jobTitle'];
+/* Dropped from the table below 1280px so the remaining columns fit. */
+const NARROW_HIDDEN_COLUMNS = new Set(['jobVersion', 'version']);
+const COLUMN_PREFS_KEY_PREFIX = 'scoredResumesTable.hiddenColumns';
+
+const WIDE_TABLE_QUERY = '(min-width: 1280px)';
+function subscribeWideTable(onChange: () => void): () => void {
+  const mq = window.matchMedia(WIDE_TABLE_QUERY);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
+}
+
+/** The user's saved hidden-column ids for one view, or that view's defaults
+ *  when nothing is saved (or storage is unavailable). */
+function readHiddenColumnPrefs(key: string, isGlobalView: boolean): string[] {
+  const defaults = isGlobalView ? [] : SINGLE_JOB_DEFAULT_HIDDEN;
+  if (typeof window === 'undefined') return defaults;
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) ?? 'null');
+    return Array.isArray(saved)
+      ? saved.filter((id): id is string => typeof id === 'string' && !LOCKED_COLUMNS.has(id))
+      : defaults;
+  } catch {
+    return defaults;
+  }
+}
 /* Short, fixed-width values read better centred under their header. */
 const CENTERED_COLUMNS = new Set(['jobVersion', 'scorePercentage', 'version']);
 
@@ -254,6 +284,10 @@ export interface ScoredResume {
   // Rating shown instead of scorePercentage wherever the score is printed as
   // plain text - see formatOverallScore() in lib/utils/matchStatus.ts.
   overallRating10?: number;
+  // The account owner deleted this resume (2026-11-19): its score and AI
+  // Talent Match results were erased (GDPR) and only name + email remain.
+  // The row shows RESUME_DELETED_ROW_MESSAGE instead of a score; no actions.
+  resumeDeleted?: boolean;
   scoredDate: string;
   scoredBy: string;
   experience?: string;
@@ -311,6 +345,10 @@ export interface ScoredResume {
 
 interface ScoredResumesTableProps {
   resumes: ScoredResume[];
+  /** The rows are still being fetched (e.g. just switched to another JD
+   *  version): draw skeleton rows / cards in the current layout instead of
+   *  the "No Scored Resumes Yet" empty state. */
+  loading?: boolean;
   jobTitle: string;
   jobId?: string;
   /** The readable job code (e.g. "JD-151") for this single-job host, used to
@@ -708,6 +746,7 @@ export function useScoringActionPermissions(canCarryAIInterview: boolean) {
 
 export default function ScoredResumesTable({
   resumes: rawResumes,
+  loading = false,
   jobTitle: rawJobTitle,
   jobId = 'jd-1',
   jobCode,
@@ -718,7 +757,7 @@ export default function ScoredResumesTable({
   initialMatchStatus = 'all',
   hideMatchStatusFilter = false,
   initialScoredDate = '',
-  onViewCandidate,
+  onViewCandidate: onViewCandidateProp,
   selectedResumes: externalSelectedResumes = [],
   onSelectResume,
   onSelectAll,
@@ -738,7 +777,7 @@ export default function ScoredResumesTable({
   compact = false,
   hideSelectionBar = false,
   toolbarPortal,
-  hiddenColumnIds,
+  hiddenColumnIds: hostHiddenColumnIds,
   formatCandidateName,
   onOpenInviteDialog,
   inlineRowInviteItems = false,
@@ -747,6 +786,15 @@ export default function ScoredResumesTable({
   displayMode: controlledDisplayMode,
   onDisplayModeChange,
 }: ScoredResumesTableProps) {
+  // A deleted resume's row (resumeDeleted, 2026-11-19) has no score to open:
+  // every View Results / row click lands here and only explains why.
+  const onViewCandidate = onViewCandidateProp
+    ? (r: ScoredResume) => {
+        if (r.resumeDeleted) { toast.info(RESUME_DELETED_ROW_MESSAGE); return; }
+        onViewCandidateProp(r);
+      }
+    : undefined;
+
   const showName = (name: string) => (formatCandidateName ? formatCandidateName(name) : name);
   /* Embedded in the Job Details tabs (the toolbar portals into that card's
      slot). When so, the toolbar controls switch to the 36px / tinted-pill
@@ -822,7 +870,13 @@ export default function ScoredResumesTable({
   /* Scorecard side of the same dialog — the resume and the scorecard are the
      two files this page can send, so the eye beside each opens that one. */
   const [scorecardPreviewUrl, setScorecardPreviewUrl] = useState<string | null>(null);
+  /* Whose scorecard the preview shows — set from the Share dialog's eye or
+     straight from a row's "View Scorecard", so the popup no longer depends on
+     the Share dialog being open. */
+  const [scorecardPreviewCandidate, setScorecardPreviewCandidate] = useState<ScoredResume | null>(null);
   const [loadingScorecardPreview, setLoadingScorecardPreview] = useState(false);
+  /** Row whose scorecard preview is being fetched (spinner in its menu item). */
+  const [previewingScorecardId, setPreviewingScorecardId] = useState<string | null>(null);
 
   const openShareModal = async (resume: ScoredResume) => {
     const resumeId = resume.resumeId;
@@ -879,26 +933,35 @@ Best regards`);
 
   /* Read the scorecard without leaving the dialog — the eye beside the resume
      does the same for the resume, so both attachments open in place. */
-  const handlePreviewScorecard = async () => {
-    if (!shareCandidate || loadingScorecardPreview) return;
+  const openScorecardPreview = async (resume: ScoredResume | null) => {
+    if (!resume || loadingScorecardPreview) return;
     setLoadingScorecardPreview(true);
+    setPreviewingScorecardId(resume.id);
     try {
-      const rawBlob = await scoringService.downloadScorecard(shareCandidate.id);
+      const rawBlob = await scoringService.downloadScorecard(resume.id);
       const blob = new Blob([rawBlob], { type: 'application/pdf' });
-      setScorecardPreviewUrl(window.URL.createObjectURL(blob));
+      const url = window.URL.createObjectURL(blob);
+      setScorecardPreviewUrl((prev) => {
+        if (prev) window.URL.revokeObjectURL(prev);
+        return url;
+      });
+      setScorecardPreviewCandidate(resume);
     } catch (error) {
       console.error('Error previewing scorecard:', error);
-      toast.error('Failed to open the scorecard. Please try again.');
+      showErrorToast(error, "Couldn't open the scorecard", { retry: () => openScorecardPreview(resume) });
     } finally {
       setLoadingScorecardPreview(false);
+      setPreviewingScorecardId(null);
     }
   };
+  const handlePreviewScorecard = () => openScorecardPreview(shareCandidate);
 
   const closeScorecardPreview = () => {
     setScorecardPreviewUrl((prev) => {
       if (prev) window.URL.revokeObjectURL(prev);
       return null;
     });
+    setScorecardPreviewCandidate(null);
   };
 
   const handleSendShareEmail = async () => {
@@ -922,11 +985,11 @@ Best regards`);
         toast.success('Resume shared successfully');
         closeShareModal();
       } else {
-        toast.error(result.message || 'Failed to send email');
+        showErrorToast(result.message || null, "Couldn't send the email");
       }
     } catch (error: any) {
       console.error('Failed to share resume:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't send email. Please try again."));
+      showErrorToast(error, "Couldn't send the email");
     } finally {
       setIsSendingEmail(false);
     }
@@ -1043,11 +1106,69 @@ Best regards`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialScoredDate]);
 
-  // The table's columns are fixed; only the EXPORT's are chosen, in the
-  // shared Export dialog (ScoredResumesExportModal).
-  const enabledColumns = hiddenColumnIds?.length
-    ? TABLE_COLUMNS.filter((col) => !hiddenColumnIds.includes(col.id))
-    : TABLE_COLUMNS;
+  /* Customize Columns (UI/UX guidelines §7). Hidden ids are kept per browser,
+     separately for the cross-job list and the single-job tables, since their
+     defaults differ: in a single-job table every row has the same JD ID and
+     Job Title (already in the page header), so those start hidden. The host's
+     `hiddenColumnIds` are never offered — the host shows them around the
+     table. */
+  const columnPrefsKey = `${COLUMN_PREFS_KEY_PREFIX}.${isGlobalView ? 'global' : 'job'}`;
+  // Held with the key it was read for, so switching view (global ⇄ job)
+  // re-reads that view's saved choice during render — no effect needed.
+  const [columnPrefs, setColumnPrefs] = useState(() => ({
+    key: columnPrefsKey,
+    hidden: readHiddenColumnPrefs(columnPrefsKey, isGlobalView),
+  }));
+  const userHiddenColumnIds = columnPrefs.key === columnPrefsKey
+    ? columnPrefs.hidden
+    : readHiddenColumnPrefs(columnPrefsKey, isGlobalView);
+  const [showColumnModal, setShowColumnModal] = useState(false);
+  const applyColumnPrefs = (enabledIds: string[]) => {
+    const hidden = TABLE_COLUMNS.map((col) => col.id).filter(
+      (id) => !enabledIds.includes(id) && !LOCKED_COLUMNS.has(id) && !hostHiddenColumnIds?.includes(id),
+    );
+    setColumnPrefs({ key: columnPrefsKey, hidden });
+    try { localStorage.setItem(columnPrefsKey, JSON.stringify(hidden)); } catch { /* storage blocked — still applies for this visit */ }
+  };
+  const hiddenColumnIds = useMemo(
+    () => Array.from(new Set([...(hostHiddenColumnIds ?? []), ...userHiddenColumnIds])),
+    [hostHiddenColumnIds, userHiddenColumnIds],
+  );
+  const enabledColumns = TABLE_COLUMNS.filter((col) => !hiddenColumnIds.includes(col.id));
+
+  /* Column count follows the screen width (§7): below xl (1280px) the table
+     drops its low-priority columns so the rest stay readable. Below lg the
+     table becomes cards anyway. The user's own choice still applies on top. */
+  const isWideTable = useSyncExternalStore(
+    subscribeWideTable,
+    () => window.matchMedia(WIDE_TABLE_QUERY).matches,
+    () => true,
+  );
+  const tableColumns = isWideTable
+    ? enabledColumns
+    : enabledColumns.filter((col) => !NARROW_HIDDEN_COLUMNS.has(col.id));
+  // Columns the user can choose between (the host's own hidden ones excluded).
+  const customizableColumns = TABLE_COLUMNS.filter((col) => !hostHiddenColumnIds?.includes(col.id));
+  const userHiddenCount = userHiddenColumnIds.filter((id) => customizableColumns.some((col) => col.id === id)).length;
+  const columnsButton = (
+    <button
+      type="button"
+      onClick={() => setShowColumnModal(true)}
+      aria-label={userHiddenCount > 0 ? `Customize columns, ${userHiddenCount} hidden` : 'Customize columns'}
+      title="Customize columns"
+      className="relative inline-flex items-center justify-center h-9 w-9 shrink-0 rounded-lg border border-brand-blue/10 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-300 hover:text-brand-blue hover:border-brand-blue/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30"
+    >
+      <Columns3 className="w-4 h-4" />
+      {userHiddenCount > 0 && (
+        <span
+          className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full bg-brand-blue text-white text-2xs leading-4 text-center tabular-nums"
+          aria-hidden="true"
+        >
+          {userHiddenCount}
+        </span>
+      )}
+    </button>
+  );
   // The JD ID column's value: the row's own code in cross-job lists, the host
   // job's in a single-job table. One helper so cell, export, search and the
   // JD ID filter can never disagree.
@@ -1621,7 +1742,7 @@ Best regards`);
       return true;
     } catch (error) {
       console.error('Error downloading scorecard:', error);
-      toast.error('Failed to download scorecard');
+      showErrorToast(error, "Couldn't download the scorecard", { retry: () => handleDownloadScorecard(resumeId) });
       return false;
     } finally {
       setDownloadingId(null);
@@ -1642,14 +1763,9 @@ Best regards`);
 
     setBulkDownloading(true);
     try {
+      // Progress, partial-failure and error toasts all live in the shared helper.
       const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_') || 'Scorecards';
-      await downloadScorecardsZip(rows, `${safeName}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
-      toast.success(`${rows.length} scorecards downloaded`);
-      return true;
-    } catch (error) {
-      console.error('Error downloading bulk scorecards:', error);
-      toast.error('Failed to download scorecards');
-      return false;
+      return await downloadScorecardsZip(rows, `${safeName}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
     } finally {
       setBulkDownloading(false);
     }
@@ -1668,10 +1784,6 @@ Best regards`);
     try {
       const safeCandidateName = (primary.candidateName || 'Candidate').replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') || 'Candidate';
       await downloadScorecardsZip(rows, `${safeCandidateName}_All_Jobs_Scorecards_${formatFileDate(new Date())}.zip`);
-      toast.success(`${rows.length} scorecards downloaded`);
-    } catch (error) {
-      console.error('Error downloading candidate scorecards:', error);
-      toast.error('Failed to download scorecards');
     } finally {
       setDownloadingId(null);
     }
@@ -1680,7 +1792,7 @@ Best regards`);
   /** Every row's scorecard PDF in one client-built ZIP, per-job folders. */
   // Shared with View by Job's Actions menu (lib/utils/scorecardDownload).
   const downloadScorecardsZip = (selectedRows: ScoredResume[], archiveName: string) =>
-    downloadScorecardsZipShared(selectedRows, archiveName, jobTitle);
+    downloadScorecardsZipWithToast(selectedRows, archiveName, jobTitle);
 
 
   // Function to handle row click and open detail view
@@ -1813,9 +1925,16 @@ Best regards`);
     if (col.id === 'matchStatus') {
       return (
         <td key={col.id} className="tf-td whitespace-nowrap">
-          <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
-            {resume.matchStatus}
-          </span>
+          {resume.resumeDeleted ? (
+            <div title={RESUME_DELETED_ROW_MESSAGE}>
+              <span className={RESUME_DELETED_BADGE_CLASS}>{RESUME_DELETED_BADGE_LABEL}</span>
+              <div className="mt-1 max-w-[260px] whitespace-normal text-2xs text-gray-500 dark:text-slate-400">{RESUME_DELETED_ROW_MESSAGE}</div>
+            </div>
+          ) : (
+            <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
+              {resume.matchStatus}
+            </span>
+          )}
         </td>
       );
     }
@@ -1828,7 +1947,7 @@ Best regards`);
           <div className={`${SCORE_CELL_TEXT} ${
             MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
           }`}>
-            {formatOverallScoreValue(resume.overallRating10, resume.scorePercentage)}
+            {resume.resumeDeleted ? <span className="text-gray-400">—</span> : formatOverallScoreValue(resume.overallRating10, resume.scorePercentage)}
           </div>
         </td>
       );
@@ -2034,6 +2153,15 @@ Best regards`);
    *  Interview, Download Scorecard. Elsewhere the order is unchanged and the
    *  caller puts its Invite ▸ submenu above these. */
   const renderActionsMenuItems = (resume: ScoredResume, candidateRows?: ScoredResume[], withInvites = false) => {
+    if (resume.resumeDeleted) {
+      // Nothing left to view, download or invite from: the score was erased.
+      return (
+        <DropdownMenuItem className={scoredResumesMenuItemClass} disabled>
+          <Info className="w-4 h-4 text-gray-400" />
+          <span className={`${MENU_ITEM_SCALE_CLASS} whitespace-normal max-w-[240px]`}>{RESUME_DELETED_ROW_MESSAGE}</span>
+        </DropdownMenuItem>
+      );
+    }
     const viewResults = (
       <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => onViewCandidate && onViewCandidate(resume)}>
         <Eye className="w-4 h-4 text-menu-icon-view" />
@@ -2076,7 +2204,7 @@ Best regards`);
     const downloadScorecard = (
       <DropdownMenuItem
         className={`${scoredResumesMenuItemClass} ${!canDownloadScorecard ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
-        disabled={downloadingId === resume.id}
+        disabled={downloadingId === resume.id || loadingScorecardPreview}
         aria-disabled={!canDownloadScorecard}
         title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
         onSelect={(e) => {
@@ -2084,17 +2212,19 @@ Best regards`);
             e.preventDefault();
             return;
           }
-          if (candidateRows) void handleDownloadCandidateScorecards(candidateRows);
-          else handleDownloadScorecard(resume.id);
+          // Several jobs → straight to the ZIP; a single scorecard opens in
+          // the preview popup first, with Download inside it.
+          if (candidateRows && candidateRows.length > 1) void handleDownloadCandidateScorecards(candidateRows);
+          else void openScorecardPreview(candidateRows?.[0] ?? resume);
         }}
       >
-        {downloadingId === resume.id ? (
+        {downloadingId === resume.id || previewingScorecardId === (candidateRows?.[0] ?? resume).id ? (
           <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
         ) : (
           <Download className="w-4 h-4 text-menu-icon-download" />
         )}
         <span className={MENU_ITEM_SCALE_CLASS}>
-          {candidateRows && candidateRows.length > 1 ? `Download All Scorecards (${candidateRows.length})` : 'Download Scorecard'}
+          {candidateRows && candidateRows.length > 1 ? `Download All Scorecards (${candidateRows.length})` : 'View Scorecard'}
         </span>
       </DropdownMenuItem>
     );
@@ -2139,6 +2269,135 @@ Best regards`);
         {renderActionsMenuItems(resume, candidateRows)}
       </>
     );
+
+  /** While `loading`: the same shells the real views draw — the grid's card
+   *  tiles, or the table (its real column headers, skeleton cells shaped like
+   *  each column's content) on desktop and record cards below lg — so the
+   *  rows drop in with no layout jump and no "No Scored Resumes Yet" flash. */
+  const renderLoadingSkeleton = () => {
+    const rows = 5;
+    const cellSkeleton = (colId: string, r: number) => {
+      switch (colId) {
+        case 'candidateName':
+          return (
+            <div className="space-y-1.5">
+              <Skeleton className="h-4" style={{ width: `${55 + (r * 13) % 35}%` }} />
+              <Skeleton className="h-3 w-3/4" />
+            </div>
+          );
+        case 'jdId':
+          return <Skeleton className="h-6 w-16 rounded-md" />;
+        case 'jobTitle':
+          return <Skeleton className="h-4" style={{ width: `${60 + (r * 11) % 30}%` }} />;
+        case 'jobVersion':
+        case 'version':
+          return <Skeleton className="h-6 w-10 rounded-full mx-auto" />;
+        case 'matchStatus':
+          return <Skeleton className="h-6 w-24 rounded-full" />;
+        case 'scorePercentage':
+          return <Skeleton className="h-4 w-10 mx-auto" />;
+        case 'scoredDate':
+          return (
+            <div className="space-y-1.5">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+          );
+        default:
+          return <Skeleton className="h-4 w-3/4" />;
+      }
+    };
+
+    if (displayMode === 'grid') {
+      return (
+        <div className="tf-card overflow-hidden" aria-busy="true" aria-label="Loading scored resumes">
+          <div className="tf-grid-4 p-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 flex flex-col gap-3">
+                <div className="space-y-1.5 px-7">
+                  <Skeleton className="h-4" style={{ width: `${55 + (i * 13) % 35}%` }} />
+                  <Skeleton className="h-3 w-3/4" />
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <Skeleton className="h-6 w-16 rounded-md" />
+                  <Skeleton className="h-6 w-24 rounded-full" />
+                </div>
+                <Skeleton className="h-3 w-5/6" />
+                <div className="mt-auto flex items-center justify-between pt-2 border-t border-gray-100 dark:border-slate-700/60">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div aria-busy="true" aria-label="Loading scored resumes">
+        {/* Desktop: the real table header, skeleton body rows. */}
+        <div className="hidden lg:block tf-card overflow-hidden">
+          <div className="overflow-x-auto tf-table-shell">
+            <table className="w-full table-auto">
+              <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                <tr>
+                  <th className="tf-th-cell text-left w-10 tf-th" aria-label="Select" />
+                  {enabledColumns.map((col) => (
+                    <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle`}>
+                      {col.label}
+                    </th>
+                  ))}
+                  <th className="tf-th-cell text-left tf-th">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: rows }).map((_, r) => (
+                  <tr key={r} className="border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                    <td className="tf-td"><Skeleton className="h-4 w-4 rounded" /></td>
+                    {enabledColumns.map((col) => (
+                      <td key={col.id} className="tf-td">{cellSkeleton(col.id, r)}</td>
+                    ))}
+                    <td className="tf-td"><Skeleton className="h-9 w-9 rounded-lg" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Below lg: record-card shaped placeholders. */}
+        <div className="lg:hidden space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="tf-panel p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <Skeleton className="h-5 w-5 rounded shrink-0" />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-5 w-16 rounded-md" />
+                    <Skeleton className="h-4" style={{ width: `${40 + (i * 17) % 30}%` }} />
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {Array.from({ length: 4 }).map((__, f) => (
+                  <Skeleton key={f} className="h-3" style={{ width: `${55 + ((i + f) * 9) % 40}%` }} />
+                ))}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Skeleton className="h-10 w-40 rounded-lg" />
+                <Skeleton className="h-10 w-10 rounded-lg" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   /* The selection's actions — Download and Invite. Shown once rows are
      picked: after the view pills when the host has them, else inside the
@@ -2460,7 +2719,10 @@ Best regards`);
                   })()}
                 </>
               )
-              : standaloneSelectAll
+              /* With the host's view pills (Resume Scoring's Candidates tab)
+                 Select All leads that pills row instead — where View by Job
+                 has it — so it isn't on this line. */
+              : standaloneSelectAll && !viewPillsSlot
                 ? <div className="max-sm:hidden">{standaloneSelectAll}</div>
                 : undefined
           }
@@ -2505,7 +2767,12 @@ Best regards`);
             </>
           }
           /* List / Grid pinned to the far right, as on the AI Talent Match tab. */
-          trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" /> : undefined}
+          trailing={embedded ? (
+            <>
+              {columnsButton}
+              <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" />
+            </>
+          ) : undefined}
           /* 36px control band like the AI Talent Match tab (its More Filters is h-9). */
           compactButtons={!!toolbarPortal}
           /* Score — right beside More Filters in Job Details, where the header's
@@ -2545,6 +2812,7 @@ Best regards`);
             />
             </div>
           )}
+          {!embedded && columnsButton}
           {!embedded && (
             <ListViewToggle value={displayMode} onChange={setDisplayMode} className="tf-jobs-viewtoggle h-9 !border-brand-blue/10" />
           )}
@@ -2721,8 +2989,14 @@ Best regards`);
         <div className={`${embedded ? '' : 'tf-jobs-row2 '}${!embedded && !row2OnDesktop ? 'sm:hidden ' : ''}mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2`}>
           {/* Standalone: Select All leads this row on phones only — laptop /
               desktop carry it on the toolbar line above. */}
+          {/* Beside the host's view pills (Resume Scoring's Candidates tab) it
+              leads this row at every size, then a divider — exactly as View by
+              Job's row 2: Select All | verdict pills | View by. */}
           {standaloneSelectAll && (
-            <div className="tf-jobs-select sm:!hidden">{standaloneSelectAll}</div>
+            <div className={`tf-jobs-select${viewPillsSlot ? '' : ' sm:!hidden'}`}>{standaloneSelectAll}</div>
+          )}
+          {standaloneSelectAll && viewPillsSlot && (
+            <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
           )}
           {viewPillsSlot}
           {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
@@ -2777,7 +3051,9 @@ Best regards`);
         return toolbarPortal ? createPortal(toolbarBlock, toolbarPortal) : toolbarBlock;
       })()}
 
-      {displayMode === 'grid' ? (
+      {loading ? (
+        renderLoadingSkeleton()
+      ) : displayMode === 'grid' ? (
         <div className="tf-card overflow-hidden">
           {gridRows.length === 0 ? (
             <ListEmptyState
@@ -2785,6 +3061,7 @@ Best regards`);
               isNarrowed={search.isNarrowed}
               query={search.appliedQuery}
               entityLabel="scored resume"
+              narrowedIllustration={NO_MATCHES_ILLUSTRATION}
               emptyTitle="No Scored Resumes Yet"
               emptyDescription="Score resumes against this job description to see the candidates here."
               onReset={search.reset}
@@ -2901,15 +3178,24 @@ Best regards`);
                   )}
 
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
-                      {resume.matchStatus}
-                    </span>
-                    <span className={`text-sm font-semibold ${
-                      MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
-                    }`}>
-                      {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
-                    </span>
+                    {resume.resumeDeleted ? (
+                      <span className={RESUME_DELETED_BADGE_CLASS} title={RESUME_DELETED_ROW_MESSAGE}>{RESUME_DELETED_BADGE_LABEL}</span>
+                    ) : (
+                      <>
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
+                          {resume.matchStatus}
+                        </span>
+                        <span className={`text-sm font-semibold ${
+                          MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
+                        }`}>
+                          {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
+                        </span>
+                      </>
+                    )}
                   </div>
+                  {resume.resumeDeleted && (
+                    <p className="text-2xs text-gray-500 dark:text-slate-400">{RESUME_DELETED_ROW_MESSAGE}</p>
+                  )}
 
                   {/* Job / Resume version — the list's two version columns, so
                       a job showing every version (All) tells the cards apart. */}
@@ -3035,12 +3321,18 @@ Best regards`);
                                 ) : null}
                               </div>
                               <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(row.matchStatus)}`}>
-                                  {row.matchStatus}
-                                </span>
-                                <span className={`text-sm font-semibold ${MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}`}>
-                                  {formatOverallScore(row.overallRating10, row.scorePercentage)}
-                                </span>
+                                {row.resumeDeleted ? (
+                                  <span className={RESUME_DELETED_BADGE_CLASS} title={RESUME_DELETED_ROW_MESSAGE}>{RESUME_DELETED_BADGE_LABEL}</span>
+                                ) : (
+                                  <>
+                                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(row.matchStatus)}`}>
+                                      {row.matchStatus}
+                                    </span>
+                                    <span className={`text-sm font-semibold ${MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}`}>
+                                      {formatOverallScore(row.overallRating10, row.scorePercentage)}
+                                    </span>
+                                  </>
+                                )}
                               </div>
                               <div className="mt-1 flex items-center gap-1 tf-meta">
                                 <Calendar className="w-3 h-3" />
@@ -3251,7 +3543,7 @@ Best regards`);
                                 <thead>
                                   <tr className="border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                                     <th className="tf-th-cell w-8" aria-hidden />
-                                    {enabledColumns.filter((col) => col.id !== 'candidateName').map((col) => (
+                                    {tableColumns.filter((col) => col.id !== 'candidateName').map((col) => (
                                       <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap`}>
                                         {col.label}
                                       </th>
@@ -3289,7 +3581,7 @@ Best regards`);
                                           )}
                                         </button>
                                       </td>
-                                      {enabledColumns.filter((col) => col.id !== 'candidateName').map((col) => renderResumeCell(col, row))}
+                                      {tableColumns.filter((col) => col.id !== 'candidateName').map((col) => renderResumeCell(col, row))}
                                       <td className="tf-td whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
@@ -3326,6 +3618,7 @@ Best regards`);
                 isNarrowed={search.isNarrowed}
                 query={search.appliedQuery}
                 entityLabel="candidate"
+                narrowedIllustration={NO_MATCHES_ILLUSTRATION}
                 emptyTitle="No scored candidates yet"
                 emptyDescription="Upload and score candidates to see them here."
                 onReset={search.reset}
@@ -3500,6 +3793,7 @@ Best regards`);
                 isNarrowed={search.isNarrowed}
                 query={search.appliedQuery}
                 entityLabel="candidate"
+                narrowedIllustration={NO_MATCHES_ILLUSTRATION}
                 emptyTitle="No scored candidates yet"
                 emptyDescription="Upload and score candidates to see them here."
                 onReset={search.reset}
@@ -3533,7 +3827,7 @@ Best regards`);
                   </button>
                 )}
               </th>
-              {enabledColumns.map((col) => (
+              {tableColumns.map((col) => (
                 <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle`}>
                   {col.label}
                 </th>
@@ -3571,7 +3865,7 @@ Best regards`);
                   />
                 </td>
 
-                {enabledColumns.map((col) => renderResumeCell(col, resume))}
+                {tableColumns.map((col) => renderResumeCell(col, resume))}
 
                 {/* Actions Column — Invite is the menu's first entry. */}
                 <td className="tf-td whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
@@ -3605,6 +3899,7 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
+            narrowedIllustration={NO_MATCHES_ILLUSTRATION}
             emptyTitle="No Scored Resumes Yet"
             emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}
@@ -3665,7 +3960,10 @@ Best regards`);
             badges={(resume.isArchived || !hiddenColumnIds?.includes('matchStatus') || !hiddenColumnIds?.includes('scorePercentage')) ? (
               <>
                 {resume.isArchived && <ResumeArchivedBadge />}
-                {!hiddenColumnIds?.includes('matchStatus') && (
+                {resume.resumeDeleted && (
+                  <span className={RESUME_DELETED_BADGE_CLASS} title={RESUME_DELETED_ROW_MESSAGE}>{RESUME_DELETED_BADGE_LABEL}</span>
+                )}
+                {!resume.resumeDeleted && !hiddenColumnIds?.includes('matchStatus') && (
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${matchBadgeClass(resume.matchStatus)}`}>
                     {resume.matchStatus}
                   </span>
@@ -3673,7 +3971,7 @@ Best regards`);
                 {/* Score: a compact badge beside the match status (was a footer
                     chip). Same three colours as the Match Status badge - see
                     lib/utils/matchStatus.ts; not a threshold on the number. */}
-                {!hiddenColumnIds?.includes('scorePercentage') && (
+                {!resume.resumeDeleted && !hiddenColumnIds?.includes('scorePercentage') && (
                   <span className={`tf-badge tabular-nums ${
                     scoreVerdict === 'Exact Match' ? 'bg-success-subtle text-success'
                     : scoreVerdict === 'Partial Match' ? 'bg-warning-subtle text-warning-strong'
@@ -3818,6 +4116,7 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
+            narrowedIllustration={NO_MATCHES_ILLUSTRATION}
             emptyTitle="No Scored Resumes Yet"
             emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}
@@ -4074,19 +4373,19 @@ Best regards`);
 
       {/* The scorecard, read in place. z-[60] puts it over the share
           dialog, the same level the resume preview uses. */}
-      {scorecardPreviewUrl && shareCandidate && (
+      {scorecardPreviewUrl && scorecardPreviewCandidate && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="hidden sm:flex w-10 h-10 rounded-xl bg-brand-blue items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                  <Eye className="w-5 h-5 text-white" />
+            <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="hidden sm:flex w-7 h-7 rounded-lg bg-brand-blue items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                  <Eye className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="tf-section-title sm:text-lg tracking-tight truncate">Scorecard</h2>
-                  <p className="tf-body-muted truncate">
-                    {shareCandidate.candidateName}
-                    {shareCandidate.scorePercentage != null && <> &middot; {formatOverallScore(shareCandidate.overallRating10, shareCandidate.scorePercentage)}</>}
+                  <h2 className="text-sm font-semibold text-gray-900 leading-tight tracking-tight truncate">Scorecard</h2>
+                  <p className="text-xs text-gray-500 leading-tight truncate">
+                    {scorecardPreviewCandidate.candidateName}
+                    {scorecardPreviewCandidate.scorePercentage != null && <> &middot; {formatOverallScore(scorecardPreviewCandidate.overallRating10, scorecardPreviewCandidate.scorePercentage)}</>}
                   </p>
                 </div>
               </div>
@@ -4098,13 +4397,13 @@ Best regards`);
                     if (!canDownloadScorecard) {
                       return;
                     }
-                    handleDownloadScorecard(shareCandidate.id);
+                    handleDownloadScorecard(scorecardPreviewCandidate.id);
                   }}
-                  disabled={downloadingId === shareCandidate.id}
+                  disabled={downloadingId === scorecardPreviewCandidate.id}
                   aria-disabled={!canDownloadScorecard}
                   title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
-                  className={`${(!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
-                  icon={<Download className="w-4 h-4" />}
+                  className={`${(!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50 h-7 px-2 text-xs`}
+                  icon={<Download className="w-3.5 h-3.5" />}
                 >
                   <span className="hidden sm:inline">Download</span>
                 </Button>
@@ -4112,10 +4411,10 @@ Best regards`);
                   variant="secondary"
                   size="sm"
                   onClick={closeScorecardPreview}
-                 
+                  className="h-7 w-7 p-0"
                   aria-label="Close"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </Button>
               </div>
             </div>
@@ -4124,6 +4423,22 @@ Best regards`);
             </div>
           </div>
         </div>
+      )}
+
+      {showColumnModal && (
+        <ColumnCustomizationModal
+          columns={customizableColumns.map((col) => ({
+            id: col.id,
+            label: col.label,
+            enabled: !userHiddenColumnIds.includes(col.id),
+            locked: LOCKED_COLUMNS.has(col.id),
+          }))}
+          onClose={() => setShowColumnModal(false)}
+          onApply={(enabledIds) => {
+            applyColumnPrefs(enabledIds);
+            toast.success('Columns updated');
+          }}
+        />
       )}
 
       {/* Export dialog — shared with View by Job (ScoredResumesExportModal).

@@ -110,7 +110,9 @@ const extractPdfText = async (blob: Blob): Promise<string> => {
     import.meta.url
   ).href;
 
-  const doc = await pdfjs.getDocument({ data: await blob.arrayBuffer() }).promise;
+  // pdf.js 6: the loading task, not the document, is what gets destroyed.
+  const loadingTask = pdfjs.getDocument({ data: await blob.arrayBuffer() });
+  const doc = await loadingTask.promise;
   const pages: string[] = [];
 
   try {
@@ -142,7 +144,7 @@ const extractPdfText = async (blob: Blob): Promise<string> => {
       page.cleanup();
     }
   } finally {
-    await doc.destroy();
+    await loadingTask.destroy();
   }
 
   const text = collapseBlankLines(pages.join('\n'));

@@ -29,7 +29,8 @@ import { ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
-import { handleUnauthorized } from '@/lib/services/api';
+import { showErrorToast } from '@/lib/utils/errorToast';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import rbacService, { formatRoleName } from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
 import { RoleListItem } from '@/lib/types/rbac';
@@ -421,7 +422,7 @@ export default function UserManagement() {
     // instead of waiting on it. They're what the Users/Active/Inactive count
     // cards actually read; the sync result itself is never rendered anywhere.
     loadUsers({ fromMount: true }); // also refreshes userCounts (see loadUsers)
-    loadRoles();
+    loadRoles({ reuseRecent: true });
 
     // Reconciles this tenant's user count against the external Admin API
     // (two possible remote round trips, each up to 10s) and only ever
@@ -458,9 +459,10 @@ export default function UserManagement() {
   // GET /rbac/roles: every role with its effective access (permission_codes),
   // holders and the tenant's role limit. Returns the list so callers can act on
   // the fresh data (e.g. select a role created a moment ago).
-  const loadRoles = async (): Promise<RoleListItem[]> => {
+  // `reuseRecent` on arrival only; reloads after a role change ask the server.
+  const loadRoles = async (opts?: { reuseRecent?: boolean }): Promise<RoleListItem[]> => {
     try {
-      const data = await rbacService.getRoles();
+      const data = await rbacService.getRoles(opts);
       setAvailableRoles(data.roles);
       if (typeof data.role_limit === 'number' && data.role_limit > 0) setRoleLimit(data.role_limit);
       return data.roles;
@@ -538,7 +540,9 @@ export default function UserManagement() {
     // until a manual page refresh. Fired in parallel and independent of the
     // list fetch so it still updates even if the list request fails.
     const countsSeq = ++userCountsSeqRef.current;
-    userService.getUserCounts({ fresh: !fromMount }).then((counts) => {
+    // On arrival, reuse what was read in the last 30 s (e.g. coming back from
+    // Usage history); any later reload follows a change and asks the server.
+    userService.getUserCounts(fromMount ? { reuseRecent: true } : { fresh: true }).then((counts) => {
       if (countsSeq !== userCountsSeqRef.current) return;
       setUserCounts(counts);
       setUserCountsFailed(false);
@@ -561,7 +565,7 @@ export default function UserManagement() {
         for (let page = 1; page <= 20; page++) {
           const res = await userService.listUsersPaged(
             { page, page_size: USERS_PAGE_SIZE },
-            { fresh: !fromMount },
+            fromMount ? { reuseRecent: true } : { fresh: true },
           );
           const pageUsers: any[] = res.items || [];
           rawUsers.push(...pageUsers);
@@ -594,7 +598,7 @@ export default function UserManagement() {
       setUsers(mappedUsers);
     } catch (error: any) {
       console.error('Error loading users:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't load users. Please try again."));
+      showErrorToast(error, "Couldn't load users", { id: 'users-load', retry: () => loadUsers() });
       // A failed background refresh keeps the list on screen.
       if (!silent) setUsers([]); // Show empty state instead of mock data
     } finally {
@@ -871,8 +875,8 @@ export default function UserManagement() {
     try {
       await navigator.clipboard.writeText(text);
       toast.success(`${what} copied`, { description: text });
-    } catch {
-      toast.error(`Couldn't copy ${what.toLowerCase()}`);
+    } catch (error) {
+      showErrorToast(error, `Couldn't copy ${what.toLowerCase()}`);
     }
   };
 
@@ -920,7 +924,7 @@ export default function UserManagement() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${getAccessToken()}`,
         },
         body: JSON.stringify({
           name: newUser.name,
@@ -942,7 +946,9 @@ export default function UserManagement() {
 
         // Handle user limit exceeded error
         if (errorData.detail?.error === 'USER_LIMIT_EXCEEDED') {
-          toast.error(friendlyErrorMessage(errorData, "User limit exceeded. Please upgrade your plan."));
+          showErrorToast(errorData, "Couldn't create user", {
+            description: friendlyErrorMessage(errorData, 'User limit exceeded. Please upgrade your plan.'),
+          });
           return;
         }
 
@@ -963,13 +969,7 @@ export default function UserManagement() {
         }
 
         // Handle other error formats
-        if (typeof errorData.detail === 'string') {
-          toast.error(friendlyErrorMessage(errorData, "Couldn't create user. Please try again."));
-        } else if (errorData.detail?.message) {
-          toast.error(friendlyErrorMessage(errorData, "Couldn't create user. Please try again."));
-        } else {
-          toast.error('Failed to create user. Please try again.');
-        }
+        showErrorToast({ ...errorData, status: response.status }, "Couldn't create user");
         return;
       }
 
@@ -996,7 +996,7 @@ export default function UserManagement() {
       setTimeout(() => { loadUsers(); refreshUser(); loadRoles(); }, 300);
     } catch (error: any) {
       console.error('Error creating user:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't create user. Please try again."));
+      showErrorToast(error, "Couldn't create user");
     } finally {
       setIsSaving(false);
     }
@@ -1043,7 +1043,7 @@ export default function UserManagement() {
       const response = await fetch(`${API_URL}/users/${id}/deactivate`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${getAccessToken()}`,
         },
       });
 
@@ -1057,9 +1057,11 @@ export default function UserManagement() {
         const errorData = await response.json().catch(() => ({}));
         // Handle last admin deactivation blocked
         if (errorData.detail?.error === 'LAST_ADMIN_DEACTIVATION_BLOCKED') {
-          toast.error(friendlyErrorMessage(errorData, "Cannot deactivate the last admin user."));
+          showErrorToast(errorData, "Couldn't deactivate user", {
+            description: friendlyErrorMessage(errorData, 'You cannot deactivate the last admin user.'),
+          });
         } else {
-          toast.error(friendlyErrorMessage(errorData, "Couldn't deactivate user. Please try again."));
+          showErrorToast({ ...errorData, status: response.status }, "Couldn't deactivate user");
         }
         return;
       }
@@ -1070,7 +1072,7 @@ export default function UserManagement() {
       loadUsers();
     } catch (error: any) {
       console.error('Error deactivating user:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't deactivate user. Please try again."));
+      showErrorToast(error, "Couldn't deactivate user");
     }
   };
 
@@ -1100,7 +1102,7 @@ export default function UserManagement() {
       const response = await fetch(`${API_URL}/users/${user.id}/${endpoint}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${getAccessToken()}`,
         },
       });
 
@@ -1115,12 +1117,17 @@ export default function UserManagement() {
         revert();
         const errorData = await response.json().catch(() => ({}));
         // Handle specific errors
+        const title = `Couldn't update ${userName}'s status`;
         if (errorData.detail?.error === 'USER_LIMIT_EXCEEDED') {
-          toast.error(friendlyErrorMessage(errorData, "User limit exceeded. Please upgrade your plan."), who);
+          showErrorToast(errorData, title, {
+            description: friendlyErrorMessage(errorData, 'User limit exceeded. Please upgrade your plan.'),
+          });
         } else if (errorData.detail?.error === 'LAST_ADMIN_DEACTIVATION_BLOCKED') {
-          toast.error(friendlyErrorMessage(errorData, "Cannot deactivate the last admin user."), who);
+          showErrorToast(errorData, title, {
+            description: friendlyErrorMessage(errorData, 'You cannot deactivate the last admin user.'),
+          });
         } else {
-          toast.error(friendlyErrorMessage(errorData, `Couldn't update ${userName}'s status. Please try again.`), who);
+          showErrorToast({ ...errorData, status: response.status }, title);
         }
         return;
       }
@@ -1133,8 +1140,7 @@ export default function UserManagement() {
     } catch (error: any) {
       revert();
       console.error('Error toggling user status:', error);
-      const isNetworkError = error.message === 'Failed to fetch' || error.name === 'TypeError';
-      toast.error(isNetworkError ? `Unable to update ${userName}'s status. Please check your connection and try again.` : friendlyErrorMessage(error, `Couldn't update ${userName}'s status. Please try again.`), who);
+      showErrorToast(error, `Couldn't update ${userName}'s status`);
     } finally {
       setTogglingUserIds((prev) => {
         const next = new Set(prev);
@@ -1151,19 +1157,19 @@ export default function UserManagement() {
     try {
       const response = await fetch(`${API_URL}/users/${user.id}/reset-password`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` },
       });
       if (response.status === 401) { handleUnauthorized(); return; }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        toast.error(friendlyErrorMessage(errorData, "Couldn't reset password. Please try again."));
+        showErrorToast({ ...errorData, status: response.status }, "Couldn't reset password");
         return;
       }
       toast.success(`Temporary password emailed to ${user.email}`);
       closeResetPwModal();
     } catch (error: any) {
       console.error('Error resetting password:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't reset password. Please try again."));
+      showErrorToast(error, "Couldn't reset password");
     } finally {
       setResetPwSubmitting(false);
     }
@@ -1184,7 +1190,7 @@ export default function UserManagement() {
       const response = await fetch(`${API_URL}/users/${user.id}/set-password`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${getAccessToken()}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -1195,14 +1201,14 @@ export default function UserManagement() {
       if (response.status === 401) { handleUnauthorized(); return; }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        toast.error(friendlyErrorMessage(errorData, "Couldn't set password. Please try again."));
+        showErrorToast({ ...errorData, status: response.status }, "Couldn't set password");
         return;
       }
       toast.success(`Password updated for ${user.email}`);
       closeResetPwModal();
     } catch (error: any) {
       console.error('Error setting password:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't set password. Please try again."));
+      showErrorToast(error, "Couldn't set password");
     } finally {
       setResetPwSubmitting(false);
     }
@@ -1222,18 +1228,18 @@ export default function UserManagement() {
     try {
       const response = await fetch(`${API_URL}/users/${user.id}/force-password-change`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` },
       });
       if (response.status === 401) { handleUnauthorized(); return; }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        toast.error(friendlyErrorMessage(errorData, "Couldn't force password change. Please try again."));
+        showErrorToast({ ...errorData, status: response.status }, "Couldn't force password change");
         return;
       }
       toast.success('User will be required to change their password on next login');
     } catch (error: any) {
       console.error('Error forcing password change:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't force password change. Please try again."));
+      showErrorToast(error, "Couldn't force password change");
     }
   };
 
@@ -1278,7 +1284,7 @@ export default function UserManagement() {
       try {
         const res = await fetch(`${API_URL}/users/${u.id}/deactivate`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+          headers: { 'Authorization': `Bearer ${getAccessToken()}` },
         });
         if (res.ok) {
           succeeded++;
@@ -1292,7 +1298,7 @@ export default function UserManagement() {
 
     toast.dismiss(loadingId);
     if (succeeded > 0) toast.success(`${succeeded} user(s) deactivated successfully`);
-    if (failed > 0) toast.error(`${failed} user(s) could not be deactivated`);
+    if (failed > 0) showErrorToast(null, `Couldn't deactivate ${failed} user(s)`);
 
     loadUsers();
     refreshLimits();
@@ -1338,7 +1344,7 @@ export default function UserManagement() {
     try {
       await fetch(`${API_URL}/users/${userId}/identity-change`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` },
       });
     } catch { /* best effort — a stale request is replaced on the next save anyway */ }
   };
@@ -1350,7 +1356,7 @@ export default function UserManagement() {
     try {
       const res = await fetch(`${API_URL}/users/${editingUser.id}/identity-change/resend`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` },
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -1428,7 +1434,7 @@ export default function UserManagement() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${getAccessToken()}`,
         },
         body: JSON.stringify(requestBody),
       });
@@ -1462,7 +1468,7 @@ export default function UserManagement() {
         if (errorData.detail?.error === 'VERIFICATION_PENDING' && !otp && !staleRetried) {
           await fetch(`${API_URL}/users/${editingUser.id}/identity-change`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+            headers: { 'Authorization': `Bearer ${getAccessToken()}` },
           }).catch(() => undefined);
           setIsSaving(false);
           return await handleUpdateUser(undefined, true);
@@ -1486,13 +1492,14 @@ export default function UserManagement() {
         console.error('[UPDATE USER ERROR] Status Text:', response.statusText);
         console.error('[UPDATE USER ERROR] Error Data:', JSON.stringify(errorData, null, 2));
         console.error('[UPDATE USER ERROR] User ID that failed:', editingUser.id);
-        console.error('[UPDATE USER ERROR] User Email that failed:', editingUser.email);
         console.error('='.repeat(80));
 
         if (errorData.detail?.error === 'LAST_ADMIN_ROLE_CHANGE_BLOCKED') {
-          toast.error(friendlyErrorMessage(errorData, "Cannot change role of the last admin user."));
+          showErrorToast(errorData, "Couldn't update user", {
+            description: friendlyErrorMessage(errorData, "You cannot change the last admin user's role."),
+          });
         } else {
-          toast.error(friendlyErrorMessage(errorData, "Couldn't update user. Please try again."));
+          showErrorToast({ ...errorData, status: response.status }, "Couldn't update user");
         }
         return;
       }
@@ -1553,7 +1560,7 @@ export default function UserManagement() {
         resetEditModal();
         loadUsers(); // Refresh the list to remove stale data
       } else {
-        toast.error(friendlyErrorMessage(error, "Couldn't update user. Please try again."));
+        showErrorToast(error, "Couldn't update user");
       }
     } finally {
       setIsSaving(false);

@@ -347,7 +347,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
   const pieChartRef = useRef<HTMLDivElement>(null);
   const trendChartRef = useRef<HTMLDivElement>(null);
   // Range and Actions / Units are shared with the Team Usage tab.
-  const { fromDate, toDate, setFromDate, setToDate, applyPreset, activePresetId } = useTeamReportRange();
+  const { fromDate, toDate, setFromDate, setToDate, applyPreset, activePresetId, presets: rangePresets } = useTeamReportRange();
   // Units only — every unit type is 1 unit per action, so Actions showed the same numbers.
   const measure: Measure = 'units';
   const [showAllTeams, setShowAllTeams] = useState(false);
@@ -898,7 +898,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
       {/* Controls — always shown, so the range stays editable while loading or after an
           error: quick ranges on the left, custom dates + Export on the right. */}
       <div className="flex flex-col gap-3 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-center lg:justify-between">
-        <RangePresets activeId={activePresetId} onPick={applyPreset} />
+        <RangePresets activeId={activePresetId} onPick={applyPreset} presets={rangePresets} />
         <div className="flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center">
           {/* Phones: From – to – To on one row. */}
           <div className="flex flex-col gap-2 min-w-0 lg:flex-row lg:items-center max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] max-sm:items-center">

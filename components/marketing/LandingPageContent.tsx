@@ -325,26 +325,6 @@ export function LandingPageContent() {
         </div>
       </section>
 
-      {/* -------------------------------------------------- How it works */}
-      <section id="how-it-works" className={`${SECTION} border-b ${RULE} bg-mkt-surface`}>
-        <div className={SHELL}>
-          <RevealHeading text="From JD to hire, all with AI" className={H2} />
-          <RevealGroup>
-            <p data-reveal className={LEAD}>
-              Six steps, one platform. AI does the heavy lifting at every one.
-            </p>
-          </RevealGroup>
-          <Steps />
-          <RevealGroup>
-            <div data-reveal className="mt-8 flex flex-wrap items-center gap-3 sm:mt-12">
-              <Cta href="/how-it-works" variant="secondary" size="sm">
-                See how it works
-              </Cta>
-            </div>
-          </RevealGroup>
-        </div>
-      </section>
-
       {/* ------------------------------------------------------ Features */}
       <div id="features" className="scroll-mt-16">
         <JdSection />
@@ -375,8 +355,28 @@ export function LandingPageContent() {
         <BinaSection />
       </div>
 
+      {/* -------------------------------------------------- How it works */}
+      <section id="how-it-works" className={`${SECTION} border-y ${RULE} bg-mkt-surface`}>
+        <div className={SHELL}>
+          <RevealHeading text="From JD to hire, all with AI" className={H2} />
+          <RevealGroup>
+            <p data-reveal className={LEAD}>
+              Six steps, one platform. AI does the heavy lifting at every one.
+            </p>
+          </RevealGroup>
+          <Steps />
+          <RevealGroup>
+            <div data-reveal className="mt-8 flex flex-wrap items-center gap-3 sm:mt-12">
+              <Cta href="/how-it-works" variant="secondary" size="sm">
+                See how it works
+              </Cta>
+            </div>
+          </RevealGroup>
+        </div>
+      </section>
+
       {/* ------------------------------------------------------- Pricing */}
-      <section id="pricing" className={`${SECTION} border-t ${RULE}`}>
+      <section id="pricing" className={SECTION}>
         <div className={SHELL}>
           <div className="flex flex-col gap-5 sm:gap-7 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -448,11 +448,8 @@ export function LandingPageContent() {
         <TeamsSection />
       </div>
 
-      {/* ------------------------------------- Why TalentFlow (#about) */}
-      <WhySection />
-
       {/* ----------------------------------------------------------- FAQ */}
-      <section id="faq" className={`${SECTION} border-t ${RULE}`}>
+      <section id="faq" className={SECTION}>
         <div className={SHELL}>
           <MarketingFaq trialDays={trialDays} />
           <div className="mt-8 flex justify-end sm:mt-10">
@@ -460,6 +457,11 @@ export function LandingPageContent() {
           </div>
         </div>
       </section>
+
+      {/* ------------------------------------- Why TalentFlow (#about) */}
+      <div className={`border-t ${RULE}`}>
+        <WhySection />
+      </div>
 
       {/* ------------------------------------------------------ Final CTA */}
       <section aria-labelledby="final-cta-heading" className="pb-12 sm:pb-24 lg:pb-28">

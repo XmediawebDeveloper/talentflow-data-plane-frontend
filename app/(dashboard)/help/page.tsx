@@ -829,7 +829,7 @@ const helpArticles: Record<string, Article> = {
             ['Usage & Quotas', 'See plan and add-on units used and remaining per feature'],
             ['Billing History', 'View and download invoices'],
             ['Payment Methods', 'Add or manage cards (account owner)'],
-            ['Refund History · Dispute History', 'Follow refunds and payment disputes'],
+            ['Refund History · Payment Disputes', 'Follow refunds and payment disputes'],
             ['Unit Disputes', 'Ask for units back when a system error used them (also a tab in Support Tickets)'],
           ]} />
         </Section>

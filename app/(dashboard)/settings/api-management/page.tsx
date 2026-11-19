@@ -5,6 +5,7 @@ import { Key, Plus, Copy, Eye, EyeOff, Trash2, RefreshCw, Clock, Loader2, X, Spa
 import { useState, useEffect } from 'react';
 import { apiKeysApi, ApiKey, ApiKeyCreateResponse } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -12,6 +13,7 @@ import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import FilterSelect from '@/components/ui/filter-select';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 export default function ApiManagementPage() {
   const { hasPermission } = useAuth();
@@ -26,6 +28,9 @@ export default function ApiManagementPage() {
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  /* Delete and Regenerate both kill the live key at once — every integration
+     using it starts failing — so each asks first. */
+  const [pendingKeyAction, setPendingKeyAction] = useState<{ type: 'delete' | 'regenerate'; key: ApiKey } | null>(null);
 
   const rootRef = useScrollRestoration<HTMLElement>('settings-api-management', !isLoading);
 
@@ -39,7 +44,7 @@ export default function ApiManagementPage() {
       setApiKeys(response.api_keys);
     } catch (error) {
       console.error('Error loading API keys:', error);
-      toast.error('Failed to load API keys');
+      showErrorToast(error, "Couldn't load API keys", { id: 'api-keys-load', retry: loadApiKeys });
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +76,7 @@ export default function ApiManagementPage() {
       await loadApiKeys();
     } catch (error) {
       console.error('Error creating API key:', error);
-      toast.error('Failed to create API key');
+      showErrorToast(error, "Couldn't create API key");
     } finally {
       setIsCreating(false);
     }
@@ -92,7 +97,7 @@ export default function ApiManagementPage() {
       toast.success('API key deleted');
     } catch (error) {
       console.error('Error deleting API key:', error);
-      toast.error('Failed to delete API key');
+      showErrorToast(error, "Couldn't delete API key");
     } finally {
       setDeletingId(null);
     }
@@ -109,7 +114,7 @@ export default function ApiManagementPage() {
       toast.success('API key regenerated');
     } catch (error) {
       console.error('Error regenerating API key:', error);
-      toast.error('Failed to regenerate API key');
+      showErrorToast(error, "Couldn't regenerate API key");
     } finally {
       setRegeneratingId(null);
     }
@@ -294,7 +299,7 @@ export default function ApiManagementPage() {
                       size="sm"
                       onClick={() => {
                         if (!canManage) return;
-                        regenerateKey(apiKey.id);
+                        setPendingKeyAction({ type: 'regenerate', key: apiKey });
                       }}
                       disabled={regeneratingId === apiKey.id || !canManage}
                       className=""
@@ -307,7 +312,7 @@ export default function ApiManagementPage() {
                       size="sm"
                       onClick={() => {
                         if (!canManage) return;
-                        deleteKey(apiKey.id);
+                        setPendingKeyAction({ type: 'delete', key: apiKey });
                       }}
                       disabled={deletingId === apiKey.id || !canManage}
                       className=""
@@ -441,6 +446,24 @@ export default function ApiManagementPage() {
           </div>
         </div>
       )}
+
+      <ConfirmationDialog
+        isOpen={!!pendingKeyAction}
+        onClose={() => setPendingKeyAction(null)}
+        onConfirm={() => {
+          if (!pendingKeyAction) return;
+          if (pendingKeyAction.type === 'delete') deleteKey(pendingKeyAction.key.id);
+          else regenerateKey(pendingKeyAction.key.id);
+        }}
+        title={pendingKeyAction?.type === 'delete' ? 'Delete API Key' : 'Regenerate API Key'}
+        description={
+          pendingKeyAction?.type === 'delete'
+            ? `Delete "${pendingKeyAction.key.name}"? Any integration using this key will stop working immediately. This cannot be undone.`
+            : `Regenerate "${pendingKeyAction?.key.name ?? ''}"? The current key stops working immediately, and every integration using it must be updated with the new key.`
+        }
+        confirmText={pendingKeyAction?.type === 'delete' ? 'Delete' : 'Regenerate'}
+        variant={pendingKeyAction?.type === 'delete' ? 'danger' : 'warning'}
+      />
     </main>
     </FeatureGate>
   );

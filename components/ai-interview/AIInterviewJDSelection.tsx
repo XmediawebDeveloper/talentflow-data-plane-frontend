@@ -1,6 +1,7 @@
 'use client';
 
-import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, ChevronRight, CheckCircle2, RefreshCw, Info } from 'lucide-react';
+import { Briefcase, Plus, Search, Eye, ChevronDown, ChevronRight, CheckCircle2, RefreshCw, Info, Video } from 'lucide-react';
+import { PageHeader } from '@/components/ui/page-header';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -235,52 +236,44 @@ export default function AIInterviewJDSelection() {
           <AIInterviewStepIndicator currentStep={1} topOffset={breadcrumbHeight} />
 
           <div className="w-full">
-            <div className="mb-6 sm:mb-8">
-              <h1 className="tf-page-title mb-2">Create New AI Interview</h1>
-              <p className="tf-body-secondary sm:text-base">
-                Select a Job Description to create an AI-powered interview
-              </p>
-            </div>
+            {/* Header — the shared PageHeader, same as Resume Scoring's Score Resumes. */}
+            <PageHeader
+              icon={<Video className="h-5 w-5" />}
+              title="Create New AI Interview"
+              description="Select a job and let AI interview the candidates."
+              actions={
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => {
+                    if (!canCreateJD) return;
+                    router.push('/recruitment/jd-creation?from=ai-interview');
+                  }}
+                  aria-disabled={!canCreateJD}
+                  title={!canCreateJD ? 'You do not have permission to create job descriptions' : ''}
+                  icon={<Plus className="w-4 h-4" />}
+                  className={`flex-shrink-0 ${!canCreateJD ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <span className="hidden sm:inline">Create New Job</span>
+                  <span className="sm:hidden">New Job</span>
+                </Button>
+              }
+            />
 
-            <div className="bg-gray-50 dark:bg-slate-800/40 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 flex items-start gap-2 sm:gap-3">
-              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0 mt-0.5" />
-              <div>
-                <div className="text-sm text-brand-blue font-medium mb-1">AI-Powered Interview</div>
-                <div className="tf-body">
-                  The AI interviewer builds its rounds from the JD&apos;s must-have and nice-to-have skills, then runs a <strong>timed or conversational interview</strong> with each candidate and scores every round.
-                </div>
-              </div>
-            </div>
 
-            <div className="tf-card-soft">
-              <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700/60">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-                  <div className="min-w-0">
-                    <h2 className="tf-section-title sm:text-lg tracking-tight">Select Job Description</h2>
-                  </div>
-                  <Button
-                    variant="primary"
-                    size="md"
-                    onClick={() => {
-                      if (!canCreateJD) return;
-                      router.push('/recruitment/jd-creation?from=ai-interview');
-                    }}
-                    aria-disabled={!canCreateJD}
-                    title={!canCreateJD ? 'You do not have permission to create job descriptions' : ''}
-                    icon={<Plus className="w-4 h-4" />}
-                    className={`flex-shrink-0 ${!canCreateJD ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <span className="hidden sm:inline">Create New Job</span>
-                    <span className="sm:hidden">New Job</span>
-                  </Button>
-                </div>
+            {/* Score Resumes' card: Job Eligibility on top, then one row with
+                "Select a Job Opening" + count on the left and Search Jobs on
+                the right, then the list. */}
+            <div className="tf-card mb-5 overflow-hidden" role="region" aria-label="Select Job Description">
+              <div className="px-3 pt-3 sm:px-4 sm:pt-4">
                 <JobEligibilityNote
-                  className="mt-3"
+                  className="mb-4"
+                  showLegend
                   description="Published (or Republished) job versions without an AI interview can be selected. Disabled and Archived jobs are shown read-only; Draft and already-configured jobs are hidden. A job with only one available version is selected straight from its card; View Versions appears when there are versions to choose from, and the eye icon shows a job's full history."
                 />
               </div>
 
-              <div className="p-4 sm:p-6">
+              <div className="px-3 pb-3 sm:px-4 sm:pb-4">
                 {loadingJds || (!eligibilityLoaded && loadError !== 'eligibility') ? (
                   <div className="space-y-3">
                     <div className="mb-4 space-y-2">
@@ -308,20 +301,6 @@ export default function AIInterviewJDSelection() {
                   </div>
                 ) : (
                   <div className="space-y-3" ref={jdListRef}>
-                    <div className="mb-4">
-                      <label className="block tf-label mb-2">Search Jobs</label>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Search by JD number, role, department or location..."
-                          value={jdSearch}
-                          onChange={e => { setJdSearch(e.target.value); setJdPage(1); }}
-                          className="tf-input pl-10 pr-4"
-                        />
-                      </div>
-                    </div>
-
                     {/* A failed read, with a way to retry — without it a network
                         error read as "no published jobs". */}
                     {loadError && (
@@ -342,29 +321,46 @@ export default function AIInterviewJDSelection() {
                       </div>
                     )}
 
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <span className="tf-label">
-                        Select a Job Opening
+                    {/* Score Resumes' row (JobOpeningPickerList layout="page"):
+                        heading + count left, Search Jobs right — one line from
+                        md, stacked on phones. */}
+                    <div className="mb-3 flex flex-col gap-2 border-b border-[var(--border)] pb-3 md:flex-row md:items-center md:justify-between">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-[var(--text-primary)]">Select a Job Opening</span>
                         {lineageJobs.length > 0 && (
-                          <span className="ml-2 font-normal text-gray-500 whitespace-nowrap">
-                            &mdash; {lineageJobs.filter(job => !isJobDisabled(job) && !isJobArchived(job)).length} available
+                          <span className="tf-stat-chip tf-stat-chip-info !py-0 tabular-nums">
+                            {lineageJobs.filter(job => !isJobDisabled(job) && !isJobArchived(job)).length} available
                           </span>
                         )}
-                      </span>
-                      {jdPick && (
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="tf-badge text-brand-blue bg-brand-blue/10">
-                            1 selected
+                        {jdPick && (
+                          <span className="flex items-center gap-2">
+                            <span className="tf-badge text-brand-blue bg-brand-blue/10">
+                              1 selected
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setJdPick(null)}
+                              className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium whitespace-nowrap"
+                            >
+                              Clear Selection
+                            </button>
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => setJdPick(null)}
-                            className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium whitespace-nowrap"
-                          >
-                            Clear Selection
-                          </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                      {/* "Search Jobs" sits to the left of the search box, on one row. */}
+                      <label className="flex w-full items-center gap-2 md:w-[25rem] lg:w-[29rem]">
+                        <span className="tf-meta shrink-0 whitespace-nowrap !font-semibold !text-[var(--text-primary)]">Search Jobs</span>
+                        <span className="relative min-w-0 flex-1">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                          <input
+                            type="text"
+                            placeholder="Search by JD number, role, department or location..."
+                            value={jdSearch}
+                            onChange={e => { setJdSearch(e.target.value); setJdPage(1); }}
+                            className="tf-input pl-10 pr-4"
+                          />
+                        </span>
+                      </label>
                     </div>
 
                     {jdPick && !jdPickOnThisPage && (

@@ -3,13 +3,13 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
 import { User, Tenant, Permission, FeatureFlags, UserRole } from '@/lib/types/tenant';
 import { authService, clearTokens } from '@/lib/services';
-import { handleUnauthorized, dispatchAccessRestrictedEvent, ApiError } from '@/lib/services/api';
+import { handleUnauthorized, dispatchAccessRestrictedEvent, ApiError, getAccessToken, restoreSession as restoreSessionToken } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { mockTenant } from '@/lib/mockData/tenantData';
 import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/services/authService';
-import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 import { forceNavigate } from '@/lib/utils/forcedNavigation';
+import { focusRefreshDue, markRefreshed } from '@/lib/utils/focusRefresh';
 
 // Helper to store/retrieve user from localStorage
 const USER_STORAGE_KEY = 'talentflow_user';
@@ -64,7 +64,7 @@ const clearTenantFromStorage = () => {
 const isTokenExpired = (): boolean => {
   if (typeof window === 'undefined') return false;
 
-  const token = localStorage.getItem('accessToken');
+  const token = getAccessToken();
   if (!token) return false;
 
   try {
@@ -436,9 +436,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Ensure cookies are synced with localStorage (cross-browser token recovery)
-      // This fixes token loss in Firefox, Safari, iOS Safari, Arc, Brave, etc.
-      ensureTokenCookies();
+      // The access token lives in memory only (sheet #5): get one for this page
+      // from the httpOnly session cookie before anything calls the API. A
+      // session that was revoked or expired comes back false and clears the
+      // "signed in" flag, so the checks below treat the user as signed out.
+      await restoreSessionToken();
 
       // First, try to restore from localStorage (fast path)
       const storedUser = getUserFromStorage();
@@ -484,6 +486,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Validate with API in background and refresh tenant name
         try {
+          markRefreshed('auth-me');
           const apiUserData = await authService.getCurrentUser();
 
           // Account deactivated while this session was cached → block via modal.
@@ -577,6 +580,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (authService.isAuthenticated()) {
         try {
           console.log('[AUTH] Fetching current user from API...');
+          markRefreshed('auth-me');
           const apiUserData = await authService.getCurrentUser();
           console.log('[AUTH] Got user data:', apiUserData);
 
@@ -784,7 +788,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]); // Re-run if user changes (login/logout)
 
   const login = useCallback((userData: User, tenantName?: string) => {
-    console.log('[AUTH] Login called for:', userData.email, 'tenant:', tenantName);
+    console.log('[AUTH] Login called for tenant:', tenantName);
     // A fresh login hands us server-issued permissions — nothing stale to wait on.
     setPermissionsVerified(true);
 
@@ -897,6 +901,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!authService.isAuthenticated()) return;
     try {
       console.log('[AUTH] refreshUser() called — fetching latest user from API...');
+      markRefreshed('auth-me');
       const apiUserData = await authService.getCurrentUser();
 
       // Admin deactivated this user (e.g. pushed via WebSocket) → block via modal.
@@ -951,8 +956,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Refresh permissions when tab becomes visible again (e.g. admin changed role in another tab)
   useEffect(() => {
     if (!user) return;
+    // At most once a minute: permission changes are pushed over the WebSocket
+    // (onPermissionsUpdated → refreshUser) and the API interceptor catches a
+    // version bump, so this only backs up a missed push.
     const handleVisibilityChange = () => {
-      if (!document.hidden) refreshUser();
+      if (!document.hidden && focusRefreshDue('auth-me')) refreshUser();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);

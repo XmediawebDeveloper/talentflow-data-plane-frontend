@@ -8,6 +8,7 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { SiteHeader } from "./SiteHeader";
 import { REDESIGNED_ROUTES } from "./fonts";
+import { hasStoredSession } from '@/lib/services/api';
 
 // Items with a `section` exist on the one-page landing route, so on "/" the
 // menu scrolls to them; an item without one would always navigate to its page.
@@ -48,7 +49,7 @@ function ClassicHeader() {
     setIsOrgLogin(subdomain || !!searchParams.get('org'));
 
     // Hide nav + auth buttons when the user already has an active session
-    setIsLoggedIn(!!localStorage.getItem('accessToken'));
+    setIsLoggedIn(hasStoredSession());
   }, [pathname]);
 
   // Prevent hydration mismatch by only rendering theme-dependent UI after mount

@@ -3,11 +3,11 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { AlertTriangle, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, MessageSquare, RefreshCw, Shield, Filter, X } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { billToFromAuth, generateDisputeRecordPDF } from '@/lib/utils/pdfInvoice';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import ListPagination from '@/components/ListPagination';
 import { RowActions } from '@/components/subscription/RowActionsMenu';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -168,7 +168,7 @@ export default function DisputeHistoryPage() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) {
         setError('Not authenticated. Please login again.');
         setLoading(false);
@@ -293,7 +293,7 @@ export default function DisputeHistoryPage() {
       await generateDisputeRecordPDF(inv, billToFromAuth(user, tenant));
     } catch (error) {
       console.error('PDF generation failed:', error);
-      toast.error('Failed to generate PDF. Please try again.');
+      showErrorToast(error, "Couldn't download the dispute record", { retry: () => handleDownloadDispute(inv) });
     } finally {
       setDownloadingId(null);
     }
@@ -314,7 +314,7 @@ export default function DisputeHistoryPage() {
     ]);
 
     await exportRows(format, EXPORT_HEADERS, csvRows, `dispute-history-${new Date().toISOString().split('T')[0]}`, {
-      sheetName: 'Dispute History',
+      sheetName: 'Payment Disputes',
     });
   };
 
@@ -355,11 +355,11 @@ export default function DisputeHistoryPage() {
     <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="tf-page-sheet">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Dispute History' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Payment Disputes' }]} />
 
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="tf-page-title">Dispute History</h1>
+            <h1 className="tf-page-title">Payment Disputes</h1>
             <p className="mt-1 tf-body-muted">
               Track chargebacks and payment disputes raised against your account, monitor deadlines, and download dispute records.
             </p>
@@ -376,7 +376,7 @@ export default function DisputeHistoryPage() {
             <ExportFormatModal
               open={showExportModal}
               onClose={() => setShowExportModal(false)}
-              title="Export Dispute History"
+              title="Export Payment Disputes"
               recordCount={filteredDisputes.length}
               columns={EXPORT_HEADERS}
               onExport={handleExport}

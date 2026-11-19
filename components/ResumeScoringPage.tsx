@@ -27,7 +27,9 @@ import type { InviteCandidate } from '@/components/talent-match-invite/inviteVer
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import api, { dispatchUnitsConsumed } from '@/lib/services/api';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
+import type { ScoredJdListParams } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import RecordPager from '@/components/RecordPager';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { useFreshQuota } from '@/lib/hooks/useFreshQuota';
@@ -56,12 +58,13 @@ import { BulkActionConfirmModal, useScoringActionPermissions, renderInviteTarget
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { clearInviteHandoff, readInviteHandoff, RESUME_INVITE_PARAM, type InviteHandoff } from '@/lib/utils/resumeScoringInviteHandoff';
-import { downloadScorecardPdf, downloadScorecardsZip, formatFileDate, scorecardVersionTag } from '@/lib/utils/scorecardDownload';
+import { downloadScorecardPdf, downloadScorecardsZipWithToast, formatFileDate, scorecardVersionTag } from '@/lib/utils/scorecardDownload';
 import { TableSkeleton, Skeleton } from '@/components/ui/skeleton';
 import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets, isInvitableAssessment } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
+import type { JDLineageVersion } from '@/lib/services/jdService';
 import { lineageKey, resolveVersionHistoryRows, getDisplayStatus, getStatusConfig, mapJDStatus } from '@/lib/utils/jobOpeningDisplay';
 import type { Job as LineageJob } from '@/lib/types/types';
 import {
@@ -270,6 +273,9 @@ interface ScoredResumeData {
    * actually needs to check.
    */
   lineageMaxVersion?: number;
+  /** A server-paged View by Job row's Exact / Partial / No Match over every
+   *  version of the job (ScoredJobsPage.rows) — set on the row only. */
+  lineageVerdictCounts?: { exact: number; partial: number; none: number };
   // Processing state for in-progress jobs
   isProcessing?: boolean;
   processingProgress?: {
@@ -428,6 +434,20 @@ interface BatchProgress {
   items?: BatchProgressItem[];
 }
 
+/** View by Job's current server page (GET /scoring/jds, one row per job). */
+export interface ScoredJobsPage {
+  /** The page's rows in list order: each job's representative JD version id
+   *  (an entry of `scoredHistory`), its lineage-wide Exact / Partial / No
+   *  Match and its highest scored version. */
+  rows: { jdId: string; counts: { exact: number; partial: number; none: number }; lineageMaxVersion?: number }[];
+  /** Jobs matching the search / filters / verdict, across every page. */
+  total: number;
+  /** Anything scored at all, before search / filters. */
+  anyScored: boolean;
+  /** Filter options, over every scored job. */
+  facets?: { locations: string[]; industries: string[]; work_modes: string[]; job_types: string[]; creators: string[] };
+}
+
 interface ResumeScoringPageProps {
   jobs?: Job[];
   /** `jobs` has its final value. The route only loads the one JD the
@@ -438,6 +458,13 @@ interface ResumeScoringPageProps {
   folders?: Folder[];
   scoredHistory?: ScoredResumeData[];
   historyLoading?: boolean;
+  /** Lineages + archived/disabled version counts that came with the scored-JD
+   *  index (GET /scoring/jds?include_lineages=true). Seeded into the version
+   *  lineage hook so the rows need no /jd/lineages or /scoring/jd/counts wave. */
+  historyLineageSeed?: {
+    lineages?: Record<string, JDLineageVersion[]>;
+    versionCounts?: Record<string, { total: number; top: { scored_by_name: string; created_at: string | null } | null }>;
+  } | null;
   /** Total Resumes Scored / Exact / Partial / No Match, precomputed
    *  server-side (a fast `SELECT COUNT()` per bucket that `GET /scoring/all`
    *  already returns on every call, page_size:1 included) so the stat cards
@@ -450,6 +477,16 @@ interface ResumeScoringPageProps {
     /** Distinct candidates behind each card (GET /scoring/stats). */
     people?: { all: number; exact: number; partial: number; none: number };
   } | null;
+  /** Server-paged View by Job (null: `scoredHistory` is the full index and
+   *  the list is filtered / grouped / paged here, as on an older backend). */
+  historyPage?: ScoredJobsPage | null;
+  /** View by Job's search / filters / verdict / sort / page changed. */
+  onQueryHistory?: (query: ScoredJdListParams) => void;
+  /** Load every scored version of the job this JD version belongs to. */
+  onEnsureHistoryJd?: (jdId: string) => Promise<void>;
+  /** Select All: every job matching the current query; resolves to their
+   *  representative versions (their versions are now in `scoredHistory`). */
+  onFetchAllHistoryJobs?: () => Promise<ScoredResumeData[]>;
   onSaveScores?: (data: ScoredResumeData) => void;
   onRefreshHistory?: () => Promise<void>;
   onLoadJdScores?: (jdId: string, jdTitle?: string) => Promise<void>;
@@ -471,10 +508,15 @@ export default function ResumeScoringPage({
   resumes: propResumes = [],
   scoredHistory = [],
   historyLoading = false,
+  historyLineageSeed = null,
+  historyPage = null,
+  onQueryHistory,
+  onEnsureHistoryJd,
+  onFetchAllHistoryJobs,
   scoreCounts = null,
   onSaveScores,
   onRefreshHistory,
-  onLoadJdScores,
+  onLoadJdScores: onLoadJdScoresProp,
   onNavigateToAITalentMatch,
   onBack,
   tenant,
@@ -486,6 +528,28 @@ export default function ResumeScoringPage({
   batchProgress = null
 }: ResumeScoringPageProps) {
   const router = useRouter();
+  /* Every per-JD score fetch goes through this wrapper, which records the JD
+     ids still in flight. The job page's table shows skeleton rows while its
+     own JD is among them — whichever way the page got there (refresh on a
+     ?jd_id URL, a list row, the version switch) — instead of flashing
+     "No Scored Resumes Yet" before the rows land. Settles on failure too, so
+     a failed load ends on the real state, not an endless skeleton. */
+  /* jdId → fetches in flight (a count, so two overlapping loads of one JD
+     don't end the skeleton when the first settles). */
+  const [jdScoresInFlight, setJdScoresInFlight] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const onLoadJdScores = onLoadJdScoresProp
+    ? (jdId: string, jdTitle?: string): Promise<void> => {
+        setJdScoresInFlight(prev => new Map(prev).set(jdId, (prev.get(jdId) ?? 0) + 1));
+        return onLoadJdScoresProp(jdId, jdTitle).finally(() => {
+          setJdScoresInFlight(prev => {
+            const next = new Map(prev);
+            const n = (next.get(jdId) ?? 1) - 1;
+            if (n > 0) next.set(jdId, n); else next.delete(jdId);
+            return next;
+          });
+        });
+      }
+    : undefined;
   /* A score opened from a resume's Candidate Activity card keeps that resume's
      trail (Resume Database › My Resumes › <candidate>) and returns to it. */
   const resumeTrail = useResumeActivityTrail(useSearchParams());
@@ -599,6 +663,12 @@ export default function ResumeScoringPage({
      regardless of what the record's own denormalised job_id says. Consumed
      below for the true version badge, the "has published siblings" check,
      and the collapse step's real grouping key. */
+  /* Declared BEFORE the ensure* effects below: in the commit that brings a new
+     index, the seed marks its keys first, so those effects skip them. */
+  const { seedFilterData: seedHistoryFilterData } = versionLineage;
+  useEffect(() => {
+    if (historyLineageSeed) seedHistoryFilterData(historyLineageSeed);
+  }, [historyLineageSeed, seedHistoryFilterData]);
   const { ensureFilterLineages: ensureHistoryFilterLineages } = versionLineage;
   const historyLineageFilterTargets = useMemo(
     () => scoredHistory.map(item => ({ key: item.jobId, jobId: item.jobId })),
@@ -928,6 +998,7 @@ export default function ResumeScoringPage({
       errorReason: item.errorMessage,
       score: item.score,
       overallRating10: item.overallRating10,
+      resumeDeleted: item.resumeDeleted,
       scoredDateTime: item.status === 'already_scored' && item.scoredAt
         ? new Date(item.scoredAt)
         : normalizeScoringStatus(item.status) === 'completed'
@@ -1211,7 +1282,7 @@ export default function ResumeScoringPage({
   // toggle that drastically changes page height flips (cards<->list drill-in,
   // global view).
   const rootRef = useScrollRestoration<HTMLElement>('resume-scoring', !historyLoading, [pageView, isGlobalView]);
-  useListStatePersistence(
+  const listStateRestored = useListStatePersistence(
     'resume-scoring',
     {
       isGlobalView, globalListMode, globalSearchQuery,
@@ -1264,6 +1335,60 @@ export default function ResumeScoringPage({
     },
   );
 
+  /* View by Job is paged on the server (when the host passes onQueryHistory):
+     each change of search / filters / verdict / sort / page asks for that
+     page. Held until the saved list state is restored, and coalesced to the
+     last change of a render burst (restoring the filters also resets the page),
+     so a landing asks once. The host drops a query it already holds. */
+  const historyServerQuery = useMemo<ScoredJdListParams>(() => ({
+    search: historySearchQuery.trim() || undefined,
+    created_by: historyCreatedBy || undefined,
+    scored_from: historyScoredFrom || undefined,
+    scored_to: historyScoredTo || undefined,
+    location: historyLocation || undefined,
+    work_mode: historyWorkMode || undefined,
+    job_type: historyJobType || undefined,
+    industry: historyIndustry || undefined,
+    match_status: matchFilter === 'Exact Match' ? 'exact_match'
+      : matchFilter === 'Partial Match' ? 'partial_match'
+      : matchFilter === 'No Match' ? 'no_match'
+      : undefined,
+    sort_by: jobSortBy === 'scored' ? undefined : jobSortBy,
+    sort_dir: jobSortOrder === 'desc' ? undefined : jobSortOrder,
+    page: historyCurrentPage,
+    page_size: historyItemsPerPage,
+  }), [historySearchQuery, historyCreatedBy, historyScoredFrom, historyScoredTo, historyLocation,
+    historyWorkMode, historyJobType, historyIndustry, matchFilter, jobSortBy, jobSortOrder,
+    historyCurrentPage, historyItemsPerPage]);
+  useEffect(() => {
+    if (!onQueryHistory || !listStateRestored) return;
+    const t = setTimeout(() => {
+      // Drop keys left undefined, so equal queries compare equal at the host.
+      const q = Object.fromEntries(
+        Object.entries(historyServerQuery).filter(([, v]) => v !== undefined),
+      ) as ScoredJdListParams;
+      onQueryHistory(q);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [historyServerQuery, listStateRestored, onQueryHistory]);
+
+  /* A job that is not on the current View by Job page (a ?jd_id link, a run
+     that just finished, a result opened from the progress popup): its
+     versions are loaded once through onEnsureHistoryJd. `ensuredHistoryJds`
+     re-runs the effects that wait on it once that load has settled. */
+  const ensureRequestedRef = useRef<Set<string>>(new Set());
+  const [ensuredHistoryJds, setEnsuredHistoryJds] = useState<Set<string>>(() => new Set());
+  const requestHistoryJd = (jdId: string) => {
+    if (!onEnsureHistoryJd || ensureRequestedRef.current.has(jdId)) return;
+    ensureRequestedRef.current.add(jdId);
+    void onEnsureHistoryJd(jdId).finally(() => {
+      setEnsuredHistoryJds(prev => new Set(prev).add(jdId));
+    });
+  };
+  /** True when nothing more can be loaded for this JD version: either the
+   *  host keeps the full index, or its job has been asked for and answered. */
+  const historyJdSettled = (jdId: string) => !onEnsureHistoryJd || ensuredHistoryJds.has(jdId);
+
   // Fetch all scored resumes for global view
   /**
    * @param silent Suppresses the failure toast. Set by the background prefetch —
@@ -1296,6 +1421,7 @@ export default function ResumeScoringPage({
         matchStatus: item.match_status || 'No Match',
         scorePercentage: Math.round(item.overall_score || 0),
         overallRating10: item.overall_rating_10,
+        resumeDeleted: item.resume_deleted,
         scoredDate: item.created_at || new Date().toISOString(),
         scoredBy: item.scored_by_name || item.scored_by || 'AI Engine',
         // Source, Status, Error Reason fields
@@ -1330,7 +1456,12 @@ export default function ResumeScoringPage({
       setGlobalFailed(true);
       // Let the next need (another tick / expand) try again.
       globalPrefetchedRef.current = false;
-      if (!silent) toast.error('Failed to load all scored candidates');
+      if (!silent) {
+        showErrorToast(error, "Couldn't load all scored candidates", {
+          id: 'global-scored-resumes',
+          retry: () => fetchGlobalScoredResumes(),
+        });
+      }
     } finally {
       setIsLoadingGlobal(false);
       setGlobalSettled(true);
@@ -1408,6 +1539,7 @@ export default function ResumeScoringPage({
             jobVersion: item.jobVersion,
             matchStatus: hit.match_status,
             overallRating10: hit.overall_rating_10,
+            resumeDeleted: hit.resume_deleted,
             resumeVersion: hit.resume_version || item.resumeVersion,
             scoredDate: hit.created_at,
           };
@@ -1417,7 +1549,10 @@ export default function ResumeScoringPage({
       }
     }
     if (!row) {
-      toast.error('Could not open this scoring result. Please try again.');
+      showErrorToast(null, "Couldn't open this scoring result", {
+        description: 'The result may still be saving. Wait a few seconds and try again.',
+        retry: () => openProgressResult(item),
+      });
       return;
     }
     // Hide the popup (the run itself is left alone) and open the result.
@@ -1541,7 +1676,7 @@ export default function ResumeScoringPage({
    *  total first, which would then jump to the tally. See `globalFailed`. */
   const scoredCountValue = (versionTotal: number, tally: { exact: number; partial: number; none: number }) => {
     // Server counts (GET /scoring/jds) are there from the first paint.
-    if (globalLoaded || (scoredHistory.length > 0 && scoredHistory.every(h => h.verdictCounts))) {
+    if (globalLoaded || historyPage || (scoredHistory.length > 0 && scoredHistory.every(h => h.verdictCounts))) {
       return tally.exact + tally.partial + tally.none;
     }
     if (globalFailed) return versionTotal;
@@ -1698,14 +1833,21 @@ export default function ResumeScoringPage({
       }
 
       // Standard flow: look for JD in scored history
+      /* Server-paged history holds the current page's jobs only: load this
+         JD's job first, and look again once that has settled. */
+      if (!scoredHistory.some(item => item.jobId === initialJdId) && !historyJdSettled(initialJdId)) {
+        requestHistoryJd(initialJdId);
+        if (!isWaitingForInitialJd) setIsWaitingForInitialJd(true);
+        return;
+      }
       // Set waiting state when we have an initialJdId
-      if (!isWaitingForInitialJd && scoredHistory.length === 0) {
+      if (!isWaitingForInitialJd && scoredHistory.length === 0 && !historyJdSettled(initialJdId)) {
         console.log('[ResumeScoringPage] Setting waiting state for initialJdId:', initialJdId);
         setIsWaitingForInitialJd(true);
         return;
       }
 
-      if (scoredHistory.length > 0) {
+      if (scoredHistory.length > 0 || (onEnsureHistoryJd && historyJdSettled(initialJdId))) {
         console.log('[ResumeScoringPage] Checking for initialJdId:', initialJdId);
         const historyItem = scoredHistory.find(item => item.jobId === initialJdId);
         /* The landing index carries no per-JD scores any more (only counts):
@@ -1775,7 +1917,7 @@ export default function ResumeScoringPage({
         }
       }
     }
-  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs, jobsLoaded, initialOpenedFrom, globalSettled, globalScoredResumes]);
+  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs, jobsLoaded, initialOpenedFrom, globalSettled, globalScoredResumes, ensuredHistoryJds]);
 
   // After scoring completes: auto-navigate to details view once scoredHistory is refreshed.
   // A layout effect, not useEffect: the popup that hid the "Choose JD" view has
@@ -1785,6 +1927,8 @@ export default function ResumeScoringPage({
   useLayoutEffect(() => {
     if (!pendingAutoSelectJdId) return;
     const historyItem = scoredHistory.find(h => h.jobId === pendingAutoSelectJdId);
+    // Not on the current View by Job page: load its job.
+    if (!historyItem) requestHistoryJd(pendingAutoSelectJdId);
     if (historyItem) {
       setSelectedHistoryItem(historyItem);
       setViewMode('details');
@@ -1803,6 +1947,8 @@ export default function ResumeScoringPage({
   useLayoutEffect(() => {
     if (!pendingViewResult) return;
     const historyItem = scoredHistory.find(h => h.jobId === pendingViewResult.jobId);
+    // Not on the current View by Job page: load its job.
+    if (!historyItem) requestHistoryJd(pendingViewResult.jobId);
     const candidate = historyItem?.scoredResumes?.find((r: any) =>
       r.resumeId === pendingViewResult.resumeId || r.resume_id === pendingViewResult.resumeId || r.id === pendingViewResult.resumeId
     );
@@ -1928,6 +2074,7 @@ export default function ResumeScoringPage({
         errorReason: item.errorMessage,
         score: item.score,
         overallRating10: item.overallRating10,
+        resumeDeleted: item.resumeDeleted,
         scoredDateTime: item.status === 'already_scored' && item.scoredAt
           ? new Date(item.scoredAt)
           : normalizeScoringStatus(item.status) === 'completed'
@@ -2053,7 +2200,7 @@ export default function ResumeScoringPage({
       } catch (err) {
         console.error(`[ResumeScoringPage] Failed to dispatch scoring batch:`, err);
         // Show the reason (e.g. not enough Resume Scoring units) when there is one.
-        toast.error(err instanceof Error && err.message ? err.message : 'Failed to start scoring. Please try again.');
+        showErrorToast(err, "Couldn't start scoring");
         // Mark all queued items as failed so the modal shows the error
         for (let i = 0; i < newItemStatuses.length; i++) {
           newItemStatuses[i].status = 'failed';
@@ -2138,6 +2285,7 @@ export default function ResumeScoringPage({
       errorReason: item.errorMessage,
       score: item.score,
       overallRating10: item.overallRating10,
+      resumeDeleted: item.resumeDeleted,
       matchResult: item.matchStatus
         ? convertMatchStatus(item.matchStatus)
         : undefined, // Stay "Pending" until real match_status is fetched after completion
@@ -2404,7 +2552,7 @@ export default function ResumeScoringPage({
   const convertToScoredResumesFormat = (scoredData: ScoredResumeData) => {
     console.log('[ResumeScoringPage] Converting scored resumes:', scoredData.scoredResumes);
     return scoredData.scoredResumes.map((resume, index) => {
-      console.log('[ResumeScoringPage] Resume:', resume.id, 'candidateName:', resume.candidateName, 'candidateEmail:', resume.candidateEmail);
+      console.log('[ResumeScoringPage] Resume:', resume.id);
       const getResumeVersion = () => {
         if (resume.name === 'Sarah Johnson') return 'Current';
         if (resume.name === 'Michael Chen') return 'Version 2';
@@ -2431,6 +2579,7 @@ export default function ResumeScoringPage({
         matchStatus: matchStatus,
         scorePercentage: Math.round(scoreValue),
         overallRating10: resume.overallRating10 ?? resume.overall_rating_10,
+        resumeDeleted: resume.resumeDeleted ?? resume.resume_deleted,
         // Keep ISO string for timestamp - let display component format it
         scoredDate: resume.scoredDate || resume.created_at || scoredData.scoredAt,
         // Use scored_by_name from API for recruiter attribution
@@ -2857,7 +3006,11 @@ export default function ResumeScoringPage({
       : allScoredResumesData;
     const goToVersion = (versionId: string, versionTitle: string) => {
       if (versionId === selectedHistoryItem.jobId) return;
-      const stub: ScoredResumeData = {
+      /* The version's own history entry when there is one (keeps its counts
+         and JD metadata in the header while its rows load); a stub only for
+         a version with no entry yet. */
+      const known = scoredHistory.find(h => h.jobId === versionId);
+      const stub: ScoredResumeData = known ?? {
         id: versionId,
         jobId: versionId,
         jobTitle: versionTitle,
@@ -2869,7 +3022,7 @@ export default function ResumeScoringPage({
       setSelectedHistoryItem(stub);
       setSelectedScoredResumes([]);
       setSelectedStatusFilter('all');
-      onLoadJdScores?.(versionId, versionTitle);
+      if (!known?.scoresLoaded) void onLoadJdScores?.(versionId, versionTitle);
       try { localStorage.setItem('lastViewedScoringJdId', versionId); } catch (e) {}
       router.push(`/recruitment/resume-scoring?jd_id=${versionId}`);
     };
@@ -2898,7 +3051,11 @@ export default function ResumeScoringPage({
                before ever reaching job 2. Matched by lineage, so whichever
                version is open, it counts as its job's row. A job the active
                filters hide falls back to the unfiltered list. */
-            const filteredJobs = collapseHistoryToLatestVersions(scoredHistory.filter(historyItemMatchesFilters), resolveHistoryGroupKey);
+            /* Server-paged: the jobs of the View by Job page it was opened
+               from, in that page's order (the other pages are not loaded). */
+            const filteredJobs = historyPage
+              ? historyPage.rows.flatMap(r => scoredHistory.filter(h => h.jobId === r.jdId))
+              : collapseHistoryToLatestVersions(scoredHistory.filter(historyItemMatchesFilters), resolveHistoryGroupKey);
             const currentKey = resolveHistoryGroupKey(selectedHistoryItem);
             const jobNavList = filteredJobs.some(h => resolveHistoryGroupKey(h) === currentKey)
               ? filteredJobs
@@ -2912,6 +3069,17 @@ export default function ResumeScoringPage({
               setSelectedScoredResumes([]);
               setSelectedStatusFilter('all');
               onLoadJdScores?.(item.jobId, item.jobTitle);
+              /* Keep the address bar on the job shown. It used to stay on the
+                 job the user started from, so a refresh — or a breadcrumb
+                 that returns here — landed back on that first job. Only jd_id
+                 changes (other params, e.g. where the page was opened from,
+                 stay). Replace, not push: stepping through jobs shouldn't
+                 stack Back entries. */
+              try { localStorage.setItem('lastViewedScoringJdId', item.jobId); } catch { /* storage blocked */ }
+              const params = new URLSearchParams(window.location.search);
+              params.set('jd_id', item.jobId);
+              params.delete('score_id');
+              router.replace(`/recruitment/resume-scoring?${params.toString()}`, { scroll: false });
             };
             return (
               <RecordPager
@@ -3076,7 +3244,19 @@ export default function ResumeScoringPage({
              screen in the popup (this page's version unless another is
              being previewed). */
           showGoToJd
-          goToJdTab="scored-resumes"
+          /* Lands on the JD page with the trail Resume Scoring › <job> ›
+             job — same as AI Interview details' Go to JD. */
+          goToJdOrigin={{
+            module: 'resume-scoring',
+            title: selectedHistoryItem.jobTitle,
+            /* This page's query with jd_id pinned to the job on screen. */
+            query: (() => {
+              const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+              params.set('jd_id', selectedHistoryItem.jobId);
+              params.delete('score_id');
+              return params.toString();
+            })(),
+          }}
         />
 
         {inviteDialogEl}
@@ -3100,6 +3280,18 @@ export default function ResumeScoringPage({
         {/* Scored Resumes Table */}
         <ScoredResumesTable
           resumes={scoredResumesData}
+          /* Switching version (or folding in All versions): skeleton rows in
+             the table's own layout until that version's scores arrive. */
+          loading={
+            (jdScoresInFlight.has(selectedHistoryItem.jobId) && !selectedHistoryItem.scoresLoaded)
+            /* The fetch has landed in scoredHistory but the sync effect hasn't
+               copied it into selectedHistoryItem yet — one render where the
+               page still holds the empty stub. Without this the empty state
+               flashed for that frame before the rows appeared. */
+            || (!selectedHistoryItem.scoresLoaded
+                && !!scoredHistory.find(h => h.jobId === selectedHistoryItem.jobId)?.scoresLoaded)
+            || (showingAllVersions && isLoadingAllVersions)
+          }
           /* No "Scored Resumes" heading: the job card above names the list. */
           title=""
           /* Row Invite ▸ and the selection's Actions → Create / Send
@@ -3271,7 +3463,7 @@ export default function ResumeScoringPage({
                       }
                     : p
                 ));
-                toast.error(`Failed to retry scoring for ${item.candidateName}`);
+                showErrorToast(error, `Couldn't re-score ${item.candidateName}`);
               }
             }}
           />
@@ -3371,6 +3563,23 @@ export default function ResumeScoringPage({
       }
     }
 
+    /* Server-paged View by Job: the server already searched, filtered,
+       grouped, sorted and paged — these are the page's rows in its order,
+       each carrying its job's counts over every version. `scoredHistory`
+       holds just those jobs' versions (plus any opened elsewhere), so the
+       client grouping below only serves an older host's full index. */
+    const serverPaged = !!historyPage;
+    // Anything scored at all — "no history yet" versus "nothing matches the filters".
+    const historyHasAny = historyPage ? historyPage.anyScored : scoredHistory.length > 0;
+    const serverRows: ScoredResumeData[] = (() => {
+      if (!historyPage) return [];
+      const byId = new Map(scoredHistory.map(h => [h.jobId, h]));
+      return historyPage.rows.flatMap(r => {
+        const item = byId.get(r.jdId);
+        return item ? [{ ...item, lineageVerdictCounts: r.counts, lineageMaxVersion: r.lineageMaxVersion }] : [];
+      });
+    })();
+
     // Filter history items (shared with the job page's Previous / Next)
     const filteredHistory = scoredHistory.filter(historyItemMatchesFilters);
 
@@ -3405,10 +3614,14 @@ export default function ResumeScoringPage({
        so the rows, the verdict filter and the count sorts no longer wait for
        (or need) the whole cross-job score list. Falls back to counting the
        loaded rows for a host that passes no server counts. */
-    const serverTallies = scoredHistory.every(h => h.verdictCounts);
+    /* Server-paged: a row's own lineage counts come with it; the per-version
+       sum below is only for a version opened elsewhere (and an entry
+       loadJdScores added without counts never voids the rest). */
+    const serverTallies = serverPaged || scoredHistory.every(h => h.verdictCounts);
     const tallyByJob = new Map<string, { exact: number; partial: number; none: number }>();
     if (serverTallies) {
       for (const h of scoredHistory) {
+        if (!h.verdictCounts) continue;
         const key = resolveHistoryGroupKey(h);
         const t = tallyByJob.get(key) || { exact: 0, partial: 0, none: 0 };
         t.exact += h.verdictCounts!.exact;
@@ -3418,6 +3631,7 @@ export default function ResumeScoringPage({
       }
     }
     const jobTally = (item: ScoredResumeData): { exact: number; partial: number; none: number } => {
+      if (item.lineageVerdictCounts) return item.lineageVerdictCounts;
       if (serverTallies) return tallyByJob.get(resolveHistoryGroupKey(item)) || { exact: 0, partial: 0, none: 0 };
       return jobScores(item).reduce(
         (acc, r) => {
@@ -3461,7 +3675,7 @@ export default function ResumeScoringPage({
         default: return new Date(item.scoredAt).getTime() || 0;
       }
     };
-    const collapsedHistory = collapsedHistoryFiltered
+    const collapsedHistory = serverPaged ? serverRows : collapsedHistoryFiltered
       .map((item, index) => ({ item, index, key: jobSortValue(item) }))
       .sort((a, b) => {
         const cmp = typeof a.key === 'string' || typeof b.key === 'string'
@@ -3473,7 +3687,9 @@ export default function ResumeScoringPage({
 
 
     // Add processing entry at the top if it exists and matches filters
-    const displayHistory = processingEntry && (historySearchQuery === '' || processingEntry.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase()))
+    // (Server-paged: on the first page only, where it would have sorted to.)
+    const displayHistory = processingEntry && (!serverPaged || historyCurrentPage === 1)
+      && (historySearchQuery === '' || processingEntry.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase()))
       ? [processingEntry, ...collapsedHistory]
       : collapsedHistory;
 
@@ -3481,20 +3697,52 @@ export default function ResumeScoringPage({
        filters and verdict applied), minus a still-processing placeholder. */
     const selectableJobs = displayHistory.filter(item => !item.isProcessing);
     const selectableJobKeys = selectableJobs.map(item => resolveHistoryGroupKey(item));
-    const allJobsSelected = selectableJobKeys.length > 0 && selectableJobKeys.every(k => selectedHistoryItems.has(k));
     // The jobs on the page being shown — Select All's "this page" scope.
-    const pageJobKeys = displayHistory
-      .slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage)
+    const pageJobKeys = (serverPaged
+      ? displayHistory
+      : displayHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage))
       .filter(item => !item.isProcessing)
       .map(item => resolveHistoryGroupKey(item));
+    /* The jobs a selection can hold. Client-paged: every listed job.
+       Server-paged: every job this session has loaded that the search /
+       filters / verdict still match — the pages ticked so far, or all of them
+       after Select All loaded them (selectAllHistoryJobs). */
+    const selectionPool = serverPaged
+      ? collapseHistoryToLatestVersions(scoredHistory.filter(historyItemMatchesFilters), resolveHistoryGroupKey)
+          .filter(item => !matchFilter || tallyOf(jobTally(item), matchFilter) > 0)
+      : selectableJobs;
+    const selectionPoolKeys = serverPaged ? selectionPool.map(item => resolveHistoryGroupKey(item)) : selectableJobKeys;
     const isJobPartlySelected = (k: string) => !selectedHistoryItems.has(k) && (partialJobRows[k]?.length ?? 0) > 0;
     // Jobs with anything ticked — whole or partly.
-    const selectedJobCount = selectableJobKeys.filter(k => selectedHistoryItems.has(k) || isJobPartlySelected(k)).length;
+    const selectedJobCount = selectionPoolKeys.filter(k => selectedHistoryItems.has(k) || isJobPartlySelected(k)).length;
+    /* Every job the list matches, across pages: the server's count when it pages. */
+    const selectableJobTotal = serverPaged ? historyPage!.total : selectableJobKeys.length;
+    const allJobsSelected = serverPaged
+      ? selectableJobTotal > 0 && pageJobKeys.every(k => selectedHistoryItems.has(k))
+        && selectionPoolKeys.filter(k => selectedHistoryItems.has(k)).length >= selectableJobTotal
+      : selectableJobKeys.length > 0 && selectableJobKeys.every(k => selectedHistoryItems.has(k));
+    const selectAllHistoryJobs = async () => {
+      if (!serverPaged || !onFetchAllHistoryJobs) {
+        setSelectedHistoryItems(new Set(selectableJobKeys));
+        setPartialJobRows({});
+        return;
+      }
+      try {
+        /* Keyed like the rows; a lineage the hook has not resolved yet falls
+           back to the record's own job code, as resolveHistoryGroupKey does. */
+        const keys = (await onFetchAllHistoryJobs()).map(item => resolveHistoryGroupKey(item));
+        setSelectedHistoryItems(new Set([...keys, ...pageJobKeys]));
+        setPartialJobRows({});
+      } catch (error) {
+        console.error('[ResumeScoringPage] Select All failed', error);
+        toast.error('Could not select every job. Try again.');
+      }
+    };
 
     /* View by Job's Export: every score of the TICKED jobs — every version,
        the verdict pill applied — in list order. Same rule as View by
        Candidates: nothing ticked, nothing exported. */
-    const jobViewExportRows = selectableJobs
+    const jobViewExportRows = selectionPool
       .flatMap(item => {
         const k = resolveHistoryGroupKey(item);
         if (selectedHistoryItems.has(k)) return jobScores(item);
@@ -3505,7 +3753,7 @@ export default function ResumeScoringPage({
     // The one ticked job, when exactly one is — an assessment invite needs a
     // single job's assessment to pick from.
     const singleSelectedJob = selectedJobCount === 1
-      ? selectableJobs.find(item => {
+      ? selectionPool.find(item => {
           const k = resolveHistoryGroupKey(item);
           return selectedHistoryItems.has(k) || isJobPartlySelected(k);
         })
@@ -3524,14 +3772,16 @@ export default function ResumeScoringPage({
           const base = singleSelectedJob
             ? `${jdCodeOf(singleSelectedJob) ? `${jdCodeOf(singleSelectedJob)}_` : ''}${singleSelectedJob.jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_')}`
             : 'Selected_Jobs';
-          await downloadScorecardsZip(rows, `${base}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
-          toast.success(`${rows.length} scorecards downloaded`);
+          // Live progress / partial-failure / error toasts come from the helper;
+          // keep the selection when nothing at all could be downloaded.
+          const ok = await downloadScorecardsZipWithToast(rows, `${base}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
+          if (!ok) return;
         }
         // Download is read-only: untick the jobs (hides the Actions bar), no refresh.
         clearJobSelection();
       } catch (error) {
         console.error('Error downloading scorecards:', error);
-        toast.error('Failed to download scorecards');
+        showErrorToast(error, "Couldn't download the scorecard", { retry: () => runJobBulkDownload(rows) });
       } finally {
         setJobBulkDownloading(false);
       }
@@ -3852,7 +4102,7 @@ export default function ResumeScoringPage({
             From lg the toolbar is unchanged. */}
         <div className="tf-jobs-toolbar tf-rs-toolbar tf-toolbar-card max-lg:mb-4">
         {/* Search and Filter Bar — only when there's a list to filter */}
-        {scoredHistory.length > 0 && (
+        {historyHasAny && (
           <div className="tf-jobs-contents mb-3">
             {/* No "Job List (N)" heading, and no count badge — the same bare
                 toolbar as View by Candidates; the pagination below carries
@@ -3880,8 +4130,11 @@ export default function ResumeScoringPage({
               filtersApplied={historySearch.filtersApplied}
               onClearFilters={clearHistoryFilters}
               leadingActions={(() => {
-                const locations = [...new Set(scoredHistory.map(i => i.jdLocation).filter(Boolean))] as string[];
-                const industries = [...new Set(scoredHistory.map(i => i.jdIndustryType).filter(Boolean))] as string[];
+                // Server-paged: options over every scored job, not just this page's.
+                const locations = historyPage?.facets?.locations
+                  ?? [...new Set(scoredHistory.map(i => i.jdLocation).filter(Boolean))] as string[];
+                const industries = historyPage?.facets?.industries
+                  ?? [...new Set(scoredHistory.map(i => i.jdIndustryType).filter(Boolean))] as string[];
                 return (
                   <div className="tf-jobs-filter-pills contents">
                     <SearchableSelect
@@ -3932,9 +4185,12 @@ export default function ResumeScoringPage({
 
             {/* Expanded Filters */}
             {showHistoryFilters && (() => {
-              const uniqueWorkModes = [...new Set(scoredHistory.map(i => i.jdRemoteType).filter(Boolean))];
-              const uniqueJobTypes = [...new Set(scoredHistory.map(i => i.jdEmploymentType).filter(Boolean))];
-              const uniqueCreators = [...new Set(scoredHistory.map(i => i.jdCreatedByName).filter(Boolean))];
+              const uniqueWorkModes = historyPage?.facets?.work_modes
+                ?? [...new Set(scoredHistory.map(i => i.jdRemoteType).filter(Boolean))];
+              const uniqueJobTypes = historyPage?.facets?.job_types
+                ?? [...new Set(scoredHistory.map(i => i.jdEmploymentType).filter(Boolean))];
+              const uniqueCreators = historyPage?.facets?.creators
+                ?? [...new Set(scoredHistory.map(i => i.jdCreatedByName).filter(Boolean))];
               const selectCls = "w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg";
               const inputCls = "w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 text-sm";
               const labelCls = "block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1.5";
@@ -4005,13 +4261,13 @@ export default function ResumeScoringPage({
 
         {/* Row 2: Select All, the verdict pills and View by toggle (Actions
             and Clear get their own row below once jobs are ticked). */}
-        <div className={`tf-jobs-row2 ${scoredHistory.length > 0 ? 'pt-3 border-t border-gray-200 dark:border-slate-700/60' : ''} mb-4 max-lg:mb-0 flex flex-wrap items-center gap-2`}>
+        <div className={`tf-jobs-row2 ${historyHasAny ? 'pt-3 border-t border-gray-200 dark:border-slate-700/60' : ''} mb-4 max-lg:mb-0 flex flex-wrap items-center gap-2`}>
           {selectableJobKeys.length > 0 && (
             <div className="tf-jobs-select">
             <SelectAllMenu
               selectedCount={selectedJobCount}
               pageCount={pageJobKeys.length}
-              totalCount={selectableJobKeys.length}
+              totalCount={selectableJobTotal}
               noun="jobs"
               allSelected={allJobsSelected}
               onSelectPage={() => {
@@ -4022,10 +4278,7 @@ export default function ResumeScoringPage({
                   return next;
                 });
               }}
-              onSelectAll={() => {
-                setSelectedHistoryItems(new Set(selectableJobKeys));
-                setPartialJobRows({});
-              }}
+              onSelectAll={() => { void selectAllHistoryJobs(); }}
               onClear={clearJobSelection}
             />
             </div>
@@ -4243,7 +4496,10 @@ export default function ResumeScoringPage({
              User-Management-uniform table (List) or as cards (Grid). Each item
              returns a <tr> (+ expandable candidates row) in List mode, or the
              card in Grid mode — both share the per-item computation below. */
-          const pageItems = displayHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage);
+          // Server-paged: the rows already are this page.
+          const pageItems = serverPaged
+            ? displayHistory
+            : displayHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage);
           const rowNodes = pageItems.map((item) => {
 
 
@@ -4310,6 +4566,7 @@ export default function ResumeScoringPage({
                       matchResult: convertMatchStatus(resume.match_status),
                       score: resume.overall_score || 0,
                       overallRating10: resume.overall_rating_10 ?? resume.overallRating10,
+                      resumeDeleted: resume.resumeDeleted ?? resume.resume_deleted,
                     }));
                   }));
                   const allProgressItems: ScoringProgressItem[] = perVersion
@@ -4324,7 +4581,7 @@ export default function ResumeScoringPage({
                   setShowProgressModal(true);
                 } catch (error) {
                   console.error('[ResumeScoringPage] Failed to load job progress:', error);
-                  toast.error('Failed to load scoring progress for this job');
+                  showErrorToast(error, "Couldn't load scoring progress for this job", { retry: openWholeJobProgress });
                 } finally {
                   setLoadingProgressJobId(null);
                 }
@@ -5093,14 +5350,14 @@ export default function ResumeScoringPage({
             <ListPagination
               currentPage={historyCurrentPage}
               itemsPerPage={historyItemsPerPage}
-              totalItems={displayHistory.length}
+              totalItems={serverPaged ? historyPage!.total : displayHistory.length}
               onPageChange={setHistoryCurrentPage}
               onItemsPerPageChange={setHistoryItemsPerPage}
               itemLabel="jobs"
             />
             </>
           );
-        })() : historyLoading && scoredHistory.length === 0 ? (
+        })() : historyLoading && (serverPaged ? !historyHasAny : scoredHistory.length === 0) ? (
           <div className="space-y-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <div
@@ -5141,7 +5398,7 @@ export default function ResumeScoringPage({
               </div>
             ))}
           </div>
-        ) : scoredHistory.length === 0 ? (
+        ) : !historyHasAny ? (
           <div className="tf-card">
             <EmptyState
               icon={ClipboardList}
@@ -5295,7 +5552,7 @@ export default function ResumeScoringPage({
                       }
                     : p
                 ));
-                toast.error(`Failed to retry scoring for ${item.candidateName}`);
+                showErrorToast(error, `Couldn't re-score ${item.candidateName}`);
               }
             }}
           />
@@ -5527,11 +5784,8 @@ export default function ResumeScoringPage({
                     aria-label="Refresh"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingHistoryModal ? 'animate-spin' : ''}`} />
-                    {/* The label swaps to "Refreshing..." mid-request, and the
-                        longer word used to widen the button and shove the
-                        close X sideways. The span reserves the wider word's
-                        width in both states, so the header never moves. */}
-                    <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+                    {/* Label hugs its text — no reserved width. */}
+                    <span className="hidden sm:inline">
                       {isRefreshingHistoryModal ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
@@ -6157,7 +6411,7 @@ export default function ResumeScoringPage({
                     }
                   : p
               ));
-              toast.error(`Failed: ${errorMsg}`);
+              showErrorToast(error, `Couldn't re-score ${item.candidateName}`);
             }
           }}
         />

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AIInterviewDetailsView from '@/components/ai-interview/AIInterviewDetailsView';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -191,7 +191,7 @@ function AIInterviewDetailsContent() {
      on the page (onRefresh) re-reads in place: swapping the page for the
      skeleton unmounted it, closing any dialog the action came from and
      dropping the tab's scroll and state. */
-  const fetchConfig = async (showSkeleton = true) => {
+  const fetchConfig = async (showSkeleton = true): Promise<void> => {
     const seq = ++fetchSeqRef.current;
     const isStale = () => seq !== fetchSeqRef.current;
     try {
@@ -208,7 +208,7 @@ function AIInterviewDetailsContent() {
       console.error('[TalentFlow] Failed to fetch AI interview config:', err);
       // A failed refresh keeps the page that is already showing.
       if (showSkeleton) setError(err.message || 'Failed to load AI interview config');
-      else toast.error(friendlyErrorMessage(err, "Couldn't refresh AI interview config. Please try again."));
+      else showErrorToast(err, "Couldn't refresh AI interview details", { id: 'ai-interview-details-refresh', retry: () => { void fetchConfig(false); } });
     } finally {
       if (!isStale()) setIsLoading(false);
     }

@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { userSettingsApi, sessionsApi, Session, UserSettings } from '@/lib/services/settingsService';
 import { clearTokens } from '@/lib/services/api';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -189,7 +189,7 @@ export default function SecurityPage() {
         });
       } catch (error) {
         console.error('Error loading security data:', error);
-        toast.error('Failed to load security settings');
+        showErrorToast(error, "Couldn't load security settings", { id: 'security-load', retry: loadData });
       } finally {
         setIsLoading(false);
       }
@@ -240,7 +240,7 @@ export default function SecurityPage() {
       }, 1500);
     } catch (error: any) {
       console.error('Error changing password:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't change password. Please try again."));
+      showErrorToast(error, "Couldn't change password");
       setIsChangingPassword(false);
     }
   };
@@ -257,7 +257,7 @@ export default function SecurityPage() {
       setShow2FASetup(true);
     } catch (error: any) {
       console.error('Error enabling 2FA:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't enable 2FA. Please try again."));
+      showErrorToast(error, "Couldn't enable 2FA");
     } finally {
       setIs2FALoading(false);
     }
@@ -278,7 +278,7 @@ export default function SecurityPage() {
       toast.success('Two-factor authentication enabled');
     } catch (error: any) {
       console.error('Error verifying 2FA:', error);
-      toast.error(friendlyErrorMessage(error, "Invalid verification code. Please try again."));
+      showErrorToast(error, "Couldn't verify the code");
     } finally {
       setIs2FALoading(false);
     }
@@ -305,7 +305,7 @@ export default function SecurityPage() {
       toast.success('Two-factor authentication disabled');
     } catch (error: any) {
       console.error('Error disabling 2FA:', error);
-      toast.error(friendlyErrorMessage(error, "Invalid verification code. Please try again."));
+      showErrorToast(error, "Couldn't disable 2FA");
     } finally {
       setIs2FALoading(false);
     }
@@ -321,7 +321,7 @@ export default function SecurityPage() {
       toast.success('Session timeout updated');
     } catch (error) {
       console.error('Error updating session timeout:', error);
-      toast.error('Failed to update session timeout');
+      showErrorToast(error, "Couldn't update session timeout");
     } finally {
       setIsSavingTimeout(false);
     }
@@ -334,7 +334,7 @@ export default function SecurityPage() {
       toast.success('Session revoked');
     } catch (error) {
       console.error('Error revoking session:', error);
-      toast.error('Failed to revoke session');
+      showErrorToast(error, "Couldn't revoke session");
     }
   };
 
@@ -351,7 +351,7 @@ export default function SecurityPage() {
       toast.success('All other sessions revoked');
     } catch (error) {
       console.error('Error revoking sessions:', error);
-      toast.error('Failed to revoke sessions');
+      showErrorToast(error, "Couldn't revoke other sessions");
     } finally {
       setIsRevokingSession(false);
     }
