@@ -26,7 +26,7 @@ import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringSe
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
@@ -203,6 +203,13 @@ export default function SelectSourceModal({
     hasMyResumesScoreAccess ? 'my-resumes' : (hasInternalDBAccess ? 'internal-db' : 'my-resumes')
   );
   const [resumes, setResumes] = useState<Resume[]>([]);
+  /* Every row either tab has loaded, by id. The selection is kept across the
+     My Resumes / Shared Database tabs, so ticked resumes are read from here
+     rather than from the list currently on screen. A stable Map (never
+     replaced); the latest copy of a row wins. */
+  const [seenRows] = useState<Map<string, Resume>>(() => new Map());
+  resumes.forEach(r => seenRows.set(r.id, r));
+  const rowOf = (id: string): Resume | undefined => seenRows.get(id);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -373,7 +380,7 @@ export default function SelectSourceModal({
       }
     } catch (error) {
       console.error('Failed to fetch resumes:', error);
-      toast.error('Failed to load resumes. Please try again.');
+      showErrorToast(error, "Couldn't load resumes", { id: 'select-source-load', retry: fetchData });
       setResumes([]);
     } finally {
       setLoading(false);
@@ -566,13 +573,13 @@ export default function SelectSourceModal({
     try {
       // Same destination as My Resumes: flagged AND filed into the one
       // Archived Resumes folder, not left in its folder with just the flag.
-      await archiveResumeToArchivedFolder(resumeId, resumes.find(r => r.id === resumeId)?.folder_id);
+      await archiveResumeToArchivedFolder(resumeId, rowOf(resumeId)?.folder_id);
       setSelectedResumes(prev => prev.filter(id => id !== resumeId));
       toast.success('Resume archived');
       await fetchData();
       refreshTabCounts();
     } catch (error: any) {
-      toast.error(`Couldn't archive resume. ${friendlyErrorMessage(error, 'Please try again.')}`);
+      showErrorToast(error, "Couldn't archive the resume");
     }
   };
 
@@ -606,7 +613,7 @@ export default function SelectSourceModal({
         refreshTabCounts();
       }
       if (failed.length) {
-        toast.error(`Couldn't unarchive ${failed.length} resume${failed.length === 1 ? '' : 's'}. Please try again.`);
+        showErrorToast(null, `Couldn't unarchive ${failed.length} resume${failed.length === 1 ? '' : 's'}`);
       }
     } finally {
       setUnarchiving(false);
@@ -626,7 +633,7 @@ export default function SelectSourceModal({
         await fetchData();
         refreshTabCounts();
       } catch (error: any) {
-        toast.error(`Couldn't delete version. ${friendlyErrorMessage(error, 'Please try again.')}`);
+        showErrorToast(error, `Couldn't delete version ${version.version}`);
       }
       return;
     }
@@ -641,7 +648,7 @@ export default function SelectSourceModal({
     }
     if (failedCount) {
       const firstError = results.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
-      toast.error(`Couldn't delete ${failedCount === 1 ? 'resume' : `${failedCount} resumes`}. ${friendlyErrorMessage(firstError?.reason, 'Please try again.')}`);
+      showErrorToast(firstError?.reason ?? null, `Couldn't delete ${failedCount === 1 ? 'the resume' : `${failedCount} resumes`}`);
     }
   };
 
@@ -660,7 +667,7 @@ export default function SelectSourceModal({
     else setSelectedResumes([]);
   };
   const resumeName = (id: string) => {
-    const r = resumes.find(x => x.id === id);
+    const r = rowOf(id);
     return r?.candidate_name || r?.file_name || 'this resume';
   };
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -684,7 +691,7 @@ export default function SelectSourceModal({
            client-side, so the fresh fetch above already holds them). */
         setSelectedFolder(folderId);
       }
-      if (failedCount) toast.error(`Couldn't move ${failedCount === 1 ? 'resume' : `${failedCount} resumes`}. Please try again.`);
+      if (failedCount) showErrorToast(results.find((r): r is PromiseRejectedResult => r.status === 'rejected')?.reason ?? null, `Couldn't move ${failedCount === 1 ? 'the resume' : `${failedCount} resumes`}`);
     } finally {
       setBulkBusy(false);
     }
@@ -700,7 +707,7 @@ export default function SelectSourceModal({
     setBulkBusy(true);
     try {
       const results = await Promise.allSettled(
-        ids.map(id => archiveResumeToArchivedFolder(id, resumes.find(r => r.id === id)?.folder_id)),
+        ids.map(id => archiveResumeToArchivedFolder(id, rowOf(id)?.folder_id)),
       );
       const done = ids.filter((_, i) => results[i].status === 'fulfilled');
       const failedCount = ids.length - done.length;
@@ -710,7 +717,7 @@ export default function SelectSourceModal({
         await fetchData();
         refreshTabCounts();
       }
-      if (failedCount) toast.error(`Couldn't archive ${failedCount === 1 ? 'resume' : `${failedCount} resumes`}. Please try again.`);
+      if (failedCount) showErrorToast(results.find((r): r is PromiseRejectedResult => r.status === 'rejected')?.reason ?? null, `Couldn't archive ${failedCount === 1 ? 'the resume' : `${failedCount} resumes`}`);
     } finally {
       setBulkBusy(false);
       setBulkConfirm(null);
@@ -733,13 +740,13 @@ export default function SelectSourceModal({
     const ids = [...actionIds];
     if (!ids.length || bulkBusy) return;
     if (ids.length === 1) {
-      const r = resumes.find(x => x.id === ids[0]);
+      const r = rowOf(ids[0]);
       try {
         saveBlob(await resumeService.download(ids[0]), r?.file_name || `${r?.candidate_name || 'resume'}.${r?.file_type || 'pdf'}`);
         toast.success('Resume downloaded');
         clearActionSelection();
-      } catch {
-        toast.error('Failed to download resume');
+      } catch (error) {
+        showErrorToast(error, "Couldn't download the resume", { retry: handleBulkDownload });
       }
       return;
     }
@@ -756,7 +763,7 @@ export default function SelectSourceModal({
       const files: Record<string, Uint8Array> = {};
       let failed = 0;
       for (let i = 0; i < ids.length; i++) {
-        const r = resumes.find(x => x.id === ids[i]);
+        const r = rowOf(ids[i]);
         let name = r?.file_name || `${r?.candidate_name || `resume_${i + 1}`}_resume`;
         if (files[`resumes/${name}`]) name = `${i + 1}_${name}`;
         try {
@@ -774,8 +781,8 @@ export default function SelectSourceModal({
         toast.success(`${ids.length} resumes downloaded as ZIP`, { id: toastId });
         clearActionSelection();
       }
-    } catch {
-      toast.error('Failed to create ZIP file', { id: toastId });
+    } catch (error) {
+      showErrorToast(error, "Couldn't create the ZIP file", { id: toastId, retry: runZipDownload });
     } finally {
       setBulkBusy(false);
       setBulkConfirm(null);
@@ -854,7 +861,8 @@ export default function SelectSourceModal({
   // Tab change
   const handleTabChange = (tab: 'my-resumes' | 'internal-db') => {
     setActiveTab(tab);
-    setSelectedResumes([]);
+    // The selection is kept across tabs (like the Resume Database page): tick
+    // some in My Resumes, switch to Shared Database, tick more, score them all.
     setSearchTerm('');
     setSelectedFolder('all');
   };
@@ -907,7 +915,7 @@ export default function SelectSourceModal({
       // Build resume items for progress display. The version is the one picked
       // in the review step (parallel to `reviewedIds`), else the row's own.
       const resumeItems = resumesToScore.map(resumeId => {
-        const resume = resumes.find(r => r.id === resumeId);
+        const resume = rowOf(resumeId);
         const reviewedIndex = reviewedIds ? reviewedIds.indexOf(resumeId) : -1;
         return {
           resumeId,
@@ -1021,7 +1029,7 @@ export default function SelectSourceModal({
 
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
+      showErrorToast(error, "Couldn't start scoring");
       setSubmitting(false);
     }
   };
@@ -1055,7 +1063,7 @@ export default function SelectSourceModal({
           : i
       ));
       setScoringStats(prev => ({ ...prev, processing: prev.processing - 1, failed: prev.failed + 1 }));
-      toast.error('Retry failed');
+      showErrorToast(error, `Couldn't re-score ${item.candidateName || 'this resume'}`);
     }
   };
 
@@ -1115,8 +1123,8 @@ export default function SelectSourceModal({
       await folderService.update(id, { name: trimmedName });
       setFolders(prev => prev.map(f => (f.id === id ? { ...f, name: trimmedName } : f)));
       toast.success('Folder renamed');
-    } catch {
-      toast.error('Failed to rename folder');
+    } catch (error) {
+      showErrorToast(error, "Couldn't rename the folder");
     }
   };
 
@@ -1148,7 +1156,7 @@ export default function SelectSourceModal({
       setFolders(flattenFolders(folderData || []));
       toast.success('Folder created');
     } catch (error: any) {
-      toast.error(`Couldn't create folder. ${friendlyErrorMessage(error, 'Please try again.')}`);
+      showErrorToast(error, "Couldn't create the folder");
     }
   };
 
@@ -1805,7 +1813,7 @@ export default function SelectSourceModal({
                   const selectedFolderData = folders.find(f => f.id === selectedFolder);
                   const isArchivedFolder = selectedFolderData?.name?.toLowerCase().includes('archived') || false;
                   if (isArchivedFolder && selectedResumes.length > 0) return true;
-                  const selectedResumeObjects = resumes.filter(r => selectedResumes.includes(r.id));
+                  const selectedResumeObjects = selectedResumes.map(rowOf).filter((r): r is Resume => !!r);
                   const hasArchivedResumes = selectedResumeObjects.some(r => r.is_archived === true);
                   return hasArchivedResumes;
                 })()}
@@ -1917,7 +1925,7 @@ export default function SelectSourceModal({
         <ApplyToJobModal
           mode="scoring"
           resumes={selectedResumes.map(id => {
-            const r = resumes.find(x => x.id === id);
+            const r = rowOf(id);
             return (r
               ? { ...r, name: r.candidate_name || (r as { name?: string }).name || 'Unknown' }
               : { id, name: 'Resume' }) as unknown as SharedResume;

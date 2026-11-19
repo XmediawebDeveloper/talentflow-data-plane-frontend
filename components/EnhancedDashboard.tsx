@@ -45,7 +45,7 @@ import api from '@/lib/services/api';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService } from '@/lib/services/resumeService';
 import { dashboardService, RecentActivity } from '@/lib/services/dashboardService';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { User, Tenant } from '@/lib/types/tenant';
 import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -269,9 +269,12 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
           // Check for permission denied (403 Forbidden)
           if (error?.message?.includes('403') || error?.message?.includes('Permission') || error?.status === 403) {
-            toast.error('Permission Denied: You do not have access to view dashboard data');
+            showErrorToast(error, "Couldn't load dashboard data", {
+              id: 'enhanced-dashboard-data',
+              description: "You don't have permission to view this data. Ask your admin for access.",
+            });
           } else {
-            toast.error('Failed to load dashboard data');
+            showErrorToast(error, "Couldn't load dashboard data", { id: 'enhanced-dashboard-data' });
           }
         }
       } finally {
@@ -404,7 +407,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
       } catch (error) {
         if (!controller.signal.aborted) {
           console.error('[EnhancedDashboard] Error fetching quota status:', error);
-          toast.error('Failed to load quota data');
+          showErrorToast(error, "Couldn't load your unit usage", { id: 'enhanced-dashboard-quota' });
         }
       } finally {
         clearTimeout(timeoutId);

@@ -24,7 +24,7 @@ import { Tenant } from '@/lib/types/tenant';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { removeBackgroundTask, upsertBackgroundTask } from '@/lib/backgroundTasks';
@@ -426,7 +426,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
       await refreshMyResumesBatches();
       startBatchPolling(batchId);
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't retry batch items. Please try again."));
+      showErrorToast(err, "Couldn't retry the batch items");
     } finally {
       setRetryingBatches(prev => { const s = new Set(prev); s.delete(batchId); return s; });
     }
@@ -453,7 +453,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
       // Refresh upload history to reflect the cancellation
       await refreshMyResumesBatches();
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't cancel batch. Please try again."));
+      showErrorToast(err, "Couldn't cancel the batch");
     } finally {
       setCancellingBatches(prev => { const s = new Set(prev); s.delete(batchId); return s; });
     }
@@ -474,7 +474,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
       await refreshMyResumesBatches();
       startBatchPolling(batchId);
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't retry file. Please try again."));
+      showErrorToast(err, "Couldn't retry the file");
     } finally {
       setRetryingItems(prev => { const s = new Set(prev); s.delete(itemId); return s; });
     }
@@ -499,7 +499,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
       );
       await refreshMyResumesBatches();
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't cancel file. Please try again."));
+      showErrorToast(err, "Couldn't cancel the file");
     } finally {
       setCancellingItems(prev => { const s = new Set(prev); s.delete(itemId); return s; });
     }
@@ -996,7 +996,11 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
       }
       // The upload dialog closed when this started, so say it here, and drop
       // the optimistic "Uploading N files..." placeholder that will never fill.
-      toast.error(message);
+      if (error?.response?.status === 403 || error?.response?.status === 409) {
+        toast.error(message);
+      } else {
+        showErrorToast(error, "Couldn't start the upload");
+      }
       setUploadHistory(prev => prev.filter(r => !(String(r.id).startsWith('temp-') && r.status === 'uploading')));
       return { success: false, error: message };
     }
@@ -1072,7 +1076,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
       }, 500);
     } catch (error: any) {
       console.error('Error resolving duplicates:', error);
-      toast.error('Failed to resolve duplicate');
+      showErrorToast(error, "Couldn't resolve the duplicate");
     } finally {
       setDuplicateFiles([]);
       setPendingUploadFolderId(undefined);
@@ -1162,10 +1166,11 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                         setIsUploadHistoryMinimized(true);
                         setIsUploadHistoryModalOpen(false);
                       }}
-                      className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors text-xl font-medium"
+                      className="h-8 min-w-8 px-2 sm:px-3 flex items-center justify-center gap-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                       aria-label="Minimize" title="Minimize"
                     >
-                      −
+                      <span className="text-xl font-medium leading-none">−</span>
+                      <span className="hidden sm:inline text-sm font-medium">Minimize</span>
                     </button>
                     <button
                       onClick={handleCloseUploadHistory}

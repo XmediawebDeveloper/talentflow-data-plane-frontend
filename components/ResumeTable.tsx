@@ -23,6 +23,7 @@ import ResumeVersionsModal from './ResumeVersionsModal';
 import VersionEyeBadge from '@/components/ui/version-eye-badge';
 import ShareResumeModal from './ShareResumeModal';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { resumeService, archiveResumeToArchivedFolder } from '@/lib/services/resumeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -649,7 +650,7 @@ export default function ResumeTable({
       setVersionHistoryResume({ ...resume, versions });
     } catch (error) {
       console.error('Failed to fetch versions:', error);
-      toast.error('Failed to load version history');
+      showErrorToast(error, "Couldn't load version history", { retry: () => handleShowVersionHistory(resume) });
     } finally {
       setIsLoadingVersions(false);
     }
@@ -1090,7 +1091,7 @@ export default function ResumeTable({
                                     toast.success('Resume downloaded', { id: 'download' });
                                   } catch (error) {
                                     console.error('Download failed:', error);
-                                    toast.error('Failed to download resume', { id: 'download' });
+                                    showErrorToast(error, "Couldn't download the resume", { id: 'download' });
                                   }
                                 }}
                                 aria-disabled={!canDownload}
@@ -1480,7 +1481,7 @@ export default function ResumeTable({
                       await archiveResumeToArchivedFolder(selectedResumeForAction.id, selectedResumeForAction.folderId);
                       toast.success('Resume archived successfully');
                     } catch (error) {
-                      toast.error('Failed to archive resume');
+                      showErrorToast(error, "Couldn't archive the resume");
                     }
                   }
                   setShowArchiveModal(false);

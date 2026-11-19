@@ -283,10 +283,11 @@ export default function ScoringJobProgressModal({
                   variant="secondary"
                   size="sm"
                   onClick={onMinimize}
-                  className="w-8"
+                  className="px-2 sm:px-3"
                   aria-label="Minimize" title="Minimize"
                 >
                   <Minus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Minimize</span>
                 </Button>
               )}
               <Button

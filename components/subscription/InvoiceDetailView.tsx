@@ -6,6 +6,7 @@ import {
   ArrowLeft, Download, Loader2, CheckCircle, Clock, AlertCircle, Circle, Copy, Package, RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -35,8 +36,8 @@ function CopyButton({ value, label }: { value: string; label: string }) {
         try {
           await navigator.clipboard.writeText(value);
           toast.success(`Copied ${label}`);
-        } catch {
-          toast.error(`Could not copy the ${label}`);
+        } catch (err) {
+          showErrorToast(err, `Couldn't copy the ${label}`);
         }
       }}
       aria-label={`Copy ${label}`}

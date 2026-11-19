@@ -79,7 +79,7 @@ import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem,
 import { formatJobExperienceBadge, formatExperienceLevelName } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { usePlanFeature, usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -1178,7 +1178,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     try {
       setViewingAIInterviewCandidate(await aiInterviewService.get(sessionId));
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't load candidate details. Please try again."));
+      showErrorToast(error, "Couldn't load candidate details", { retry: () => handleAIInterviewCandidateClick(sessionId) });
     } finally {
       setLoadingAIInterviewCandidate(false);
     }
@@ -1301,7 +1301,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // A failed clone says why; a failed lookup falls through to the config
       // flow, whose own guard re-checks before anything is created.
       if (error?.message) {
-        toast.error(friendlyErrorMessage(error, "Couldn't create a new AI interview version. Please try again."));
+        showErrorToast(error, "Couldn't create a new AI interview version");
         return;
       }
       // Lookup failed — fall through to the config flow rather than blocking.
@@ -1418,7 +1418,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // A failed clone says why; a failed lookup falls through to the creation
       // flow, whose own guard re-checks before anything is created.
       if (error?.message) {
-        toast.error(friendlyErrorMessage(error, "Couldn't duplicate the assessment. Please try again."));
+        showErrorToast(error, "Couldn't duplicate the assessment");
         return;
       }
     } finally {
@@ -1453,7 +1453,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setDraftAssessment(null);
       fetchAssessmentResults();
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't publish the assessment. Please try again."));
+      showErrorToast(err, "Couldn't publish the assessment");
     } finally {
       setPublishingDraft(false);
     }
@@ -1487,7 +1487,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     } catch (err: any) {
       // A draft with no clusters/skills configured can't be published; the API
       // says why, so surface that rather than a generic failure.
-      toast.error(friendlyErrorMessage(err, "Couldn't publish the AI interview. Please try again."));
+      showErrorToast(err, "Couldn't publish the AI interview");
     } finally {
       setPublishingAIDraft(false);
     }
@@ -1536,8 +1536,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       }
       setAiInterviewConfig(liveConfig);
       setTrackAIInterviewConfig(liveConfig);
-    } catch {
-      toast.error('Could not load the AI interview for this job. Please try again.');
+    } catch (error) {
+      showErrorToast(error, "Couldn't load the AI interview for this job", { retry: handleTrackAIInterviewInvites });
     } finally {
       setResolvingTrackInvitesConfig(false);
     }
@@ -1789,6 +1789,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setScoredResumesStats(stats);
     } catch (error) {
       console.error('[JobDetailView] Failed to fetch scored resumes:', error);
+      showErrorToast(error, "Couldn't load scored resumes", { id: `job-${job.id}-scored-resumes`, retry: fetchScoredResumes });
       setScoredResumes([]);
       setScoredResumesStats({ total: 0, exactMatch: 0, partialMatch: 0, noMatch: 0 });
     } finally {
@@ -2458,13 +2459,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         clearInterval(poll);
       }, 600000);
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't start scoring. Please try again."));
+      showErrorToast(err, "Couldn't start scoring");
     }
   };
 
   const handleAIMatchError = (error: string) => {
     setShowAIMatchPanel(false);
-    toast.error(`AI Matching failed: ${error}`);
+    showErrorToast(error || null, "Couldn't run AI Talent Match");
   };
 
   const handleSelectApplicants = () => {

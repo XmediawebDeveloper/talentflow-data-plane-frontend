@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import AppModal from '@/components/ui/app-modal';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
 import { accessCounts, copyBlockedReason, LEVEL_NAMES } from '@/lib/permissions/moduleLevels';
@@ -146,7 +146,7 @@ export default function RoleManagement() {
       if (typeof data.role_limit === 'number' && data.role_limit > 0) setRoleLimit(data.role_limit);
     } catch (error) {
       console.error('Failed to load roles:', error);
-      toast.error(friendlyErrorMessage(error, 'Failed to load roles'));
+      showErrorToast(error, "Couldn't load roles", { id: 'roles-load', retry: loadData });
       setRoles([]);
     } finally {
       setIsLoading(false);
@@ -211,7 +211,7 @@ export default function RoleManagement() {
       loadData();
     } catch (error) {
       console.error('Failed to delete role:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't delete the role. Please try again."));
+      showErrorToast(error, `Couldn't delete role "${deleteTarget.name}"`);
     } finally {
       setDeleting(false);
     }

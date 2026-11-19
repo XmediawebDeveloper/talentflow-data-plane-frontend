@@ -13,6 +13,7 @@ import Link from 'next/link';
 import ForwardTicketDialog from '@/components/support/ForwardTicketDialog';
 import { forwardTeamLabel } from '@/lib/services/internalTicketService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketCategory, InternalTicketPriority, InternalTicketStatus } from '@/lib/services';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -131,7 +132,7 @@ export default function InternalTicketAdmin() {
           router.replace('/organization/internal-tickets', { scroll: false });
         } catch (error) {
           console.error('Error fetching ticket from URL:', error);
-          toast.error('Could not find the requested ticket');
+          showErrorToast(error, "Couldn't open the requested ticket");
         }
       };
       openTicketFromUrl();
@@ -156,6 +157,7 @@ export default function InternalTicketAdmin() {
       if (isStale()) return;
       console.error('Error fetching tickets:', error);
       setTickets([]);
+      showErrorToast(error, "Couldn't load team tickets", { id: 'internal-ticket-admin-load', retry: fetchTickets });
     } finally {
       if (!isStale()) setLoading(false);
     }
@@ -178,6 +180,10 @@ export default function InternalTicketAdmin() {
       setSelectedTicket(ticket);
     } catch (error) {
       console.error('Error fetching ticket detail:', error);
+      showErrorToast(error, "Couldn't load the full ticket — showing the summary from the list", {
+        id: `internal-ticket-admin-detail-${ticketId}`,
+        retry: () => fetchTicketDetail(ticketId),
+      });
     }
   };
 
@@ -198,7 +204,7 @@ export default function InternalTicketAdmin() {
       fetchStats();
     } catch (error) {
       console.error('Error assigning ticket:', error);
-      toast.error('Failed to assign ticket');
+      showErrorToast(error, "Couldn't assign the ticket");
     } finally {
       setActionLoading(null);
     }
@@ -226,7 +232,7 @@ export default function InternalTicketAdmin() {
       fetchStats();
     } catch (error) {
       console.error('Error resolving ticket:', error);
-      toast.error('Failed to resolve ticket');
+      showErrorToast(error, "Couldn't resolve the ticket");
     } finally {
       setActionLoading(null);
     }
@@ -244,7 +250,7 @@ export default function InternalTicketAdmin() {
       fetchStats();
     } catch (error) {
       console.error('Error closing ticket:', error);
-      toast.error('Failed to close ticket');
+      showErrorToast(error, "Couldn't close the ticket");
     } finally {
       setActionLoading(null);
     }
@@ -262,7 +268,7 @@ export default function InternalTicketAdmin() {
       fetchStats();
     } catch (error) {
       console.error('Error reopening ticket:', error);
-      toast.error('Failed to reopen ticket');
+      showErrorToast(error, "Couldn't reopen the ticket");
     } finally {
       setActionLoading(null);
     }
@@ -288,8 +294,7 @@ export default function InternalTicketAdmin() {
       toast.success('Reply sent successfully');
     } catch (error) {
       console.error('Error sending reply:', error);
-      const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      toast.error(typeof detail === 'string' ? detail : 'Failed to send reply');
+      showErrorToast(error, "Couldn't send your reply");
     } finally {
       setReplySending(false);
     }
@@ -299,8 +304,8 @@ export default function InternalTicketAdmin() {
     if (!selectedTicket) return;
     try {
       saveBlob(await internalTicketService.downloadAttachment(selectedTicket.id, file.id), file.file_name);
-    } catch {
-      toast.error('Could not download the file');
+    } catch (error) {
+      showErrorToast(error, `Couldn't download ${file.file_name}`, { retry: () => handleDownload(file) });
     }
   };
 
@@ -314,7 +319,7 @@ export default function InternalTicketAdmin() {
       toast.success('Priority updated');
     } catch (error) {
       console.error('Error updating priority:', error);
-      toast.error('Failed to update priority');
+      showErrorToast(error, "Couldn't update the priority");
     }
   };
 

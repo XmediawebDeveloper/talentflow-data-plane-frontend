@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { toISODateIST } from '@/lib/utils/dateUtils';
+import { useQuota } from '@/contexts/QuotaContext';
 
 /**
  * Shared by the Team Usage and Team Analytics tabs: the date range and the
@@ -40,7 +41,10 @@ export const RANGE_PRESETS: RangePreset[] = [
 
 // ─── Session-backed state ─────────────────────────────────────────────────────
 
-const RANGE_KEY = 'team-report:range';
+/* v2: only a range the user picked is saved now (the default is no longer
+   written), so ranges auto-saved under the old key — the 30-day default — are
+   left behind instead of overriding the billing-period default. */
+const RANGE_KEY = 'team-report:range:v2';
 
 function readSession<T>(key: string, valid: (v: unknown) => v is T): T | null {
   try {
@@ -80,20 +84,73 @@ const isRange = (v: unknown): v is Range => {
     && from <= to && to <= todayIST();
 };
 
-/** Saves a preset as the shared range before switching tabs — e.g. the Teams
- *  list's "Units (last 30 days)" opens Team Usage on that same range. */
+/** Saves a preset as the shared range before switching tabs. */
 export function rememberRangePreset(id: string) {
   const preset = RANGE_PRESETS.find((p) => p.id === id);
   if (preset) writeSession(RANGE_KEY, preset.range());
 }
 
-/** The date range shared by both report tabs (default: last 30 days). */
+/** Before switching tabs: drop any picked range, so the report tabs open on
+ *  their default — the current billing period. The Teams list's Units links
+ *  use this, since their numbers cover that same period. */
+export function rememberBillingPeriod() {
+  writeSession(RANGE_KEY, null);
+}
+
+/**
+ * The period the Teams list's units cover, matching the report tabs' default:
+ * the current billing period, or the last 30 days when there is none.
+ * `ready` is false while the quota status is still loading, so callers don't
+ * fetch the fallback range just before the billing period arrives.
+ */
+export function useTeamUnitsPeriod(): { range: Range; label: string; ready: boolean } {
+  const { quotaData, loading } = useQuota();
+  const billing = billingRangeIST(quotaData?.billing_period);
+  if (billing) return { range: billing, label: 'billing period', ready: true };
+  return { range: RANGE_PRESETS[1].range(), label: 'last 30 days', ready: !loading };
+}
+
+const isPickedRange = (v: unknown): v is Range | null => v === null || isRange(v);
+
+/** The current billing period as an IST date range (to: today at the latest),
+ *  from the quota status's `billing_period` — the same period Usage History,
+ *  the Usage dashboard and Upgrade Plans show. Null until it's known. */
+function billingRangeIST(period: { start?: string; end?: string } | undefined): Range | null {
+  if (!period?.start) return null;
+  const startDate = new Date(period.start);
+  if (Number.isNaN(startDate.getTime())) return null;
+  const today = todayIST();
+  const from = toISODateIST(startDate);
+  const endDate = period.end ? new Date(period.end) : null;
+  const end = endDate && !Number.isNaN(endDate.getTime()) ? toISODateIST(endDate) : today;
+  const to = end < today ? end : today;
+  return from <= to ? { from, to } : null;
+}
+
+/**
+ * The date range shared by both report tabs.
+ *
+ * Default: the current billing period, so Team Usage / Analytics open on the
+ * same days as Usage History and the plan's quota. Until the billing period
+ * is known (first load), or if there isn't one, the last 30 days. Only a
+ * range the user picks is saved for the session; the default isn't, so it
+ * keeps following the billing period.
+ */
 export function useTeamReportRange() {
-  const [range, setRange] = useSessionState<Range>(RANGE_KEY, RANGE_PRESETS[1].range(), isRange);
-  const activePresetId = RANGE_PRESETS.find((p) => {
+  const { quotaData } = useQuota();
+  const billing = billingRangeIST(quotaData?.billing_period);
+  const [picked, setPicked] = useSessionState<Range | null>(RANGE_KEY, null, isPickedRange);
+  const range: Range = picked ?? billing ?? RANGE_PRESETS[1].range();
+
+  // "Current billing period" leads the presets once the period is known.
+  const presets: RangePreset[] = billing
+    ? [{ id: 'billing', label: 'Current billing period', range: () => billing }, ...RANGE_PRESETS]
+    : RANGE_PRESETS;
+  const activePresetId = presets.find((p) => {
     const r = p.range();
     return r.from === range.from && r.to === range.to;
   })?.id;
+
   return {
     fromDate: range.from,
     toDate: range.to,
@@ -102,14 +159,16 @@ export function useTeamReportRange() {
     // other end along instead of sending an inverted range.
     setFromDate: (from: string) => {
       if (!ISO_DATE.test(from)) return;
-      setRange((r) => ({ from, to: from > r.to ? from : r.to }));
+      setPicked({ from, to: from > range.to ? from : range.to });
     },
     setToDate: (to: string) => {
       if (!ISO_DATE.test(to)) return;
-      setRange((r) => ({ from: to < r.from ? to : r.from, to }));
+      setPicked({ from: to < range.from ? to : range.from, to });
     },
-    applyPreset: (p: RangePreset) => setRange(p.range()),
+    // Picking "Current billing period" goes back to following the default.
+    applyPreset: (p: RangePreset) => setPicked(p.id === 'billing' ? null : p.range()),
     activePresetId,
+    presets,
   };
 }
 
@@ -177,10 +236,16 @@ export function UnitStatCard({ label, value, icon: Icon, strong = false, loading
 
 // ─── Controls ─────────────────────────────────────────────────────────────────
 
-export function RangePresets({ activeId, onPick, className = '' }: { activeId?: string; onPick: (p: RangePreset) => void; className?: string }) {
+export function RangePresets({ activeId, onPick, presets = RANGE_PRESETS, className = '' }: {
+  activeId?: string;
+  onPick: (p: RangePreset) => void;
+  /** useTeamReportRange's list (leads with "Current billing period"). */
+  presets?: RangePreset[];
+  className?: string;
+}) {
   return (
     <div className={`flex gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0 ${className}`} role="group" aria-label="Date range presets">
-      {RANGE_PRESETS.map((preset) => {
+      {presets.map((preset) => {
         const active = activeId === preset.id;
         return (
           <button
@@ -206,7 +271,7 @@ export function RangePresets({ activeId, onPick, className = '' }: { activeId?: 
  *  Usage and Analytics tabs so the numbers can be read correctly. */
 export function UnitRulesHelp({ className = '' }: { className?: string }) {
   const rules: [string, string][] = [
-    ['Resume Units (RU)', '1 unit per uploaded resume. Duplicates you discard are not charged; overwriting or saving a new version is. Units come back when a resume is deleted or an upload is cancelled.'],
+    ['Resume Units (RU)', '1 unit per uploaded resume. Duplicates you discard are not charged; overwriting or saving a new version is. Deleting a resume or cancelling an upload gives its unit back to your quota, but usage here keeps counting it: Resume Units only ever goes up.'],
     ['Resume Scoring (RS)', '1 unit per resume scored, charged only when scoring succeeds. Re-scoring a resume charges again.'],
     ['AI Assessment (AS)', '1 unit is reserved when the invite is sent and charged when the candidate starts the assessment. It is released if the link expires unused.'],
     ['AI Interview (AIU)', '1 unit is reserved when the invite is sent and charged when the candidate starts the interview. It is released if the link expires unused.'],

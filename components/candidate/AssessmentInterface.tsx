@@ -25,7 +25,8 @@ import {
   WifiOff,
   Wifi,
   RefreshCw,
-  Info
+  Info,
+  Briefcase
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,6 +43,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useRetryQueue } from '@/hooks/useRetryQueue';
 import { getFullscreenChangeEvent, isFullscreen as getIsFullscreen, exitFullscreen as compatExitFullscreen, requestFullscreen as compatRequestFullscreen, playVideo } from '@/lib/utils/browserCompat';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import CandidateHeader from './CandidateHeader';
 import CandidateStepper from './CandidateStepper';
 import { CANDIDATE_PAGE, RECRUITER_BAR_ROW, RECRUITER_SHELL } from '@/lib/constants/candidateLayout';
@@ -307,6 +309,38 @@ export function AssessmentInterface({
   // Records the wall-clock ms when the timer was paused due to network loss.
   // Used to shift assessmentStartTimeRef forward on resume so offline time is excluded.
   const pauseStartWallTimeRef = useRef<number | null>(null);
+
+  /* Below `lg` the timer card sits above the question and scrolls away with
+     the page (only the desktop column is sticky). Watch it: once it has left
+     the screen, a slim bar pinned to the top shows the time and question
+     instead, so the candidate never has to scroll back up to see it. */
+  const [timerCardEl, setTimerCardEl] = useState<HTMLDivElement | null>(null);
+  const [timerCardOffscreen, setTimerCardOffscreen] = useState(false);
+  /* The header block — pinned from `sm`, so there the card is "gone" once it
+     slides under the header, not only once it leaves the viewport. */
+  const stickyHeaderRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!timerCardEl) return;
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      const header = stickyHeaderRef.current;
+      const headerBottom = header && getComputedStyle(header).position === 'sticky'
+        ? header.getBoundingClientRect().bottom
+        : 0;
+      const card = timerCardEl.getBoundingClientRect();
+      setTimerCardOffscreen(card.bottom <= headerBottom || card.top >= window.innerHeight);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(check); };
+    check();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [timerCardEl]);
 
   // Initialize: compute from wall clock (not decrement-based) to be accurate
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
@@ -1483,6 +1517,17 @@ export function AssessmentInterface({
     }
   };
 
+  // Previous / Next save the current answer before moving; if that save throws,
+  // the click otherwise does nothing visible. Offline and time-expiry are left
+  // to the offline banner and the timer, which already explain them. No Retry:
+  // the candidate presses the button again (it re-saves).
+  const notifyNavigationSaveFailed = (error: unknown) => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('TIME_EXPIRED') || message.toLowerCase().includes('time expired')) return;
+    showErrorToast(error, "Couldn't save your answer", { id: 'assessment-navigate-error' });
+  };
+
   // Navigate to previous question (save as draft, editable)
   const handlePrevious = async () => {
     if (isNavigating || currentQuestion.question_number <= 1) return;
@@ -1506,6 +1551,7 @@ export function AssessmentInterface({
       await onNavigate(currentQuestion.question_number - 1);
     } catch (error) {
       console.error('Failed to navigate to previous:', error);
+      notifyNavigationSaveFailed(error);
     } finally {
       setIsNavigating(false);
     }
@@ -1539,6 +1585,7 @@ export function AssessmentInterface({
       }
     } catch (error) {
       console.error('Failed to navigate to next:', error);
+      notifyNavigationSaveFailed(error);
     } finally {
       setIsNavigating(false);
     }
@@ -1921,7 +1968,7 @@ export function AssessmentInterface({
       {/* Sticky Header Container - pinned from `sm` up. On a phone the
           header and step form are ~150px, a quarter of the screen, so there
           they scroll away and the question gets the whole viewport. */}
-      <div className="relative z-50 sm:sticky sm:top-0">
+      <div ref={stickyHeaderRef} className="relative z-50 sm:sticky sm:top-0">
         {/* Network Status Banner */}
         {/* Two different facts, two different messages. A backend restart used
             to render as "No internet connection", which blames the candidate's
@@ -2043,6 +2090,47 @@ export function AssessmentInterface({
 
             return (
               <>
+                {/* Phones / tablets: pinned time + question once the timer
+                    card has scrolled off. Desktop keeps its sticky column.
+                    Top on a phone (its header scrolls away); bottom from `sm`,
+                    where the header is itself pinned to the top. */}
+                {timerCardOffscreen && (
+                  <div
+                    className="lg:hidden fixed inset-x-0 top-0 sm:top-auto sm:bottom-0 z-40 bg-white/95 backdrop-blur-sm border-b sm:border-b-0 sm:border-t border-gray-200 shadow-sm"
+                    role="timer"
+                    aria-label={`Time remaining ${formatTime(globalTimeRemaining)}`}
+                  >
+                    <div className="flex items-center justify-between gap-3 px-4 py-2">
+                      <span className="flex items-center gap-2 min-w-0">
+                        <Clock className={`w-4 h-4 shrink-0 ${timerTone}`} />
+                        <span className={`text-lg font-bold tabular-nums leading-none ${timerTone} ${globalTimeRemaining < 300 ? 'animate-pulse' : ''}`}>
+                          {formatTime(globalTimeRemaining)}
+                        </span>
+                        {timeRemaining !== null && (
+                          <span className={`text-xs tabular-nums whitespace-nowrap ${timeRemaining < 30 ? 'text-destructive font-semibold' : 'text-gray-500'}`}>
+                            · Q {formatTime(timeRemaining)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-sm font-semibold text-gray-700 tabular-nums whitespace-nowrap">
+                        Q {currentQuestion.question_number} / {currentQuestion.total_questions}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Which job this test is for — a candidate applying to
+                    several jobs can confirm they are on the right one. */}
+                {assessmentInfo.jd_title && (
+                  <div className="mb-3 sm:mb-4 flex items-center gap-2 min-w-0">
+                    <Briefcase className="w-4 h-4 shrink-0 text-brand-blue" />
+                    <span className="tf-body-secondary shrink-0">Job:</span>
+                    <span className="text-sm sm:text-base font-semibold text-gray-900 truncate" title={assessmentInfo.jd_title}>
+                      {assessmentInfo.jd_title}
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex flex-col lg:flex-row-reverse lg:items-stretch gap-4 lg:gap-5">
                   {/* ── Right column ── */}
                   <aside className="lg:w-80 shrink-0 flex flex-col gap-4 lg:sticky lg:top-40 lg:self-start">
@@ -2089,8 +2177,9 @@ export function AssessmentInterface({
                       </div>
                     </div>
 
-                    {/* Time + question progress — one card, split by a rule. */}
-                    <div className={SIDE_CARD}>
+                    {/* Time + question progress — one card, split by a rule.
+                        Observed for the pinned mobile bar above. */}
+                    <div ref={setTimerCardEl} className={SIDE_CARD}>
                       <div className="flex items-center gap-3">
                         <span className="w-11 h-11 shrink-0 rounded-xl bg-brand-blue/10 flex items-center justify-center">
                           <Clock className={`w-5 h-5 ${timerTone}`} />

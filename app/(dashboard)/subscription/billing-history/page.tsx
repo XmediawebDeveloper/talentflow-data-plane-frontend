@@ -10,6 +10,7 @@ import { billToFromAuth, generateBillingInvoicePDF } from '@/lib/utils/pdfInvoic
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import ListPagination from '@/components/ListPagination';
 import { RowActions } from '@/components/subscription/RowActionsMenu';
 import BillingReports from '@/components/subscription/BillingReports';
@@ -193,6 +194,7 @@ export default function BillingHistoryPage() {
       setAddonTransactions(res.data?.data || []);
     } catch (err) {
       console.error('[BillingHistory] Addon transactions fetch error:', err);
+      showErrorToast(err, "Couldn't load add-on transactions", { id: 'billing-addon-transactions', retry: fetchAddonTransactions });
     }
   };
 
@@ -205,8 +207,7 @@ export default function BillingHistoryPage() {
         prev.map(t => t.id === txnId ? { ...t, status: 'paid', activation_status: 'activated' } : t)
       );
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || 'Retry failed. Please try again.';
-      toast.error(msg);
+      showErrorToast(err, "Couldn't activate the add-on");
     } finally {
       setRetryingId(null);
     }
@@ -286,8 +287,8 @@ export default function BillingHistoryPage() {
     try {
       await navigator.clipboard.writeText(invoiceNumber);
       toast.success('Invoice number copied');
-    } catch {
-      toast.error('Could not copy invoice number');
+    } catch (err) {
+      showErrorToast(err, "Couldn't copy invoice number");
     }
   };
 
@@ -356,7 +357,7 @@ export default function BillingHistoryPage() {
       api.post('/billing/log-view', { kind: 'invoice_downloaded', invoice_number: inv.invoice_number }).catch(() => {});
     } catch (error) {
       console.error('PDF generation failed:', error);
-      toast.error('Failed to generate PDF. Please try again.');
+      showErrorToast(error, `Couldn't download invoice ${inv.invoice_number}`, { retry: () => handleDownloadInvoice(inv) });
     } finally {
       setDownloadingId(null);
     }

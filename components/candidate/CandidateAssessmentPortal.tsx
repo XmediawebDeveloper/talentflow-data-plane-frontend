@@ -44,6 +44,7 @@ import { Monitor, Loader2, AlertCircle, Maximize2, ClipboardList, Shield, Shield
 import { Button } from '@/components/ui/button';
 import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen, playVideo, shouldUseAdaptiveAssessmentMode, lockKeyboardShortcuts, unlockKeyboardShortcuts } from '@/lib/utils/browserCompat';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { SegmentedRecorder, createCanvasRelayTrack, resetRecorderSegments } from '@/lib/proctoring/segmentedRecorder';
 import { beginLegitimateShare, endLegitimateShare, registerAppOwnedStream, unregisterAppOwnedStream } from '@/components/ai-interview/proctoring/ScreenRecordingGuard';
 import { ShareBarGateScreen } from './ShareBarGateScreen';
@@ -2383,6 +2384,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       questionsCacheRef.current.set(questionNumber, { ...question, all_question_statuses: null });
     } catch (err) {
       console.error('Failed to navigate to question:', err);
+      // Only reached from a Previous / Next / question-number click. Without
+      // feedback the click silently does nothing. Skip while offline — the
+      // assessment's offline banner already covers that case.
+      if (seq === navigationSeqRef.current && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+        showErrorToast(err, "Couldn't load that question", {
+          id: 'assessment-navigate-error',
+          retry: () => handleNavigateToQuestion(questionNumber),
+        });
+      }
     }
   };
 

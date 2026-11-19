@@ -21,7 +21,7 @@ import {
   User,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST } from '@/lib/utils/dateUtils';
 import {
@@ -132,7 +132,7 @@ export default function MyConsumptionHistory() {
       setHistory(items);
     } catch (error: any) {
       if (isStale()) return;
-      toast.error(friendlyErrorMessage(error, "Couldn't load consumption history. Please try again."));
+      showErrorToast(error, "Couldn't load consumption history", { id: 'my-consumption-history-load', retry: loadHistory });
     } finally {
       if (!isStale()) setIsLoading(false);
     }

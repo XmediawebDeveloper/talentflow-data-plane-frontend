@@ -49,9 +49,11 @@ const asText = (value: unknown): string => {
 export const errorText = (error: unknown): string => {
   if (typeof error === 'string') return error;
   if (!error || typeof error !== 'object') return '';
-  const e = error as { response?: { data?: { detail?: unknown } }; detail?: unknown; message?: unknown };
+  const e = error as { response?: { data?: { detail?: unknown; message?: unknown } }; detail?: unknown; message?: unknown };
   return (
     asText(e.response?.data?.detail) ||
+    // Some endpoints put the reason in `message` instead of `detail`.
+    asText(e.response?.data?.message) ||
     asText(e.detail) ||
     (typeof e.message === 'string' ? e.message : '')
   ).trim();

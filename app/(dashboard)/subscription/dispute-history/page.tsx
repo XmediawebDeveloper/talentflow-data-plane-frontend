@@ -7,7 +7,7 @@ import { handleUnauthorized } from '@/lib/services/api';
 import { billToFromAuth, generateDisputeRecordPDF } from '@/lib/utils/pdfInvoice';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import ListPagination from '@/components/ListPagination';
 import { RowActions } from '@/components/subscription/RowActionsMenu';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -293,7 +293,7 @@ export default function DisputeHistoryPage() {
       await generateDisputeRecordPDF(inv, billToFromAuth(user, tenant));
     } catch (error) {
       console.error('PDF generation failed:', error);
-      toast.error('Failed to generate PDF. Please try again.');
+      showErrorToast(error, "Couldn't download the dispute record", { retry: () => handleDownloadDispute(inv) });
     } finally {
       setDownloadingId(null);
     }

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { clearRbacSessionCache } from '@/lib/utils/rbacSessionCache';
+import { showErrorToast } from '@/lib/utils/errorToast';
 
 // Neutral-gray skeleton mirroring the Permissions & Roles layout:
 // hero + 3-col grid (Roles list, then the module permissions panel).
@@ -213,6 +214,10 @@ export default function PermissionsPage() {
       setIsEditing(false);
     } catch (err) {
       console.error('[Permissions] Error fetching role details:', err);
+      showErrorToast(err, "Couldn't load role details", {
+        id: 'permissions-role-details',
+        retry: () => fetchRoleDetails(roleId, headers),
+      });
     }
   };
 
