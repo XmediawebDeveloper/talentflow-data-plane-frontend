@@ -8,7 +8,7 @@
  * Queries GET /audits to fetch actual audit logs for comparison.
  */
 
-import { handleUnauthorized } from './api';
+import { handleUnauthorized, getAccessToken as getSessionAccessToken } from './api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 const STORAGE_KEY = 'talentflow_pending_verifications';
@@ -100,7 +100,7 @@ const OPERATION_MAP: Record<string, string> = {
 
 const getAccessToken = (): string | null => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('accessToken');
+  return getSessionAccessToken();
 };
 
 const generateId = (): string => {

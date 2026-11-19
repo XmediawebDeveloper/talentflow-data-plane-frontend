@@ -14,7 +14,7 @@ import {
   Sliders, Info, Star,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
@@ -652,7 +652,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       markUnsavedVersion(result.cloned_id);
       router.push(withOrigin(aiInterviewConfigureHref(result.cloned_id, config.jd_id || '')));
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't duplicate config. Please try again."));
+      showErrorToast(error, "Couldn't duplicate AI interview");
     } finally {
       setActionLoading(false);
     }
@@ -670,7 +670,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       await onRefresh?.();
       toast.success('Config archived');
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't archive AI interview. Please try again."));
+      showErrorToast(error, "Couldn't archive AI interview");
     } finally {
       setActionLoading(false);
       setConfirmAction(null);
@@ -698,7 +698,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           : 'Configuration restored to Active'
       );
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't unarchive AI interview. Please try again."));
+      showErrorToast(error, "Couldn't unarchive AI interview");
     } finally {
       setActionLoading(false);
     }
@@ -716,7 +716,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       toast.success('Config deleted');
       onBack();
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't delete AI interview. Please try again."));
+      showErrorToast(error, "Couldn't delete AI interview");
     } finally {
       setActionLoading(false);
       setConfirmAction(null);
@@ -839,7 +839,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     return () => { cancelled = true; };
   }, [configureOnly, setCandidateParam]);
 
-  const handleCandidateClick = useCallback(async (activityId: string, navIds?: string[]) => {
+  const handleCandidateClick = useCallback(async (activityId: string, navIds?: string[]): Promise<void> => {
     if (navIds) setCandidateNavIds(navIds);
     setCandidateLoading(true);
     try {
@@ -847,7 +847,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       setCandidateDetail(detail);
       setCandidateParam(detail?.id || activityId);
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't load candidate details. Please try again."));
+      showErrorToast(error, "Couldn't load candidate details", { retry: () => { void handleCandidateClick(activityId, navIds); } });
     } finally {
       setCandidateLoading(false);
     }

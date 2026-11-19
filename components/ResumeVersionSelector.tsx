@@ -5,7 +5,7 @@ import { X, FileText, Calendar, User, Clock, CheckCircle2, History, Loader2 } fr
 import { Resume, ResumeVersion } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { resumeService } from '@/lib/services/resumeService';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
 
 interface ResumeVersionSelectorProps {
@@ -71,8 +71,8 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
         older: { version: olderNumber, name: older.name, text: olderText },
         newer: { version: newerNumber, name: newer.name, text: newerText },
       });
-    } catch {
-      toast.error('Could not load those versions to compare');
+    } catch (error) {
+      showErrorToast(error, "Couldn't load those versions to compare", { retry: () => openComparison(older, olderNumber, newer, newerNumber) });
     } finally {
       setLoadingCompare(false);
     }

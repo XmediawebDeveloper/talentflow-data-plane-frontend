@@ -5,6 +5,7 @@ import { Palette, Upload, Save, Eye, Check, Loader2, X, ShieldCheck, ShieldAlert
 import { useState, useEffect, useRef } from 'react';
 import { brandingApi, BrandingSettings, BrandingUpdate } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,7 @@ export default function BrandingPage() {
         setCnameTarget(domainConfig.cname_target);
       } catch (error) {
         console.error('Error loading branding:', error);
+        showErrorToast(error, "Couldn't load branding settings", { id: 'branding-load', retry: loadBranding });
       } finally {
         setIsLoading(false);
       }
@@ -73,7 +75,7 @@ export default function BrandingPage() {
       setTimeout(() => setSaved(false), 2000);
     } catch (error) {
       console.error('Error saving branding:', error);
-      toast.error('Failed to save branding');
+      showErrorToast(error, "Couldn't save branding");
     } finally {
       setIsSaving(false);
     }
@@ -102,7 +104,7 @@ export default function BrandingPage() {
     } catch (error) {
       setDomainVerified(false);
       setDomainError('Network error during verification');
-      toast.error('Verification request failed');
+      showErrorToast(error, "Couldn't verify domain", { retry: handleVerifyDomain });
     } finally {
       setIsVerifyingDomain(false);
     }
@@ -129,7 +131,7 @@ export default function BrandingPage() {
       toast.success('Logo uploaded successfully');
     } catch (error) {
       console.error('Logo upload failed:', error);
-      toast.error('Failed to upload logo. Please try again.');
+      showErrorToast(error, "Couldn't upload logo");
     } finally {
       setIsUploadingLogo(false);
       if (logoInputRef.current) logoInputRef.current.value = '';

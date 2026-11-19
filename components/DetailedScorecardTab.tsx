@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info, Copy, Check, ChevronsUpDown, ChevronsDownUp, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Tooltip } from '@/components/ui/tooltip';
 import { RATING_PASS_THRESHOLD } from '@/lib/utils/matchStatus';
@@ -195,8 +196,8 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       setCopiedReasoningIndex(index);
       toast.success('AI reasoning copied to clipboard');
       setTimeout(() => setCopiedReasoningIndex(current => (current === index ? null : current)), 1500);
-    } catch {
-      toast.error('Failed to copy to clipboard');
+    } catch (error) {
+      showErrorToast(error, "Couldn't copy to the clipboard");
     }
   };
 

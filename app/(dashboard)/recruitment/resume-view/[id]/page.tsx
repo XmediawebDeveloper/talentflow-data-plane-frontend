@@ -226,7 +226,7 @@ import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/r
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
@@ -243,6 +243,7 @@ import {
   resumeDatabaseTabHref,
   type ResumeTab,
 } from '@/lib/constants/resumePools';
+import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
 
 /** Create / Send button when the user lacks the permission: shown, greyed, hover explains. */
 const PERMISSION_LOCKED_BUTTON_CLASS =
@@ -460,11 +461,9 @@ export default function ResumeViewPage() {
     own: !!uploaderId && uploaderId === String(user?.id ?? ''),
     fromAiMatch,
   });
-  const canDeleteResume = !isTenantUserEmailResume && (isTenantAdmin || (
-    sharedPool
-      ? hasPermissionCode('internal_db:delete')
-      : hasPermission('canDeleteResumes') || hasPermissionCode('my_resumes:delete')
-  ));
+  // Account owner only (2026-11-19): deleting erases the resume's Resume
+  // Scoring and AI Talent Match results, so no role can be given Delete.
+  const canDeleteResume = !isTenantUserEmailResume && canDeleteResumes(isTenantAdmin);
   // An archived resume is off-limits for every action below (Score, AI Talent
   // Match, Invite) — it can still be viewed, downloaded, shared and deleted,
   // same as the Resume Database list's own rule (ResumeTable.tsx / MyResumesView.tsx).
@@ -796,7 +795,7 @@ export default function ResumeViewPage() {
     } catch (err: any) {
       console.error('Failed to fetch resume:', err);
       setError(err?.message || 'Failed to load resume');
-      toast.error('Failed to load resume');
+      showErrorToast(err, "Couldn't load this resume", { id: `resume-${resumeId}-load`, retry: fetchResume });
     } finally {
       setLoading(false);
     }
@@ -898,7 +897,7 @@ export default function ResumeViewPage() {
   const handleDownload = async (
     targetResumeId: string = resumeId,
     targetFileName: string = resume?.fileName || `resume-${resumeId}.${resume?.fileType || 'pdf'}`,
-    errorMessage: string = 'Failed to download resume'
+    errorMessage: string = "Couldn't download the resume"
   ) => {
     try {
       const blob = await resumeService.download(targetResumeId);
@@ -910,8 +909,8 @@ export default function ResumeViewPage() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch {
-      toast.error(errorMessage);
+    } catch (error) {
+      showErrorToast(error, errorMessage, { retry: () => handleDownload(targetResumeId, targetFileName, errorMessage) });
     }
   };
 
@@ -961,11 +960,11 @@ Best regards`);
         setShareEmail('');
         setShareMessage('');
       } else {
-        toast.error(result.message || 'Failed to send email');
+        showErrorToast(result.message || null, "Couldn't send the email");
       }
     } catch (error: any) {
       console.error('Failed to share resume:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't send email. Please try again."));
+      showErrorToast(error, "Couldn't send the email");
     } finally {
       setIsSendingEmail(false);
     }
@@ -978,14 +977,14 @@ Best regards`);
       variant: 'delete',
       confirmText: 'Delete Resume',
       item: { label: 'RESUME', name: getCandidateName() },
-      warningNote: 'Deleting this resume will permanently remove it and cannot be restored.',
+      warningNote: "Deleting this resume will permanently remove it and cannot be restored. Its Resume Scoring and AI Talent Match results are deleted too (only the candidate's name and email stay there). Assessments and AI Interviews are kept.",
     })) {
       try {
         await resumeService.delete(resumeId);
         toast.success('Resume deleted');
         router.push('/recruitment/resume-database?tab=my-resumes');
       } catch (err) {
-        toast.error('Failed to delete resume');
+        showErrorToast(err, "Couldn't delete the resume");
       }
     }
   };
@@ -1018,7 +1017,7 @@ Best regards`);
       setPublishedJobs(convertedJobs);
     } catch (error) {
       console.error('Failed to fetch jobs:', error);
-      toast.error('Failed to load jobs');
+      showErrorToast(error, "Couldn't load jobs", { id: 'resume-view-jobs-load', retry: fetchPublishedJobs });
     }
   };
 
@@ -1099,7 +1098,7 @@ Best regards`);
       setScoreTableResume(toScoredResumeDetail(found, jobForInvite?.jdTitle || jobDetailsTitle));
     } catch (error) {
       console.error('[ResumeView] Failed to load the score table:', error);
-      toast.error('Failed to load score table');
+      showErrorToast(error, "Couldn't load the score table", { id: 'resume-view-score-table', retry: openScoreTable });
     } finally {
       setLoadingScoreTable(false);
     }
@@ -1302,7 +1301,7 @@ Best regards`);
       if (error?.message?.includes('QUOTA') || error?.response?.status === 403) {
         toast.error('Resume scoring quota exhausted. Please upgrade your plan.');
       } else {
-        toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
+        showErrorToast(error, "Couldn't start scoring");
       }
     } finally {
       setSelectedVersionForApply(null);
@@ -1739,7 +1738,7 @@ Best regards`);
                       <button
                         onClick={() => { if (!canDeleteResume) return; handleDelete(); }}
                         aria-disabled={!canDeleteResume}
-                        title={isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : !canDeleteResume ? 'You do not have permission to delete resumes' : undefined}
+                        title={isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : !canDeleteResume ? RESUME_DELETE_OWNER_ONLY_REASON : undefined}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm ${
                           canDeleteResume
                             ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300'
@@ -2461,7 +2460,7 @@ Best regards`);
                                     document.body.removeChild(link);
                                     window.URL.revokeObjectURL(url);
                                   } catch (err) {
-                                    toast.error('Failed to download version');
+                                    showErrorToast(err, "Couldn't download this version");
                                   }
                                 }}
                                 className={`p-2 rounded-md transition-colors ${
@@ -2923,7 +2922,7 @@ Best regards`);
             setAiTalentMatchJob(null);
           }}
           onError={(error) => {
-            toast.error(error || 'Failed to run AI Talent Match');
+            showErrorToast(error || null, "Couldn't run AI Talent Match");
             setAiTalentMatchJob(null);
           }}
         />

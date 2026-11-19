@@ -68,6 +68,9 @@ export interface ChannelListResponse {
   channels: Channel[];
   direct_messages: Channel[];
   total_unread: number;
+  /** With `includeMessages`: the conversation the page opens first, and its last 50 messages (already marked read). */
+  open_channel_id?: string | null;
+  open_messages?: MessageListResponse | null;
 }
 
 export interface MessageListResponse {
@@ -121,9 +124,12 @@ class ChatService {
   /**
    * List all channels for the current user
    */
-  async listChannels(): Promise<ChannelListResponse> {
+  async listChannels(options?: { includeMessages?: boolean; open?: string | null }): Promise<ChannelListResponse> {
     try {
-      const response = await api.get('/chat/channels');
+      const params = options?.includeMessages
+        ? { include_messages: true, ...(options.open ? { open: options.open } : {}) }
+        : undefined;
+      const response = await api.get('/chat/channels', params ? { params } : undefined);
       return response.data;
     } catch (error) {
       console.error('Error listing channels:', error);

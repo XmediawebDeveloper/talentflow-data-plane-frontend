@@ -4,10 +4,10 @@ import { Building2, Save, Edit2, Loader2, X, AlertCircle, CheckCircle2, MapPin, 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import authService from '@/lib/services/authService';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Button } from '@/components/ui/button';
@@ -338,7 +338,7 @@ export default function CompanyProfilePage() {
     setIsLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) { setError('Session expired. Please log in again.'); return; }
 
       const response = await fetch(`${API_URL}/settings/organization-profile`, {
@@ -383,7 +383,7 @@ export default function CompanyProfilePage() {
     setSuccessMessage('');
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) throw new Error('Session expired. Please log in again.');
 
       const response = await fetch(`${API_URL}/settings/organization-profile`, {
@@ -457,7 +457,7 @@ export default function CompanyProfilePage() {
       setValidationErrors((prev) => ({ ...prev, zipCode: undefined }));
       toast.success('Address filled from your current location — please review it.');
     } catch (err) {
-      toast.error(friendlyErrorMessage(err, "Couldn't get your current location. Please try again."));
+      showErrorToast(err, "Couldn't get your current location");
     } finally {
       setIsLocating(false);
     }
@@ -1242,8 +1242,8 @@ function CopyButton({ text, label, showText }: { text: string; label: string; sh
       setCopied(true);
       toast.success(`Copied ${label}`);
       setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error(`Couldn't copy ${label}`);
+    } catch (error) {
+      showErrorToast(error, `Couldn't copy ${label}`);
     }
   };
   return (

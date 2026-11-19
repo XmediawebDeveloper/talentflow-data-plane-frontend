@@ -1,13 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X, Users, Mail, Play, Check, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send, Undo2 } from 'lucide-react';
+import { X, Users, Mail, Play, Check, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send, Undo2, Download, FileText, FileSpreadsheet } from 'lucide-react';
+import ExportColumnsModal, { type ExportFormatOption } from '@/components/ExportColumnsModal';
+import { exportRows } from '@/lib/utils/exportUtils';
+import { useAuth } from '@/lib/hooks/useAuth';
 import type { InviteStatusKind } from '@/components/ui/invite-status-chip';
 import { StatCardsHint, StatusLegend, UpdatedAgo } from '@/components/ui/guided-tracker';
 import { TrackerSelectAll, TrackerStatusTabs, TrackerTabHint, trackerSelection, TRACKER_LOOK_PANEL_CLASS, TRACKER_LOOK_BODY_CLASS, TrackerBulkBar, type TrackerTab, type TrackerSelectGroup } from '@/components/ui/tracker-look';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -39,7 +42,51 @@ import AIInterviewInviteTable, {
   isRevocableInvite,
   displayInviteScore,
   matchesInviteResultFilter,
+  inviteResult,
+  inviteSourceLabel,
+  inviteStatusLabel,
 } from '@/components/AIInterviewInviteTable';
+
+const exportDate = (value: string | null | undefined): string => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+};
+
+const exportVersion = (n: number | null | undefined): string => (n != null && n > 0 ? `V${n}` : '');
+
+/* Export columns: one row per invite, in the table's own order and wording.
+   The Export popup lets the user untick any of them. */
+type InviteExportContext = { jdShortId?: string; jdTitle: string; jobVersion?: number; interviewVersion?: number };
+type InviteExportRow = {
+  candidate_cid?: string | null; candidate_name?: string | null; candidate_email?: string | null;
+  invitation_sent_at?: string | null; created_at?: string | null; started_at?: string | null;
+  completed_at?: string | null; expires_at?: string | null; _jd_version?: number; _interview_version?: number;
+};
+const INVITE_EXPORT_COLUMNS: { id: string; label: string; value: (inv: InviteExportRow, ctx: InviteExportContext) => string }[] = [
+  { id: 'cid', label: 'CID', value: (inv) => inv.candidate_cid || '' },
+  { id: 'name', label: 'Candidate Name', value: (inv) => inv.candidate_name || '' },
+  { id: 'email', label: 'Email', value: (inv) => inv.candidate_email || '' },
+  { id: 'status', label: 'Status', value: (inv) => inviteStatusLabel(inv) },
+  { id: 'invited', label: 'Invited At', value: (inv) => exportDate(inv.invitation_sent_at || inv.created_at) },
+  { id: 'started', label: 'Started At', value: (inv) => exportDate(inv.started_at) },
+  { id: 'completed', label: 'Completed At', value: (inv) => exportDate(inv.completed_at) },
+  { id: 'expires', label: 'Link Expires At', value: (inv) => exportDate(inv.expires_at) },
+  { id: 'score', label: 'Score', value: (inv) => { const s = displayInviteScore(inv); return s != null ? String(Math.round(s)) : ''; } },
+  { id: 'result', label: 'Result', value: (inv) => inviteResult(inv, displayInviteScore(inv)) ?? '' },
+  { id: 'jobId', label: 'Job ID', value: (_inv, ctx) => ctx.jdShortId || '' },
+  { id: 'jobTitle', label: 'Job Title', value: (_inv, ctx) => ctx.jdTitle },
+  { id: 'jobVersion', label: 'Job Version', value: (inv, ctx) => exportVersion(inv._jd_version ?? ctx.jobVersion) },
+  { id: 'interviewVersion', label: 'Interview Version', value: (inv, ctx) => exportVersion(inv._interview_version ?? ctx.interviewVersion) },
+  { id: 'source', label: 'Invite Source', value: (inv) => inviteSourceLabel(inv)?.replace(/^Via /, '') ?? '' },
+];
+
+type InviteExportFormat = 'csv' | 'xlsx';
+const INVITE_EXPORT_FORMATS: ExportFormatOption<InviteExportFormat>[] = [
+  { key: 'csv', title: 'CSV Format', description: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
+  { key: 'xlsx', title: 'Excel Format (.xlsx)', description: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100 dark:bg-blue-500/15', iconColor: 'text-blue-700 dark:text-blue-300' },
+];
 
 /* Bulk resend eligibility — Expired rows only, and never once the candidate
    has started or completed. A freshly-sent "invited" row has no manual resend
@@ -148,6 +195,10 @@ const STATUS_CARD_LABEL: Record<string, string> = {
 };
 /* guided: every card in the Status dropdown, Revoked included. */
 const AI_CARD_STATUS_OPTIONS = [...AI_INTERVIEW_INVITE_STATUS_OPTIONS, { value: 'revoked', label: 'Revoked' }, { value: 'failed', label: 'Invite Failed' }];
+/* non-guided (embedded): the Revoked stat card renders either way (see the
+   `cards` array below), so the dropdown needs Revoked here too — just without
+   the card-less "Invite Failed" option guided mode also offers. */
+const AI_EMBEDDED_STATUS_OPTIONS = [...AI_INTERVIEW_INVITE_STATUS_OPTIONS, { value: 'revoked', label: 'Revoked' }];
 const INTERVIEW_LEGEND: InviteStatusKind[] = ['invited', 'in_progress', 'completed', 'terminated', 'cancelled', 'expired', 'revoked', 'invite_failed'];
 
 /**
@@ -183,6 +234,13 @@ export default function AIInterviewTrackInvitesModal({
   guided = !embedded,
   scope,
 }: AIInterviewTrackInvitesModalProps) {
+  // Export uses the module's export permission (`ai_interview:export`), greyed when missing.
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExport = isTenantAdmin || hasPermissionCode('ai_interview:export');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<InviteExportFormat>('xlsx');
+
   /* Keyed on its contents: the host builds the array on every render. */
   const scopeKey = (scope ?? []).map((entry) => `${entry.configId}:${entry.jobVersion}:${entry.interviewVersion}`).join('|');
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -411,6 +469,7 @@ export default function AIInterviewTrackInvitesModal({
     setIsBulkResending(true);
     let sent = 0;
     let failedCount = 0;
+    let firstError: unknown = null;
     const failedIds = new Set<string>();
     for (const inv of targets) {
       try {
@@ -418,6 +477,7 @@ export default function AIInterviewTrackInvitesModal({
         sent++;
       } catch (error) {
         console.error(`Failed to resend AI interview invitation ${inv.id}:`, error);
+        if (failedCount === 0) firstError = error;
         failedCount++;
         failedIds.add(inv.id);
       }
@@ -426,7 +486,7 @@ export default function AIInterviewTrackInvitesModal({
       toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
     }
     if (failedCount > 0) {
-      toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
+      showErrorToast(firstError, `Couldn't resend ${failedCount} invitation${failedCount === 1 ? '' : 's'}`);
     }
     // Keep only the ones that failed ticked, so a retry acts on them; once
     // anything changed, the cached "Select all pages" rows are stale — drop them.
@@ -438,52 +498,101 @@ export default function AIInterviewTrackInvitesModal({
     await onChanged?.();
   };
 
+  /* A job's matching rows across `targets` (its interviews), stamped with each
+     row's job / interview version. `paging` = one server page (newest invited
+     first) with the filtered total; null = every matching row (1000 an
+     interview, the cap the per-interview reads had) for client-side Source /
+     Result filtering and "Select all pages". One request (`also`); an older
+     backend that ignores `also` (no `scoped_config_ids` echoed) falls back to
+     one request per interview, merged and paged here as before. */
+  const loadJobScopeRows = useCallback(async (
+    targets: NonNullable<typeof jobScope>,
+    paging: { page: number; pageSize: number } | null,
+  ): Promise<{ rows: any[]; total: number; serverPaged: boolean }> => {
+    if (targets.length === 0) return { rows: [], total: 0, serverPaged: paging !== null };
+    const byConfig = new Map(targets.map((entry) => [entry.configId, entry]));
+    const stamp = (inv: any, entry = byConfig.get(String(inv.config_id))) => ({
+      ...inv,
+      _config_id: entry?.configId ?? inv.config_id,
+      _jd_version: entry?.jobVersion,
+      _interview_version: entry?.interviewVersion,
+    });
+    const filterParams = {
+      search: filters.search.trim() || undefined,
+      status: filters.status !== 'all' ? filters.status : undefined,
+      invite_date_from: filters.dateFrom || undefined,
+      invite_date_to: filters.dateTo || undefined,
+    };
+    const tolerateFailed = (err: unknown) => {
+      if (filters.status === 'failed') return { items: [], total: 0 } as unknown as Awaited<ReturnType<typeof aiInterviewService.getConfigInvitations>>;
+      throw err;
+    };
+    const [first, ...rest] = targets;
+    const res = await aiInterviewService.getConfigInvitations(first.configId, {
+      ...filterParams,
+      also: rest.map((entry) => entry.configId).join(','),
+      order: 'invited',
+      page: paging ? paging.page : 1,
+      page_size: paging ? paging.pageSize : 1000 * targets.length,
+    }).catch(tolerateFailed);
+    if (rest.length === 0 || res.scoped_config_ids) {
+      return { rows: (res.items || []).map((inv: any) => stamp(inv)), total: res.total || 0, serverPaged: paging !== null };
+    }
+    // Older backend: one request per interview, merged newest invited first.
+    const lists = await Promise.all(targets.map((entry) =>
+      aiInterviewService.getConfigInvitations(entry.configId, { ...filterParams, page: 1, page_size: 1000 })
+        .catch(tolerateFailed)
+        .then((r) => (r.items || []).map((inv: any) => stamp(inv, entry)))));
+    const sentAt = (inv: any) => new Date(inv.invitation_sent_at || inv.created_at || 0).getTime();
+    const merged = lists.flat().sort((a: any, b: any) => sentAt(b) - sentAt(a));
+    if (!paging) return { rows: merged, total: merged.length, serverPaged: false };
+    const start = (paging.page - 1) * paging.pageSize;
+    return { rows: merged.slice(start, start + paging.pageSize), total: merged.length, serverPaged: true };
+  }, [filters]);
+
   /* Bumped by every loadInvitations run (filter/page change, poll, Refresh),
      so an older response landing late can't overwrite a newer one's rows and
      cards. */
   const loadSeqRef = useRef(0);
-  const loadInvitations = useCallback(async (silent = false) => {
+  const loadInvitations = useCallback(async (silent = false): Promise<void> => {
     const seq = ++loadSeqRef.current;
     const isStale = () => seq !== loadSeqRef.current;
     if (!silent) setIsLoading(true);
     try {
-      /* A whole job: each interview's matching rows (narrowed to the chosen job
-         / interview version), stamped with their versions, merged newest-sent
-         first, then filtered and paged here. The cards add up every interview
-         in ONE request (GET /ai-interview/invitation-overview). */
+      /* A whole job: every interview's matching rows (narrowed to the chosen
+         job / interview version) in ONE request — the first interview's
+         invitations endpoint with the rest as `also`, newest invited first —
+         stamped with their versions. Paged on the server unless Source /
+         Result is set (no server-side filter for those), as the single
+         interview path does. It used to send one request PER interview
+         (page_size 1000 each) and merge and page them here. The cards add up
+         every interview in ONE request (GET /ai-interview/invitation-overview). */
       if (jobScope) {
         const targets = jobScope.filter((entry) =>
           (!jobVersionFilter || String(entry.jobVersion) === jobVersionFilter)
           && (!versionFilter || String(entry.interviewVersion) === versionFilter));
-        const [lists, counts] = await Promise.all([
-          Promise.all(targets.map((entry) =>
-            aiInterviewService.getConfigInvitations(entry.configId, {
-              search: filters.search.trim() || undefined,
-              status: filters.status !== 'all' ? filters.status : undefined,
-              invite_date_from: filters.dateFrom || undefined,
-              invite_date_to: filters.dateTo || undefined,
-              page: 1,
-              page_size: 1000,
-            }).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; }).then((res) => (res.items || []).map((inv: any) => ({
-              ...inv,
-              _config_id: entry.configId,
-              _jd_version: entry.jobVersion,
-              _interview_version: entry.interviewVersion,
-            }))))),
+        const [batch, counts] = await Promise.all([
+          loadJobScopeRows(targets, fetchAllForClientFilters ? null : { page, pageSize }),
           aiInterviewService.getInvitationOverview(jobScope.map((entry) => entry.configId)),
         ]);
         if (isStale()) return;
-        const sentAt = (inv: any) => new Date(inv.invitation_sent_at || inv.created_at || 0).getTime();
-        const matching = lists.flat()
-          .filter((inv: any) =>
-            (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter))
-          .sort((a: any, b: any) => sentAt(b) - sentAt(a));
-        const pages = Math.max(1, Math.ceil(matching.length / pageSize));
-        const safePage = Math.min(page, pages);
-        setInvitations(matching.slice((safePage - 1) * pageSize, safePage * pageSize));
-        setFilteredTotal(matching.length);
-        setTotalPages(pages);
-        if (safePage !== page) setPage(safePage);
+        if (batch.serverPaged) {
+          setInvitations(batch.rows);
+          setFilteredTotal(batch.total);
+          setTotalPages(Math.max(1, Math.ceil(batch.total / pageSize)));
+          if (batch.rows.length === 0 && batch.total > 0 && page > 1) {
+            setPage((current) => Math.min(current - 1, Math.max(1, Math.ceil(batch.total / pageSize))));
+          }
+        } else {
+          const matching = batch.rows.filter((inv: any) =>
+            (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
+          const pages = Math.max(1, Math.ceil(matching.length / pageSize));
+          const safePage = Math.min(page, pages);
+          setInvitations(matching.slice((safePage - 1) * pageSize, safePage * pageSize));
+          setFilteredTotal(matching.length);
+          setTotalPages(pages);
+          if (safePage !== page) setPage(safePage);
+        }
         const rows = jobScope.map((entry) => counts[entry.configId]).filter(Boolean);
         const sum = (pick: (o: (typeof rows)[number]) => number | undefined) => rows.reduce((acc, o) => acc + (pick(o) || 0), 0);
         setOverview({
@@ -566,41 +675,91 @@ export default function AIInterviewTrackInvitesModal({
     } catch (error) {
       if (isStale()) return;
       console.error('Failed to load AI interview invitations:', error);
-      if (!silent) toast.error('Could not load invitations. Please try again.');
+      if (!silent) showErrorToast(error, "Couldn't load invitations", { id: 'ai-interview-track-invites-load', retry: () => { void loadInvitations(); } });
     } finally {
       // A stale run leaves the spinner to the run that replaced it.
       if (!isStale()) setIsLoading(false);
     }
-  }, [configId, page, pageSize, filters, sourceFilter, resultFilter, fetchAllForClientFilters, jobScope, jobVersionFilter, versionFilter]);
+  }, [configId, page, pageSize, filters, sourceFilter, resultFilter, fetchAllForClientFilters, jobScope, jobVersionFilter, versionFilter, loadJobScopeRows]);
 
   /* look: every page's matching rows for "Select all pages" — the same
      requests and filters as loadInvitations, unpaged (1000 a config, as its
      own Source / Result path reads). */
+  /* Every page's rows matching the current tab, search and filters, unpaged.
+     Shared by "Select all pages" and Export. */
+  const fetchAllMatchingRows = async (): Promise<typeof invitations> => {
+    const params = {
+      search: filters.search.trim() || undefined,
+      status: filters.status !== 'all' ? filters.status : undefined,
+      invite_date_from: filters.dateFrom || undefined,
+      invite_date_to: filters.dateTo || undefined,
+      page: 1,
+      page_size: 1000,
+    };
+    const lists = jobScope
+      ? await Promise.all(jobScope
+        .filter((entry) => (!jobVersionFilter || String(entry.jobVersion) === jobVersionFilter) && (!versionFilter || String(entry.interviewVersion) === versionFilter))
+        .map((entry) => aiInterviewService.getConfigInvitations(entry.configId, params).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; }).then((res) => (res.items || []).map((inv) => ({
+          ...inv, _config_id: entry.configId, _jd_version: entry.jobVersion, _interview_version: entry.interviewVersion,
+        })))))
+      : [((await aiInterviewService.getConfigInvitations(configId, params).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; })).items || [])];
+    return lists.flat().filter((inv) =>
+      (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
+  };
+
+  /* Export: the ticked rows when there are any, otherwise every row matching
+     the current tab and filters (all pages). Built in the browser from the
+     same data the table shows — no extra backend endpoint. */
+  const handleExport = async (columnIds: string[]) => {
+    if (!canExport || isExporting) return;
+    const format = exportFormat;
+    // Keep the table's order whatever order the columns were ticked in.
+    const picked = INVITE_EXPORT_COLUMNS.filter((c) => columnIds.includes(c.id));
+    if (picked.length === 0) {
+      toast.warning('Pick at least one column to export');
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const rows = selectedIds.size > 0 ? selectedRows : await fetchAllMatchingRows();
+      if (rows.length === 0) {
+        toast.warning('No invites to export');
+        return;
+      }
+      const ctx: InviteExportContext = { jdShortId, jdTitle: jdTitle || '', jobVersion: headerJobVersion, interviewVersion: headerInterviewVersion };
+      const data = rows.map((inv) => picked.map((c) => c.value(inv, ctx)));
+      const statusPart = filters.status !== 'all' ? `-${filters.status}` : '';
+      const baseName = `${(jdShortId || 'ai-interview').replace(/\s+/g, '_')}-invites${statusPart}-${new Date().toISOString().slice(0, 10)}`;
+      await exportRows(format, picked.map((c) => c.label), data, baseName, {
+        sheetName: 'Invite Status',
+        title: `AI Interview Invites — ${jdShortId ? `${jdShortId} - ` : ''}${jdTitle}`,
+      });
+      // Audit trail through the module's existing export-log endpoint.
+      void aiInterviewService.logListExport({
+        format: format === 'csv' ? 'csv' : 'excel',
+        recordCount: rows.length,
+        tab: filters.status,
+        ids: rows.map((inv) => String(inv.id)),
+        exportType: 'ai_interview_invites',
+      });
+      toast.success(`Exported ${rows.length} ${rows.length === 1 ? 'invite' : 'invites'} to ${format === 'csv' ? 'CSV' : 'Excel'}`);
+      setShowExportModal(false);
+    } catch (err) {
+      showErrorToast(err, "Couldn't export invites");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const selectAllPages = async () => {
     setAllPagesLoading(true);
     try {
-      const params = {
-        search: filters.search.trim() || undefined,
-        status: filters.status !== 'all' ? filters.status : undefined,
-        invite_date_from: filters.dateFrom || undefined,
-        invite_date_to: filters.dateTo || undefined,
-        page: 1,
-        page_size: 1000,
-      };
-      const lists = jobScope
-        ? await Promise.all(jobScope
-          .filter((entry) => (!jobVersionFilter || String(entry.jobVersion) === jobVersionFilter) && (!versionFilter || String(entry.interviewVersion) === versionFilter))
-          .map((entry) => aiInterviewService.getConfigInvitations(entry.configId, params).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; }).then((res) => (res.items || []).map((inv) => ({
-            ...inv, _config_id: entry.configId, _jd_version: entry.jobVersion, _interview_version: entry.interviewVersion,
-          })))))
-        : [((await aiInterviewService.getConfigInvitations(configId, params).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; })).items || [])];
-      const rows: typeof invitations = lists.flat().filter((inv) =>
-        (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
+      const rows = await fetchAllMatchingRows();
       const lockedRow = (inv: (typeof invitations)[number]) => (rowJdLocked(inv) ? { ...inv, _jd_status: lockedStatusByVersion.get(inv._jd_version as number) } : inv);
       setAllPages({ key: allPagesKey, rows: rows.map(lockedRow) });
       setSelectedIds(new Set(rows.filter((inv) => isBulkActionable(inv) && !rowJdLocked(inv)).map((inv) => inv.id)));
     } catch (err) {
-      toast.error(friendlyErrorMessage(err, "Couldn't select every page. Please try again."));
+      showErrorToast(err, "Couldn't select invitations on every page", { retry: () => { void selectAllPages(); } });
     } finally {
       setAllPagesLoading(false);
     }
@@ -627,7 +786,7 @@ export default function AIInterviewTrackInvitesModal({
       const succeeded = results.filter((r) => r.status === 'fulfilled').length;
       const failed = results.length - succeeded;
       if (succeeded > 0) toast.success(`Revoked ${succeeded} invitation${succeeded === 1 ? '' : 's'}.`);
-      if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
+      if (failed > 0) showErrorToast(results.find((r): r is PromiseRejectedResult => r.status === 'rejected')?.reason ?? null, `Couldn't revoke ${failed} invitation${failed === 1 ? '' : 's'}`);
       // Keep only the ones that failed ticked, so a retry acts on them; once
       // anything changed, the cached "Select all pages" rows are stale — drop them.
       setSelectedIds(new Set(targets.filter((_: any, i: number) => results[i].status === 'rejected').map((inv: any) => inv.id)));
@@ -694,7 +853,10 @@ export default function AIInterviewTrackInvitesModal({
       <div
         {...(embedded ? {} : heightLock.dialogProps)}
         className={embedded
-          ? 'bg-white dark:bg-slate-900 w-full flex flex-col'
+          /* Embedded as the job page's Invitation Status tab: take the page
+             sheet's own dark surface (not a slate-900 block on it), and have
+             the table's sticky header / pinned columns paint that same surface. */
+          ? 'bg-white dark:bg-[var(--surface)] [--tf-sticky-surface:var(--surface)] w-full flex flex-col'
           : `${TRACKER_DIALOG_PANEL_CLASS} ${look ? TRACKER_LOOK_PANEL_CLASS : paginationBelowTable ? NO_INNER_SCROLL_PANEL : ''}`}>
         {/* Header */}
         <div className={`${paginationBelowTable || look ? 'tf-tracker-header ' : ''}px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0`}>
@@ -722,7 +884,7 @@ export default function AIInterviewTrackInvitesModal({
                   <span className="truncate">{jdTitle}</span>
                   {jobLock && <JobLockBadge kind={jobLock} title={jobLockMessage} />}
                   {jobScope && (
-                    <span className="text-gray-400 dark:text-slate-600 whitespace-nowrap">
+                    <span className="text-gray-400 dark:text-slate-400 whitespace-nowrap">
                       - all job versions ({jobScope.length} interview{jobScope.length === 1 ? '' : 's'})
                     </span>
                   )}
@@ -757,10 +919,25 @@ export default function AIInterviewTrackInvitesModal({
               aria-label="Refresh"
               icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshing ? 'animate-spin' : ''}`} />}
             >
-              {/* Reserves the wider word so the header never shifts. */}
-              <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+              {/* Label hugs its text — no reserved width. */}
+              <span className="hidden sm:inline">
                 {isRefreshing ? 'Refreshing...' : 'Refresh'}
               </span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { if (canExport) setShowExportModal(true); }}
+              disabled={isLoading && invitations.length === 0}
+              aria-disabled={!canExport || undefined}
+              title={canExport
+                ? (selectedIds.size > 0 ? `Export the ${selectedIds.size} selected invites` : 'Export every invite in this view (all pages)')
+                : 'You do not have permission to export AI interviews'}
+              aria-label="Export"
+              className={canExport ? '' : 'opacity-50 cursor-not-allowed'}
+              icon={<Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+            >
+              <span className="hidden sm:inline">Export</span>
             </Button>
             {/* No ✕: the footer's Cancel is the one close control. */}
           </div>
@@ -867,7 +1044,7 @@ export default function AIInterviewTrackInvitesModal({
             // A narrowed list has its own page 1; staying on page 4 would look empty.
             setPage(1);
           }}
-          statusOptions={guided ? AI_CARD_STATUS_OPTIONS : AI_INTERVIEW_INVITE_STATUS_OPTIONS}
+          statusOptions={guided ? AI_CARD_STATUS_OPTIONS : AI_EMBEDDED_STATUS_OPTIONS}
           searchPlaceholder="Search by candidate name or email..."
           extraSelects={[
             ...(hideVersionDetails ? [] : [...(hideJobVersionFilter ? [] : [{
@@ -1038,6 +1215,25 @@ export default function AIInterviewTrackInvitesModal({
         </>
         )}
 
+        {/* Export — the AI Interview module's export popup: CSV or Excel
+            (.xlsx), then Customize Columns. Exports the ticked invites, else
+            every invite in the current tab and filters across all pages. */}
+        {showExportModal && (
+          <ExportColumnsModal<InviteExportFormat>
+            title="Export Invite Status"
+            recordCount={selectedIds.size > 0 ? selectedIds.size : filteredTotal}
+            recordNoun={['invite', 'invites']}
+            formats={INVITE_EXPORT_FORMATS}
+            format={exportFormat}
+            onFormatChange={setExportFormat}
+            columns={INVITE_EXPORT_COLUMNS.map(({ id, label }) => ({ id, label }))}
+            initialColumnIds={INVITE_EXPORT_COLUMNS.map((c) => c.id)}
+            exporting={isExporting}
+            onExport={(ids) => void handleExport(ids)}
+            onClose={() => { if (!isExporting) setShowExportModal(false); }}
+          />
+        )}
+
         {/* Resend confirmation — regenerates the interview token, so the old
             link stops working the moment the new email goes out. Mirrors the
             AI Interviews page tracker's dialog and endpoint. */}
@@ -1058,13 +1254,7 @@ export default function AIInterviewTrackInvitesModal({
               await loadInvitations(true);
               await onChanged?.();
             } catch (err: any) {
-              const detail = err?.response?.data?.detail;
-              const msg =
-                (typeof detail === 'object' && detail?.message) ||
-                (typeof detail === 'string' && detail) ||
-                err?.message ||
-                'Failed to resend email';
-              toast.error(msg);
+              showErrorToast(err, `Couldn't resend the invitation to ${inv.candidate_email}`);
             } finally {
               setResendingId(null);
               setResendTarget(null);
@@ -1091,7 +1281,7 @@ export default function AIInterviewTrackInvitesModal({
               await loadInvitations(true);
               await onChanged?.();
             } catch (err: any) {
-              toast.error(friendlyErrorMessage(err, "Couldn't revoke invitation. Please try again."));
+              showErrorToast(err, `Couldn't revoke the invitation for ${inv.candidate_email}`);
             } finally {
               setRevokingId(null);
               setRevokeTarget(null);
@@ -1233,13 +1423,13 @@ export default function AIInterviewTrackInvitesModal({
         await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
         toast.success(`Invitation updated and sent to ${email}`);
       } catch (sendErr: any) {
-        toast.error(friendlyErrorMessage(sendErr, 'Details saved, but the invitation could not be sent. Try Edit again.'));
+        showErrorToast(sendErr, "Details saved, but couldn't send the invitation");
       }
       await loadInvitations(true);
       await onChanged?.();
       setEditTarget(null);
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't update invitation. Please try again."));
+      showErrorToast(err, "Couldn't update the invitation");
     } finally {
       setSavingEdit(false);
     }

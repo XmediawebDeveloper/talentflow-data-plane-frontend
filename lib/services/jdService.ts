@@ -3,6 +3,7 @@
  */
 
 import api, { handleApiError } from './api';
+import { takePrimedLineages, takePrimedVersionCounts } from '@/lib/utils/jdLineagePrime';
 import { cachedList, invalidateListCache, listCacheKey, listReadOptions, withListCacheInvalidation, type ListReadOptions } from '@/lib/utils/listCache';
 import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 
@@ -182,6 +183,10 @@ export interface JDListResponse {
   /** `listJobs` only: per row id, distinct versions in the job's lineage and
    *  distinct versions with this row's status (drives "View Versions"). */
   versions_meta?: Record<string, { version_count: number; tab_version_count: number }> | null;
+  /** `listJobs` only: "N assessed / N interviewed" for the rows on this page —
+   *  what GET /jd/candidate-counts answers, in the same response. Absent/null
+   *  on an older backend or a failed tally (the page then asks for them). */
+  candidate_counts?: Record<string, { assessed: number; interviewed: number }> | null;
 }
 
 /** The Job Openings toolbar's filters — shared by `listJobs` and `getJobStats`,
@@ -1279,6 +1284,10 @@ export const jdService = {
    * detail page to jump between whole versions (not just a content diff).
    */
   async getLineageVersions(jdId: string): Promise<JDLineageVersion[]> {
+    /* A lineage that arrived inside a list response (GET /assessments or
+       /ai-interview/configs `include=lineages`) answers without a request. */
+    const primed = takePrimedLineages([jdId]).hit[jdId];
+    if (primed) return primed;
     const inFlight = lineageVersionsInFlight.get(jdId);
     if (inFlight) return inFlight;
 
@@ -1307,8 +1316,12 @@ export const jdService = {
    * fails, so the caller can fall back to the per-job call.
    */
   async getLineagesBatch(jdIds: string[], opts?: { fresh?: boolean }): Promise<Record<string, JDLineageVersion[]>> {
-    const ids = Array.from(new Set(jdIds.filter(Boolean)));
-    const out: Record<string, JDLineageVersion[]> = {};
+    const asked = Array.from(new Set(jdIds.filter(Boolean)));
+    /* Lineages another response already carried (GET /assessments
+       include=lineages) answer without a request; `fresh` never uses them. */
+    const primed = opts?.fresh ? { hit: {}, missing: asked } : takePrimedLineages(asked);
+    const ids = primed.missing;
+    const out: Record<string, JDLineageVersion[]> = { ...primed.hit };
     try {
       for (let i = 0; i < ids.length; i += 200) {
         const response = await api.get<{ lineages: Record<string, JDLineageVersion[]> }>(
@@ -1337,14 +1350,17 @@ export const jdService = {
    * version panel lists by; `total` counts every version.
    */
   async getVersionCounts(jdIds: string[]): Promise<Record<string, { total: number; active: number }>> {
-    const ids = Array.from(new Set(jdIds.filter(Boolean)));
-    if (ids.length === 0) return {};
+    const asked = Array.from(new Set(jdIds.filter(Boolean)));
+    if (asked.length === 0) return {};
+    // Counts another response already carried (GET /assessments include=version_counts).
+    const { hit, missing: ids } = takePrimedVersionCounts(asked);
+    if (ids.length === 0) return hit;
     try {
       const response = await api.get<{ counts: Record<string, { total: number; active: number }> }>(
         '/jd/version-counts',
         { params: { ids: ids.join(',') } },
       );
-      return response.data?.counts || {};
+      return { ...hit, ...(response.data?.counts || {}) };
     } catch (error) {
       throw new Error(handleApiError(error));
     }

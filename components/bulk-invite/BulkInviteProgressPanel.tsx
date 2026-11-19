@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useModuleQuota } from '@/contexts/QuotaContext';
 import { UNIT_LABELS } from '@/lib/constants/unitColors';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
 import ListPagination from '@/components/ListPagination';
@@ -21,16 +22,9 @@ import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressCont
 import { formatTimeLeft } from '@/lib/services/bulkInviteService';
 import { useBulkInviteActions } from './useBulkInviteActions';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
-import { ClipboardList, FolderOpen, Video } from 'lucide-react';
+import { ClipboardList, Video } from 'lucide-react';
+import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 
-/* Where a candidate came from, as the View window names it. */
-const SOURCE_LABEL: Record<string, string> = {
-  'talent-match': 'AI Talent Match',
-  'score-resume': 'Resume Scoring',
-  'my-resumes': 'My Resumes',
-  'internal-db': 'Shared Database',
-  extra: 'Added by email',
-};
 const sentWhen = (iso?: string | null) => {
   if (!iso) return null;
   const d = new Date(iso);
@@ -60,8 +54,10 @@ async function copyText(text: string, what: string) {
   try {
     await navigator.clipboard.writeText(text);
     toast.success(`${what} copied`);
-  } catch {
-    toast.error('Could not copy — your browser blocked clipboard access');
+  } catch (error) {
+    showErrorToast(error, `Couldn't copy ${what.toLowerCase()}`, {
+      description: 'Your browser blocked clipboard access.',
+    });
   }
 }
 
@@ -592,7 +588,7 @@ export default function BulkInviteProgressPanel({
             <span>Candidate</span>
             <span>Status</span>
             <span>Send For</span>
-            <span>Source</span>
+            <span>Invite Source</span>
             <span>Sent Date</span>
             <span className="text-right">Actions</span>
           </li>
@@ -675,13 +671,16 @@ export default function BulkInviteProgressPanel({
                   ? <span className="rounded-md px-1.5 py-0.5 text-xs font-semibold ring-1 text-violet-700 bg-violet-50 ring-violet-200">V{sendVersion}</span>
                   : <VersionPill kind="assessment" version={sendVersion} />) : null}
               </span>
-              {/* Source — where the candidate was picked from */}
+              {/* Invite Source — via email or via resume, the same two values
+                  and wording the Invite Status Tracking / View Progress pages
+                  use everywhere else (AIInterviewInviteTable's InviteSourceValue),
+                  derived from resume_id so it never disagrees with how the
+                  candidate was actually added, whatever tab or folder they came
+                  from. */}
               <span className="min-w-0">
-                {r.source ? (
-                  <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-gray-200 dark:border-slate-700 px-2 py-1 text-xs text-gray-700 dark:text-slate-300">
-                    <FolderOpen className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{SOURCE_LABEL[r.source] ?? r.source}</span>
-                  </span>
-                ) : <span className="text-xs text-gray-400">—</span>}
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-gray-200 dark:border-slate-700 px-2 py-1 text-xs text-gray-700 dark:text-slate-300">
+                  <InviteSourceValue inv={{ invite_source: r.resume_id ? 'resume' : 'email' }} iconClassName="w-3.5 h-3.5" />
+                </span>
               </span>
               {/* Sent Date — when this candidate was processed */}
               <span className="text-xs">

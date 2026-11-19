@@ -14,7 +14,7 @@ import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { formatJobVersionLabel, formatJobActionMessage, formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/lib/hooks/useAuth';
 
@@ -236,6 +236,25 @@ function JobDetailsContent() {
     }
     const s = kept.toString();
     return s ? `?${s}` : '';
+  })();
+  /* Opened from Resume Scoring's / AI Talent Match's job page (Go to JD in
+     its View Job Detail popup): the trail is <Module> › <job> › this job,
+     the same shape as `ai-interview-details`. The module path is fixed here;
+     only its query (the job / view that page was on) comes from the URL. */
+  const moduleOrigin = (() => {
+    const from = searchParams.get('from');
+    const base = from === 'resume-scoring-details'
+      ? { label: 'Resume Scoring', path: '/recruitment/resume-scoring' }
+      : from === 'ai-talent-match-details'
+        ? { label: 'AI Talent Match', path: '/recruitment/ai-talent-match' }
+        : null;
+    if (!base) return null;
+    const query = new URLSearchParams(searchParams.get('origin_query') || '').toString();
+    return {
+      ...base,
+      title: searchParams.get('origin_title') || '',
+      href: query ? `${base.path}?${query}` : base.path,
+    };
   })();
   const resultAssessmentId = searchParams.get('assessment_id') || '';
   const resultAssessmentTitle = searchParams.get('assessment_title') || '';
@@ -477,7 +496,7 @@ function JobDetailsContent() {
     } catch (error) {
       if (isStale()) return;
       console.error('Failed to fetch job details:', error);
-      toast.error('Failed to load job details');
+      showErrorToast(error, "Couldn't load job details", { id: `job-${jobId}-load`, retry: () => fetchJobDetails() });
     } finally {
       // A stale run leaves the skeleton to the run that replaced it.
       if (!isStale()) setLoading(false);
@@ -611,9 +630,7 @@ function JobDetailsContent() {
     } catch (error) {
       console.error('Failed to create new JD version:', error);
       setCreatingVersion(false);
-      toast.error('Could not create new version', {
-        description: error instanceof Error ? error.message : 'Please try again.',
-      });
+      showErrorToast(error, "Couldn't create a new version");
     }
   };
 
@@ -624,7 +641,7 @@ function JobDetailsContent() {
       toast.success(formatJobActionMessage(republishJob, 'republished'));
       fetchJobDetails();
     } catch (error) {
-      toast.error('Failed to republish job');
+      showErrorToast(error, "Couldn't republish the job");
     }
   };
 
@@ -648,7 +665,7 @@ function JobDetailsContent() {
       if (error.message?.includes('403') || error.message?.includes('Owner')) {
         toast.error('Only Owners can disable job descriptions');
       } else {
-        toast.error('Failed to disable job');
+        showErrorToast(error, "Couldn't disable the job");
       }
     }
   };
@@ -663,7 +680,7 @@ function JobDetailsContent() {
       if (error.message?.includes('403') || error.message?.includes('Owner')) {
         toast.error('Only Owners can enable job descriptions');
       } else {
-        toast.error('Failed to enable job');
+        showErrorToast(error, "Couldn't enable the job");
       }
     }
   };
@@ -692,7 +709,7 @@ function JobDetailsContent() {
       setArchiveDialog({ open: false, job: null, busy: false });
       fetchJobDetails();
     } catch (error) {
-      toast.error('Failed to archive job');
+      showErrorToast(error, "Couldn't archive the job");
       /* Left open on failure — closing it would look like the archive worked. */
       setArchiveDialog(prev => ({ ...prev, busy: false }));
     }
@@ -704,7 +721,7 @@ function JobDetailsContent() {
       toast.success(formatJobActionMessage(job, 'unarchived and published'));
       fetchJobDetails();
     } catch (error) {
-      toast.error('Failed to unarchive job');
+      showErrorToast(error, "Couldn't unarchive the job");
     }
   };
 
@@ -714,7 +731,7 @@ function JobDetailsContent() {
       toast.success(formatJobActionMessage(job, 'deleted'));
       router.push('/recruitment/job-openings');
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't delete job description. Please try again."));
+      showErrorToast(error, "Couldn't delete the job description");
     }
   };
 
@@ -814,6 +831,13 @@ function JobDetailsContent() {
               href: `/recruitment/ai-interviews/${encodeURIComponent(interviewId)}${interviewQuery}`,
             }]
           : []),
+        { label: job.title || 'Job Details' },
+      ]
+    : moduleOrigin
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: moduleOrigin.label, href: moduleOrigin.path },
+        ...(moduleOrigin.title ? [{ label: moduleOrigin.title, href: moduleOrigin.href }] : []),
         { label: job.title || 'Job Details' },
       ]
     : fromAiInterview

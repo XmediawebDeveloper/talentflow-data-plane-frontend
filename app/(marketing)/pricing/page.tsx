@@ -1,11 +1,12 @@
 "use client";
 
-// ⚠️ MIRROR PAGE: This pricing page is mirrored with components/auth/PlanSelectionModal.tsx
-// Any changes to plan display, free-trial logic, or quota rendering MUST be applied to both files.
+// ⚠️ The signup plan picker (components/auth/PlanSelectionModal.tsx) reads plans through
+// components/marketing/plans.ts. Keep plan display, free-trial and quota rules in sync with it.
 
 import { useState, useEffect, useRef } from "react";
 import { Check, Building2, Users, Zap } from "lucide-react";
 import { BillingToggle } from "@/components/marketing/BillingToggle";
+import { BILLING_TOGGLE_TONE } from "@/components/marketing/pillTone";
 import { display, DISPLAY } from "@/components/marketing/fonts";
 import { Cta } from "@/components/marketing/Cta";
 import { MarketingFaq } from "@/components/marketing/MarketingFaq";
@@ -594,6 +595,7 @@ export default function PricingPage() {
                     onChange={setIsYearly}
                     savePercent={toggleDisabled ? 0 : bestSaving}
                     disabled={toggleDisabled}
+                    {...BILLING_TOGGLE_TONE}
                   />
                 </div>
               </RevealGroup>

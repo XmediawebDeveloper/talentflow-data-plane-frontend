@@ -6,7 +6,7 @@
  */
 
 import { refreshToken } from '@/lib/services/api';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 
 interface PermissionGuardOptions {
   action: string;
@@ -42,7 +42,9 @@ export async function withPermissionGuard<T>(
         || `You don't have permission to ${options.action}`;
 
       if (options.showToast !== false) {
-        toast.error(message);
+        showErrorToast(error, `Couldn't ${options.action}`, {
+          description: `${message.replace(/\.?$/, '.')} Ask your admin if you need access.`,
+        });
       }
 
       // Force UI refresh to hide unavailable buttons

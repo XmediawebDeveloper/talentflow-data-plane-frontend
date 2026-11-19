@@ -7,7 +7,7 @@
  * Endpoint: POST /api/v1/usage/record (proxies to Admin API)
  */
 
-import api, { dispatchUnitsConsumed, handleUnauthorized } from './api';
+import api, { dispatchUnitsConsumed, handleUnauthorized, getAccessToken as getSessionAccessToken } from './api';
 
 // Use backend API - no direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -69,7 +69,7 @@ export interface RecordUsageResponse {
  */
 const getAccessToken = (): string | null => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('accessToken');
+  return getSessionAccessToken();
 };
 
 /**
@@ -312,7 +312,7 @@ export async function checkQuotaStatus(): Promise<QuotaStatusResponse> {
     return { status: 'error', error: 'Not in browser context' };
   }
 
-  const accessToken = localStorage.getItem('accessToken');
+  const accessToken = getAccessToken();
   if (!accessToken) {
     return { status: 'error', error: 'No access token available' };
   }

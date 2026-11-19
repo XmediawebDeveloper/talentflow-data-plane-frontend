@@ -1,4 +1,5 @@
 import api from './api';
+import { cachedList, listCacheKey, listReadOptions, type ListReadOptions } from '@/lib/utils/listCache';
 
 export interface DashboardStats {
   total_resumes: number;
@@ -72,9 +73,15 @@ export interface DashboardResponse {
 }
 
 export const dashboardService = {
-  async getDashboard(): Promise<DashboardResponse> {
-    const response = await api.get<DashboardResponse>('/dashboard');
-    return response.data;
+  /* Through the shared list cache: `reuseRecent` (screens that only display it
+     on arrival — Dashboard, Usage history) reuses a read from the last 30 s, so
+     going back to the Dashboard does not ask again. Any write clears it. */
+  async getDashboard(opts?: ListReadOptions): Promise<DashboardResponse> {
+    return cachedList(
+      listCacheKey('dashboard'),
+      async () => (await api.get<DashboardResponse>('/dashboard')).data,
+      listReadOptions(opts),
+    );
   },
 };
 

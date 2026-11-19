@@ -37,7 +37,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import {
@@ -48,7 +48,6 @@ import {
   AdjustmentLogEntry,
   AllPoolsResponse,
   ExistingUsageUser,
-  UsageSummaryResponse,
   getUnitTypeName,
 } from '@/lib/services/unitPoolService';
 import teamService, { AllTeamsUsageSummary, TeamMembersUsageSummary } from '@/lib/services/teamService';
@@ -170,7 +169,7 @@ type LucideIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 
 const UNIT_TYPE_CONFIG: Record<UnitType, { label: string; icon: LucideIcon; color: string; bg: string; bar: string }> = {
   RS: { label: 'Resume Scoring', icon: ClipboardList, color: 'text-brand-blue', bg: 'bg-brand-blue/10', bar: 'bg-brand-blue' },
-  AS: { label: 'Assessment', icon: ClipboardCheck, color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', bar: 'bg-brand-cyan' },
+  AS: { label: 'AI Assessment', icon: ClipboardCheck, color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', bar: 'bg-brand-cyan' },
   AIU: { label: 'AI Interview', icon: Video, color: 'text-success', bg: 'bg-success-subtle', bar: 'bg-success' },
 };
 
@@ -181,9 +180,9 @@ const CONSUMPTION_COLUMNS: Array<{
   iconClass: string;
 }> = [
   { key: 'RS', label: 'Resume Scoring', icon: ClipboardList, iconClass: 'text-brand-blue' },
-  { key: 'AS', label: 'Assessment', icon: ClipboardCheck, iconClass: 'text-brand-cyan' },
+  { key: 'AS', label: 'AI Assessment', icon: ClipboardCheck, iconClass: 'text-brand-cyan' },
   { key: 'AIU', label: 'AI Interview', icon: Video, iconClass: 'text-success' },
-  { key: 'RU', label: 'Resume Storage', icon: Upload, iconClass: 'text-brand-orange' },
+  { key: 'RU', label: 'Resume Units', icon: Upload, iconClass: 'text-brand-orange' },
 ];
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -406,12 +405,10 @@ function ExportModal({
 
 function AnalyticsCards({
   pools,
-  summary,
   subscriptionUnits,
   userLimits,
 }: {
   pools: AllPoolsResponse | null;
-  summary: UsageSummaryResponse | null;
   subscriptionUnits: SubscriptionUnits | null;
   userLimits: UserLimitsResponse | null;
 }) {
@@ -498,7 +495,7 @@ function AnalyticsCards({
               </div>
               <span className="tf-badge text-2xs ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep">RU</span>
             </div>
-            <h3 className="text-sm font-semibold text-gray-500 mb-2 truncate">Resume Storage</h3>
+            <h3 className="text-sm font-semibold text-gray-500 mb-2 truncate" title="Resumes stored right now. Goes down when resumes are deleted, unlike Resume Units usage.">Resume Storage <span className="font-normal">(stored now)</span></h3>
             <div className="grid grid-cols-3 gap-1.5 mb-2.5">
               <div className="min-w-0">
                 <p className="truncate tf-micro-hint">Limit</p>
@@ -707,16 +704,11 @@ function FeatureWiseTab({
 
 function UserWiseTab({
   data,
-  subscriptionUnits,
-  isBillingPeriod,
   page,
   onPageChange,
   isLoading,
 }: {
   data: UsersUsageResponse | null;
-  subscriptionUnits: SubscriptionUnits | null;
-  /** True when the table covers exactly the current billing period (the cards' period). */
-  isBillingPeriod: boolean;
   page: number;
   onPageChange: (p: number) => void;
   isLoading: boolean;
@@ -756,30 +748,13 @@ function UserWiseTab({
     });
   });
 
-  /* Reconciliation with the cards. The cards show Control Plane usage for the
-     current billing period. Resume Scoring / Assessment / AI Interview units
-     the Control Plane charged without any per-user record (e.g. AI Talent
-     Match runs from before it became free) are listed as one "not attributed"
-     row, so the column totals equal the cards. Resume Storage is left out: its
-     card is the number of resumes stored now, not uploads in a period. */
-  const RECONCILED_KEYS: UnitKey[] = ['RS', 'AS', 'AIU'];
-  const unattributed: Partial<Record<UnitKey, number>> = {};
-  RECONCILED_KEYS.forEach((k) => {
-    const server = data?.unattributed?.[k] ?? 0;
-    let gap = 0;
-    if (isBillingPeriod && subscriptionUnits) {
-      const used = (subscriptionUnits as unknown as Record<string, { used?: number } | undefined>)[k]?.used;
-      if (typeof used === 'number') gap = used - (data?.totals?.[k] ?? 0);
-    }
-    const v = server + (gap > 0 ? gap : 0);
-    if (v > 0) unattributed[k] = v;
-  });
-  if (data?.unattributed?.RU) unattributed.RU = data.unattributed.RU;
-  const hasUnattributed = Object.keys(unattributed).length > 0;
+  /* Usage, not balance: the column totals are just the users' usage added up.
+     They are not reconciled to the cards above (the quota balance, which goes
+     back up when units are returned) — the note under the table explains how
+     the two relate, and the audit logs hold every deduction and return. */
   const columnTotals: Partial<Record<UnitKey, number>> = {};
   UNIT_KEYS.forEach((k) => {
-    const sumUsers = (data?.users ?? []).reduce((acc, r) => acc + (r.by_type[k] ?? 0), 0);
-    columnTotals[k] = sumUsers + (unattributed[k] ?? 0);
+    columnTotals[k] = (data?.users ?? []).reduce((acc, r) => acc + (r.by_type[k] ?? 0), 0);
   });
   const grandTotal = UNIT_KEYS.reduce((acc, k) => acc + (columnTotals[k] ?? 0), 0);
 
@@ -856,19 +831,12 @@ function UserWiseTab({
             }
           />
         ))}
-        {hasUnattributed && (
-          <MobileRecordCard
-            title={<span className="min-w-0 truncate">Not attributed to a user</span>}
-            meta={[{ icon: <Layers className="h-3.5 w-3.5" />, label: 'Charged with no per-user record' }]}
-            footer={<UnitChips values={unattributed as Record<string, number>} />}
-          />
-        )}
       </MobileRecordList>
 
       {/* Clear-sort bar — only while a column is sorted (desktop table). */}
       {sort.sortKey && (
         <div className="hidden items-center justify-end border-b border-gray-100 px-4 py-2 lg:flex">
-          <ClearSortChip sort={sort} labels={{ userName: 'User', RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview', RU: 'Resume Storage', total: 'Total', successCount: 'Success', lastUsed: 'Last Active' }} onClear={() => { sort.clearSort?.(); onPageChange(1); }} />
+          <ClearSortChip sort={sort} labels={{ userName: 'User', RS: 'Resume Scoring', AS: 'AI Assessment', AIU: 'AI Interview', RU: 'Resume Units', total: 'Total', successCount: 'Success', lastUsed: 'Last Active' }} onClear={() => { sort.clearSort?.(); onPageChange(1); }} />
         </div>
       )}
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
@@ -943,34 +911,13 @@ function UserWiseTab({
                 <td className="tf-td tf-meta">{u.lastUsed ? formatIST(u.lastUsed) : '—'}</td>
               </tr>
             ))}
-            {hasUnattributed && page === Math.max(1, totalPages) && (
-              <tr className="bg-gray-50/60">
-                <td className="tf-td tf-caption">—</td>
-                <td className="tf-td">
-                  <p className="tf-label">Not attributed to a user</p>
-                  <p className="tf-hint">Charged with no per-user record (e.g. AI Talent Match runs before it became free)</p>
-                </td>
-                {CONSUMPTION_COLUMNS.map((column) => (
-                  <td key={column.key} className="tf-td text-right text-gray-700 font-medium">
-                    {unattributed[column.key as UnitKey]?.toLocaleString() || '—'}
-                  </td>
-                ))}
-                <td className="tf-td text-right">
-                  <span className="font-bold text-gray-700">
-                    {UNIT_KEYS.reduce((acc, k) => acc + (unattributed[k] ?? 0), 0).toLocaleString()}
-                  </span>
-                </td>
-                <td className="tf-td" />
-                <td className="tf-td" />
-              </tr>
-            )}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-200 bg-white">
               <td className="tf-td" />
               <td className="tf-td">
                 <p className="tf-label">Total</p>
-                {isBillingPeriod && <p className="tf-hint">Current billing period — matches the cards above</p>}
+                <p className="tf-hint">Units used by these users</p>
               </td>
               {CONSUMPTION_COLUMNS.map((column) => (
                 <td key={column.key} className="tf-td text-right font-semibold text-gray-900">
@@ -986,9 +933,21 @@ function UserWiseTab({
           </tfoot>
         </table>
       </div>
-      <p className="tf-hint px-4 py-2">
-        Resume Storage here is net uploads in the selected period (uploads minus returned units). The Resume Storage card shows resumes stored right now.
-      </p>
+      {/* How this table relates to the cards above. */}
+      <div className="mx-4 my-3 flex gap-2.5 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-3 py-2.5 text-xs text-gray-600 dark:border-blue-400/20 dark:bg-blue-400/[0.06] dark:text-slate-300">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" aria-hidden="true" />
+        <div className="space-y-1">
+          <p>
+            <span className="font-semibold text-gray-800 dark:text-slate-100">This table is usage</span> — units each user
+            used; a charge stays counted. <span className="font-semibold text-gray-800 dark:text-slate-100">The cards above are your quota balance</span>,
+            which goes back up when a unit is returned (e.g. a deleted resume gives its unit back).
+          </p>
+          <p>
+            So <span className="font-semibold text-gray-800 dark:text-slate-100">card “Used” = units used − units returned</span>, and
+            the two won&apos;t always match. Every deduction and return is listed in the audit logs.
+          </p>
+        </div>
+      </div>
       {totalPages > 1 && (
         <Pagination page={page} totalPages={totalPages} total={users.length} pageSize={PAGE_SIZE} onPageChange={onPageChange} />
       )}
@@ -1131,7 +1090,7 @@ function TeamWiseTab({
       {/* Clear-sort bar — only while a column is sorted (desktop table). */}
       {sort.sortKey && (
         <div className="hidden items-center justify-end border-b border-gray-100 px-4 py-2 lg:flex">
-          <ClearSortChip sort={sort} labels={{ team_name: 'Team', RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview', RU: 'Resume Storage', jds_created: 'JDs Created', assessments_created: 'Assessments' }} onClear={() => { sort.clearSort?.(); onPageChange(1); }} />
+          <ClearSortChip sort={sort} labels={{ team_name: 'Team', RS: 'Resume Scoring', AS: 'AI Assessment', AIU: 'AI Interview', RU: 'Resume Units', jds_created: 'JDs Created', assessments_created: 'Assessments' }} onClear={() => { sort.clearSort?.(); onPageChange(1); }} />
         </div>
       )}
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
@@ -1383,7 +1342,7 @@ function InlineTeamMembersUsage({
       {/* Clear-sort bar — only while a column is sorted (desktop table). */}
       {sort.sortKey && (
         <div className="hidden items-center justify-end border-b border-gray-100 px-4 py-2 lg:flex">
-          <ClearSortChip sort={sort} labels={{ user_name: 'User', RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview', RU: 'Resume Storage', total: 'Total', last_activity: 'Last Active' }} onClear={() => { sort.clearSort?.(); }} />
+          <ClearSortChip sort={sort} labels={{ user_name: 'User', RS: 'Resume Scoring', AS: 'AI Assessment', AIU: 'AI Interview', RU: 'Resume Units', total: 'Total', last_activity: 'Last Active' }} onClear={() => { sort.clearSort?.(); }} />
         </div>
       )}
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
@@ -1397,13 +1356,13 @@ function InlineTeamMembersUsage({
                 <SortableHeader label="Resume Scoring" column="RS" sort={sort} align="right" />
               </th>
               <th aria-sort={ariaSort(sort, 'AS')} className="tf-th-cell text-right tf-th">
-                <SortableHeader label="Assessment" column="AS" sort={sort} align="right" />
+                <SortableHeader label="AI Assessment" column="AS" sort={sort} align="right" />
               </th>
               <th aria-sort={ariaSort(sort, 'AIU')} className="tf-th-cell text-right tf-th">
                 <SortableHeader label="AI Interview" column="AIU" sort={sort} align="right" />
               </th>
               <th aria-sort={ariaSort(sort, 'RU')} className="tf-th-cell text-right tf-th">
-                <SortableHeader label="Resume Storage" column="RU" sort={sort} align="right" />
+                <SortableHeader label="Resume Units" column="RU" sort={sort} align="right" />
               </th>
               <th aria-sort={ariaSort(sort, 'total')} className="tf-th-cell text-right tf-th">
                 <SortableHeader label="Total" column="total" sort={sort} align="right" />
@@ -1623,7 +1582,6 @@ export default function UsageHistory() {
 
   // Data
   const [pools, setPools] = useState<AllPoolsResponse | null>(null);
-  const [summary, setSummary] = useState<UsageSummaryResponse | null>(null);
   const [consumptionItems, setConsumptionItems] = useState<ConsumptionLogEntry[]>([]);
   const [consumptionTotal, setConsumptionTotal] = useState(0);
   const [teamsData, setTeamsData] = useState<AllTeamsUsageSummary | null>(null);
@@ -1715,31 +1673,36 @@ export default function UsageHistory() {
     );
   }
 
-  // ── Load pool status & summary ────────────────────────────────────────────
-  const loadPoolData = useCallback(async () => {
+  // ── Load pool status ──────────────────────────────────────────────────────
+  /* None of these depend on the date range, so they load once (and on
+     Refresh). GET /unit-pool/usage-summary used to ride along with the range
+     as a dependency: the billing period arriving moved the range and re-ran all
+     four, and the summary it fetched was never rendered (AnalyticsCards does
+     not read it) — so it is no longer requested. */
+  /* `reuseRecent` (arrival only): the dashboard and seat limits were very likely
+     read moments ago on the Dashboard / User Management, so reuse an answer from
+     the last 30 s. Refresh passes nothing and asks the server. */
+  const loadPoolData = useCallback(async (opts?: { reuseRecent?: boolean }) => {
     const seq = ++poolSeqRef.current;
     const isStale = () => seq !== poolSeqRef.current;
     setIsLoadingPools(true);
     try {
-      const days = Math.max(1, Math.ceil((dateEnd.getTime() - dateStart.getTime()) / (1000 * 60 * 60 * 24)));
-      const [poolsRes, summaryRes, dashRes, limitsRes] = await Promise.all([
+      const [poolsRes, dashRes, limitsRes] = await Promise.all([
         unitPoolService.getPoolStatus(),
-        unitPoolService.getUsageSummary(days),
-        dashboardService.getDashboard().catch(() => null),
-        featurePermissionService.getUserLimits().catch(() => null),
+        dashboardService.getDashboard(opts).catch(() => null),
+        featurePermissionService.getUserLimits(opts).catch(() => null),
       ]);
       if (isStale()) return;
       setPools(poolsRes);
-      setSummary(summaryRes);
       if (dashRes?.subscription_units) setSubscriptionUnits(dashRes.subscription_units);
       if (limitsRes) setUserLimits(limitsRes);
     } catch (err: any) {
       if (isStale()) return;
-      toast.error(friendlyErrorMessage(err, "Couldn't load pool data. Please try again."));
+      showErrorToast(err, "Couldn't load unit pool data", { id: 'usage-pools' });
     } finally {
       if (!isStale()) setIsLoadingPools(false);
     }
-  }, [dateStart, dateEnd]);
+  }, []);
 
   // ── Load consumption history ───────────────────────────────────────────────
   const loadConsumption = useCallback(async (page: number, mode: 'feature' | 'user' = 'feature') => {
@@ -1761,7 +1724,7 @@ export default function UsageHistory() {
       setConsumptionTotal(mode === 'user' ? (res.users?.length ?? res.items.length) : res.total);
     } catch (err: any) {
       if (isStale()) return;
-      toast.error(friendlyErrorMessage(err, "Couldn't load consumption history. Please try again."));
+      showErrorToast(err, "Couldn't load consumption history", { id: 'usage-consumption' });
     } finally {
       if (!isStale()) setIsLoadingConsumption(false);
     }
@@ -1785,7 +1748,7 @@ export default function UsageHistory() {
       if (res.billing_period) setBillingPeriod(res.billing_period);
     } catch (err) {
       if (isStale()) return;
-      toast.error(friendlyErrorMessage(err, "Couldn't load user usage. Please try again."));
+      showErrorToast(err, "Couldn't load user usage", { id: 'usage-users' });
     } finally {
       if (!isStale()) setIsLoadingUsers(false);
     }
@@ -1798,7 +1761,7 @@ export default function UsageHistory() {
       const res = await teamService.getAllTeamsUsage(teamRangeStart, teamRangeEnd);
       setTeamsData(res);
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't load team data. Please try again."));
+      showErrorToast(err, "Couldn't load team usage", { id: 'usage-teams' });
     } finally {
       setIsLoadingTeams(false);
     }
@@ -1824,7 +1787,7 @@ export default function UsageHistory() {
       if (err?.response?.status === 500 || err?.status === 500 || err?.message?.includes('500')) {
         setAdjustmentsUnavailable(true);
       } else {
-        toast.error(friendlyErrorMessage(err, "Couldn't load adjustments. Please try again."));
+        showErrorToast(err, "Couldn't load adjustments", { id: 'usage-adjustments' });
       }
     } finally {
       setIsLoadingAdjustments(false);
@@ -1833,9 +1796,9 @@ export default function UsageHistory() {
 
   // ── Effects ────────────────────────────────────────────────────────────────
 
-  // Pool status — fires when date range changes (loadPoolData encodes dateStart/dateEnd)
+  // Pool status — once on mount (see loadPoolData)
   useEffect(() => {
-    loadPoolData();
+    loadPoolData({ reuseRecent: true });
   }, [loadPoolData]);
 
   // Reset pages when filters/tab/dates change (no API call here)
@@ -1918,7 +1881,7 @@ export default function UsageHistory() {
       toast.success(`Exported as ${format.toUpperCase()}`);
       setShowExportModal(false);
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Export failed. Please try again."));
+      showErrorToast(err, `Couldn't export usage history as ${format.toUpperCase()}`, { retry: () => handleExport(format) });
     } finally {
       setIsExporting(false);
     }
@@ -1927,6 +1890,7 @@ export default function UsageHistory() {
   const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
     { id: 'user', label: 'User-Wise', icon: User },
     { id: 'team', label: 'Team-Wise', icon: Users },
+    { id: 'refunds', label: 'Refunds', icon: RefreshCw },
   ];
 
   // Active filter tags: the period / date range as one tag (only once it moves
@@ -2017,7 +1981,6 @@ export default function UsageHistory() {
       {/* ── Feature Analytics Cards ── */}
       <AnalyticsCards
         pools={isLoadingPools ? null : pools}
-        summary={summary}
         subscriptionUnits={subscriptionUnits}
         userLimits={userLimits}
       />
@@ -2125,13 +2088,16 @@ export default function UsageHistory() {
           <div
             role="radiogroup"
             aria-label="Usage view"
-            className="relative grid grid-cols-2 h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10 order-first w-full shrink-0 sm:w-auto sm:self-start lg:order-none lg:self-auto"
+            className="relative grid h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10 order-first w-full shrink-0 sm:w-auto sm:self-start lg:order-none lg:self-auto"
+            style={{ gridTemplateColumns: `repeat(${TABS.length}, minmax(0, 1fr))` }}
           >
             <span
               aria-hidden
-              className={`absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-white dark:bg-slate-800 shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out ${
-                activeTab === TABS[1].id ? 'translate-x-full' : 'translate-x-0'
-              }`}
+              className="absolute top-1 bottom-1 left-1 rounded-md bg-white dark:bg-slate-800 shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out"
+              style={{
+                width: `calc((100% - 0.5rem) / ${TABS.length})`,
+                transform: `translateX(${Math.max(0, TABS.findIndex((t) => t.id === activeTab)) * 100}%)`,
+              }}
             />
             {TABS.map((tab) => {
               const Icon = tab.icon;
@@ -2169,8 +2135,6 @@ export default function UsageHistory() {
           {activeTab === 'user' && (
             <UserWiseTab
               data={usersUsage}
-              subscriptionUnits={subscriptionUnits}
-              isBillingPeriod={quickPeriod === 'billing'}
               page={userPage}
               onPageChange={setUserPage}
               isLoading={isLoadingUsers}

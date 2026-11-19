@@ -5,7 +5,9 @@ import { planChangeService } from '@/lib/services/planChangeService';
 import { PLAN_CHANGE_PENDING_EVENT } from '@/lib/services/api';
 import { isOnline, isTransientNetworkError, withNetworkRetry } from '@/lib/utils/networkRetry';
 import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
+import { focusRefreshDue, markRefreshed } from '@/lib/utils/focusRefresh';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import type {
   PlanChangeNotification,
   PlanChangeUrgency,
@@ -82,6 +84,7 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
+    markRefreshed('plan-changes');
     try {
       // First load: the app-shell /bootstrap response, if it carried this part.
       const boot = await takeBootstrapPart<{ data?: unknown } | unknown[]>('pending_plan_changes');
@@ -132,7 +135,8 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
   // initial fetch may have silently failed due to localStorage/storage restrictions
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      // Throttled: one tab switch fires this, and the 5-min poll / WS cover the rest.
+      if (document.visibilityState === 'visible' && focusRefreshDue('plan-changes')) {
         fetchPendingChanges();
       }
     };
@@ -203,7 +207,7 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
       return true;
     } catch (error) {
       console.error('[PlanChange] Failed to accept change:', error);
-      toast.error('Failed to accept plan changes. Please try again.');
+      showErrorToast(error, "Couldn't accept the plan changes");
       return false;
     }
   }, [currentChange]);
@@ -226,7 +230,7 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
       return true;
     } catch (error) {
       console.error('[PlanChange] Failed to reject change:', error);
-      toast.error('Failed to reject plan changes. Please try again.');
+      showErrorToast(error, "Couldn't reject the plan changes");
       return false;
     }
   }, [currentChange]);

@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import {
   FileCheck,
   RefreshCw,
@@ -149,7 +148,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
         setBaselineTotal(result.total);
       }
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't load consent logs. Please try again."));
+      showErrorToast(error, "Couldn't load consent logs", { id: 'consent-logs-load', retry: loadLogs });
     } finally {
       setIsLoading(false);
       setHasLoadedOnce(true);
@@ -165,7 +164,10 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
       setAuditTrail(result.items);
       setShowAuditTrail(true);
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't load audit trail. Please try again."));
+      showErrorToast(error, "Couldn't load consent audit trail", {
+        id: 'consent-audit-trail',
+        retry: () => loadAuditTrail(consentLogId),
+      });
     }
   };
 

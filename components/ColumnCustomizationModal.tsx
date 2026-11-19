@@ -5,6 +5,9 @@ interface ColumnOption {
   id: string;
   label: string;
   enabled: boolean;
+  /** Always shown — rendered ticked and disabled, so the table keeps its
+   *  identifying columns (e.g. Candidate, Score). */
+  locked?: boolean;
 }
 
 interface ColumnCustomizationModalProps {
@@ -19,18 +22,18 @@ export default function ColumnCustomizationModal({ columns, onClose, onApply }: 
   const toggleColumn = (id: string) => {
     setSelectedColumns(prev =>
       prev.map(col =>
-        col.id === id ? { ...col, enabled: !col.enabled } : col
+        col.id === id && !col.locked ? { ...col, enabled: !col.enabled } : col
       )
     );
   };
 
   const handleApply = () => {
-    const enabled = selectedColumns.filter(col => col.enabled).map(col => col.id);
+    const enabled = selectedColumns.filter(col => col.enabled || col.locked).map(col => col.id);
     onApply(enabled);
     onClose();
   };
 
-  const enabledCount = selectedColumns.filter(col => col.enabled).length;
+  const enabledCount = selectedColumns.filter(col => col.enabled || col.locked).length;
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
@@ -51,17 +54,22 @@ export default function ColumnCustomizationModal({ columns, onClose, onApply }: 
             {selectedColumns.map((column) => (
               <label
                 key={column.id}
-                className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-brand-blue/5 cursor-pointer transition-colors"
+                className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors ${
+                  column.locked ? 'cursor-not-allowed opacity-70' : 'hover:bg-brand-blue/5 cursor-pointer'
+                }`}
+                title={column.locked ? 'This column is always shown' : undefined}
               >
                 <div className="relative">
                   <input
                     type="checkbox"
-                    checked={column.enabled}
+                    checked={column.locked || column.enabled}
+                    disabled={column.locked}
                     onChange={() => toggleColumn(column.id)}
                     className="tf-checkbox accent-brand-blue focus:ring-2 focus:ring-brand-blue/40"
                   />
                 </div>
                 <span className="tf-body">{column.label}</span>
+                {column.locked && <span className="tf-meta ml-auto">Always shown</span>}
               </label>
             ))}
           </div>

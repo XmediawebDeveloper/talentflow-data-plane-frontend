@@ -3,7 +3,7 @@
 import AppModal, { type AppModalTone } from '@/components/ui/app-modal';
 import { useEffect, useState } from 'react';
 import { Download, FileDown, FileSpreadsheet, FileText, FileType2, Info, ScrollText } from 'lucide-react';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import type { ExportFileFormat } from '@/lib/utils/exportUtils';
 
 export type { ExportFileFormat };
@@ -140,7 +140,7 @@ export default function ExportFormatModal({
       onClose();
     } catch (error) {
       console.error('Export failed:', error);
-      toast.error(`Failed to export to ${FORMAT_NAMES[format]}`);
+      showErrorToast(error, `Couldn't export to ${FORMAT_NAMES[format]}`, { retry: handleExport });
     } finally {
       setExporting(false);
     }

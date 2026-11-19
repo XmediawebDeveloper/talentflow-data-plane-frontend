@@ -6,6 +6,7 @@ import { X, Download, Clock, User, FileText, History, Briefcase, Eye, GitCompare
 import { ResumeVersion, Resume } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 
 interface VersionHistoryModalProps {
@@ -120,7 +121,7 @@ export default function VersionHistoryModal({
         firstIsNewer ? { newer: first, older: second } : { newer: second, older: first },
       );
     } catch (error) {
-      toast.error('Could not load those versions to compare');
+      showErrorToast(error, "Couldn't load those versions to compare", { retry: handleCompare });
     } finally {
       setIsComparing(false);
     }
@@ -370,7 +371,7 @@ export default function VersionHistoryModal({
                                   document.body.removeChild(a);
                                   toast.success('Downloaded', { id: 'version-download' });
                                 } catch (error) {
-                                  toast.error('Download failed', { id: 'version-download' });
+                                  showErrorToast(error, "Couldn't download this version", { id: 'version-download' });
                                 }
                               }
                             }}

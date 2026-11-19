@@ -28,6 +28,7 @@ import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import { SortByControl } from '@/components/ui/select-all-menu';
 import ListPagination from '@/components/ListPagination';
 import TabEmptyState from '@/components/ui/tab-empty-state';
+import { NoMatchingCandidates } from '@/components/ui/list-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
@@ -79,7 +80,7 @@ import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem,
 import { formatJobExperienceBadge, formatExperienceLevelName } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { usePlanFeature, usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -97,6 +98,7 @@ import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 import { toOneDecimalScore } from '@/lib/utils/score';
 import NameAvatar from '@/components/ui/name-avatar';
 import { AssessmentIllustration, InterviewIllustration, ScoredResumesIllustration, TalentMatchIllustration } from '@/components/jobs/JobResultsIllustrations';
+import DeletedResumeRows from '@/components/resumes/DeletedResumeRows';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -1177,7 +1179,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     try {
       setViewingAIInterviewCandidate(await aiInterviewService.get(sessionId));
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't load candidate details. Please try again."));
+      showErrorToast(error, "Couldn't load candidate details", { retry: () => handleAIInterviewCandidateClick(sessionId) });
     } finally {
       setLoadingAIInterviewCandidate(false);
     }
@@ -1300,7 +1302,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // A failed clone says why; a failed lookup falls through to the config
       // flow, whose own guard re-checks before anything is created.
       if (error?.message) {
-        toast.error(friendlyErrorMessage(error, "Couldn't create a new AI interview version. Please try again."));
+        showErrorToast(error, "Couldn't create a new AI interview version");
         return;
       }
       // Lookup failed — fall through to the config flow rather than blocking.
@@ -1417,7 +1419,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // A failed clone says why; a failed lookup falls through to the creation
       // flow, whose own guard re-checks before anything is created.
       if (error?.message) {
-        toast.error(friendlyErrorMessage(error, "Couldn't duplicate the assessment. Please try again."));
+        showErrorToast(error, "Couldn't duplicate the assessment");
         return;
       }
     } finally {
@@ -1452,7 +1454,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setDraftAssessment(null);
       fetchAssessmentResults();
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't publish the assessment. Please try again."));
+      showErrorToast(err, "Couldn't publish the assessment");
     } finally {
       setPublishingDraft(false);
     }
@@ -1486,7 +1488,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     } catch (err: any) {
       // A draft with no clusters/skills configured can't be published; the API
       // says why, so surface that rather than a generic failure.
-      toast.error(friendlyErrorMessage(err, "Couldn't publish the AI interview. Please try again."));
+      showErrorToast(err, "Couldn't publish the AI interview");
     } finally {
       setPublishingAIDraft(false);
     }
@@ -1535,8 +1537,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       }
       setAiInterviewConfig(liveConfig);
       setTrackAIInterviewConfig(liveConfig);
-    } catch {
-      toast.error('Could not load the AI interview for this job. Please try again.');
+    } catch (error) {
+      showErrorToast(error, "Couldn't load the AI interview for this job", { retry: handleTrackAIInterviewInvites });
     } finally {
       setResolvingTrackInvitesConfig(false);
     }
@@ -1721,6 +1723,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           matchStatus: matchStatus,
           scorePercentage: Number((item.overall_score || 0).toFixed(1)),  // Keep 1 decimal for consistency
           overallRating10: item.overall_rating_10,
+          resumeDeleted: item.resume_deleted,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by || item.scored_by_name || 'System',
           // Identifies one scoring trigger, where the API sends it — Recent
@@ -1787,6 +1790,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setScoredResumesStats(stats);
     } catch (error) {
       console.error('[JobDetailView] Failed to fetch scored resumes:', error);
+      showErrorToast(error, "Couldn't load scored resumes", { id: `job-${job.id}-scored-resumes`, retry: fetchScoredResumes });
       setScoredResumes([]);
       setScoredResumesStats({ total: 0, exactMatch: 0, partialMatch: 0, noMatch: 0 });
     } finally {
@@ -2456,13 +2460,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         clearInterval(poll);
       }, 600000);
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't start scoring. Please try again."));
+      showErrorToast(err, "Couldn't start scoring");
     }
   };
 
   const handleAIMatchError = (error: string) => {
     setShowAIMatchPanel(false);
-    toast.error(`AI Matching failed: ${error}`);
+    showErrorToast(error || null, "Couldn't run AI Talent Match");
   };
 
   const handleSelectApplicants = () => {
@@ -4553,6 +4557,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 toolbarActions={resultsInviteAction('assessment', 'toolbar')}
                 emptyStateAction={resultsInviteAction('assessment', 'empty')}
                 emptyStateText={resultsEmptyText('assessment')}
+                emptyStateIllustration={<AssessmentIllustration />}
                 /* Actions ▸ Create / Send Assessment | AI Interview: the AI
                    Talent Match tab's version popups, with the ticked candidates. */
                 onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'assessment-result')}
@@ -4652,6 +4657,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               toolbarActions={resultsInviteAction('interview', 'toolbar')}
               emptyStateAction={resultsInviteAction('interview', 'empty')}
               emptyStateText={resultsEmptyText('interview')}
+              emptyStateIllustration={<InterviewIllustration />}
               readOnly={jobInactive}
               configId={aiInterviewConfig.id}
               configTitle={aiInterviewConfig.position || aiInterviewConfig.jd_title || 'AI Interview'}
@@ -4680,10 +4686,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       )}
 
       {/* AI Talent Match Tab Content */}
+      {/* Results whose resume the account owner deleted (2026-11-19): name +
+          email only, listed apart until the job is run again. */}
+      {activeTab === 'ai-talent-match' && (
+        <DeletedResumeRows
+          rows={aiMatchCandidates.filter((c) => c.resumeDeleted).map((c) => ({ id: c.id, name: c.name, email: c.email }))}
+          className="mb-3"
+        />
+      )}
       {activeTab === 'ai-talent-match' && (
         <AIMatchTabContent
           toolbarPortal={tabToolbarSlot}
-          candidates={aiMatchCandidates}
+          candidates={aiMatchCandidates.filter((c) => !c.resumeDeleted)}
           scoredResumes={scoredResumes}
           scoredResumesLoaded={scoredResumesLoaded && !loadingScoredResumes}
           jobTitle={job.title}
@@ -4700,7 +4714,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onScoreSelected={(selected) => { if (selected.length > 0) setAiMatchScoreReview(selected); }}
           onScoreAll={() => {
             const scoredIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
-            const unscored = aiMatchCandidates.filter((c) => !scoredIds.has(c.resumeId));
+            const unscored = aiMatchCandidates.filter((c) => !c.resumeDeleted && !scoredIds.has(c.resumeId));
             if (unscored.length > 0) setAiMatchScoreReview(unscored);
           }}
           onViewCandidate={(candidate) => {
@@ -5695,7 +5709,7 @@ function AIMatchTabContent({
         bordered
         icon={Brain}
         illustration={<TalentMatchIllustration />}
-        title="No AI Talent Match Results"
+        title="No AI Talent Match Results Yet"
         description="Run an AI Talent Match session to find the best candidates for this role."
         action={(
           <Button
@@ -6051,9 +6065,7 @@ function AIMatchTabContent({
         {effectiveDisplayMode === 'grid' ? (
           <div className="max-h-[calc(100dvh-20rem)] overflow-auto p-4">
             {filteredCandidates.length === 0 ? (
-              <div className="px-4 py-12 text-center tf-body-muted">
-                No candidates match the current filters.
-              </div>
+              <NoMatchingCandidates query={searchQuery} />
             ) : (
               <div className="tf-grid-4">
                 {paginatedCandidates.map((candidate) => {
@@ -6201,8 +6213,8 @@ function AIMatchTabContent({
               {filteredCandidates.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-0">
-                    <div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 dark:text-slate-500`}>
-                      No candidates match the current filters.
+                    <div className={TABLE_EMPTY_PANEL_CLASS}>
+                      <NoMatchingCandidates query={searchQuery} className="py-0" />
                     </div>
                   </td>
                 </tr>
@@ -6477,8 +6489,8 @@ function AIMatchTabContent({
         {/* Mobile: candidates render as cards instead of a 1450px-wide horizontal-scroll table (§10). */}
         <div className="lg:hidden space-y-3">
           {filteredCandidates.length === 0 ? (
-            <div className="tf-panel p-8 text-center tf-body-muted">
-              No candidates match the current filters.
+            <div className="tf-panel">
+              <NoMatchingCandidates query={searchQuery} />
             </div>
           ) : (
             paginatedCandidates.map((candidate) => {

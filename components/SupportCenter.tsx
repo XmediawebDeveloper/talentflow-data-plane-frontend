@@ -18,6 +18,7 @@ import {
   Headphones, CircleDashed, BarChart3, Eye, ChevronRight, Check, ChevronLeft, Copy, Flag, Settings2, Info, UploadCloud, History, Bold, Italic, List, ListOrdered, Link2, Smile, Forward, Shield
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketPriority } from '@/lib/services';
 import type { InternalTicketFilterParams } from '@/lib/services/internalTicketService';
@@ -844,7 +845,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       const ticket = await internalTicketService.getTicket(ticketId);
       setSelectedInternalTicket(ticket);
     } catch (error) {
-      toast.error(`${errorText(error, 'Could not load this ticket')} — showing the summary from the list.`);
+      showErrorToast(error, "Couldn't load the full ticket — showing the summary from the list", {
+        id: `internal-ticket-detail-${ticketId}`,
+        retry: () => fetchInternalTicketDetail(ticketId),
+      });
     }
   };
 
@@ -860,7 +864,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       fetchInternalStats();
     } catch (error) {
       console.error('Error assigning ticket:', error);
-      toast.error('Failed to assign ticket');
+      showErrorToast(error, "Couldn't assign the ticket");
     } finally {
       setInternalActionLoading(null);
     }
@@ -878,7 +882,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       fetchInternalStats();
     } catch (error) {
       console.error('Error resolving ticket:', error);
-      toast.error('Failed to resolve ticket');
+      showErrorToast(error, "Couldn't resolve the ticket");
     } finally {
       setInternalActionLoading(null);
     }
@@ -896,7 +900,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       fetchInternalStats();
     } catch (error) {
       console.error('Error closing ticket:', error);
-      toast.error('Failed to close ticket');
+      showErrorToast(error, "Couldn't close the ticket");
     } finally {
       setInternalActionLoading(null);
     }
@@ -914,7 +918,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       fetchInternalStats();
     } catch (error) {
       console.error('Error reopening ticket:', error);
-      toast.error('Failed to reopen ticket');
+      showErrorToast(error, "Couldn't reopen the ticket");
     } finally {
       setInternalActionLoading(null);
     }
@@ -962,7 +966,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       setReplyMessage('');
       toast.success('Reply sent successfully');
     } catch (error) {
-      toast.error(errorText(error, 'Failed to send reply'));
+      showErrorToast(error, "Couldn't send your reply");
     } finally {
       setReplySending(false);
     }
@@ -972,7 +976,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     try {
       saveBlob(await internalTicketService.downloadAttachment(ticketId, file.id), file.file_name);
     } catch (error) {
-      toast.error(errorText(error, 'Could not download the file'));
+      showErrorToast(error, `Couldn't download ${file.file_name}`, { retry: () => downloadInternalAttachment(ticketId, file) });
     }
   };
 
@@ -986,7 +990,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       toast.success('Priority updated');
     } catch (error) {
       console.error('Error updating priority:', error);
-      toast.error('Failed to update priority');
+      showErrorToast(error, "Couldn't update the priority");
     }
   };
 
@@ -1076,7 +1080,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       if (myCurrentPage === 1) fetchTickets(); else setMyCurrentPage(1);
       fetchStats();
     } catch (error) {
-      toast.error(errorText(error, 'Failed to create ticket'));
+      showErrorToast(error, "Couldn't create the ticket");
     } finally {
       setSubmitting(false);
     }
@@ -1105,7 +1109,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
-      toast.error(errorText(error, 'Could not download the file'));
+      showErrorToast(error, `Couldn't download ${file.name}`, { retry: () => downloadAttachment(ticketId, file) });
     }
   };
 
@@ -1171,13 +1175,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           setReplyFiles([]);
         } catch (error) {
           // Keep the files chosen so the user can retry just the upload.
-          toast.error(errorText(error, 'The attachments could not be uploaded'));
+          showErrorToast(error, "Couldn't upload the attachments");
           return;
         }
       }
       toast.success('Reply sent successfully');
     } catch (error) {
-      toast.error(errorText(error, 'Failed to send reply'));
+      showErrorToast(error, "Couldn't send your reply");
     } finally {
       setReplySending(false);
     }
@@ -1191,7 +1195,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       toast.success('Ticket closed');
       fetchStats();
     } catch (error) {
-      toast.error(errorText(error, 'Failed to close ticket'));
+      showErrorToast(error, "Couldn't close the ticket");
     }
   };
 
@@ -1203,7 +1207,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       toast.success('Ticket reopened');
       fetchStats();
     } catch (error) {
-      toast.error(errorText(error, 'Failed to reopen ticket'));
+      showErrorToast(error, "Couldn't reopen the ticket");
     }
   };
 
@@ -1223,7 +1227,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       fetchStats();
       return true;
     } catch (error) {
-      toast.error(errorText(error, 'Failed to update ticket'));
+      showErrorToast(error, "Couldn't update the ticket");
       return false;
     }
   };
@@ -2416,7 +2420,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           const copyTicketId = () => {
             navigator.clipboard?.writeText(selectedTicket.ticketNumber)
               .then(() => toast.success('Ticket ID copied'))
-              .catch(() => toast.error('Could not copy ticket ID'));
+              .catch((err) => showErrorToast(err, "Couldn't copy the ticket ID"));
           };
           const detailTab = detailTabState.id === selectedTicket.id ? detailTabState.tab : 'conversation';
           const draftPriority = priorityDraft.id === selectedTicket.id ? priorityDraft.value : selectedTicket.priority;
@@ -3658,7 +3662,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           const copyId = () => {
             navigator.clipboard?.writeText(t.ticket_number)
               .then(() => toast.success('Ticket ID copied'))
-              .catch(() => toast.error('Could not copy ticket ID'));
+              .catch((err) => showErrorToast(err, "Couldn't copy the ticket ID"));
           };
           const downloadInternalTranscript = () => {
             const lines = [

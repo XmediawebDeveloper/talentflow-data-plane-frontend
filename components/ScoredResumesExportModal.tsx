@@ -185,6 +185,18 @@ export default function ScoredResumesExportModal({
   /* A real .xlsx workbook (ExcelJS, loaded on demand) — not an HTML table
      saved as ".xls", which Excel opens only after a format warning. */
   const exportToXLS = async () => {
+    /* Runs in the background behind one live toast: the dialog closes at once
+       (which also rules out a double-click starting a second export), and the
+       toast shows the row count as the sheet fills, then the outcome. */
+    const total = rows.length;
+    const toastId = toast.loading(`Preparing Excel export… 0/${total}`, {
+      description: 'You can keep working — the file downloads when ready.',
+    });
+    onClose();
+    // Lets the browser paint the toast between chunks of rows.
+    const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const ROW_CHUNK = 250;
+
     let buffer: ArrayBuffer;
     try {
       const ExcelJS = (await import('exceljs')).default;
@@ -202,8 +214,19 @@ export default function ScoredResumesExportModal({
         cell.font = { bold: true };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
       });
-      rows.forEach(resume => {
-        sheet.addRow(exportColumns.map(col => getCellValue(resume, col.id)));
+      for (let i = 0; i < total; i += ROW_CHUNK) {
+        rows.slice(i, i + ROW_CHUNK).forEach(resume => {
+          sheet.addRow(exportColumns.map(col => getCellValue(resume, col.id)));
+        });
+        toast.loading(`Preparing Excel export… ${Math.min(i + ROW_CHUNK, total)}/${total}`, {
+          id: toastId,
+          description: 'You can keep working — the file downloads when ready.',
+        });
+        await yieldToUi();
+      }
+      toast.loading(`Building Excel file… (${total} records)`, {
+        id: toastId,
+        description: 'You can keep working — the file downloads when ready.',
       });
 
       // Hairline borders on the table; widths fitted to the longest value (capped).
@@ -226,7 +249,10 @@ export default function ScoredResumesExportModal({
       buffer = await workbook.xlsx.writeBuffer() as ArrayBuffer;
     } catch (error) {
       console.error('Excel export failed:', error);
-      toast.error('Failed to export to Excel');
+      toast.error("Couldn't export to Excel", {
+        id: toastId,
+        description: 'Try again, or export as CSV instead. If it keeps happening, contact support.',
+      });
       return;
     }
 
@@ -234,9 +260,8 @@ export default function ScoredResumesExportModal({
       new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
       fileName('xlsx'),
     );
-    toast.success(`Exported ${rows.length} records to Excel`);
+    toast.success(`Exported ${total} records to Excel`, { id: toastId, description: undefined });
     onExported?.();
-    onClose();
     scoringService.logClientExport('excel', rows.length, isUuid(auditJdId) ? auditJdId : undefined);
   };
 

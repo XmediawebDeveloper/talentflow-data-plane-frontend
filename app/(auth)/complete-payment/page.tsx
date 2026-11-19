@@ -10,12 +10,13 @@ import {
   CreditCard, AlertCircle, Loader2, CheckCircle, ShieldCheck, ArrowLeft, Check, Shield
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import Cookies from 'js-cookie';
 import { decodeParam, decodePlanId } from '@/lib/utils/planEncoder';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { useTheme } from 'next-themes';
 // Auto-login support after paid signup payment — see post-payment redirect.
-import { setTokens, clearTokens } from '@/lib/services/api';
+import { setTokens } from '@/lib/services/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -192,7 +193,7 @@ function CompletePaymentContent() {
         if (rzpErr.message?.includes('cancelled')) {
           toast.info('Payment cancelled', { description: 'You can try again anytime.' });
         } else {
-          toast.error('Payment failed', { description: rzpErr.message });
+          showErrorToast(rzpErr, "Couldn't complete the payment");
         }
         setPaymentProcessing(false);
         setPaymentStep('');
@@ -244,10 +245,12 @@ function CompletePaymentContent() {
       const hasTokens = Boolean(data?.access_token && data?.refresh_token);
       setTimeout(() => {
         if (hasTokens) {
-          try { clearTokens(); } catch {}
-          setTokens(data.access_token, data.refresh_token);
-          // Hard redirect so providers re-init with the new tokens.
-          window.location.href = '/dashboard';
+          // setTokens replaces any older session (clearing first would race
+          // its cookie delete against the new cookie).
+          setTokens(data.access_token, data.refresh_token).finally(() => {
+            // Hard redirect so providers re-init with the new tokens.
+            window.location.href = '/dashboard';
+          });
         } else {
           router.push('/login');
         }
@@ -262,7 +265,7 @@ function CompletePaymentContent() {
         ? 'Payment processing failed. Please try again or contact support if the issue persists.'
         : rawMessage;
       setError(message);
-      toast.error('Payment failed', { description: message });
+      showErrorToast(message, "Couldn't complete the payment");
     } finally {
       setPaymentProcessing(false);
       setPaymentStep('');

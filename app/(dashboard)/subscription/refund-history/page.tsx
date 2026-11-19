@@ -3,10 +3,10 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, RefreshCw, ExternalLink, Filter, Sparkles, X } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { billToFromAuth, generateRefundReceiptPDF } from '@/lib/utils/pdfInvoice';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
 import { RowActions } from '@/components/subscription/RowActionsMenu';
@@ -154,7 +154,7 @@ export default function RefundHistoryPage() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) {
         setError('Not authenticated. Please login again.');
         setLoading(false);
@@ -289,7 +289,7 @@ export default function RefundHistoryPage() {
       await generateRefundReceiptPDF(inv, billToFromAuth(user, tenant));
     } catch (error) {
       console.error('PDF generation failed:', error);
-      toast.error('Failed to generate PDF. Please try again.');
+      showErrorToast(error, "Couldn't download the refund receipt", { retry: () => handleDownloadRefund(inv) });
     } finally {
       setDownloadingId(null);
     }
@@ -352,7 +352,7 @@ export default function RefundHistoryPage() {
       <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Refund History' }]} />
 
-        {/* Header — title + actions (matches Dispute History) */}
+        {/* Header — title + actions (matches Payment Disputes) */}
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="tf-page-title">Refund History</h1>

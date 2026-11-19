@@ -3,6 +3,7 @@
  */
 
 import api from './api';
+import { cachedList, listCacheKey, listReadOptions, type ListReadOptions } from '../utils/listCache';
 import { readRbacCache, writeRbacCache, clearRbacSessionCache } from '../utils/rbacSessionCache';
 import {
   Permission,
@@ -69,13 +70,19 @@ export async function getPermissionModules(): Promise<Record<string, string>> {
  */
 export const formatRoleName = (name: string | null | undefined): string => (name ?? '').toUpperCase();
 
-export async function getRoles(): Promise<{
+export async function getRoles(opts?: ListReadOptions): Promise<{
   roles: RoleListItem[];
   total: number;
   /** Max roles per tenant, system roles included. */
   role_limit?: number;
 }> {
-  const response = await api.get(`${RBAC_BASE_URL}/roles`);
+  // `reuseRecent`: arriving on User Management reuses an answer from the last 30 s
+  // (any write, e.g. a role save, clears it — lib/utils/listCache).
+  const response = { data: await cachedList(
+    listCacheKey('rbac|roles'),
+    async () => (await api.get(`${RBAC_BASE_URL}/roles`)).data,
+    listReadOptions(opts),
+  ) };
 
   // Ensure core system roles are always marked as system roles
   const systemRoleCodes = ['tenant_admin', 'admin', 'recruiter', 'viewer', 'billing_manager'];

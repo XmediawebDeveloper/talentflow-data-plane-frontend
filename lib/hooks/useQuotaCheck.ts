@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { getAccessToken } from '@/lib/services/api';
 
 interface QuotaCheckResult {
   available: boolean;
@@ -58,7 +59,7 @@ export function useQuotaCheck() {
     setStatus(prev => ({ ...prev, loading: true, error: null }));
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) {
         setStatus({
           loading: false,
