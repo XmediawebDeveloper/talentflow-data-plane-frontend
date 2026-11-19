@@ -10,7 +10,7 @@ import { MemberStack, TeamActionHandlers, formatTeamDateTime, AttentionChip, Tea
  *  direction of the column's values, so newest-first Created is 'desc'. */
 export type TeamListSortKey = 'name' | 'newest' | 'members' | 'units';
 
-interface TeamListTableProps extends Pick<TeamActionHandlers, 'onViewDetails' | 'maxMembers' | 'unitsByTeam' | 'onOpenUsage' | 'createdBy'> {
+interface TeamListTableProps extends Pick<TeamActionHandlers, 'onViewDetails' | 'maxMembers' | 'unitsByTeam' | 'unitsPeriod' | 'onOpenUsage' | 'createdBy'> {
   teams: Team[];
   /** Rendered inside the card under the table — e.g. `<ListPagination attached />`. */
   footer?: React.ReactNode;
@@ -26,7 +26,7 @@ const TH = 'px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300';
  * List-view counterpart of the TeamCard grid: same data, one row per team.
  * Clicking a row opens the Team popup, like clicking a card.
  */
-export default function TeamListTable({ teams, onViewDetails, footer, sortKey, sortDir, onSort, maxMembers = 0, unitsByTeam = null, onOpenUsage, createdBy = null }: TeamListTableProps) {
+export default function TeamListTable({ teams, onViewDetails, footer, sortKey, sortDir, onSort, maxMembers = 0, unitsByTeam = null, unitsPeriod = 'last 30 days', onOpenUsage, createdBy = null }: TeamListTableProps) {
   const sort: TableSort<TeamListSortKey> = { sortKey, sortDir, toggleSort: onSort };
   return (
     <section className="tf-card-soft overflow-hidden">
@@ -54,7 +54,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
               <>
                 <MobileStatChip tone="info">{team.member_count} members</MobileStatChip>
                 {unitsByTeam?.[team.id] && (
-                  <MobileStatChip tone="neutral">{formatTeamUnits(unitsByTeam[team.id].total)} units (30 days)</MobileStatChip>
+                  <MobileStatChip tone="neutral">{formatTeamUnits(unitsByTeam[team.id].total)} units ({unitsPeriod})</MobileStatChip>
                 )}
               </>
             }
@@ -79,7 +79,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
               </th>
               {unitsByTeam && (
                 <th className={TH} aria-sort={ariaSort(sort, 'units')}>
-                  <SortableHeader label="Units (last 30 days)" column="units" sort={sort} />
+                  <SortableHeader label={`Units (${unitsPeriod})`} column="units" sort={sort} />
                 </th>
               )}
               <th className={TH} aria-sort={ariaSort(sort, 'newest')}>

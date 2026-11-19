@@ -7,6 +7,16 @@ import { DISPLAY } from "../fonts";
 import { PLAN_RAIL, PLAN_RAIL_ITEM, PlanCard, SwipeHint } from "../PlanCard";
 import { SWIPE_ITEM, SWIPE_RAIL, SwipeDots, useSwipeDeck } from "../SwipeDeck";
 import type { MarketingPlan } from "../plans";
+import {
+  ACTIVE_PILL,
+  ACTIVE_PILL_COUNT,
+  ACTIVE_PILL_TEXT,
+  placeTabPill,
+  TAB_PILL_CLASS,
+  TAB_SWAP_CLASS,
+  TAB_SWAP_CSS,
+  tabSwapDelay,
+} from "../pillTone";
 
 /* ------------------------------------------------------------------ *
  * Plan types
@@ -76,10 +86,10 @@ const plural = (n: number) => `${n} ${n === 1 ? "plan" : "plans"}`;
 
 /* ------------------------------------------------------------------ */
 
-function GroupHeader({ meta, count }: { meta: GroupMeta; count: number }) {
+function GroupHeader({ meta, count, swapIn }: { meta: GroupMeta; count: number; swapIn: boolean }) {
   const Icon = meta.icon;
   return (
-    <div data-group-head className="flex items-center gap-3 sm:gap-4">
+    <div data-group-head className={`flex items-center gap-3 sm:gap-4 ${swapIn ? TAB_SWAP_CLASS : ""}`}>
       <span data-group-icon aria-hidden="true" className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl sm:h-12 sm:w-12 ${meta.tone}`}>
         <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
       </span>
@@ -96,13 +106,18 @@ function GroupHeader({ meta, count }: { meta: GroupMeta; count: number }) {
 }
 
 /** Phone: centred accordion swipe deck (see SwipeDeck); sm+: plain grid. */
-function CardGrid({ plans, isYearly }: { plans: MarketingPlan[]; isYearly: boolean }) {
+function CardGrid({ plans, isYearly, swapIn }: { plans: MarketingPlan[]; isYearly: boolean; swapIn: boolean }) {
   const { wrapRef, current, goTo } = useSwipeDeck(plans.length);
   return (
     <div ref={wrapRef}>
       <div data-swipe-rail className={`mt-5 sm:mt-7 ${PLAN_RAIL} ${GRID_COLS} ${SWIPE_RAIL}`}>
-        {plans.map((plan) => (
-          <div key={plan.id} data-plan-card className={`${PLAN_RAIL_ITEM} [transform-style:preserve-3d] ${SWIPE_ITEM}`}>
+        {plans.map((plan, index) => (
+          <div
+            key={plan.id}
+            data-plan-card
+            style={swapIn ? { animationDelay: tabSwapDelay(index) } : undefined}
+            className={`${PLAN_RAIL_ITEM} [transform-style:preserve-3d] ${SWIPE_ITEM} ${swapIn ? TAB_SWAP_CLASS : ""}`}
+          >
             <div data-swipe-face className="h-full will-change-transform">
               <PlanCard plan={plan} isYearly={isYearly} />
             </div>
@@ -148,38 +163,33 @@ export function PlanGroups({ plans, isYearly }: { plans: MarketingPlan[]; isYear
   const tabsRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLSpanElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const switching = useRef(false);
   const firstRun = useRef(true);
+  const pillPlaced = useRef(false);
+  // Set once the reader has switched type; from then on new sets drift in via CSS.
+  const [switched, setSwitched] = useState(false);
 
   const reduceMotion = () =>
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  /* Sliding pill behind the active type. */
+  /* Sliding pill behind the active type: a CSS glide on the project's fluid
+     curve (TAB_SWAP_CSS), the same as the signup plan picker. */
   useLayoutEffect(() => {
     const bar = tabsRef.current;
     const pill = pillRef.current;
     if (!bar || !pill) return;
-    const place = (animate: boolean) => {
-      const btn = bar.querySelector<HTMLElement>('[aria-pressed="true"]');
-      if (!btn) return;
-      const to = { x: btn.offsetLeft, width: btn.offsetWidth, autoAlpha: 1 };
-      if (!animate || reduceMotion()) gsap.set(pill, to);
-      else gsap.to(pill, { ...to, duration: 0.6, ease: "elastic.out(1, 0.8)" });
-      // Keep the chosen chip in view on the phone rail.
-      btn.scrollIntoView({ block: "nearest", inline: "nearest", behavior: reduceMotion() ? "auto" : "smooth" });
-    };
-    place(!firstRun.current);
-    const onResize = () => place(false);
+    placeTabPill(bar, pill, pillPlaced.current);
+    pillPlaced.current = true;
+    const onResize = () => placeTabPill(bar, pill, false);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [active, tabs.length]);
 
-  /* Enter animations: on first view the groups build as they scroll in;
-     after a switch, the new set rises in at once. */
+  /* First view: the groups build as they scroll in. Switches are handled by
+     CSS (TAB_SWAP_CLASS), so this only runs the scroll reveal once. */
   useGSAP(
     () => {
       const root = contentRef.current;
-      if (!root || reduceMotion()) {
+      if (!root || reduceMotion() || !firstRun.current) {
         firstRun.current = false;
         return;
       }
@@ -209,44 +219,24 @@ export function PlanGroups({ plans, isYearly }: { plans: MarketingPlan[]; isYear
         rules.forEach((rule) =>
           gsap.from(rule, { scaleX: 0, duration: 1, ease: "power3.inOut", scrollTrigger: { trigger: rule, start: "top 90%", once: true } })
         );
-      } else {
-        const tl = gsap.timeline();
-        tl.from(heads, { y: 20, autoAlpha: 0, duration: 0.45, stagger: 0.08 })
-          .from(icons, { scale: 0.4, rotate: -25, duration: 0.6, ease: "back.out(2.2)", stagger: 0.08 }, 0)
-          .from(rules, { scaleX: 0, duration: 0.8, ease: "power3.inOut" }, 0.1)
-          .fromTo(cards, cardFrom, { ...cardTo, stagger: 0.05, duration: 0.65 }, 0.08);
-        ScrollTrigger.refresh();
       }
     },
     { scope: contentRef, dependencies: [active], revertOnUpdate: true }
   );
 
-  /* Switching: the current set drops away, then the next one rises in. */
+  /* Switching happens at once: the pill glides while the new set drifts in.
+     No exit phase to wait on, so it never feels stepped. */
   const select = (id: GroupId) => {
-    if (id === active || switching.current) return;
-    const root = contentRef.current;
+    if (id === active) return;
     const section = rootRef.current;
     // If the reader is deep in a long list, bring the switcher back into view.
     if (section && section.getBoundingClientRect().top < 0) {
       window.scrollTo({ top: section.getBoundingClientRect().top + window.scrollY - 80, behavior: reduceMotion() ? "auto" : "smooth" });
     }
-    if (!root || reduceMotion()) {
-      setActive(id);
-      return;
-    }
-    switching.current = true;
-    gsap.to(root.querySelectorAll("[data-plan-card], [data-group-head]"), {
-      y: -14,
-      autoAlpha: 0,
-      scale: 0.98,
-      duration: 0.22,
-      ease: "power2.in",
-      stagger: 0.015,
-      onComplete: () => {
-        switching.current = false;
-        setActive(id);
-      },
-    });
+    setSwitched(true);
+    setActive(id);
+    // Cards from a newly shown type may sit below the fold; let ScrollTrigger re-measure.
+    requestAnimationFrame(() => ScrollTrigger.refresh());
   };
 
   const visibleTiers = groups.filter((t) => t.id === active);
@@ -265,7 +255,7 @@ export function PlanGroups({ plans, isYearly }: { plans: MarketingPlan[]; isYear
           <span
             ref={pillRef}
             aria-hidden="true"
-            className="pointer-events-none absolute left-0 top-1 h-[calc(100%-0.5rem)] rounded-full bg-mkt-ink opacity-0 shadow-[0_8px_20px_-10px_rgba(8,19,46,0.6)]"
+            className={`${TAB_PILL_CLASS} pointer-events-none absolute left-0 top-1 h-[calc(100%-0.5rem)] rounded-full opacity-0 ${ACTIVE_PILL}`}
           />
           {tabs.map(({ id, label, count, icon: Icon }) => {
             const on = active === id;
@@ -276,17 +266,14 @@ export function PlanGroups({ plans, isYearly }: { plans: MarketingPlan[]; isYear
                 aria-pressed={on}
                 onClick={() => select(id)}
                 className={`group relative z-10 inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-sm font-semibold transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid sm:px-4 ${
-                  on ? "text-mkt-canvas" : "text-slate-600 hover:text-mkt-ink dark:text-slate-300"
+                  on ? ACTIVE_PILL_TEXT : "text-slate-600 hover:text-mkt-ink dark:text-slate-300"
                 }`}
               >
-                <Icon
-                  aria-hidden="true"
-                  className="h-4 w-4 transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:-rotate-12 group-hover:scale-110"
-                />
+                <Icon aria-hidden="true" className="h-4 w-4" />
                 {label}
                 <span
                   className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums leading-none transition-colors duration-300 ${
-                    on ? "bg-white/20 text-mkt-canvas dark:bg-slate-900/20" : "bg-slate-900/[0.06] text-slate-500 dark:bg-white/10 dark:text-slate-400"
+                    on ? ACTIVE_PILL_COUNT : "bg-slate-900/[0.06] text-slate-500 dark:bg-white/10 dark:text-slate-400"
                   }`}
                 >
                   {count}
@@ -301,11 +288,13 @@ export function PlanGroups({ plans, isYearly }: { plans: MarketingPlan[]; isYear
         Showing {plural(shownCount)}
       </p>
 
+      <style>{TAB_SWAP_CSS}</style>
       <div ref={contentRef} className="space-y-14 sm:space-y-20">
         {visibleTiers.map((tier) => (
+          // Keyed by type, so a switch mounts fresh nodes and replays the CSS drift-in.
           <section key={tier.id} aria-label={`${tier.meta.label} plans`}>
-            <GroupHeader meta={tier.meta} count={tier.plans.length} />
-            <CardGrid plans={tier.plans} isYearly={isYearly} />
+            <GroupHeader meta={tier.meta} count={tier.plans.length} swapIn={switched} />
+            <CardGrid plans={tier.plans} isYearly={isYearly} swapIn={switched} />
           </section>
         ))}
       </div>

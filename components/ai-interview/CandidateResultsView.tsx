@@ -63,7 +63,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ViewResumeButton from '@/components/ui/view-resume-button';
-import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, pickResumeByEmail, resumeEmailOf, verifyResumeBelongsToInvite } from '@/lib/utils/resumeEmailMatch';
+import { RESUME_EMAIL_MISMATCH_MESSAGE, emailsMatch, normalizeEmail, resumeEmailOf } from '@/lib/utils/resumeEmailMatch';
+import { resolveInviteResumeId } from '@/components/ai-interview/useInviteResumePreview';
 import ResumeHoverPreview from '@/components/ResumeHoverPreview';
 import TruncatedTextCell from './TruncatedTextCell';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
@@ -2004,42 +2005,17 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // contradict, the same identity rule the interview agent applies
   // (_names_plausibly_same_person), so a reused address can't surface a
   // stranger's resume. No match → no resume.
+  // The shared lookup (useInviteResumePreview.tsx) — the same rule the Results
+  // and Track tables' row ⋮ › View Resume use.
   const resolveResumeId = async (): Promise<string | null> => {
     setResumeEmailMismatch(false);
-    const email = inviteEmail();
-    if (!email) return null;
-    const { resumeService } = await import('@/lib/services/resumeService');
-
-    const linked = liveSession.resume_id || interview.resume_id;
-    if (linked) {
-      try {
-        // get(id) without logView — an availability check, not a view.
-        const verified = await verifyResumeBelongsToInvite(linked, email, id => resumeService.get(id));
-        if (verified) return verified;
-        setResumeEmailMismatch(true);
-      } catch (err) {
-        // Couldn't verify the link — never show it unverified; the email
-        // search below can still find the same resume.
-        console.warn('[CandidateResultsView] Linked resume check failed:', err);
-      }
-    }
-
-    // Exact email is the rule, whatever the invite source — the name only
-    // breaks a tie (pickResumeByEmail).
-    try {
-      // include_archived: an archived resume still exists — the resume_id
-      // path opens it, so the email path must find it too (naveen's resume was
-      // archived, so his direct-email invite showed "invited via Direct Email").
-      const results = await resumeService.list({ search: email, page_size: 50, include_archived: true });
-      const items = results.items || [];
-      const match: any = pickResumeByEmail(items as any[], email, interview.candidate_name || liveSession.candidate_name);
-      console.info('[CandidateResultsView] resume lookup by e-mail', { email, hits: items.length, matched: match?.id ?? null });
-      if (match?.id) setResumeEmailMismatch(false);
-      return match?.id || null;
-    } catch (err) {
-      console.warn('[CandidateResultsView] Resume search failed:', err);
-      return null;
-    }
+    const { id, mismatch } = await resolveInviteResumeId({
+      resumeId: liveSession.resume_id || interview.resume_id,
+      email: inviteEmail(),
+      name: interview.candidate_name || liveSession.candidate_name,
+    });
+    setResumeEmailMismatch(!id && mismatch);
+    return id;
   };
 
   // Prev/Next re-renders this same instance with a different interview, so

@@ -31,6 +31,7 @@ const protectedRoutes = [
   '/dashboard',
   '/recruitment',
   '/organization',
+  '/chat',          // Chat (was /organization/team-chat)
   '/subscription',
   '/settings',
   '/analytics',
