@@ -472,7 +472,7 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
       /^\s*Payment Methods\s*$/i,
       /^\s*Billing History\s*$/i,
       /^\s*Refund History\s*$/i,
-      /^\s*Dispute History\s*$/i,
+      /^\s*Payment Disputes\s*$/i,
     ];
     const broken: string[] = [];
     for (const tab of tabs) {

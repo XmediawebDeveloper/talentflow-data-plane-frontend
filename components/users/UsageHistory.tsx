@@ -946,9 +946,6 @@ function UserWiseTab({
             So <span className="font-semibold text-gray-800 dark:text-slate-100">card “Used” = units used − units returned</span>, and
             the two won&apos;t always match. Every deduction and return is listed in the audit logs.
           </p>
-          <p className="text-gray-500 dark:text-slate-400">
-            For now, Resume Units here still subtract deleted resumes; they&apos;ll count every upload once the server sends that figure.
-          </p>
         </div>
       </div>
       {totalPages > 1 && (
@@ -1893,6 +1890,7 @@ export default function UsageHistory() {
   const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
     { id: 'user', label: 'User-Wise', icon: User },
     { id: 'team', label: 'Team-Wise', icon: Users },
+    { id: 'refunds', label: 'Refunds', icon: RefreshCw },
   ];
 
   // Active filter tags: the period / date range as one tag (only once it moves
@@ -2090,13 +2088,16 @@ export default function UsageHistory() {
           <div
             role="radiogroup"
             aria-label="Usage view"
-            className="relative grid grid-cols-2 h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10 order-first w-full shrink-0 sm:w-auto sm:self-start lg:order-none lg:self-auto"
+            className="relative grid h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10 order-first w-full shrink-0 sm:w-auto sm:self-start lg:order-none lg:self-auto"
+            style={{ gridTemplateColumns: `repeat(${TABS.length}, minmax(0, 1fr))` }}
           >
             <span
               aria-hidden
-              className={`absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-white dark:bg-slate-800 shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out ${
-                activeTab === TABS[1].id ? 'translate-x-full' : 'translate-x-0'
-              }`}
+              className="absolute top-1 bottom-1 left-1 rounded-md bg-white dark:bg-slate-800 shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out"
+              style={{
+                width: `calc((100% - 0.5rem) / ${TABS.length})`,
+                transform: `translateX(${Math.max(0, TABS.findIndex((t) => t.id === activeTab)) * 100}%)`,
+              }}
             />
             {TABS.map((tab) => {
               const Icon = tab.icon;

@@ -369,7 +369,7 @@ export default function BillingHistoryPage() {
       <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Billing History' }]} />
 
-        {/* Header — title + actions (matches Dispute History) */}
+        {/* Header — title + actions (matches Payment Disputes) */}
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="tf-page-title">Billing History</h1>
