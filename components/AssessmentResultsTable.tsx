@@ -446,6 +446,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       toast.success(`All ${count} filtered results exported to ${formatName} successfully!`);
       setShowExportModal(false);
       setExportStep('format');
+      // Export of the ticked rows done — clear the selection (hides the bulk
+      // bar). Nothing changed, so no reload.
+      setSelectedResults([]);
     } catch (error) {
       console.error('Export failed:', error);
       toast.error(exportErrorMessage(error));
@@ -536,6 +539,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      // Download done — clear the selection (hides the bulk bar); no reload.
+      setSelectedResults([]);
     } catch (error) {
       console.error('Failed to download bulk PDFs:', error);
       toast.error('Failed to download PDF reports. Please try again.');

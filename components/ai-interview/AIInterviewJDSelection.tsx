@@ -1,6 +1,6 @@
 'use client';
 
-import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, CheckCircle2, RefreshCw, Info } from 'lucide-react';
+import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, ChevronRight, CheckCircle2, RefreshCw, Info } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -530,7 +530,46 @@ export default function AIInterviewJDSelection() {
                               )}
                             </div>
 
-                            <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto sm:flex-shrink-0">
+                            {/* View (eye) — its original place, the card's top-right,
+                                at every width. */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setVersionHistoryVersion(null);
+                                setVersionHistoryFor({ id: job.id, title: job.title });
+                              }}
+                              className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                              aria-label="View version history"
+                              title="View version history"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Card actions — one right-aligned row at the card's foot:
+                              View Versions (only when this job has another version to
+                              pick, needsVersionPicker) | Create Config. */}
+                          <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                              {showVersionPicker && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    jdLineage.toggle(versionKey, job.id);
+                                  }}
+                                  aria-expanded={versionsExpanded}
+                                  className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
+                                    versionsExpanded
+                                      ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10'
+                                      : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                                  }`}
+                                  title={versionsExpanded ? 'Hide version history' : 'View version history — every version of this job, and the one to build the AI interview against'}
+                                >
+                                  {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 /* Permission lock: aria-disabled (not native) so the
@@ -538,7 +577,10 @@ export default function AIInterviewJDSelection() {
                                 disabled={!cardAddEnabled && canCreateAIInterviews}
                                 aria-disabled={!cardAddEnabled}
                                 onClick={() => cardAddEnabled && handleCreateForVersion(cardTarget.id)}
-                                className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all flex-shrink-0 ${
+                                /* "Create ›" rather than a bare "+": a per-job action
+                                   (starts an AI interview for this JD), so not
+                                   "Next", which reads as wizard navigation. */
+                                className={`h-7 px-2.5 inline-flex items-center justify-center gap-1 rounded-md ring-1 text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
                                   cardAddEnabled
                                     ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-white/10'
                                     : ADD_BUTTON_DISABLED
@@ -546,47 +588,11 @@ export default function AIInterviewJDSelection() {
                                 aria-label={cardAddLabel}
                                 title={cardAddLabel}
                               >
-                                <Plus className="w-3.5 h-3.5" />
+                                <span className="sm:hidden">Create</span>
+                                <span className="hidden sm:inline">Create Config</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
                               </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setVersionHistoryVersion(null);
-                                  setVersionHistoryFor({ id: job.id, title: job.title });
-                                }}
-                                className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                                aria-label="View version history"
-                                title="View version history"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
                           </div>
-
-                          {/* View Versions — bottom-right, only when this job has
-                              another version to pick (needsVersionPicker). */}
-                          {showVersionPicker && (
-                            <div className="mt-3 flex items-center justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  jdLineage.toggle(versionKey, job.id);
-                                }}
-                                aria-expanded={versionsExpanded}
-                                className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
-                                  versionsExpanded
-                                    ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10'
-                                    : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
-                                }`}
-                                title={versionsExpanded ? 'Hide version history' : 'View version history — every version of this job, and the one to build the AI interview against'}
-                              >
-                                {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                              </button>
-                            </div>
-                          )}
 
                           {showVersionPicker && versionsExpanded && (
                             <JobVersionHistoryPanel
@@ -650,7 +656,7 @@ export default function AIInterviewJDSelection() {
                                       type="button"
                                       disabled={!enabled}
                                       onClick={() => enabled && handleCreateForVersion(versionJob.id)}
-                                      className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all ${
+                                      className={`h-7 px-2.5 inline-flex items-center justify-center gap-1 rounded-md ring-1 text-xs font-medium whitespace-nowrap transition-all ${
                                         enabled
                                           ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-white/10'
                                           : ADD_BUTTON_DISABLED
@@ -658,7 +664,9 @@ export default function AIInterviewJDSelection() {
                                       aria-label={label}
                                       title={label}
                                     >
-                                      <Plus className="w-3.5 h-3.5" />
+                                      <span className="sm:hidden">Create</span>
+                                      <span className="hidden sm:inline">Create Config</span>
+                                      <ChevronRight className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                       type="button"

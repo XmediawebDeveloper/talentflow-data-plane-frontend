@@ -901,6 +901,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     setBulkRunning(true);
     let done = 0;
     let failed = 0;
+    const failedIds = new Set<string>();
     const queue = [...eligible];
     const worker = async () => {
       while (queue.length) {
@@ -911,13 +912,16 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
         } catch (err) {
           console.error(`Bulk ${verb} failed for assessment ${row.id}:`, err);
           failed += 1;
+          failedIds.add(row.id);
         }
       }
     };
     await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
     setBulkRunning(false);
     setBulkVerb(null);
-    setSelectedIds(new Set());
+    /* Any success clears the selection (hiding the Actions menu); rows that
+       failed stay ticked for a retry. All failed → selection kept as is. */
+    if (done > 0) setSelectedIds(failedIds);
     const parts = [`${done} ${BULK_COPY[verb].past}`];
     if (skippedCount) parts.push(`${skippedCount} skipped`);
     if (failed) parts.push(`${failed} failed`);
@@ -993,6 +997,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       tab: fixedStatus || 'all',
       ids: selectedRows.map((row) => row.id),
     });
+    // Export done — clear the selection (hides the Actions menu); no refresh.
+    setSelectedIds(new Set());
   };
 
   /* Which bulk items this tab offers: All → every one; Active / Draft →

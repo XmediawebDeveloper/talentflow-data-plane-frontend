@@ -789,7 +789,20 @@ export default function ResumeScoringPage({
      job the drill-in or a candidate view is on. null = closed. Rendered in
      each of those views' returns via `inviteDialogEl`. */
   const [inviteRequest, setInviteRequest] = useState<InviteDialogRequest | null>(null);
-  const inviteDialogEl = <JobInviteDialogHost request={inviteRequest} onClose={() => setInviteRequest(null)} openOn="score-resume" />;
+  // True when the open request came from the drill-in table's selection
+  // Actions menu: a successful send then clears that selection (and its bar).
+  const inviteClearsScoredSelectionRef = useRef(false);
+  const inviteDialogEl = (
+    <JobInviteDialogHost
+      request={inviteRequest}
+      onClose={() => setInviteRequest(null)}
+      onSent={() => {
+        if (inviteClearsScoredSelectionRef.current) setSelectedScoredResumes([]);
+        inviteClearsScoredSelectionRef.current = false;
+      }}
+      openOn="score-resume"
+    />
+  );
   /* THE invite popup, global opener — for the lists that span jobs (View by
      Job's Actions, a create round trip's return). */
   const { open: openInvite } = useInviteDialog();
@@ -2560,7 +2573,7 @@ export default function ResumeScoringPage({
         /* View Resume as an eye on the resume version badge. */
         viewResumeOnVersionBadge
         /* Invite ▾ → Create / Send for this job, this candidate. */
-        onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem), candidates: asScoreCandidates(candidates) })}
+        onOpenInviteDialog={(kind, candidates) => { inviteClearsScoredSelectionRef.current = false; setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem), candidates: asScoreCandidates(candidates) }); }}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId, resumeVersion) => {
           const row = _scoredList.find((r: any) => r.id === scoreId);
@@ -2682,7 +2695,7 @@ export default function ResumeScoringPage({
         /* Invite ▾ → Create / Send for this score's own job. A row with no
            job ('global'): the detail page opens THE popup itself, on its
            picker of every published one. */
-        onOpenInviteDialog={candidateJdId !== 'global' ? (kind, candidates) => setInviteRequest({
+        onOpenInviteDialog={candidateJdId !== 'global' ? (kind, candidates) => { inviteClearsScoredSelectionRef.current = false; setInviteRequest({
           kind,
           job: {
             jdId: candidateJdId,
@@ -2691,7 +2704,7 @@ export default function ResumeScoringPage({
             versionNumber: selectedCandidateForView.jobVersion,
           },
           candidates: asScoreCandidates(candidates),
-        }) : undefined}
+        }); } : undefined}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId, resumeVersion) => {
           const row = globalScoredResumesVersioned.find((r: any) => r.id === scoreId);
@@ -3091,7 +3104,10 @@ export default function ResumeScoringPage({
           title=""
           /* Row Invite ▸ and the selection's Actions → Create / Send
              Assessment | AI Interview for this job — Job Details' popup. */
-          onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem, detailsVersionNumber), candidates: asScoreCandidates(candidates) })}
+          onOpenInviteDialog={(kind, candidates, fromSelection) => {
+            inviteClearsScoredSelectionRef.current = !!fromSelection;
+            setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem, detailsVersionNumber), candidates: asScoreCandidates(candidates) });
+          }}
           displayMode={jobResumesDisplayMode}
           onDisplayModeChange={setJobResumesDisplayMode}
           jobTitle={selectedHistoryItem.jobTitle}
@@ -3511,6 +3527,8 @@ export default function ResumeScoringPage({
           await downloadScorecardsZip(rows, `${base}_Combined_Scorecards_${formatFileDate(new Date())}.zip`);
           toast.success(`${rows.length} scorecards downloaded`);
         }
+        // Download is read-only: untick the jobs (hides the Actions bar), no refresh.
+        clearJobSelection();
       } catch (error) {
         console.error('Error downloading scorecards:', error);
         toast.error('Failed to download scorecards');
@@ -5177,6 +5195,7 @@ export default function ResumeScoringPage({
               return `Scored_Resumes_${matchFilter ? matchFilter.replace(/\s+/g, '_') + '_' : ''}${date}.${ext}`;
             }}
             rowJobCode={(r) => r.jobCode || ''}
+            onExported={clearJobSelection}
             onClose={() => setShowJobExportModal(false)}
           />
         )}
@@ -5966,16 +5985,7 @@ export default function ResumeScoringPage({
           JobOpeningPickerList), just rendered inline instead of behind a
           popup. Everything after picking a job — Select Resumes, and the
           scoring flow beyond it — stays a popup, unchanged. */}
-      <section className="tf-card mb-5 overflow-hidden" aria-labelledby="score-select-jd">
-        {/* Section header — a title bar, like the page's other cards. */}
-        <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 sm:px-4">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
-            <Briefcase className="h-4 w-4 text-brand-blue" />
-          </span>
-          <h2 id="score-select-jd" className="tf-section-title">
-            Select Job Description
-          </h2>
-        </div>
+      <section className="tf-card mb-5 overflow-hidden" aria-label="Select Job Description">
         <div className="p-3 sm:p-4">
 
         {/* Every non-draft job is listed — Published, Disabled and Archived —

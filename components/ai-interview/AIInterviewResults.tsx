@@ -891,6 +891,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       });
       toast.success(`Exported ${rows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
       setShowExportModal(false);
+      // Export done — clear the ticks, which also hides the bulk bar.
+      setSelected(new Map());
     } catch (error) {
       toast.error(friendlyErrorMessage(error, "Couldn't export results. Please try again."));
     } finally {
@@ -919,6 +921,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     setIsBulkWorking(true);
     let done = 0;
     let failed = 0;
+    const failedSessions: AIInterviewResponse[] = [];
     // One at a time: each resend emails a candidate, and one failure must not
     // stop the rest.
     for (const session of targets) {
@@ -928,6 +931,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         done++;
       } catch {
         failed++;
+        failedSessions.push(session);
       }
     }
     if (done > 0) {
@@ -941,7 +945,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     // Reload first, so the table is already current when the dialog closes
     // and the selection clears (rows no longer flash their old status).
     await loadSessions();
-    setSelected(new Map());
+    // Keep only the ones that failed ticked, so a retry acts on them.
+    setSelected(new Map(failedSessions.map((s) => [s.id, s])));
     setIsBulkWorking(false);
     setBulkAction(null);
   };
@@ -968,6 +973,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       } else if (skipped > 0) {
         toast.success(`Downloaded ${downloaded} report${downloaded === 1 ? '' : 's'}. ${skipped} candidate${skipped === 1 ? ' has' : 's have'} no report yet.`);
       }
+      // Download went through — clear the ticks (hides the bulk bar). Kept
+      // when nothing downloaded or some reports failed, so the user can retry.
+      if (downloaded > 0 && failed === 0) setSelected(new Map());
     } catch (err) {
       console.error('[AIInterviewResults] Bulk PDF download failed:', err);
       toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');

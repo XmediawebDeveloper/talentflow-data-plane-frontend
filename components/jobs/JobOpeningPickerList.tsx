@@ -444,7 +444,7 @@ export default function JobOpeningPickerList({
         {layout === 'page' && (
           /* Page layout: heading + count left, Search Jobs right — one line
              from md, stacked on phones. Same words as the default layout. */
-          <div className="mb-3 flex flex-col gap-2 border-b border-[var(--border)] pb-3 md:flex-row md:items-end md:justify-between">
+          <div className="mb-3 flex flex-col gap-2 border-b border-[var(--border)] pb-3 md:flex-row md:items-center md:justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="text-sm font-semibold text-[var(--text-primary)]">Select a Job Opening</span>
               {sortedJobs.length > 0 && !loadingJobs && (
@@ -467,9 +467,10 @@ export default function JobOpeningPickerList({
                 </span>
               )}
             </div>
-            <label className="flex w-full flex-col gap-1 md:w-80 lg:w-96">
-              <span className="tf-meta font-medium">Search Jobs</span>
-              <span className="relative">
+            {/* "Search Jobs" sits to the left of the search box, on one row. */}
+            <label className="flex w-full items-center gap-2 md:w-[25rem] lg:w-[29rem]">
+              <span className="tf-meta shrink-0 whitespace-nowrap !font-semibold !text-[var(--text-primary)]">Search Jobs</span>
+              <span className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
                 <input
                   type="text"

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useScoringProgress, ScoringJob, toMatchResult } from '@/contexts/ScoringProgressContext';
-import { CheckCircle2, Loader2, Layers, ChevronDown, ChevronRight, Maximize2, Search, Trash2, Sparkles, Play, FileText, ClipboardList, Video, Upload } from 'lucide-react';
+import { CheckCircle2, Loader2, Layers, ChevronDown, ChevronRight, Maximize2, Search, Trash2, Sparkles, Play, FileText, ClipboardList, Video, Upload, X } from 'lucide-react';
 import ActivitiesOverviewModal, { ACTIVITY_MODULE, type ActivityKind, type ActivityRow } from '@/components/activities/ActivitiesOverviewModal';
 import AppModal from '@/components/ui/app-modal';
 import { bulkInviteService } from '@/lib/services/bulkInviteService';
@@ -12,7 +12,7 @@ import { inviteStateOf, inviteVersionOf } from '@/components/bulk-invite/BulkInv
 import { bulkInviteNeedsLook, formatTimeLeft, isBulkInviteActive } from '@/lib/services/bulkInviteService';
 import type { TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
 import { useExternalBackgroundTasks, type ExternalBackgroundTask } from '@/lib/backgroundTasks';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import SuccessAnimation from '@/components/ui/success-animation';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -86,6 +86,13 @@ export default function GlobalScoringProgressIndicator() {
       document.removeEventListener('keydown', onKey);
     };
   }, [listOpen]);
+  /* Moving to another page (sidebar, breadcrumb, browser Back, a link inside
+     a row) closes the list too — it must never stay open over the new page. */
+  const pathname = usePathname();
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setListOpen(false);
+  }, [pathname]);
   const wasMainPanelOpen = useRef(isMainPanelOpen);
 
   /* The full popup, opened right where the recruiter is — no page owns this
@@ -114,6 +121,9 @@ export default function GlobalScoringProgressIndicator() {
      it has running work. */
   const [groupOpen, setGroupOpen] = useState<Partial<Record<ActivityKind, boolean>>>({});
   const [confirmScoringCancel, setConfirmScoringCancel] = useState<ScoringJob[] | null>(null);
+  /* Settles the promise cancelOverviewRows returned for a scoring cancel:
+     failed row keys ([] = all cancelled), or null for "Keep scoring". */
+  const scoringCancelOutcomeRef = useRef<((failedKeys: string[] | null) => void) | null>(null);
   const [scoringBusy, setScoringBusy] = useState(false);
 
   /* A batch status from the server → this run's rows (only rows that changed). */
@@ -506,9 +516,12 @@ export default function GlobalScoringProgressIndicator() {
     if (inv) invite?.dismiss(inv.job_id);
   };
   /* Send again / Re-score every failed + cancelled row of the chosen jobs. */
-  const retryOverviewRows = async (rows: ActivityRow[]) => {
+  /* Returns the keys of the rows that could not be restarted, so the overview
+     keeps only those ticked for another try. */
+  const retryOverviewRows = async (rows: ActivityRow[]): Promise<string[]> => {
     let requeued = 0;
     let failedCalls = 0;
+    const failedKeys: string[] = [];
     await Promise.all(rows.map(async row => {
       try {
         const job = scoringJobOf(row);
@@ -527,18 +540,36 @@ export default function GlobalScoringProgressIndicator() {
         }
       } catch {
         failedCalls += 1;
+        failedKeys.push(row.key);
       }
     }));
     const word = rows[0]?.kind === 'scoring' ? 'Re-scoring' : 'Sending again to';
     if (requeued) toast.success(`${word} ${n(requeued)} across ${rows.length - failedCalls} job${rows.length - failedCalls === 1 ? '' : 's'}`);
     if (failedCalls) toast.error(`${failedCalls} job${failedCalls === 1 ? '' : 's'} could not be restarted. Please try again.`);
+    return failedKeys;
   };
-  /* Cancel running jobs: invites use their own confirm; scoring asks here. */
-  const cancelOverviewRows = (rows: ActivityRow[]) => {
+  const settleScoringCancel = (failedKeys: string[] | null) => {
+    scoringCancelOutcomeRef.current?.(failedKeys);
+    scoringCancelOutcomeRef.current = null;
+  };
+  /* Cancel running jobs: invites use their own confirm; scoring asks here.
+     Resolves once the confirm is answered — the keys of rows whose cancel
+     failed ([] = all cancelled), or null when nothing was cancelled (the user
+     chose Keep sending / Keep scoring, or no row was cancellable) — so the
+     overview only unticks rows that really were cancelled. */
+  const cancelOverviewRows = async (rows: ActivityRow[]): Promise<string[] | null> => {
     const invites = rows.map(inviteJobOf).filter((j): j is TrackedBulkInvite => !!j);
-    if (invites.length) { inviteActions.askCancel(invites); return; }
+    if (invites.length) {
+      const failedJobIds = await inviteActions.askCancel(invites);
+      return failedJobIds === null ? null : failedJobIds.map(id => `invite:${id}`);
+    }
     const runs = rows.map(scoringJobOf).filter((j): j is ScoringJob => !!j?.batchId);
-    if (runs.length) setConfirmScoringCancel(runs);
+    if (!runs.length) return null;
+    return new Promise<string[] | null>(resolve => {
+      settleScoringCancel(null); // a superseded confirm counts as dismissed
+      scoringCancelOutcomeRef.current = resolve;
+      setConfirmScoringCancel(runs);
+    });
   };
   const doCancelScoring = async () => {
     const runs = confirmScoringCancel ?? [];
@@ -555,6 +586,7 @@ export default function GlobalScoringProgressIndicator() {
     else toast.success(`${n(stopped)} waiting resume${stopped === 1 ? '' : 's'} cancelled — finished scores stay`);
     setScoringBusy(false);
     setConfirmScoringCancel(null);
+    settleScoringCancel(runs.filter((_, i) => results[i].status === 'rejected').map(job => `score:${job.jobId}`));
   };
 
   /* ── Grouped list ── */
@@ -603,7 +635,11 @@ export default function GlobalScoringProgressIndicator() {
           aria-label="My Activities"
           aria-hidden={!expanded}
           inert={!expanded}
-          className={`fixed bottom-16 ${rightCls} z-40 flex max-h-[min(480px,calc(100dvh-6rem))] w-[calc(100vw-1.5rem)] sm:w-[20rem] flex-col overflow-hidden rounded-xl border border-[var(--border-dark)] bg-[var(--muted)] text-[var(--popover-foreground)] shadow-2xl origin-bottom-right motion-reduce:transition-none motion-reduce:animate-none ${expanded ? 'visible opacity-100 animate-in fade-in zoom-in-95 duration-200' : 'invisible pointer-events-none translate-x-2 translate-y-3 scale-[0.12] opacity-0 transition-[translate,scale,opacity,visibility] duration-[260ms] ease-in'}`}
+          /* bottom-[4.75rem]: the round button is bottom-6 + h-10 = 4rem tall
+             and its count badge pokes 4px above that, so bottom-16 sat the
+             popup's bottom-right corner (the "Clear finished" footer) right
+             on the badge. 76px leaves a clean 8px gap above the badge. */
+          className={`fixed bottom-[4.75rem] ${rightCls} z-40 flex max-h-[min(480px,calc(100dvh-6.75rem))] w-[calc(100vw-1.5rem)] sm:w-[20rem] flex-col overflow-hidden rounded-xl border border-[var(--border-dark)] bg-[var(--muted)] text-[var(--popover-foreground)] shadow-2xl origin-bottom-right motion-reduce:transition-none motion-reduce:animate-none ${expanded ? 'visible opacity-100 animate-in fade-in zoom-in-95 duration-200' : 'invisible pointer-events-none translate-x-2 translate-y-3 scale-[0.12] opacity-0 transition-[translate,scale,opacity,visibility] duration-[260ms] ease-in'}`}
         >
           <header className="flex items-center gap-1 border-b border-[var(--info-line)] bg-[var(--info-subtle)] px-2.5 py-1.5">
             <Layers className="h-3 w-3 text-brand-blue" />
@@ -616,16 +652,17 @@ export default function GlobalScoringProgressIndicator() {
                 <Maximize2 /><span className="max-[359px]:sr-only">View all</span>
               </Button>
             )}
-            <Button
-              variant="secondary"
-              size="sm"
-              className="!h-5 !w-5 !px-0 !rounded-md"
-              onClick={() => { setListOpen(false); setMinimized(true); }}
-              aria-label="Minimize"
-              title="Minimize"
+            {/* Close: hides the list back into the round button. Tasks keep
+                running; nothing is removed. */}
+            <button
+              type="button"
+              onClick={() => { setListOpen(false); setMinimized(true); toggleRef.current?.focus(); }}
+              aria-label="Close My Activities"
+              title="Close (tasks keep running)"
+              className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-destructive-subtle hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
             >
-              <ChevronDown className="h-3 w-3" />
-            </Button>
+              <X className="h-3.5 w-3.5" />
+            </button>
           </header>
           {/* Status chips (4+ tasks) and a search (10+). */}
           {items.length >= 4 && (
@@ -649,7 +686,9 @@ export default function GlobalScoringProgressIndicator() {
               )}
             </div>
           )}
-          <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-1.5">
+          {/* Thin auto-hiding bar (the app's scrollbar-auto-hide) and
+              overscroll-contain so the list never drags the page behind it. */}
+          <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain scrollbar-auto-hide scrollbar-light p-1.5">
             {groupKinds.map(kind => {
               const group = visibleItems.filter(i => i.kind === kind);
               /* One job in a module: its own row, no group around it. */
@@ -742,6 +781,9 @@ export default function GlobalScoringProgressIndicator() {
       <button
         type="button"
         ref={toggleRef}
+        /* globals.css reads this to leave room under the page so the
+           button never sits on top of the last row's buttons. */
+        data-activity-dock=""
         onClick={() => { setListOpen(!expanded); setMinimized(expanded); dismissWidgetHint(); }}
         aria-expanded={expanded}
         aria-label={runningCount
@@ -785,7 +827,7 @@ export default function GlobalScoringProgressIndicator() {
 
       <AppModal
         open={!!confirmScoringCancel}
-        onCancel={() => { if (!scoringBusy) setConfirmScoringCancel(null); }}
+        onCancel={() => { if (!scoringBusy) { setConfirmScoringCancel(null); settleScoringCancel(null); } }}
         cancelLabel="Keep scoring"
         size="sm"
         tone="warning"
