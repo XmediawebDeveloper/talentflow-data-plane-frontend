@@ -92,6 +92,17 @@ export const sessionTokenManager = {
   }
 };
 
+// Code run/submit carry no token in the URL, so name the invitation explicitly;
+// the backend checks it owns the attempt before running anything.
+function codeRequestHeaders(): Record<string, string> {
+  let invitationToken = currentAssessmentToken;
+  if (!invitationToken && typeof window !== 'undefined') {
+    const match = window.location.pathname.match(/\/assessment\/(?:take\/)?([a-zA-Z0-9_-]+)/);
+    invitationToken = match ? match[1] : null;
+  }
+  return invitationToken ? { 'X-Invitation-Token': invitationToken } : {};
+}
+
 // Create a separate axios instance for candidate (no auth interceptors)
 const candidateApi = axios.create({
   baseURL: API_BASE_URL,
@@ -117,7 +128,7 @@ candidateApi.interceptors.request.use((config) => {
       sessionTokenManager.setAssessmentToken(invitationToken);
       sessionToken = sessionTokenManager.getToken(invitationToken);
       if (sessionToken) {
-        console.log('[SESSION] Recovered token from URL-based lookup:', invitationToken.substring(0, 10) + '...');
+        console.log('[SESSION] Recovered token from URL-based lookup');
       }
     }
   }
@@ -1454,7 +1465,8 @@ export const candidateService = {
           language,
           code,
           stdin: stdin || '',
-        }
+        },
+        { headers: codeRequestHeaders() }
       );
       return response.data;
     } catch (error) {
@@ -1492,7 +1504,8 @@ export const candidateService = {
           language,
           code,
           code_input: codeInput || '',
-        }
+        },
+        { headers: codeRequestHeaders() }
       );
       return response.data;
     } catch (error) {

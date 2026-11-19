@@ -3,7 +3,7 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, RefreshCw, ExternalLink, Filter, Sparkles, X } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { billToFromAuth, generateRefundReceiptPDF } from '@/lib/utils/pdfInvoice';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { showErrorToast } from '@/lib/utils/errorToast';
@@ -154,7 +154,7 @@ export default function RefundHistoryPage() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) {
         setError('Not authenticated. Please login again.');
         setLoading(false);

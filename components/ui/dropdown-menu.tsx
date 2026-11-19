@@ -271,7 +271,9 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "origin-left transition-transform duration-150 ease-out data-[highlighted]:scale-[0.97] data-[state=open]:scale-[0.97] flex cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-[inset]:pl-8",
+        /* Same row as DropdownMenuItem: icon + label with gap-2, 16px icons,
+           and only the label scales on hover (via `group`), not the whole row. */
+        "group relative flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}
@@ -284,17 +286,31 @@ function DropdownMenuSubTrigger({
 
 function DropdownMenuSubContent({
   className,
+  sideOffset = 2,
+  alignOffset = -4,
+  /* Pages scroll inside .tf-page-scroll, not the window, so Radix counts the
+     strip under that inner scrollbar as free room and let the flyout run
+     over it. The wider right margin clears the scrollbar, so the flyout
+     flips to the left of the menu instead of hugging the screen edge. */
+  collisionPadding = { top: 8, bottom: 8, left: 8, right: 32 },
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+  /* Portalled so the parent menu's overflow / zoom transform can't clip or
+     shift it; alignOffset lines its first item up with the trigger row. */
   return (
+    <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
+      sideOffset={sideOffset}
+      alignOffset={alignOffset}
+      collisionPadding={collisionPadding}
       className={cn(
         "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-md p-1 shadow-lg",
         className,
       )}
       {...props}
     />
+    </DropdownMenuPrimitive.Portal>
   );
 }
 

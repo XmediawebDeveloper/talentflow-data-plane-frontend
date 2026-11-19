@@ -191,6 +191,18 @@ const nextConfig: NextConfig = {
             key: 'Permissions-Policy',
             value: 'fullscreen=*',
           },
+          // "full application" #12. The CSP is limited to directives that can't
+          // break the app (no script-src: inline scripts, WASM models, avatar
+          // and proctoring libraries; no object-src: blob-URL PDF previews use
+          // the browser's PDF plugin); it blocks framing by other sites and
+          // <base> hijacking.
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'; base-uri 'self'" },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          ...(process.env.NODE_ENV === 'production'
+            ? [{ key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' }]
+            : []),
         ],
       },
     ];

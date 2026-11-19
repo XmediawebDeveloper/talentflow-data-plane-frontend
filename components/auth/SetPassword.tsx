@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { authService, getLoginUrl } from '@/lib/services/authService';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
+import { hasStoredSession } from '@/lib/services/api';
 
 export default function SetPassword() {
   const router = useRouter();
@@ -44,8 +45,9 @@ export default function SetPassword() {
 
   // Guard: if no access token, redirect to login
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
+    // Access token is restored from the session cookie asynchronously, so
+    // check for a session here, not for the in-memory token.
+    if (!hasStoredSession()) {
       router.replace(getLoginUrl());
       return;
     }

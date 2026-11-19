@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { showErrorToast } from '@/lib/utils/errorToast';
 import type { DocumentType } from '@/lib/services/termsService';
+import { sanitizeHtml } from '@/lib/utils/sanitizeHtml';
 
 const DOC_META: Record<DocumentType, { label: string; checkboxText: string; Icon: IconComponent }> = {
   TERMS_AND_CONDITIONS: {
@@ -166,7 +167,7 @@ export default function TermsAcceptanceModal() {
           ref={contentRef}
           onScroll={handleScroll}
           className="flex-1 overflow-y-auto px-6 py-5 prose prose-sm max-w-none"
-          dangerouslySetInnerHTML={{ __html: currentTerms.content_html }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(currentTerms.content_html) }}
         />
 
         {/* Footer */}

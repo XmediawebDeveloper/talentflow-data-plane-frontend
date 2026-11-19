@@ -3,7 +3,7 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Shield, Search, Clock, CheckCircle2, XCircle, AlertCircle, Download, ExternalLink, RefreshCw, Plus, Copy } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -179,7 +179,7 @@ export default function UnitDisputesView({ embedded = false }: { embedded?: bool
   );
 
   const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (!token) return null;
     return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
   }, []);

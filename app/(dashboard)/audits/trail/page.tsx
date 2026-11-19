@@ -28,7 +28,7 @@ import {
   Loader2 as Loader2Icon,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import {
   ERROR_ORIGIN_LABELS,
   ERROR_ORIGIN_COLORS,
@@ -459,7 +459,7 @@ export default function AuditTrailPage() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       const params = new URLSearchParams({
         page: page.toString(),
         page_size: pageSize.toString(),
@@ -537,7 +537,7 @@ export default function AuditTrailPage() {
       ? String(Math.max(1, Math.ceil((Date.now() - new Date(`${customFrom}T00:00:00`).getTime()) / 86_400_000)))
       : dateRange;
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       // Pass the active filters so each popup's counts are faceted by the
       // OTHER filters (e.g. users counted for the selected action only) and
       // match the record count you get after clicking an entry.
@@ -570,7 +570,7 @@ export default function AuditTrailPage() {
 
   const fetchFilters = useCallback(async () => {
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
 
       const [actionsRes, entitiesRes] = await Promise.all([
         fetch(`${API_URL}/audits/actions/list`, {
@@ -603,7 +603,7 @@ export default function AuditTrailPage() {
 
   const fetchTotalUsers = useCallback(async () => {
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       const response = await fetch(`${API_URL}/users?page=1&page_size=1`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -675,7 +675,7 @@ export default function AuditTrailPage() {
     const fetchAiAudit = async () => {
       setIsLoadingAiAudit(true);
       try {
-        const token = localStorage.getItem('accessToken');
+        const token = getAccessToken();
         if (!token) return;
 
         const response = await fetch(`${API_URL}/audits/ai-generation/${attemptId}`, {
@@ -799,7 +799,7 @@ export default function AuditTrailPage() {
   const handleExport = async () => {
     setExportLoading(true);
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) {
         handleUnauthorized();
         return;

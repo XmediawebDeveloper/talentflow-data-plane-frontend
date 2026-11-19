@@ -16,7 +16,7 @@ import { decodeParam, decodePlanId } from '@/lib/utils/planEncoder';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { useTheme } from 'next-themes';
 // Auto-login support after paid signup payment — see post-payment redirect.
-import { setTokens, clearTokens } from '@/lib/services/api';
+import { setTokens } from '@/lib/services/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -245,10 +245,12 @@ function CompletePaymentContent() {
       const hasTokens = Boolean(data?.access_token && data?.refresh_token);
       setTimeout(() => {
         if (hasTokens) {
-          try { clearTokens(); } catch {}
-          setTokens(data.access_token, data.refresh_token);
-          // Hard redirect so providers re-init with the new tokens.
-          window.location.href = '/dashboard';
+          // setTokens replaces any older session (clearing first would race
+          // its cookie delete against the new cookie).
+          setTokens(data.access_token, data.refresh_token).finally(() => {
+            // Hard redirect so providers re-init with the new tokens.
+            window.location.href = '/dashboard';
+          });
         } else {
           router.push('/login');
         }

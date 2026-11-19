@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import {
   Users,
   Zap,
@@ -75,7 +75,7 @@ export default function AddSeatsModal({
   const loadPricing = async () => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const token = getAccessToken() || localStorage.getItem('token');
       const response = await fetch(`${API_URL}/addons?active_only=true&public_only=true`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -141,7 +141,7 @@ export default function AddSeatsModal({
     const totalSeats = quantity * pricing.units_per_package;
 
     try {
-      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const token = getAccessToken() || localStorage.getItem('token');
 
       // Step 1: Create Razorpay order
       const orderRes = await fetch(`${API_URL}/addons/create-order`, {

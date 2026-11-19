@@ -91,7 +91,9 @@ export default function PdfDocumentViewer({ url, onLoaded, onError, className }:
           if (a.subtype !== 'Link') continue;
           const href = toExternalUrl(a.url || a.unsafeUrl);
           if (!href || !Array.isArray(a.rect)) continue;
-          const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(a.rect);
+          // pdf.js 6 dropped convertToViewportRectangle; map both corners.
+          const [x1, y1] = viewport.convertToViewportPoint(a.rect[0], a.rect[1]);
+          const [x2, y2] = viewport.convertToViewportPoint(a.rect[2], a.rect[3]);
           const link = document.createElement('a');
           link.href = href;
           link.target = '_blank';

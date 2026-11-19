@@ -118,6 +118,13 @@ function getRequestHostname(request: NextRequest): { hostname: string; source: s
   return preferred || candidates[0] || { hostname: '', source: 'none' };
 }
 
+// "tf_session" is the httpOnly marker set with the session cookie. The old
+// JS-written "accessToken" cookie still counts until that browser's next page
+// load moves its session over (lib/services/api.ts restoreSession).
+function hasSessionCookie(request: NextRequest): boolean {
+  return Boolean(request.cookies.get('tf_session')?.value || request.cookies.get('accessToken')?.value);
+}
+
 export async function proxy(request: NextRequest) {
   let { pathname } = request.nextUrl;
   const isDocumentRequest = request.method === 'GET' || request.method === 'HEAD';
@@ -260,7 +267,7 @@ export async function proxy(request: NextRequest) {
   // falls through the rest of this proxy (token check, tf-subdomain cookies)
   // exactly as a request for /login would; only the final response differs.
   const serveLoginAtRoot = Boolean(tenantSubdomain) && pathname === '/';
-  if (serveLoginAtRoot && request.cookies.get('accessToken')?.value) {
+  if (serveLoginAtRoot && hasSessionCookie(request)) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);
@@ -303,8 +310,9 @@ export async function proxy(request: NextRequest) {
     pathname === route || pathname.startsWith(`${route}/`)
   );
 
-  // Get auth token from cookie
-  const token = request.cookies.get('accessToken')?.value;
+  // Signed-in marker. The session itself is an httpOnly cookie set by
+  // /api/session (security sheet #5); scripts can't read either cookie.
+  const token = hasSessionCookie(request) ? '1' : undefined;
 
   // Diagnostic logging for cross-browser token debugging
   if (!isPublicRoute && isProtectedRoute && !token) {

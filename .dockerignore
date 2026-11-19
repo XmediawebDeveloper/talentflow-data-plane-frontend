@@ -20,3 +20,9 @@ Dockerfile
 docker-compose*.yml
 .dockerignore
 README.md
+
+# Backup / leftover copies (may hold old secrets) - "full application" #19
+*.bak
+*.orig
+*.old
+*~

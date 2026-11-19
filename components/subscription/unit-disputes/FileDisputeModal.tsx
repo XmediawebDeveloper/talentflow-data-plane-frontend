@@ -14,7 +14,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import AppModal from '@/components/ui/app-modal';
 import { Skeleton } from '@/components/ui/skeleton';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { showErrorToast } from '@/lib/utils/errorToast';
 import { formatIST } from '@/lib/utils/dateUtils';
 import {
@@ -53,7 +53,7 @@ interface Props {
 }
 
 const authHeaders = () => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const token = typeof window !== 'undefined' ? getAccessToken() : null;
   return token ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } : null;
 };
 

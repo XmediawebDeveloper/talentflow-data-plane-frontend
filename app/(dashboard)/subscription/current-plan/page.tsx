@@ -4,7 +4,7 @@ import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, C
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import api, { handleUnauthorized } from '@/lib/services/api';
+import api, { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -865,7 +865,7 @@ function CurrentPlanContent() {
     }
 
     // Fallback: try to parse from JWT token
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
@@ -1272,7 +1272,7 @@ function CurrentPlanContent() {
   // Is an earlier plan payment still waiting to be applied?
   const fetchPurchaseStatus = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       const tid = tenantId || user?.tenantId;
       if (!token || !tid) return;
       const response = await fetch(`${API_URL}/subscription/${tid}/purchase-status`, {
@@ -1299,7 +1299,7 @@ function CurrentPlanContent() {
         return;
       }
 
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) return;
 
       const response = await fetch(`${API_URL}/subscription/queued-upgrades`, {
@@ -1334,7 +1334,7 @@ function CurrentPlanContent() {
       setIsApplyingUpgrade(true);
       setError(null);
 
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       const response = await fetch(`${API_URL}/subscription/queued-upgrades/${selectedQueuedUpgrade.id}/apply`, {
         method: 'POST',
         headers: {
@@ -1690,7 +1690,7 @@ function CurrentPlanContent() {
       setError(null);
       setSuccessMessage(null);
 
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
 
       // Determine plan ID and billing interval
       const hasAnnual = !!selectedPlanForPayment.annualPlanId;
