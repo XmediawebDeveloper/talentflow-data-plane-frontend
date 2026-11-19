@@ -39,6 +39,8 @@ import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import { GenerateJDIllustration, ManualJDIllustration } from '@/components/jobs/JobResultsIllustrations';
+import { AIModeIcon, ManualModeIcon } from '@/components/jobs/JDModeIcons';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
 import { clearFreshDraftVersion, isFreshDraftVersion } from '@/lib/utils/jdDraftVersion';
@@ -9526,7 +9528,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               >
                 {/* Icon left; title over description beside it. */}
                 <div className="flex items-start gap-2 sm:gap-3 text-left">
-                  <Wand2 className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 ${mode === 'ai' ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
+                  <AIModeIcon active={mode === 'ai'} />
                   <div className="min-w-0">
                     <h3 className="tf-row-name sm:text-base mb-1">
                       AI-Generated JD
@@ -9548,7 +9550,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               >
                 {/* Icon left; title over description beside it. */}
                 <div className="flex items-start gap-2 sm:gap-3 text-left">
-                  <Edit2 className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 ${mode === 'manual' ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
+                  <ManualModeIcon active={mode === 'manual'} />
                   <div className="min-w-0">
                     <h3 className="tf-row-name sm:text-base mb-1">
                       Manual Input
@@ -9611,13 +9613,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         </p>
                       )}
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-destructive' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-destructive' : 'text-gray-500'}`}>
                           {jobTitle.length === 0 && `Job Title is required (min ${VALIDATION.JOB_TITLE.min} characters)`}
                           {jobTitle.length > 0 && jobTitleValidationError && jobTitleValidationError}
                           {jobTitle.length > 0 && !jobTitleValidationError && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required (${VALIDATION.JOB_TITLE.min - jobTitle.length} more)`}
                           {jobTitle.length >= VALIDATION.JOB_TITLE.min && !jobTitleValidationError && !jobTitleLengthInvalid && isJobTitlePendingValidation && 'Validating job title...'}
                         </p>
-                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-destructive' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-destructive' : 'text-gray-500'}`}>
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
                         </p>
                       </div>
@@ -9778,12 +9780,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         </p>
                       )}
                       <div className="flex justify-between mt-1">
-                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-destructive' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-destructive' : 'text-gray-500'}`}>
                           {jobTitle.length > 0 && jobTitleValidationError && jobTitleValidationError}
                           {jobTitle.length > 0 && !jobTitleValidationError && jobTitle.length < VALIDATION.JOB_TITLE.min && `Min ${VALIDATION.JOB_TITLE.min} characters required`}
                           {jobTitle.length >= VALIDATION.JOB_TITLE.min && !jobTitleValidationError && !jobTitleLengthInvalid && isJobTitlePendingValidation && 'Validating job title...'}
                         </p>
-                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-destructive' : isJobTitlePendingValidation ? 'text-gray-500' : getCharCountColor(jobTitle.length, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)}`}>
+                        <p className={`text-xs ${hasJobTitleValidationError ? 'text-destructive' : 'text-gray-500'}`}>
                           {jobTitle.length}/{VALIDATION.JOB_TITLE.max}
                         </p>
                       </div>
@@ -9974,10 +9976,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-[300px] sm:h-[400px] lg:h-[600px] bg-gray-50 dark:bg-slate-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-700">
-                      <div className="text-center">
-                        <FileText className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
-                        <p className="tf-body-secondary sm:text-base mb-2">No job description generated yet</p>
-                        <p className="tf-body-muted px-4">
+                      {/* Same illustrated empty state as the Job Details tabs. */}
+                      <div className="flex flex-col items-center px-4 text-center">
+                        <div className="mb-4 flex w-full justify-center"><GenerateJDIllustration /></div>
+                        <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">No Job Description Generated Yet</h3>
+                        <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">
                           Fill in the job details and click &quot;Generate Job Description&quot;
                         </p>
                       </div>
@@ -9995,10 +9998,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-[300px] sm:h-[400px] lg:h-[600px] bg-gray-50 dark:bg-slate-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-700">
-                      <div className="text-center">
-                        <FileText className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
-                        <p className="tf-body-secondary sm:text-base mb-2">Start typing your job description</p>
-                        <p className="tf-body-muted px-4">
+                      {/* Same illustrated empty state as AI-Generated JD's. */}
+                      <div className="flex flex-col items-center px-4 text-center">
+                        <div className="mb-4 flex w-full justify-center"><ManualJDIllustration /></div>
+                        <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">Start Typing Your Job Description</h3>
+                        <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">
                           Paste or write your JD in the left panel
                         </p>
                       </div>

@@ -6,7 +6,7 @@ import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'rea
 import { createPortal } from 'react-dom';
 import ListToolbar from '@/components/ui/list-toolbar';
 import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
-import ListEmptyState from '@/components/ui/list-empty-state';
+import ListEmptyState, { NO_MATCHES_ILLUSTRATION } from '@/components/ui/list-empty-state';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -125,6 +125,9 @@ interface AIInterviewResultsProps {
   emptyStateAction?: React.ReactNode;
   /** The nobody-has-a-result-yet state's supporting line; unset = default. */
   emptyStateText?: string;
+  /** Job Details: the tab's own illustration, so the no-results state looks
+   *  the same before and after an interview exists. Unset = icon only. */
+  emptyStateIllustration?: React.ReactNode;
   /**
    * The linked job's version and this interview config's own ordinal among
    * every config authored against that job (oldest first) — the same two
@@ -309,7 +312,7 @@ const SCORE_INPUT_CLASS = 'w-full min-w-0 h-9 px-3 text-sm text-black dark:text-
 const RESULT_STATUSES = new Set(['in_progress', 'completed', 'terminated']);
 const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value === v);
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, readOnly = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, emptyStateText, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, jobScope, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, readOnly = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, emptyStateText, emptyStateIllustration, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, jobScope, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
   const scoped = !!jobScope && jobScope.length > 0;
   /* Every name in Capitalized Case (the invite trackers' rule), after the host's own formatter. */
   const showName = (name?: string | null) => capitalizedCase(formatCandidateName && name ? formatCandidateName(name) : name);
@@ -1810,6 +1813,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             // the populated table would show; standalone it stands on its own.
             bordered={embedded}
             icon={Users}
+            illustration={emptyStateIllustration}
             title={emptyStateText ? 'No AI Interview Results Yet' : 'No AI Interview Results'}
             description={emptyStateText ?? (summary.all > 0
               ? 'Results appear here once an invited candidate starts their interview.'
@@ -1827,6 +1831,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             emptyTitle="No candidates invited yet"
             emptyDescription="Invite candidates to this interview to see their sessions here."
             onReset={search.reset}
+            narrowedIllustration={NO_MATCHES_ILLUSTRATION}
           />
         ) : displayMode === 'grid' ? (
           <>
