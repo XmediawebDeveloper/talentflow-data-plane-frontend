@@ -1,0 +1,24 @@
+.git
+.gitignore
+node_modules/
+.next/
+
+# Secrets — runtime env comes from env_file, build-time from CI build args
+.env
+.env.*
+next-public.env
+
+# Tests / dev artifacts
+e2e/
+test-results/
+playwright.config.ts
+*.log
+middleware.ts.bak
+
+# CI / Docker files themselves
+.gitlab-ci.yml
+Dockerfile
+docker-compose*.yml
+.dockerignore
+.gitlab/
+README.md
