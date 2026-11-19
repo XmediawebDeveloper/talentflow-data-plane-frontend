@@ -121,8 +121,8 @@ function ForwardTicketForm({
         </p>
 
         <fieldset>
-          <legend className="text-sm font-medium text-[var(--text-primary)] mb-2">Forward to</legend>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Forward to">
+          <legend className="text-sm font-medium text-[var(--text-primary)] mb-2">Issue type</legend>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Issue type">
             {FORWARD_TEAMS.map(t => {
               const selected = team === t.value;
               return (
