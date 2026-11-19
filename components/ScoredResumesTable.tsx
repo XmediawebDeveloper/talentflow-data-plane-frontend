@@ -8,6 +8,7 @@ import { useJobActionLock } from '@/components/jobs/JobActionLock';
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
+import { RESUME_DELETED_ROW_MESSAGE, RESUME_DELETED_BADGE_LABEL, RESUME_DELETED_BADGE_CLASS } from '@/lib/permissions/resumeDelete';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import ScoredResumesExportModal from './ScoredResumesExportModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -254,6 +255,10 @@ export interface ScoredResume {
   // Rating shown instead of scorePercentage wherever the score is printed as
   // plain text - see formatOverallScore() in lib/utils/matchStatus.ts.
   overallRating10?: number;
+  // The account owner deleted this resume (2026-11-19): its score and AI
+  // Talent Match results were erased (GDPR) and only name + email remain.
+  // The row shows RESUME_DELETED_ROW_MESSAGE instead of a score; no actions.
+  resumeDeleted?: boolean;
   scoredDate: string;
   scoredBy: string;
   experience?: string;
@@ -718,7 +723,7 @@ export default function ScoredResumesTable({
   initialMatchStatus = 'all',
   hideMatchStatusFilter = false,
   initialScoredDate = '',
-  onViewCandidate,
+  onViewCandidate: onViewCandidateProp,
   selectedResumes: externalSelectedResumes = [],
   onSelectResume,
   onSelectAll,
@@ -747,6 +752,15 @@ export default function ScoredResumesTable({
   displayMode: controlledDisplayMode,
   onDisplayModeChange,
 }: ScoredResumesTableProps) {
+  // A deleted resume's row (resumeDeleted, 2026-11-19) has no score to open:
+  // every View Results / row click lands here and only explains why.
+  const onViewCandidate = onViewCandidateProp
+    ? (r: ScoredResume) => {
+        if (r.resumeDeleted) { toast.info(RESUME_DELETED_ROW_MESSAGE); return; }
+        onViewCandidateProp(r);
+      }
+    : undefined;
+
   const showName = (name: string) => (formatCandidateName ? formatCandidateName(name) : name);
   /* Embedded in the Job Details tabs (the toolbar portals into that card's
      slot). When so, the toolbar controls switch to the 36px / tinted-pill
@@ -1813,9 +1827,16 @@ Best regards`);
     if (col.id === 'matchStatus') {
       return (
         <td key={col.id} className="tf-td whitespace-nowrap">
-          <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
-            {resume.matchStatus}
-          </span>
+          {resume.resumeDeleted ? (
+            <div title={RESUME_DELETED_ROW_MESSAGE}>
+              <span className={RESUME_DELETED_BADGE_CLASS}>{RESUME_DELETED_BADGE_LABEL}</span>
+              <div className="mt-1 max-w-[260px] whitespace-normal text-2xs text-gray-500 dark:text-slate-400">{RESUME_DELETED_ROW_MESSAGE}</div>
+            </div>
+          ) : (
+            <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
+              {resume.matchStatus}
+            </span>
+          )}
         </td>
       );
     }
@@ -1828,7 +1849,7 @@ Best regards`);
           <div className={`${SCORE_CELL_TEXT} ${
             MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
           }`}>
-            {formatOverallScoreValue(resume.overallRating10, resume.scorePercentage)}
+            {resume.resumeDeleted ? <span className="text-gray-400">—</span> : formatOverallScoreValue(resume.overallRating10, resume.scorePercentage)}
           </div>
         </td>
       );
@@ -2034,6 +2055,15 @@ Best regards`);
    *  Interview, Download Scorecard. Elsewhere the order is unchanged and the
    *  caller puts its Invite ▸ submenu above these. */
   const renderActionsMenuItems = (resume: ScoredResume, candidateRows?: ScoredResume[], withInvites = false) => {
+    if (resume.resumeDeleted) {
+      // Nothing left to view, download or invite from: the score was erased.
+      return (
+        <DropdownMenuItem className={scoredResumesMenuItemClass} disabled>
+          <Info className="w-4 h-4 text-gray-400" />
+          <span className={`${MENU_ITEM_SCALE_CLASS} whitespace-normal max-w-[240px]`}>{RESUME_DELETED_ROW_MESSAGE}</span>
+        </DropdownMenuItem>
+      );
+    }
     const viewResults = (
       <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => onViewCandidate && onViewCandidate(resume)}>
         <Eye className="w-4 h-4 text-menu-icon-view" />
@@ -2901,15 +2931,24 @@ Best regards`);
                   )}
 
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
-                      {resume.matchStatus}
-                    </span>
-                    <span className={`text-sm font-semibold ${
-                      MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
-                    }`}>
-                      {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
-                    </span>
+                    {resume.resumeDeleted ? (
+                      <span className={RESUME_DELETED_BADGE_CLASS} title={RESUME_DELETED_ROW_MESSAGE}>{RESUME_DELETED_BADGE_LABEL}</span>
+                    ) : (
+                      <>
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
+                          {resume.matchStatus}
+                        </span>
+                        <span className={`text-sm font-semibold ${
+                          MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
+                        }`}>
+                          {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
+                        </span>
+                      </>
+                    )}
                   </div>
+                  {resume.resumeDeleted && (
+                    <p className="text-2xs text-gray-500 dark:text-slate-400">{RESUME_DELETED_ROW_MESSAGE}</p>
+                  )}
 
                   {/* Job / Resume version — the list's two version columns, so
                       a job showing every version (All) tells the cards apart. */}
@@ -3035,12 +3074,18 @@ Best regards`);
                                 ) : null}
                               </div>
                               <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(row.matchStatus)}`}>
-                                  {row.matchStatus}
-                                </span>
-                                <span className={`text-sm font-semibold ${MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}`}>
-                                  {formatOverallScore(row.overallRating10, row.scorePercentage)}
-                                </span>
+                                {row.resumeDeleted ? (
+                                  <span className={RESUME_DELETED_BADGE_CLASS} title={RESUME_DELETED_ROW_MESSAGE}>{RESUME_DELETED_BADGE_LABEL}</span>
+                                ) : (
+                                  <>
+                                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(row.matchStatus)}`}>
+                                      {row.matchStatus}
+                                    </span>
+                                    <span className={`text-sm font-semibold ${MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}`}>
+                                      {formatOverallScore(row.overallRating10, row.scorePercentage)}
+                                    </span>
+                                  </>
+                                )}
                               </div>
                               <div className="mt-1 flex items-center gap-1 tf-meta">
                                 <Calendar className="w-3 h-3" />
@@ -3665,7 +3710,10 @@ Best regards`);
             badges={(resume.isArchived || !hiddenColumnIds?.includes('matchStatus') || !hiddenColumnIds?.includes('scorePercentage')) ? (
               <>
                 {resume.isArchived && <ResumeArchivedBadge />}
-                {!hiddenColumnIds?.includes('matchStatus') && (
+                {resume.resumeDeleted && (
+                  <span className={RESUME_DELETED_BADGE_CLASS} title={RESUME_DELETED_ROW_MESSAGE}>{RESUME_DELETED_BADGE_LABEL}</span>
+                )}
+                {!resume.resumeDeleted && !hiddenColumnIds?.includes('matchStatus') && (
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${matchBadgeClass(resume.matchStatus)}`}>
                     {resume.matchStatus}
                   </span>
@@ -3673,7 +3721,7 @@ Best regards`);
                 {/* Score: a compact badge beside the match status (was a footer
                     chip). Same three colours as the Match Status badge - see
                     lib/utils/matchStatus.ts; not a threshold on the number. */}
-                {!hiddenColumnIds?.includes('scorePercentage') && (
+                {!resume.resumeDeleted && !hiddenColumnIds?.includes('scorePercentage') && (
                   <span className={`tf-badge tabular-nums ${
                     scoreVerdict === 'Exact Match' ? 'bg-success-subtle text-success'
                     : scoreVerdict === 'Partial Match' ? 'bg-warning-subtle text-warning-strong'

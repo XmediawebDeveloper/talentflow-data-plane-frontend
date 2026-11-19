@@ -5,6 +5,7 @@ import { planChangeService } from '@/lib/services/planChangeService';
 import { PLAN_CHANGE_PENDING_EVENT } from '@/lib/services/api';
 import { isOnline, isTransientNetworkError, withNetworkRetry } from '@/lib/utils/networkRetry';
 import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
+import { focusRefreshDue, markRefreshed } from '@/lib/utils/focusRefresh';
 import { toast } from 'sonner';
 import type {
   PlanChangeNotification,
@@ -82,6 +83,7 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
+    markRefreshed('plan-changes');
     try {
       // First load: the app-shell /bootstrap response, if it carried this part.
       const boot = await takeBootstrapPart<{ data?: unknown } | unknown[]>('pending_plan_changes');
@@ -132,7 +134,8 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
   // initial fetch may have silently failed due to localStorage/storage restrictions
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      // Throttled: one tab switch fires this, and the 5-min poll / WS cover the rest.
+      if (document.visibilityState === 'visible' && focusRefreshDue('plan-changes')) {
         fetchPendingChanges();
       }
     };

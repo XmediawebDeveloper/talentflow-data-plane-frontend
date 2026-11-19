@@ -48,7 +48,6 @@ import {
   AdjustmentLogEntry,
   AllPoolsResponse,
   ExistingUsageUser,
-  UsageSummaryResponse,
   getUnitTypeName,
 } from '@/lib/services/unitPoolService';
 import teamService, { AllTeamsUsageSummary, TeamMembersUsageSummary } from '@/lib/services/teamService';
@@ -406,12 +405,10 @@ function ExportModal({
 
 function AnalyticsCards({
   pools,
-  summary,
   subscriptionUnits,
   userLimits,
 }: {
   pools: AllPoolsResponse | null;
-  summary: UsageSummaryResponse | null;
   subscriptionUnits: SubscriptionUnits | null;
   userLimits: UserLimitsResponse | null;
 }) {
@@ -1588,7 +1585,6 @@ export default function UsageHistory() {
 
   // Data
   const [pools, setPools] = useState<AllPoolsResponse | null>(null);
-  const [summary, setSummary] = useState<UsageSummaryResponse | null>(null);
   const [consumptionItems, setConsumptionItems] = useState<ConsumptionLogEntry[]>([]);
   const [consumptionTotal, setConsumptionTotal] = useState(0);
   const [teamsData, setTeamsData] = useState<AllTeamsUsageSummary | null>(null);
@@ -1680,22 +1676,27 @@ export default function UsageHistory() {
     );
   }
 
-  // ── Load pool status & summary ────────────────────────────────────────────
-  const loadPoolData = useCallback(async () => {
+  // ── Load pool status ──────────────────────────────────────────────────────
+  /* None of these depend on the date range, so they load once (and on
+     Refresh). GET /unit-pool/usage-summary used to ride along with the range
+     as a dependency: the billing period arriving moved the range and re-ran all
+     four, and the summary it fetched was never rendered (AnalyticsCards does
+     not read it) — so it is no longer requested. */
+  /* `reuseRecent` (arrival only): the dashboard and seat limits were very likely
+     read moments ago on the Dashboard / User Management, so reuse an answer from
+     the last 30 s. Refresh passes nothing and asks the server. */
+  const loadPoolData = useCallback(async (opts?: { reuseRecent?: boolean }) => {
     const seq = ++poolSeqRef.current;
     const isStale = () => seq !== poolSeqRef.current;
     setIsLoadingPools(true);
     try {
-      const days = Math.max(1, Math.ceil((dateEnd.getTime() - dateStart.getTime()) / (1000 * 60 * 60 * 24)));
-      const [poolsRes, summaryRes, dashRes, limitsRes] = await Promise.all([
+      const [poolsRes, dashRes, limitsRes] = await Promise.all([
         unitPoolService.getPoolStatus(),
-        unitPoolService.getUsageSummary(days),
-        dashboardService.getDashboard().catch(() => null),
-        featurePermissionService.getUserLimits().catch(() => null),
+        dashboardService.getDashboard(opts).catch(() => null),
+        featurePermissionService.getUserLimits(opts).catch(() => null),
       ]);
       if (isStale()) return;
       setPools(poolsRes);
-      setSummary(summaryRes);
       if (dashRes?.subscription_units) setSubscriptionUnits(dashRes.subscription_units);
       if (limitsRes) setUserLimits(limitsRes);
     } catch (err: any) {
@@ -1704,7 +1705,7 @@ export default function UsageHistory() {
     } finally {
       if (!isStale()) setIsLoadingPools(false);
     }
-  }, [dateStart, dateEnd]);
+  }, []);
 
   // ── Load consumption history ───────────────────────────────────────────────
   const loadConsumption = useCallback(async (page: number, mode: 'feature' | 'user' = 'feature') => {
@@ -1798,9 +1799,9 @@ export default function UsageHistory() {
 
   // ── Effects ────────────────────────────────────────────────────────────────
 
-  // Pool status — fires when date range changes (loadPoolData encodes dateStart/dateEnd)
+  // Pool status — once on mount (see loadPoolData)
   useEffect(() => {
-    loadPoolData();
+    loadPoolData({ reuseRecent: true });
   }, [loadPoolData]);
 
   // Reset pages when filters/tab/dates change (no API call here)
@@ -1982,7 +1983,6 @@ export default function UsageHistory() {
       {/* ── Feature Analytics Cards ── */}
       <AnalyticsCards
         pools={isLoadingPools ? null : pools}
-        summary={summary}
         subscriptionUnits={subscriptionUnits}
         userLimits={userLimits}
       />

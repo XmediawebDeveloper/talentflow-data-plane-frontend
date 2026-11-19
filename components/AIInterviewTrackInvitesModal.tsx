@@ -492,6 +492,58 @@ export default function AIInterviewTrackInvitesModal({
     await onChanged?.();
   };
 
+  /* A job's matching rows across `targets` (its interviews), stamped with each
+     row's job / interview version. `paging` = one server page (newest invited
+     first) with the filtered total; null = every matching row (1000 an
+     interview, the cap the per-interview reads had) for client-side Source /
+     Result filtering and "Select all pages". One request (`also`); an older
+     backend that ignores `also` (no `scoped_config_ids` echoed) falls back to
+     one request per interview, merged and paged here as before. */
+  const loadJobScopeRows = useCallback(async (
+    targets: NonNullable<typeof jobScope>,
+    paging: { page: number; pageSize: number } | null,
+  ): Promise<{ rows: any[]; total: number; serverPaged: boolean }> => {
+    if (targets.length === 0) return { rows: [], total: 0, serverPaged: paging !== null };
+    const byConfig = new Map(targets.map((entry) => [entry.configId, entry]));
+    const stamp = (inv: any, entry = byConfig.get(String(inv.config_id))) => ({
+      ...inv,
+      _config_id: entry?.configId ?? inv.config_id,
+      _jd_version: entry?.jobVersion,
+      _interview_version: entry?.interviewVersion,
+    });
+    const filterParams = {
+      search: filters.search.trim() || undefined,
+      status: filters.status !== 'all' ? filters.status : undefined,
+      invite_date_from: filters.dateFrom || undefined,
+      invite_date_to: filters.dateTo || undefined,
+    };
+    const tolerateFailed = (err: unknown) => {
+      if (filters.status === 'failed') return { items: [], total: 0 } as unknown as Awaited<ReturnType<typeof aiInterviewService.getConfigInvitations>>;
+      throw err;
+    };
+    const [first, ...rest] = targets;
+    const res = await aiInterviewService.getConfigInvitations(first.configId, {
+      ...filterParams,
+      also: rest.map((entry) => entry.configId).join(','),
+      order: 'invited',
+      page: paging ? paging.page : 1,
+      page_size: paging ? paging.pageSize : 1000 * targets.length,
+    }).catch(tolerateFailed);
+    if (rest.length === 0 || res.scoped_config_ids) {
+      return { rows: (res.items || []).map((inv: any) => stamp(inv)), total: res.total || 0, serverPaged: paging !== null };
+    }
+    // Older backend: one request per interview, merged newest invited first.
+    const lists = await Promise.all(targets.map((entry) =>
+      aiInterviewService.getConfigInvitations(entry.configId, { ...filterParams, page: 1, page_size: 1000 })
+        .catch(tolerateFailed)
+        .then((r) => (r.items || []).map((inv: any) => stamp(inv, entry)))));
+    const sentAt = (inv: any) => new Date(inv.invitation_sent_at || inv.created_at || 0).getTime();
+    const merged = lists.flat().sort((a: any, b: any) => sentAt(b) - sentAt(a));
+    if (!paging) return { rows: merged, total: merged.length, serverPaged: false };
+    const start = (paging.page - 1) * paging.pageSize;
+    return { rows: merged.slice(start, start + paging.pageSize), total: merged.length, serverPaged: true };
+  }, [filters]);
+
   /* Bumped by every loadInvitations run (filter/page change, poll, Refresh),
      so an older response landing late can't overwrite a newer one's rows and
      cards. */
@@ -501,43 +553,40 @@ export default function AIInterviewTrackInvitesModal({
     const isStale = () => seq !== loadSeqRef.current;
     if (!silent) setIsLoading(true);
     try {
-      /* A whole job: each interview's matching rows (narrowed to the chosen job
-         / interview version), stamped with their versions, merged newest-sent
-         first, then filtered and paged here. The cards add up every interview
-         in ONE request (GET /ai-interview/invitation-overview). */
+      /* A whole job: every interview's matching rows (narrowed to the chosen
+         job / interview version) in ONE request — the first interview's
+         invitations endpoint with the rest as `also`, newest invited first —
+         stamped with their versions. Paged on the server unless Source /
+         Result is set (no server-side filter for those), as the single
+         interview path does. It used to send one request PER interview
+         (page_size 1000 each) and merge and page them here. The cards add up
+         every interview in ONE request (GET /ai-interview/invitation-overview). */
       if (jobScope) {
         const targets = jobScope.filter((entry) =>
           (!jobVersionFilter || String(entry.jobVersion) === jobVersionFilter)
           && (!versionFilter || String(entry.interviewVersion) === versionFilter));
-        const [lists, counts] = await Promise.all([
-          Promise.all(targets.map((entry) =>
-            aiInterviewService.getConfigInvitations(entry.configId, {
-              search: filters.search.trim() || undefined,
-              status: filters.status !== 'all' ? filters.status : undefined,
-              invite_date_from: filters.dateFrom || undefined,
-              invite_date_to: filters.dateTo || undefined,
-              page: 1,
-              page_size: 1000,
-            }).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; }).then((res) => (res.items || []).map((inv: any) => ({
-              ...inv,
-              _config_id: entry.configId,
-              _jd_version: entry.jobVersion,
-              _interview_version: entry.interviewVersion,
-            }))))),
+        const [batch, counts] = await Promise.all([
+          loadJobScopeRows(targets, fetchAllForClientFilters ? null : { page, pageSize }),
           aiInterviewService.getInvitationOverview(jobScope.map((entry) => entry.configId)),
         ]);
         if (isStale()) return;
-        const sentAt = (inv: any) => new Date(inv.invitation_sent_at || inv.created_at || 0).getTime();
-        const matching = lists.flat()
-          .filter((inv: any) =>
-            (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter))
-          .sort((a: any, b: any) => sentAt(b) - sentAt(a));
-        const pages = Math.max(1, Math.ceil(matching.length / pageSize));
-        const safePage = Math.min(page, pages);
-        setInvitations(matching.slice((safePage - 1) * pageSize, safePage * pageSize));
-        setFilteredTotal(matching.length);
-        setTotalPages(pages);
-        if (safePage !== page) setPage(safePage);
+        if (batch.serverPaged) {
+          setInvitations(batch.rows);
+          setFilteredTotal(batch.total);
+          setTotalPages(Math.max(1, Math.ceil(batch.total / pageSize)));
+          if (batch.rows.length === 0 && batch.total > 0 && page > 1) {
+            setPage((current) => Math.min(current - 1, Math.max(1, Math.ceil(batch.total / pageSize))));
+          }
+        } else {
+          const matching = batch.rows.filter((inv: any) =>
+            (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
+          const pages = Math.max(1, Math.ceil(matching.length / pageSize));
+          const safePage = Math.min(page, pages);
+          setInvitations(matching.slice((safePage - 1) * pageSize, safePage * pageSize));
+          setFilteredTotal(matching.length);
+          setTotalPages(pages);
+          if (safePage !== page) setPage(safePage);
+        }
         const rows = jobScope.map((entry) => counts[entry.configId]).filter(Boolean);
         const sum = (pick: (o: (typeof rows)[number]) => number | undefined) => rows.reduce((acc, o) => acc + (pick(o) || 0), 0);
         setOverview({
@@ -625,7 +674,7 @@ export default function AIInterviewTrackInvitesModal({
       // A stale run leaves the spinner to the run that replaced it.
       if (!isStale()) setIsLoading(false);
     }
-  }, [configId, page, pageSize, filters, sourceFilter, resultFilter, fetchAllForClientFilters, jobScope, jobVersionFilter, versionFilter]);
+  }, [configId, page, pageSize, filters, sourceFilter, resultFilter, fetchAllForClientFilters, jobScope, jobVersionFilter, versionFilter, loadJobScopeRows]);
 
   /* look: every page's matching rows for "Select all pages" — the same
      requests and filters as loadInvitations, unpaged (1000 a config, as its
