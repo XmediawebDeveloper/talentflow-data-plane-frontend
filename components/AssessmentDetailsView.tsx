@@ -32,7 +32,6 @@ import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import InviteFilterBar, {
   EMPTY_INVITE_FILTERS,
-  ASSESSMENT_INVITE_STATUS_OPTIONS,
   type InviteFilterState,
 } from '@/components/InviteFilterBar';
 import { RevokeInvitationDialog, EditInvitationModal } from '@/components/AssessmentInviteActions';
@@ -209,6 +208,22 @@ interface Section {
 
 // IST timezone constant
 const INDIA_TIMEZONE = 'Asia/Kolkata';
+
+/* One option per stat card below (Total Invited, Invited, In Progress,
+   Completed, Expired, Terminated, Revoked), in the cards' own keys — so
+   picking any card's bucket from the dropdown always shows that card's name
+   there. ASSESSMENT_INVITE_STATUS_OPTIONS used 'abandoned'/no 'sent' or
+   'revoked' at all, which is why Invited/Terminated/Revoked were missing
+   here. */
+const ASSESSMENT_DETAILS_STATUS_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'sent', label: 'Invited' },
+  { value: 'started', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'expired', label: 'Invite Expired' },
+  { value: 'terminated', label: 'Terminated' },
+  { value: 'revoked', label: 'Revoked' },
+];
 
 /**
  * THE ASSESSMENTS AUTHORED AGAINST ONE JOB VERSION, deduped by assessment id.
@@ -2896,11 +2911,9 @@ export default function AssessmentDetailsView({
                 setInviteFilters(nextFilters);
                 setInvitePage(1);
               }}
-              /* The popup's trimmed list — one option per stat card above, so
-                 picking one can never return rows the cards cannot explain. */
-              statusOptions={ASSESSMENT_INVITE_STATUS_OPTIONS.filter(
-                (option) => !['failed', 'abandoned'].includes(option.value)
-              )}
+              /* One option per stat card above, so picking one can never
+                 return rows the cards cannot explain. */
+              statusOptions={ASSESSMENT_DETAILS_STATUS_OPTIONS}
               searchPlaceholder="Search by candidate name, email, or CID..."
             />
 

@@ -195,6 +195,10 @@ const STATUS_CARD_LABEL: Record<string, string> = {
 };
 /* guided: every card in the Status dropdown, Revoked included. */
 const AI_CARD_STATUS_OPTIONS = [...AI_INTERVIEW_INVITE_STATUS_OPTIONS, { value: 'revoked', label: 'Revoked' }, { value: 'failed', label: 'Invite Failed' }];
+/* non-guided (embedded): the Revoked stat card renders either way (see the
+   `cards` array below), so the dropdown needs Revoked here too — just without
+   the card-less "Invite Failed" option guided mode also offers. */
+const AI_EMBEDDED_STATUS_OPTIONS = [...AI_INTERVIEW_INVITE_STATUS_OPTIONS, { value: 'revoked', label: 'Revoked' }];
 const INTERVIEW_LEGEND: InviteStatusKind[] = ['invited', 'in_progress', 'completed', 'terminated', 'cancelled', 'expired', 'revoked', 'invite_failed'];
 
 /**
@@ -1040,7 +1044,7 @@ export default function AIInterviewTrackInvitesModal({
             // A narrowed list has its own page 1; staying on page 4 would look empty.
             setPage(1);
           }}
-          statusOptions={guided ? AI_CARD_STATUS_OPTIONS : AI_INTERVIEW_INVITE_STATUS_OPTIONS}
+          statusOptions={guided ? AI_CARD_STATUS_OPTIONS : AI_EMBEDDED_STATUS_OPTIONS}
           searchPlaceholder="Search by candidate name or email..."
           extraSelects={[
             ...(hideVersionDetails ? [] : [...(hideJobVersionFilter ? [] : [{
