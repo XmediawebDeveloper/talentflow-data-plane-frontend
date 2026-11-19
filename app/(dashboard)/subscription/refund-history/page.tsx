@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { billToFromAuth, generateRefundReceiptPDF } from '@/lib/utils/pdfInvoice';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
 import { RowActions } from '@/components/subscription/RowActionsMenu';
@@ -289,7 +289,7 @@ export default function RefundHistoryPage() {
       await generateRefundReceiptPDF(inv, billToFromAuth(user, tenant));
     } catch (error) {
       console.error('PDF generation failed:', error);
-      toast.error('Failed to generate PDF. Please try again.');
+      showErrorToast(error, "Couldn't download the refund receipt", { retry: () => handleDownloadRefund(inv) });
     } finally {
       setDownloadingId(null);
     }

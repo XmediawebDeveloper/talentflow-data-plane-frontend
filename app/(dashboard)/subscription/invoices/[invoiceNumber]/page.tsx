@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, RotateCcw } from 'lucide-react';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import api from '@/lib/services/api';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -107,7 +107,7 @@ export default function InvoicePage() {
       api.post('/billing/log-view', { kind: 'invoice_downloaded', invoice_number: inv.invoice_number }).catch(() => {});
     } catch (error) {
       console.error('PDF generation failed:', error);
-      toast.error('Failed to generate PDF. Please try again.');
+      showErrorToast(error, `Couldn't download invoice ${inv.invoice_number}`, { retry: () => handleDownload(inv) });
     } finally {
       setDownloading(false);
     }

@@ -1,97 +1,206 @@
-import { Upload, UserPlus, Search, FileText, BarChart3, Settings, Zap, Clock } from 'lucide-react';
+'use client';
+
+import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { ChevronRight, ClipboardList, FilePlus2, Lock, Upload, Video, Zap, type LucideIcon } from 'lucide-react';
+import { Tooltip } from '@/components/ui/tooltip';
+import { ResumeScoringIcon, TalentMatchIcon } from '@/components/icons/nav-icons';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { isRouteAuthorized } from '@/lib/navigation/routeAccess';
+import { PLAN_LOCKED_MESSAGE, type PlanFeatureKey } from '@/lib/types/planFeatures';
+import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
+
+/* Header "Quick actions" (UI/UX guidelines §1: the fixed top header carries
+   Profile, Notifications, Plan status and Quick actions).
+
+   One click from any page to the start of the main recruiter workflows. Each
+   row is gated the same way the dashboard tiles are: a missing permission or a
+   plan that lacks the feature keeps the row visible but locked, with the reason
+   on hover — never hidden (same rule as the profile menu and nav tiles). */
 
 interface QuickAction {
   id: string;
   label: string;
-  icon: any;
-  shortcut?: string;
-  onClick: () => void;
-  color: string;
   description: string;
+  icon: LucideIcon | typeof ResumeScoringIcon;
+  /** Built per click so jd-creation gets a fresh `?new=` (see job-openings). */
+  href: () => string;
+  /** The action's own permission — must hold at least one. */
+  permissions: string[];
+  planFeature?: PlanFeatureKey;
 }
+
+const QUICK_ACTIONS: QuickAction[] = [
+  {
+    id: 'create-jd',
+    label: 'Create JD',
+    description: 'Write or generate a job description',
+    icon: FilePlus2,
+    // The jd-creation segment is cached by the App Router; a unique `new`
+    // forces a blank form instead of reusing an in-progress one.
+    href: () => `/recruitment/jd-creation?new=${Date.now()}`,
+    permissions: ['canCreateJD'],
+  },
+  {
+    id: 'upload-resumes',
+    label: 'Upload Resumes',
+    description: 'Add resumes to My Resumes',
+    icon: Upload,
+    href: () => '/recruitment/resume-database?tab=my-resumes&upload=1',
+    permissions: ['canUploadResumes'],
+    planFeature: 'resume_upload',
+  },
+  {
+    id: 'score-resumes',
+    label: 'Score Resumes',
+    description: 'Pick a JD and score resumes against it',
+    icon: ResumeScoringIcon,
+    href: () => '/recruitment/resume-scoring/jd-selection',
+    permissions: ['canRunScoring'],
+    planFeature: 'resume_scoring',
+  },
+  {
+    id: 'ai-talent-match',
+    label: 'AI Talent Match',
+    description: 'Find the best candidates for a JD',
+    icon: TalentMatchIcon,
+    href: () => '/recruitment/ai-talent-match',
+    permissions: ['canRunAiMatch'],
+    planFeature: 'ai_talent_match',
+  },
+  {
+    id: 'create-assessment',
+    label: 'Create Assessment',
+    description: 'Build an AI assessment for a JD',
+    icon: ClipboardList,
+    href: () => '/recruitment/assessments/create',
+    permissions: ['canCreateAssessments'],
+    planFeature: 'assessment',
+  },
+  {
+    id: 'create-ai-interview',
+    label: 'Create AI Interview',
+    description: 'Set up an AI interview for a JD',
+    icon: Video,
+    href: () => '/recruitment/ai-interviews/jd-selection',
+    permissions: ['canCreateAIInterviews', 'canRunAiInterviews'],
+    planFeature: 'ai_interview',
+  },
+];
+
+const SUBSCRIPTION_LOCKED_MESSAGE = 'Your subscription is inactive. Renew your plan to use this.';
 
 interface QuickActionsProps {
-  isOpen: boolean;
-  onClose: () => void;
-  actions: QuickAction[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  subscriptionExpired?: boolean;
 }
 
-export default function QuickActions({ isOpen, onClose, actions }: QuickActionsProps) {
-  if (!isOpen) return null;
+export default function QuickActions({ open, onOpenChange, subscriptionExpired }: QuickActionsProps) {
+  const router = useRouter();
+  const { isTenantAdmin, hasPermission } = useAuth();
+  const { hasPlanFeature, loading: planLoading } = usePlanFeatures();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // ESC closes and hands focus back to the trigger; opening moves focus into
+  // the panel so the rows are reachable straight from the keyboard (§14).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onOpenChange(false);
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    panelRef.current?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus();
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onOpenChange]);
+
+  const lockReason = (action: QuickAction): string | null => {
+    if (subscriptionExpired) return SUBSCRIPTION_LOCKED_MESSAGE;
+    if (action.planFeature) {
+      if (planLoading) return 'Checking your plan…';
+      if (!hasPlanFeature(action.planFeature)) return PLAN_LOCKED_MESSAGE;
+    }
+    const permitted =
+      isTenantAdmin ||
+      (action.permissions.some(hasPermission) &&
+        isRouteAuthorized(action.href().split('?')[0], { isTenantAdmin, hasPermission }));
+    return permitted ? null : PERMISSION_DENIED_MESSAGE;
+  };
 
   return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50"
-        onClick={onClose}
-      />
+    <div className="relative">
+      <Tooltip content="Quick actions" position="bottom">
+        <button
+          ref={triggerRef}
+          onClick={() => onOpenChange(!open)}
+          className="relative p-1.5 sm:p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/25"
+          aria-label="Quick actions"
+          aria-haspopup="menu"
+          aria-expanded={open}
+        >
+          <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
+        </button>
+      </Tooltip>
 
-      {/* Quick Actions Panel */}
-      <div className="fixed inset-x-0 top-20 z-50 flex justify-center px-4">
-        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-7rem)] flex flex-col overflow-hidden animate-scale-in">
-          {/* Header */}
-          <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Zap className="w-5 h-5 text-gray-800" />
-                <h2 className="text-gray-900">Quick Actions</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="tf-meta">Press ESC to close</span>
-                <button
-                  onClick={onClose}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  ✕
-                </button>
-              </div>
+      {open && (
+        <>
+          {/* Same z-band as the other header dropdowns (see the plan menu). */}
+          <div className="fixed inset-0 z-[80]" onClick={() => onOpenChange(false)} />
+          {/* Phones: full-width sheet under the header. md+: anchored to the bolt. */}
+          <div
+            ref={panelRef}
+            role="menu"
+            aria-label="Quick actions"
+            className="fixed left-3 right-3 top-[4.25rem] md:absolute md:left-auto md:right-0 md:top-full md:mt-2 md:w-[340px] max-h-[calc(100dvh-5rem)] overflow-y-auto bg-white rounded-xl shadow-xl border border-gray-200 z-[85]"
+          >
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-brand-blue" />
+              <span className="tf-row-name">Quick actions</span>
             </div>
-          </div>
-
-          {/* Actions Grid */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-6">
-            <div className="grid grid-cols-2 gap-3">
-              {actions.map((action) => {
+            <div className="divide-y divide-gray-100">
+              {QUICK_ACTIONS.map((action) => {
+                const reason = lockReason(action);
+                const locked = reason !== null;
                 const Icon = action.icon;
                 return (
                   <button
                     key={action.id}
+                    role="menuitem"
                     onClick={() => {
-                      action.onClick();
-                      onClose();
+                      if (locked) return;
+                      onOpenChange(false);
+                      router.push(action.href());
                     }}
-                    className="flex items-start gap-4 p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left group"
+                    aria-disabled={locked}
+                    title={reason ?? undefined}
+                    className={`w-full px-4 py-2.5 text-left flex items-center gap-2.5 transition-colors focus-visible:outline-none focus-visible:bg-brand-blue/[0.06] ${
+                      locked ? 'opacity-60 cursor-not-allowed' : 'group hover:bg-brand-blue/[0.04]'
+                    }`}
                   >
-                    <div className={`p-2 rounded-lg ${action.color} group-hover:scale-110 transition-transform`}>
-                      <Icon className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="tf-body">{action.label}</span>
-                        {action.shortcut && (
-                          <span className="tf-meta bg-gray-100 px-2 py-0.5 rounded">
-                            {action.shortcut}
-                          </span>
-                        )}
-                      </div>
-                      <p className="tf-meta">{action.description}</p>
-                    </div>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 transition-colors group-hover:bg-brand-blue/15">
+                      <Icon className="w-4 h-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block tf-row-name truncate">{action.label}</span>
+                      <span className="block tf-meta truncate">{locked ? reason : action.description}</span>
+                    </span>
+                    {locked ? (
+                      <Lock className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 shrink-0 text-gray-300 transition-colors group-hover:text-brand-blue" />
+                    )}
                   </button>
                 );
               })}
             </div>
           </div>
-
-          {/* Recently Used */}
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-            <div className="flex items-center gap-2 tf-meta">
-              <Clock className="w-3.5 h-3.5" />
-              <span>Tip: Use keyboard shortcuts for faster access</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
+        </>
+      )}
+    </div>
   );
 }

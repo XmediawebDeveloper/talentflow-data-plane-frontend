@@ -84,8 +84,9 @@ export default function BulkInviteResultsDialog({
         </Button>
       ) : undefined}
       headerExtra={onMinimize ? (
-        <Button variant="secondary" size="sm" onClick={onMinimize} className="w-8 !px-0" aria-label="Minimize" title="Minimize — sending carries on; the icon stays bottom right">
+        <Button variant="secondary" size="sm" onClick={onMinimize} className="px-2 sm:px-3" aria-label="Minimize" title="Minimize — sending carries on; the icon stays bottom right">
           <Minus className="w-4 h-4" />
+          <span className="hidden sm:inline">Minimize</span>
         </Button>
       ) : undefined}
       /* Same 16px above the "Invitation process completed" box as the panel

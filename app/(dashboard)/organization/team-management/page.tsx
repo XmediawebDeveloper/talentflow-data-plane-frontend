@@ -13,7 +13,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import FeatureGate from '@/components/shared/FeatureGate';
 import teamService, { Team, TeamStats, TeamUsageSummary } from '@/lib/services/teamService';
 import { rememberBillingPeriod, useTeamUnitsPeriod } from '@/components/teams/reportControls';
@@ -128,14 +128,6 @@ const TEAM_SORTS: { value: TeamSort; label: string }[] = [
 ];
 
 
-const getErrorDetail = (error: unknown): string | undefined => {
-  if (typeof error !== 'object' || error === null || !('response' in error)) {
-    return undefined;
-  }
-  const response = (error as { response?: { data?: { detail?: string } } }).response;
-  return response?.data?.detail;
-};
-
 export default function TeamManagementPage() {
   const router = useRouter();
   const { user: authUser, isLoading: authLoading, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
@@ -146,6 +138,8 @@ export default function TeamManagementPage() {
     avg_members_per_team: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  // Bumped by the load-failure toast's Retry to re-run the page load.
+  const [reloadKey, setReloadKey] = useState(0);
   const [availableUsers, setAvailableUsers] = useState<ApiUser[]>([]);
   // Units per team over the current billing period (the report tabs' default
   // range). null = not loaded or no access to usage — the Units column / box
@@ -306,7 +300,7 @@ export default function TeamManagementPage() {
       } catch (error: unknown) {
         console.error('Error fetching data:', error);
         if (!isMounted) return;
-        toast.error('Failed to load teams data');
+        showErrorToast(error, "Couldn't load teams", { id: 'teams-load', retry: () => setReloadKey((k) => k + 1) });
         setTeams([]);
         setStats({ total_teams: 0, total_members: 0, avg_members_per_team: 0 });
       } finally {
@@ -320,7 +314,7 @@ export default function TeamManagementPage() {
     };
     // Keyed on the user's id, so a background permission refresh doesn't reload the page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, authUser?.id, router]);
+  }, [authLoading, authUser?.id, router, reloadKey]);
 
   const filteredTeams = useMemo(() => {
     let result = teams;
@@ -543,7 +537,7 @@ export default function TeamManagementPage() {
       setAllUsers(users);
     } catch (error: unknown) {
       console.error('Error fetching users:', error);
-      toast.error('Failed to load available users');
+      showErrorToast(error, "Couldn't load available users", { id: 'teams-available-users', retry: fetchAvailableUsers });
     } finally {
       setIsLoadingUsers(false);
     }
@@ -568,9 +562,7 @@ export default function TeamManagementPage() {
     } catch (error) {
       console.error('Error refreshing data:', error);
       // The save itself worked — say the list may be out of date and offer a retry.
-      toast.error('Could not refresh the team list', {
-        action: { label: 'Retry', onClick: () => { void refreshData(); } },
-      });
+      showErrorToast(error, "Couldn't refresh the team list", { id: 'teams-load', retry: refreshData });
       return false;
     }
   };
@@ -658,7 +650,7 @@ export default function TeamManagementPage() {
       await refreshData();
     } catch (error: unknown) {
       console.error('Error creating team:', error);
-      toast.error(friendlyErrorMessage(getErrorDetail(error), "Couldn't create team. Please try again."));
+      showErrorToast(error, "Couldn't create team");
     } finally {
       setIsCreating(false);
     }
@@ -680,8 +672,13 @@ export default function TeamManagementPage() {
         setSelectedTeam(team);
         setTeamModal(mode);
       }
-    } catch {
-      if (!listed) toast.error(mode === 'view' ? 'Failed to load team details' : 'Failed to load team data');
+    } catch (error) {
+      if (!listed) {
+        showErrorToast(error, mode === 'view' ? "Couldn't load team details" : "Couldn't load team data", {
+          id: 'team-popup-load',
+          retry: () => openTeamPopup(teamId, mode),
+        });
+      }
     }
   };
 
@@ -742,7 +739,7 @@ export default function TeamManagementPage() {
       }
     } catch (error: unknown) {
       console.error('Error updating team:', error);
-      toast.error(friendlyErrorMessage(getErrorDetail(error), "Couldn't update team. Please try again."));
+      showErrorToast(error, "Couldn't update team");
     } finally {
       setIsUpdating(false);
     }
@@ -785,7 +782,7 @@ export default function TeamManagementPage() {
       await refreshData();
     } catch (error: unknown) {
       console.error('Error deleting team:', error);
-      toast.error(friendlyErrorMessage(getErrorDetail(error), "Couldn't delete team. Please try again."));
+      showErrorToast(error, "Couldn't delete team");
     } finally {
       setIsDeleting(false);
     }

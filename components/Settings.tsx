@@ -13,7 +13,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserProfileUpdate } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
 import { Button } from '@/components/ui/button';
@@ -206,6 +206,7 @@ export default function Settings() {
       } catch (error) {
         console.error('Error loading settings:', error);
         // Use default values on error
+        showErrorToast(error, "Couldn't load your settings", { id: 'settings-load', retry: loadData });
       } finally {
         setIsLoading(false);
       }
@@ -252,7 +253,7 @@ export default function Settings() {
       refreshUser().catch(() => {});
     } catch (error) {
       console.error('Error saving profile:', error);
-      toast.error(errorMessage(error, 'Failed to save profile'));
+      showErrorToast(error, "Couldn't save profile");
     } finally {
       setIsSaving(false);
     }
@@ -302,7 +303,7 @@ export default function Settings() {
     try {
       setAvatarUrl(await resizeImageToDataUrl(file)); // preview only until Save Changes
     } catch (error) {
-      toast.error(errorMessage(error, 'Failed to process image'));
+      showErrorToast(error, "Couldn't process image");
     } finally {
       setIsAvatarBusy(false);
     }
@@ -328,7 +329,7 @@ export default function Settings() {
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast.error('Failed to save settings');
+      showErrorToast(error, "Couldn't save settings");
     } finally {
       setIsSaving(false);
     }
@@ -353,7 +354,7 @@ export default function Settings() {
       setConfirmPassword('');
       setTimeout(() => logout(), 1500);
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't change password. Please try again."));
+      showErrorToast(error, "Couldn't change password");
     } finally {
       setIsChangingPassword(false);
     }

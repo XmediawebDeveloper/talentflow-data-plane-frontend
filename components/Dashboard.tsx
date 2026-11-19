@@ -33,7 +33,7 @@ import type { IconComponent } from '@/lib/types/icon';
 import { useState, useEffect, useCallback } from 'react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { assessmentService } from '@/lib/services';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { handleUnauthorized } from '@/lib/services/api';
 
 import { User, Tenant, getRemainingUnits } from '@/lib/types/tenant';
@@ -318,7 +318,10 @@ export default function Dashboard({
         );
 
         if (permissionErrors.length > 0) {
-          toast.error('Permission Denied: You do not have access to view dashboard data');
+          showErrorToast(null, "Couldn't load dashboard data", {
+            id: 'dashboard-data',
+            description: "You don't have permission to view this data. Ask your admin for access.",
+          });
           return;
         }
 
@@ -342,7 +345,7 @@ export default function Dashboard({
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
-        toast.error('Failed to load dashboard data');
+        showErrorToast(error, "Couldn't load dashboard data", { id: 'dashboard-data', retry: fetchData });
       } finally {
         setLoadingJDs(false);
       }

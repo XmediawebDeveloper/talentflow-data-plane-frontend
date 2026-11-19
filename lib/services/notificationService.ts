@@ -51,7 +51,10 @@ class NotificationService {
     limit: number = 20,
     offset: number = 0,
     unreadOnly: boolean = false,
-    category?: string
+    category?: string,
+    /** The Notifications page passes true so a failed load can say so; the
+     *  header bell keeps the soft empty-list fallback. */
+    { throwOnError = false }: { throwOnError?: boolean } = {}
   ): Promise<NotificationListResponse> {
     try {
       const params: any = { limit, offset };
@@ -61,6 +64,7 @@ class NotificationService {
       const response = await api.get('/notifications', { params });
       return response.data;
     } catch (error) {
+      if (throwOnError) throw error;
       /* warn, not error: this read fails soft (empty list) and the caller
          refetches — a transient network drop here is routine, and
          console.error made Next.js dev raise its overlay on every one. */

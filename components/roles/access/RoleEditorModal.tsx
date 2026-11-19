@@ -7,7 +7,7 @@ import AppModal from '@/components/ui/app-modal';
 import { Input } from '@/components/ui/input';
 import FilterSelect from '@/components/ui/filter-select';
 import rbacService from '@/lib/services/rbacService';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { withRequired, withoutOrphanEntryPoints, getAllCatalogCodes } from '@/lib/permissions/permissionRules';
 import { ALWAYS_ON, copyBlockedReason, pruneAutoMap, type AutoMap } from '@/lib/permissions/moduleLevels';
 import type { Role, RoleListItem } from '@/lib/types/rbac';
@@ -36,11 +36,6 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const peopleCount = (n: number) => (n === 1 ? '1 person' : `${n} people`);
 const slug = (name: string) =>
   `${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'role'}_${Date.now().toString(36)}`;
-
-const errorDetail = (error: unknown): string | undefined => {
-  const data = (error as { response?: { data?: { detail?: unknown } } })?.response?.data;
-  return typeof data?.detail === 'string' ? data.detail : undefined;
-};
 
 export interface RoleEditorModalProps {
   open: boolean;
@@ -179,7 +174,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
         onSaved(created);
       }
     } catch (error) {
-      toast.error(friendlyErrorMessage(errorDetail(error), "Couldn't save the role. Please try again."));
+      showErrorToast(error, "Couldn't save role");
     } finally {
       setSaving(false);
       setConfirmOpen(false);

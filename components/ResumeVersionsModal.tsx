@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, FileText, Download, Calendar, History, Eye, Loader2, Briefcase, CheckCircle2, Lightbulb } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { canDownloadSomeResumes, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -121,7 +121,7 @@ export default function ResumeVersionsModal({
       document.body.removeChild(a);
     } catch (error) {
       console.error('Download failed:', error);
-      toast.error('Failed to download resume');
+      showErrorToast(error, "Couldn't download the resume", { retry: () => handleDownload(version) });
     }
   };
 
@@ -163,7 +163,7 @@ export default function ResumeVersionsModal({
         newer: { version: newer.version, name: newer.file_name, text: newerText },
       });
     } catch (error) {
-      toast.error('Could not load those versions to compare');
+      showErrorToast(error, "Couldn't load those versions to compare", { retry: () => openComparison(a, b) });
     } finally {
       setLoadingCompare(false);
     }

@@ -7,16 +7,12 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { userService, type ApiUser } from '@/lib/services/userService';
 import rbacService from '@/lib/services/rbacService';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import type { RoleListItem } from '@/lib/types/rbac';
 import { useAuth } from '@/lib/hooks/useAuth';
 import RoleUserPicker, { type PickedUser } from './RoleUserPicker';
 
 const PAGE_SIZE = 20;
-
-const errorDetail = (error: unknown) =>
-  (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-  ?? (error instanceof Error ? error.message : undefined);
 
 /**
  * "People with this role" in the role's View popup: everyone who has it, one
@@ -71,9 +67,7 @@ export default function RoleMembers({ role, roleNames, onChanged }: {
     const given = picked.length - failed.length;
     if (failed.length) {
       const first = results.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
-      toast.error(`Couldn't give ${role.name} to ${failed.map((u) => u.name).join(', ')}`, {
-        description: friendlyErrorMessage(errorDetail(first?.reason), 'Please try again.'),
-      });
+      showErrorToast(first?.reason ?? null, `Couldn't give ${role.name} to ${failed.map((u) => u.name).join(', ')}`);
     }
     if (given) toast.success(`${role.name} given to ${given === 1 ? picked.find((u) => !failed.includes(u))?.name : `${given} people`}`);
     setPicked(failed);

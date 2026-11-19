@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useModuleQuota } from '@/contexts/QuotaContext';
 import { UNIT_LABELS } from '@/lib/constants/unitColors';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
 import ListPagination from '@/components/ListPagination';
@@ -53,8 +54,10 @@ async function copyText(text: string, what: string) {
   try {
     await navigator.clipboard.writeText(text);
     toast.success(`${what} copied`);
-  } catch {
-    toast.error('Could not copy — your browser blocked clipboard access');
+  } catch (error) {
+    showErrorToast(error, `Couldn't copy ${what.toLowerCase()}`, {
+      description: 'Your browser blocked clipboard access.',
+    });
   }
 }
 

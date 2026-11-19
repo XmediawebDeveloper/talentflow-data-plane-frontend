@@ -37,7 +37,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import {
@@ -1701,7 +1701,7 @@ export default function UsageHistory() {
       if (limitsRes) setUserLimits(limitsRes);
     } catch (err: any) {
       if (isStale()) return;
-      toast.error(friendlyErrorMessage(err, "Couldn't load pool data. Please try again."));
+      showErrorToast(err, "Couldn't load unit pool data", { id: 'usage-pools' });
     } finally {
       if (!isStale()) setIsLoadingPools(false);
     }
@@ -1727,7 +1727,7 @@ export default function UsageHistory() {
       setConsumptionTotal(mode === 'user' ? (res.users?.length ?? res.items.length) : res.total);
     } catch (err: any) {
       if (isStale()) return;
-      toast.error(friendlyErrorMessage(err, "Couldn't load consumption history. Please try again."));
+      showErrorToast(err, "Couldn't load consumption history", { id: 'usage-consumption' });
     } finally {
       if (!isStale()) setIsLoadingConsumption(false);
     }
@@ -1751,7 +1751,7 @@ export default function UsageHistory() {
       if (res.billing_period) setBillingPeriod(res.billing_period);
     } catch (err) {
       if (isStale()) return;
-      toast.error(friendlyErrorMessage(err, "Couldn't load user usage. Please try again."));
+      showErrorToast(err, "Couldn't load user usage", { id: 'usage-users' });
     } finally {
       if (!isStale()) setIsLoadingUsers(false);
     }
@@ -1764,7 +1764,7 @@ export default function UsageHistory() {
       const res = await teamService.getAllTeamsUsage(teamRangeStart, teamRangeEnd);
       setTeamsData(res);
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't load team data. Please try again."));
+      showErrorToast(err, "Couldn't load team usage", { id: 'usage-teams' });
     } finally {
       setIsLoadingTeams(false);
     }
@@ -1790,7 +1790,7 @@ export default function UsageHistory() {
       if (err?.response?.status === 500 || err?.status === 500 || err?.message?.includes('500')) {
         setAdjustmentsUnavailable(true);
       } else {
-        toast.error(friendlyErrorMessage(err, "Couldn't load adjustments. Please try again."));
+        showErrorToast(err, "Couldn't load adjustments", { id: 'usage-adjustments' });
       }
     } finally {
       setIsLoadingAdjustments(false);
@@ -1884,7 +1884,7 @@ export default function UsageHistory() {
       toast.success(`Exported as ${format.toUpperCase()}`);
       setShowExportModal(false);
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Export failed. Please try again."));
+      showErrorToast(err, `Couldn't export usage history as ${format.toUpperCase()}`, { retry: () => handleExport(format) });
     } finally {
       setIsExporting(false);
     }

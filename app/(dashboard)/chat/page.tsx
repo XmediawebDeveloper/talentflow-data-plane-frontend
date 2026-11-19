@@ -32,7 +32,7 @@ import {
   MessageCircleMore,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import chatService, {
   ChatConnectionStatus,
   Channel,
@@ -153,7 +153,8 @@ export default function TeamChatPage() {
       }
       const failed = targets.length - done.size;
       if (failed > 0) {
-        toast.error(`Failed to ${pin ? 'pin' : 'unpin'} ${failed} message${failed === 1 ? '' : 's'}`);
+        const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+        showErrorToast(firstError?.reason ?? null, `Couldn't ${pin ? 'pin' : 'unpin'} ${failed} message${failed === 1 ? '' : 's'}`);
         // Keep only the failed ones selected so a retry is one tap.
         setSelectedMessageIds(new Set(targets.filter((m) => !done.has(m.id)).map((m) => m.id)));
       } else {
@@ -173,8 +174,7 @@ export default function TeamChatPage() {
       setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, is_pinned: false } : m)));
       toast.success('Message unpinned');
     } catch (error) {
-      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.error(detail || 'Failed to unpin message');
+      showErrorToast(error, "Couldn't unpin message");
     } finally {
       setUnpinningId(null);
     }
@@ -222,7 +222,7 @@ export default function TeamChatPage() {
       }
       const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
       if (firstError) {
-        toast.error(friendlyErrorMessage(firstError.reason, "Couldn't delete message. Please try again."));
+        showErrorToast(firstError.reason, "Couldn't delete message");
       }
       setDeleteTargets(null);
     } finally {
@@ -236,8 +236,8 @@ export default function TeamChatPage() {
       setCopiedMessageId(message.id);
       toast.success('Message copied');
       setTimeout(() => setCopiedMessageId((id) => (id === message.id ? null : id)), 1500);
-    } catch {
-      toast.error('Could not copy message');
+    } catch (error) {
+      showErrorToast(error, "Couldn't copy message");
     }
   };
   const [permissions, setPermissions] = useState<{ can_create_channel: boolean; role: string }>({
@@ -599,7 +599,10 @@ export default function TeamChatPage() {
     } catch (error: any) {
       console.error('Error fetching channels:', error);
       if (error.response?.status !== 404) {
-        toast.error('Failed to load channels');
+        showErrorToast(error, "Couldn't load channels", {
+          id: 'team-chat-channels',
+          retry: () => fetchChannels({ initial, selectFirst }),
+        });
       }
     } finally {
       if (initial) setIsLoading(false);
@@ -649,7 +652,7 @@ export default function TeamChatPage() {
       setMessages([]);
       await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
-      toast.error(friendlyErrorMessage(e, "Couldn't leave channel. Please try again."));
+      showErrorToast(e, "Couldn't leave channel");
     }
   };
 
@@ -673,7 +676,7 @@ export default function TeamChatPage() {
       setMessages([]);
       await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
-      toast.error(friendlyErrorMessage(e, "Couldn't delete channel. Please try again."));
+      showErrorToast(e, "Couldn't delete channel");
     }
   };
 
@@ -699,7 +702,7 @@ export default function TeamChatPage() {
       setMessages([]);
       await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
-      toast.error(friendlyErrorMessage(e, "Couldn't delete chat. Please try again."));
+      showErrorToast(e, "Couldn't delete chat");
     }
   };
 
@@ -749,7 +752,12 @@ export default function TeamChatPage() {
       });
     } catch (error) {
       console.error('Error fetching messages:', error);
-      if (!silent && selectedChannelIdRef.current === channelId) toast.error('Failed to load messages');
+      if (!silent && selectedChannelIdRef.current === channelId) {
+        showErrorToast(error, "Couldn't load messages", {
+          id: 'team-chat-messages',
+          retry: () => fetchMessages(channelId),
+        });
+      }
     } finally {
       // A stale request (the user already moved on) must not end the newer one's loading state.
       if (!silent && selectedChannelIdRef.current === channelId) setIsLoadingMessages(false);
@@ -787,7 +795,7 @@ export default function TeamChatPage() {
       setAvailableUsers(users);
     } catch (error) {
       console.error('Error fetching users:', error);
-      toast.error('Failed to load team members');
+      showErrorToast(error, "Couldn't load team members", { id: 'team-chat-users', retry: fetchAvailableUsers });
     } finally {
       setIsLoadingUsers(false);
     }
@@ -859,7 +867,7 @@ export default function TeamChatPage() {
       bumpConversation(channelId, newMessage);
     } catch (error) {
       console.error('Error sending message:', error);
-      toast.error('Failed to send message');
+      showErrorToast(error, "Couldn't send message");
       // Give the text back — to the box if still here, else to that chat's draft.
       if (selectedChannelIdRef.current === channelId) setMessageInput((cur) => cur || content);
       else if (!draftsRef.current[channelId]) draftsRef.current[channelId] = content;
@@ -918,7 +926,7 @@ export default function TeamChatPage() {
       bumpConversation(channelId, newMessage);
     } catch (error: any) {
       console.error('Error uploading attachment:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't upload image. Please try again."));
+      showErrorToast(error, "Couldn't upload image");
     } finally {
       setIsUploadingAttachment(false);
     }
@@ -972,7 +980,7 @@ export default function TeamChatPage() {
       else await chatService.addReaction(messageId, emoji);
     } catch (error) {
       console.error('Error updating reaction:', error);
-      toast.error(alreadyMine ? 'Failed to remove reaction' : 'Failed to add reaction');
+      showErrorToast(error, alreadyMine ? "Couldn't remove reaction" : "Couldn't add reaction");
     }
     // Reconcile with the server quietly (also undoes the optimistic change on failure).
     if (channelId) void fetchMessages(channelId, { silent: true });
@@ -1004,7 +1012,7 @@ export default function TeamChatPage() {
       openChannel(channel);
     } catch (error: any) {
       console.error('Error creating channel:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't create channel. Please try again."));
+      showErrorToast(error, "Couldn't create channel");
     } finally {
       setIsCreating(false);
     }
@@ -1023,7 +1031,7 @@ export default function TeamChatPage() {
       setSelectedChannel(updatedChannel);
     } catch (error: any) {
       console.error('Error adding members:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't add members. Please try again."));
+      showErrorToast(error, "Couldn't add members");
     }
   };
 
@@ -1075,7 +1083,7 @@ export default function TeamChatPage() {
           return;
         }
       }
-      toast.error(friendlyErrorMessage(error, "Couldn't start conversation. Please try again."));
+      showErrorToast(error, "Couldn't start conversation");
     } finally {
       setIsCreatingDM(false);
     }

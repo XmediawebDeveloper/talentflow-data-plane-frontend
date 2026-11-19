@@ -4,6 +4,7 @@ import { Trash2, RefreshCw, GitBranch, Check, Loader2, FileText, AlertTriangle }
 import { useState } from 'react';
 import { resumeService } from '@/lib/services';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 
 export interface VersionedBatchItem {
   id: string;          // batch_item_id
@@ -40,7 +41,8 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
       } else if (succeeded > 0) {
         toast.warning(`${succeeded} resolved, ${failed} failed`, { id: toastId });
       } else {
-        toast.error('Failed to resolve resumes', { id: toastId });
+        const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+        showErrorToast(firstFailure?.reason ?? null, "Couldn't resolve the resumes", { id: toastId });
       }
 
       // Every item failed: nothing changed, so stay open with the same items
@@ -48,7 +50,7 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
       if (succeeded > 0) onResolved();
     } catch (error) {
       console.error('Bulk resolution error:', error);
-      toast.error('Failed to resolve versioned resumes', { id: toastId });
+      showErrorToast(error, "Couldn't resolve the versioned resumes", { id: toastId });
     } finally {
       setIsSubmitting(false);
     }

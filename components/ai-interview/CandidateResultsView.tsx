@@ -51,6 +51,7 @@ import { useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } 
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import api from '@/lib/services/api';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -1273,11 +1274,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       const rawDetail = err?.response?.data?.detail;
       // A disabled-JD refusal arrives as {error, message}, not a string.
       const detail = typeof rawDetail === 'string' ? rawDetail : rawDetail?.message;
-      const msg =
+      const description =
         status === 409 ? (detail || 'This interview has already been re-evaluated.')
         : status === 400 ? (detail || 'Re-evaluation is only available once the candidate reached the end of the interview.')
-        : (detail || 'Re-evaluation could not be completed. Please try again.');
-      toast.error(msg, { id: _t });
+        : undefined;
+      showErrorToast(err, "Couldn't re-evaluate the interview", { id: _t, description });
     } finally {
       setReEvaluating(false);
     }
@@ -2064,7 +2065,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
         markResumeUnavailable();
       } else {
         console.error('[CandidateResultsView] Failed to load resume:', err);
-        toast.error('Could not load the resume. Please try again.');
+        showErrorToast(err, "Couldn't load the resume", { retry: () => { void handleViewResume(); } });
       }
     } finally {
       setIsLoadingResume(false);
@@ -2368,7 +2369,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       await downloadSessionReport(liveSession.id);
                     } catch (err) {
                       console.error('[CandidateResultsView] report download failed:', err);
-                      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the report. Please try again.');
+                      showErrorToast(err, "Couldn't download the report", isForbiddenError(err) ? { description: AI_REPORT_DOWNLOAD_DENIED } : {});
                     } finally {
                       setReportDownloading(false);
                     }
@@ -4222,7 +4223,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 setChatDownloadOpen(false);
                               } catch (error) {
                                 console.error('Chat download failed:', error);
-                                toast.error(`Failed to download the chat as ${chatDownloadFormat === 'pdf' ? 'PDF' : 'text'}`);
+                                showErrorToast(error, `Couldn't download the chat as ${chatDownloadFormat === 'pdf' ? 'PDF' : 'text'}`);
                               } finally {
                                 setChatDownloading(false);
                               }

@@ -5,7 +5,7 @@ import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye, Download, C
 import { useRouter } from 'next/navigation';
 import { jdService, JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/components/providers/AuthProvider';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -397,7 +397,7 @@ export default function JDVersionHistoryModal({
       }
     } catch (error) {
       console.error('Failed to fetch JD version lineage:', error);
-      toast.error('Failed to load version history');
+      showErrorToast(error, "Couldn't load version history", { id: `jd-${jdId}-versions` });
       setVersions([]);
     } finally {
       setLoading(false);

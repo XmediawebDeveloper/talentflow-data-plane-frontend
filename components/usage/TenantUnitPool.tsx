@@ -29,7 +29,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import {
@@ -155,7 +155,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
         // Permission denied - expected for users without usage access
         console.log('Role-based access restriction applied');
       } else {
-        toast.error(friendlyErrorMessage(error, "Couldn't load unit pool data. Please try again."));
+        showErrorToast(error, "Couldn't load unit pool data", { id: 'tenant-unit-pool-load', retry: loadData });
       }
     } finally {
       setIsLoading(false);
@@ -182,7 +182,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
       setShowHistoryPanel(true);
       setSelectedType(unitType || null);
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't load consumption history. Please try again."));
+      showErrorToast(error, "Couldn't load consumption history", { id: 'tenant-unit-pool-history', retry: () => loadHistory(unitType) });
     }
   };
 
@@ -224,7 +224,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
       toast.success(`Export completed: ${filename}`);
       setShowExportModal(false);
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't export data. Please try again."));
+      showErrorToast(error, "Couldn't export usage data", { retry: handleExport });
     } finally {
       setIsExporting(false);
     }
