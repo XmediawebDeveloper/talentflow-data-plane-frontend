@@ -7,6 +7,7 @@ import {
 } from '@/lib/services/adminAssignedPlanService';
 import { isOnline, isTransientNetworkError, withNetworkRetry } from '@/lib/utils/networkRetry';
 import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
+import { focusRefreshDue, markRefreshed } from '@/lib/utils/focusRefresh';
 
 const DISMISS_KEY = 'tf_admin_assigned_plan_banner_dismissed';
 
@@ -60,6 +61,7 @@ export function AdminAssignedPlanProvider({ children }: { children: React.ReactN
       return;
     }
 
+    markRefreshed('admin-assigned-plan');
     try {
       // First load: the app-shell /bootstrap response, if it carried this part.
       const boot = await takeBootstrapPart<{ data?: AdminAssignedPlan | null }>('admin_assigned_plan');
@@ -93,10 +95,11 @@ export function AdminAssignedPlanProvider({ children }: { children: React.ReactN
     return () => clearInterval(timer);
   }, [fetchPending]);
 
-  // Re-check when the tab regains focus (Firefox private-mode safety)
+  // Re-check when the tab regains focus (Firefox private-mode safety) — at most
+  // once a minute; the 5-min poll covers the rest.
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') fetchPending();
+      if (document.visibilityState === 'visible' && focusRefreshDue('admin-assigned-plan')) fetchPending();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
