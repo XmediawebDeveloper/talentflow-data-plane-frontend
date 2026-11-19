@@ -60,7 +60,7 @@ import RecordPager from '@/components/RecordPager';
 import { toast } from 'sonner';
 import DeletedResumeRows from '@/components/resumes/DeletedResumeRows';
 import { RESUME_DELETED_BADGE_CLASS, RESUME_DELETED_BADGE_LABEL, RESUME_DELETED_ROW_MESSAGE } from '@/lib/permissions/resumeDelete';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { assessmentService } from '@/lib/services';
 import type { Resume } from '@/lib/types/types';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
@@ -751,7 +751,12 @@ export default function AITalentMatchPage({
         return candidates;
       } catch (error) {
         console.error('[AITalentMatch] Failed to fetch session details:', error);
-        if (!silent) toast.error('Failed to load matched candidates');
+        if (!silent) {
+          showErrorToast(error, "Couldn't load matched candidates", {
+            id: `ai-match-session-${item.id}`,
+            retry: () => loadHistoryCandidates(item),
+          });
+        }
         setFailedHistorySessionIds(prev => (prev.has(item.id) ? prev : new Set(prev).add(item.id)));
         return [] as MatchedCandidateWithVersions[];
       } finally {
@@ -1154,6 +1159,7 @@ export default function AITalentMatchPage({
   ]);
   const jobsList = usePagedList<AIMatchJobItem, AIMatchStats, typeof jobsQuery>({
     name: 'ai-match-jobs',
+    errorToast: "Couldn't load jobs",
     query: jobsQuery,
     fetchPage: (q) => aiMatchService.listMatchedJobs(q),
     // The band is what the rating cards select — it never narrows the cards.
@@ -1298,6 +1304,7 @@ export default function AITalentMatchPage({
   ]);
   const candList = usePagedList<AIMatchCandidateItem, unknown, typeof candidatesQuery>({
     name: 'ai-match-candidates',
+    errorToast: "Couldn't load matched candidates",
     query: candidatesQuery,
     fetchPage: (q) => aiMatchService.listMatchedCandidates(q),
     enabled: candidatesActive,
@@ -1394,7 +1401,7 @@ export default function AITalentMatchPage({
       setSelectedJobKeys(new Set(res.items.filter(i => (i.total_matches || 0) > 0).map(i => i.id)));
       setPartialJobRows({});
     } catch (error) {
-      toast.error(friendlyErrorMessage(error, "Couldn't select every job. Please try again."));
+      showErrorToast(error, "Couldn't select every job", { retry: selectAllMatchingJobs });
     } finally {
       setSelectingAll(false);
     }
@@ -1407,7 +1414,7 @@ export default function AITalentMatchPage({
       setSelectedCandKeys(new Set(res.items.map(i => i.key)));
       setPartialCandJobs({});
     } catch (error) {
-      toast.error(friendlyErrorMessage(error, "Couldn't select every candidate. Please try again."));
+      showErrorToast(error, "Couldn't select every candidate", { retry: selectAllMatchingCandidates });
     } finally {
       setSelectingAll(false);
     }
@@ -1827,7 +1834,7 @@ export default function AITalentMatchPage({
         }
       } catch (error) {
         console.error('[AITalentMatch] Failed to load score details:', error);
-        toast.error('Failed to load the score details');
+        showErrorToast(error, "Couldn't load the score details", { id: `ai-match-score-details-${jdId}` });
       } finally {
         scoreDetailRequests.current.delete(jdId);
       }
@@ -2534,7 +2541,7 @@ export default function AITalentMatchPage({
       return true;
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
+      showErrorToast(error, "Couldn't start scoring");
       return false;
     }
   };
@@ -9274,7 +9281,7 @@ export default function AITalentMatchPage({
               router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
             } catch (error: any) {
               console.error('Failed to start scoring:', error);
-              toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
+              showErrorToast(error, `Couldn't start scoring for ${scoringCandidate.name}`);
             }
 
             setShowVersionSelectForScoring(false);

@@ -1,8 +1,7 @@
 import { X, Save, AlertCircle, Clock, FileText, Award, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { assessmentService } from '@/lib/services';
-import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import { Button } from '@/components/ui/button';
@@ -128,7 +127,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
       onClose();
     } catch (error) {
       console.error('Failed to update assessment:', error);
-      toast.error(`Couldn't update assessment. ${friendlyErrorMessage(error, 'Please try again.')}`);
+      showErrorToast(error, "Couldn't update assessment");
     } finally {
       setIsSaving(false);
     }

@@ -29,7 +29,7 @@ import type {
 } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -1032,7 +1032,7 @@ function HRSection({
     } catch (error: any) {
       const detail = error?.response?.data?.detail;
       if (typeof detail === 'string') setQuestionError(detail);
-      toast.error(detail || 'Failed to add question');
+      showErrorToast(error, "Couldn't add the question to the bank");
     } finally {
       setSavingQ(false);
     }
@@ -2131,9 +2131,9 @@ export default function AIInterviewConfig() {
           }));
         }
 
-      } catch {
+      } catch (err) {
         setRedirecting(true);
-        toast.error('Failed to load job description');
+        showErrorToast(err, "Couldn't load the job description");
         router.replace('/recruitment/ai-interviews/jd-selection');
       } finally {
         setLoadingJd(false);
@@ -2518,8 +2518,7 @@ export default function AIInterviewConfig() {
       setIntroVideoUrl(result.url || result.file_url || '');
       toast.success('Video uploaded successfully');
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to upload video';
-      toast.error(msg);
+      showErrorToast(e, "Couldn't upload the video");
       setIntroVideoFile(null);
       setVideoPreviewSrc('');
     } finally {
@@ -2781,7 +2780,7 @@ export default function AIInterviewConfig() {
       // Swallowing errors here left callers unable to show anything but a
       // generic "please save first" with no clue why the save itself failed
       // (quota exceeded, validation error, network issue, etc).
-      toast.error(friendlyErrorMessage(err, "Couldn't save draft. Please try again."));
+      showErrorToast(err, "Couldn't save draft");
       return false;
     } finally {
       setSavingDraft(false);
@@ -2798,7 +2797,7 @@ export default function AIInterviewConfig() {
       toast.success(await keepWizardChanges(id, loadedStatusRef.current));
       return true;
     } catch (err) {
-      toast.error((err as Error)?.message || 'Failed to save draft');
+      showErrorToast(err, "Couldn't save draft");
       return false;
     }
   };
@@ -3187,7 +3186,7 @@ export default function AIInterviewConfig() {
       toast.success('AI interview deleted');
     } catch (err) {
       isNavigatingRef.current = false;
-      toast.error((err as Error)?.message || 'Failed to delete AI interview');
+      showErrorToast(err, "Couldn't delete AI interview");
       return;
     } finally {
       setLeaveBusy(null);
@@ -3749,8 +3748,8 @@ export default function AIInterviewConfig() {
                                 const blobUrl = URL.createObjectURL(res.data);
                                 setVideoPreviewSrc(blobUrl);
                                 setShowVideoPreview(true);
-                              } catch {
-                                toast.error('Failed to load video preview');
+                              } catch (err) {
+                                showErrorToast(err, "Couldn't load the video preview");
                               }
                             }
                           }}

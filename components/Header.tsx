@@ -20,6 +20,7 @@ import { BellAnimatedIcon, ThemeAnimatedIcon } from '@/components/icons/HeaderAn
 import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
 import { isRouteAuthorized } from '@/lib/navigation/routeAccess';
 import NameAvatar from '@/components/ui/name-avatar';
@@ -113,6 +114,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(false);
   const [tenantStatus, setTenantStatus] = useState<string | null>(null);
 
   // Notification state
@@ -776,11 +778,13 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
          more for a 1.6s checkmark is not worth it, and a toast is how the rest
          of this file reports what happened anyway. */
       toast.success('User ID copied to clipboard');
-    } catch {
+    } catch (err) {
       /* Clipboard is blocked on insecure origins and by some browser policies.
          Say so rather than flashing a tick for a copy that did not happen —
          the tooltip still shows the full id to select by hand. */
-      toast.error('Could not copy — your browser blocked clipboard access');
+      showErrorToast(err, "Couldn't copy your user ID", {
+        description: 'Your browser blocked clipboard access. Select the ID in the tooltip to copy it by hand.',
+      });
     }
   };
 
@@ -952,6 +956,20 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
             Quick Tour
           </Button>
         )}
+
+        {/* Quick actions (UI/UX guidelines §1) — start a main workflow from any page. */}
+        <QuickActions
+          open={showQuickActions}
+          onOpenChange={(open) => {
+            setShowQuickActions(open);
+            if (open) {
+              setShowNotifications(false);
+              setShowPlanMenu(false);
+              setShowUserMenu(false);
+            }
+          }}
+          subscriptionExpired={subscriptionExpired}
+        />
 
         {/* Plan & Unit Balance Display - Clickable to show breakdown dropdown */}
         {hasQuotaPermission && !canSeeUnits && (

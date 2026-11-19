@@ -29,7 +29,7 @@ import type { AIInterviewResponse, AIInterviewListResponse, AIInterviewStatsResp
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { useBackgroundResend } from '@/components/bulk-invite/useBackgroundResend';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
@@ -778,7 +778,7 @@ export default function AIInterview() {
      and swapping the page for the skeleton then unmounted every open popup
      and dropped the list's scroll. */
   const hasLoadedRef = useRef(false);
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (): Promise<void> => {
     const seq = ++loadDataSeqRef.current;
     const isStale = () => seq !== loadDataSeqRef.current;
     const firstLoad = !hasLoadedRef.current;
@@ -853,10 +853,10 @@ export default function AIInterview() {
       if (firstLoad) setConfigs([]);
       if (error instanceof Error) {
         console.error('Failed to load AI interview configs:', error);
-        toast.error(friendlyErrorMessage(error, "AI interview configurations failed to load. Please try again."));
+        showErrorToast(error, "Couldn't load AI interviews", { id: 'ai-interviews-load', retry: () => loadData() });
       } else {
         console.error('Failed to load AI interview data:', error);
-        toast.error('Failed to load data. Please refresh.');
+        showErrorToast(error, "Couldn't load AI interviews", { id: 'ai-interviews-load', retry: () => loadData() });
       }
     } finally {
       if (archivedLoad) await archivedLoad;
@@ -897,13 +897,14 @@ export default function AIInterview() {
     }
   }, []);
 
-  const loadProcessingSessions = useCallback(async () => {
+  const loadProcessingSessions = useCallback(async (): Promise<void> => {
     setProcessingLoading(true);
     try {
       const result = await fetchAllRows((page_size, page) => aiInterviewService.list({ status: 'in_progress', page_size, page, compact: true }));
       setProcessingSessions(result.items);
     } catch (error) {
       console.error('Failed to load processing sessions:', error);
+      showErrorToast(error, "Couldn't load interviews in progress", { id: 'ai-interviews-processing-load', retry: () => loadProcessingSessions() });
     } finally {
       setProcessingLoading(false);
     }
@@ -946,7 +947,7 @@ export default function AIInterview() {
     }
   }, []);
 
-  const loadInvitations = useCallback(async (configId: string, page: number, filters: InviteFilterState, source = '', resultFilter = '', silent = false) => {
+  const loadInvitations = useCallback(async (configId: string, page: number, filters: InviteFilterState, source = '', resultFilter = '', silent = false): Promise<void> => {
     const seq = ++invitationsSeqRef.current;
     const isStale = () => seq !== invitationsSeqRef.current;
     if (!silent) setLoadingInvitations(true);
@@ -1038,7 +1039,7 @@ export default function AIInterview() {
     } catch (error) {
       if (isStale()) return;
       console.error('Failed to load invitations:', error);
-      if (!silent) toast.error('Failed to load invitations');
+      if (!silent) showErrorToast(error, "Couldn't load invitations", { id: 'ai-interview-invitations-load', retry: () => loadInvitations(configId, page, filters, source, resultFilter) });
     } finally {
       /* Cleared by the latest run, silent or not: a poll that superseded a
          visible load must still end that load's spinner. */
@@ -1458,7 +1459,7 @@ export default function AIInterview() {
       setDeleteTarget(null);
     } catch (error) {
       console.error('Failed to delete:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't delete configuration. Please try again."));
+      showErrorToast(error, "Couldn't delete AI interview configuration");
     } finally {
       setDeleteLoading(false);
     }
@@ -1546,7 +1547,7 @@ export default function AIInterview() {
       toast.success('Configuration published!');
     } catch (error) {
       console.error('Failed to publish:', error);
-      toast.error('Failed to publish configuration');
+      showErrorToast(error, "Couldn't publish AI interview configuration");
     }
     setOpenMenuId(null);
   };
@@ -1629,7 +1630,7 @@ export default function AIInterview() {
       const detail = await aiInterviewService.get(candidateId);
       setCandidateDetailFromModal(detail);
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't load candidate details. Please try again."));
+      showErrorToast(err, "Couldn't load candidate details", { retry: () => { void handleViewCandidateDetail(candidateId); } });
     } finally {
       setCandidateDetailLoading(false);
     }
@@ -1653,7 +1654,7 @@ export default function AIInterview() {
       setRefreshSignal((n) => n + 1);
       setArchiveTarget(null);
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't archive AI interview. Please try again."));
+      showErrorToast(error, "Couldn't archive AI interview");
     } finally {
       setArchiveLoading(false);
     }
@@ -1671,7 +1672,7 @@ export default function AIInterview() {
           : 'Configuration restored to Active'
       );
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't unarchive AI interview. Please try again."));
+      showErrorToast(error, "Couldn't unarchive AI interview");
     }
     setOpenMenuId(null);
   };
@@ -1703,7 +1704,7 @@ export default function AIInterview() {
       markUnsavedVersion(result.cloned_id);
       router.push(aiInterviewConfigureHref(result.cloned_id, config.jd_id || ''));
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't duplicate AI interview. Please try again."));
+      showErrorToast(error, "Couldn't duplicate AI interview");
     }
   };
 
@@ -1748,7 +1749,7 @@ export default function AIInterview() {
       );
       setRevokePendingTarget(null);
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't revoke pending invites. Please try again."));
+      showErrorToast(error, "Couldn't revoke pending invites");
     } finally {
       setIsRevokingPending(false);
     }
@@ -1777,7 +1778,7 @@ export default function AIInterview() {
       toast.success('Settings saved!');
     } catch (error) {
       console.error('Failed to save settings:', error);
-      toast.error('Failed to save settings');
+      showErrorToast(error, "Couldn't save AI interview settings");
     }
   };
 
@@ -1800,7 +1801,7 @@ export default function AIInterview() {
       toast.success('Proctoring settings saved!');
     } catch (error) {
       console.error('Failed to save proctoring settings:', error);
-      toast.error('Failed to save proctoring settings');
+      showErrorToast(error, "Couldn't save proctoring settings");
     }
   };
 
@@ -2144,6 +2145,7 @@ export default function AIInterview() {
   const totalJobsExtrasRef = useRef<(res: AIInterviewListResponse) => void>(() => {});
   const totalJobsPaged = usePagedList<AIInterviewResponse, unknown, AIConfigListQuery>({
     name: 'ai-configs:total-jobs',
+    errorToast: "Couldn't load AI interviews",
     query: totalJobsQuery,
     /* The page also brings what the landing used to fetch in a second wave
        right after it — every version of the jobs on screen, their lineages /
@@ -2967,7 +2969,9 @@ export default function AIInterview() {
       if (downloaded > 0 && failed === 0) setSelectedStatusInviteIds(new Set());
     } catch (err) {
       console.error('[AIInterview] Invitation Status bulk PDF download failed:', err);
-      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');
+      showErrorToast(err, "Couldn't download the reports", isForbiddenError(err)
+        ? { description: AI_REPORT_DOWNLOAD_DENIED }
+        : { retry: () => { void handleStatusBulkPdfs(rows); } });
     } finally {
       setDownloadingStatusPdfs(null);
     }
@@ -4891,7 +4895,7 @@ export default function AIInterview() {
                           const succeeded = results.filter((r) => r.status === 'fulfilled').length;
                           const failed = results.length - succeeded;
                           if (succeeded > 0) toast.success(`Revoked ${succeeded} invitation${succeeded === 1 ? '' : 's'}.`);
-                          if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
+                          if (failed > 0) showErrorToast(results.find((r): r is PromiseRejectedResult => r.status === 'rejected')?.reason ?? null, `Couldn't revoke ${failed} invitation${failed === 1 ? '' : 's'}`);
                           // Keep only the ones that failed ticked, so a retry acts on them.
                           setSelectedStatusInviteIds(new Set(targets.filter((_, i) => results[i].status === 'rejected').map((inv) => inv.id)));
                           await loadAllInviteStatuses();
@@ -5399,13 +5403,7 @@ export default function AIInterview() {
             // refresh invitations list so the new expires_at/status is reflected
             await refreshAfterInviteAction(viewInvitationsConfig?.id);
           } catch (err: any) {
-            const detail = err?.response?.data?.detail;
-            const msg =
-              (typeof detail === 'object' && detail?.message) ||
-              (typeof detail === 'string' && detail) ||
-              err?.message ||
-              'Failed to resend email';
-            toast.error(msg);
+            showErrorToast(err, `Couldn't resend the invitation to ${inv.candidate_email}`);
           } finally {
             setResendingEmailFor(null);
             setResendInviteTarget(null);
@@ -5431,7 +5429,7 @@ export default function AIInterview() {
             setSelectedInviteIds(new Set());
             await refreshAfterInviteAction(viewInvitationsConfig?.id);
           } catch (err: any) {
-            toast.error(friendlyErrorMessage(err, "Couldn't revoke invitation. Please try again."));
+            showErrorToast(err, `Couldn't revoke the invitation for ${inv.candidate_email}`);
           } finally {
             setRevokingInviteFor(null);
             setRevokeInviteTarget(null);
@@ -5462,7 +5460,7 @@ export default function AIInterview() {
               toast.success(`Revoked ${succeeded} invitation${succeeded === 1 ? '' : 's'}.`);
             }
             if (failed > 0) {
-              toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
+              showErrorToast(results.find((r): r is PromiseRejectedResult => r.status === 'rejected')?.reason ?? null, `Couldn't revoke ${failed} invitation${failed === 1 ? '' : 's'}`);
             }
             // Keep only the ones that failed ticked, so a retry acts on them.
             setSelectedInviteIds(new Set(targets.filter((_, i) => results[i].status === 'rejected').map((inv) => inv.id)));
@@ -5567,18 +5565,12 @@ export default function AIInterview() {
                       await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
                       toast.success(`Invitation updated and sent to ${email}`);
                     } catch (sendErr: any) {
-                      const detail = sendErr?.response?.data?.detail;
-                      const msg =
-                        (typeof detail === 'object' && detail?.message) ||
-                        (typeof detail === 'string' && detail) ||
-                        sendErr?.message ||
-                        'Details saved, but the invitation could not be sent — try Edit again.';
-                      toast.error(msg);
+                      showErrorToast(sendErr, "Details saved, but couldn't send the invitation");
                     }
                     await refreshAfterInviteAction(viewInvitationsConfig?.id);
                     setEditInviteTarget(null);
                   } catch (err: any) {
-                    toast.error(friendlyErrorMessage(err, "Couldn't update invitation. Please try again."));
+                    showErrorToast(err, "Couldn't update the invitation");
                   } finally {
                     setSavingEditInvite(false);
                   }

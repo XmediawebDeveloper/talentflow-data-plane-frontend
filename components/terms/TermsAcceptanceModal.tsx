@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { getLoginUrl } from '@/lib/services/authService';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import type { DocumentType } from '@/lib/services/termsService';
 
 const DOC_META: Record<DocumentType, { label: string; checkboxText: string; Icon: IconComponent }> = {
@@ -81,10 +82,10 @@ export default function TermsAcceptanceModal() {
         const docLabel = currentDocumentType ? DOC_META[currentDocumentType].label : 'document';
         toast.success(`${docLabel} accepted successfully`);
       } else {
-        toast.error('Failed to accept. Please try again.');
+        showErrorToast(null, `Couldn't accept the ${currentDocumentType ? DOC_META[currentDocumentType].label : 'document'}`);
       }
-    } catch {
-      toast.error('Failed to accept. Please try again.');
+    } catch (err) {
+      showErrorToast(err, `Couldn't accept the ${currentDocumentType ? DOC_META[currentDocumentType].label : 'document'}`);
     } finally {
       setAccepting(false);
     }

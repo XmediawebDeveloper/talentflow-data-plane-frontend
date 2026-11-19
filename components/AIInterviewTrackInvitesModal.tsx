@@ -10,7 +10,7 @@ import { StatCardsHint, StatusLegend, UpdatedAgo } from '@/components/ui/guided-
 import { TrackerSelectAll, TrackerStatusTabs, TrackerTabHint, trackerSelection, TRACKER_LOOK_PANEL_CLASS, TRACKER_LOOK_BODY_CLASS, TrackerBulkBar, type TrackerTab, type TrackerSelectGroup } from '@/components/ui/tracker-look';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -465,6 +465,7 @@ export default function AIInterviewTrackInvitesModal({
     setIsBulkResending(true);
     let sent = 0;
     let failedCount = 0;
+    let firstError: unknown = null;
     const failedIds = new Set<string>();
     for (const inv of targets) {
       try {
@@ -472,6 +473,7 @@ export default function AIInterviewTrackInvitesModal({
         sent++;
       } catch (error) {
         console.error(`Failed to resend AI interview invitation ${inv.id}:`, error);
+        if (failedCount === 0) firstError = error;
         failedCount++;
         failedIds.add(inv.id);
       }
@@ -480,7 +482,7 @@ export default function AIInterviewTrackInvitesModal({
       toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
     }
     if (failedCount > 0) {
-      toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
+      showErrorToast(firstError, `Couldn't resend ${failedCount} invitation${failedCount === 1 ? '' : 's'}`);
     }
     // Keep only the ones that failed ticked, so a retry acts on them; once
     // anything changed, the cached "Select all pages" rows are stale — drop them.
@@ -548,7 +550,7 @@ export default function AIInterviewTrackInvitesModal({
      so an older response landing late can't overwrite a newer one's rows and
      cards. */
   const loadSeqRef = useRef(0);
-  const loadInvitations = useCallback(async (silent = false) => {
+  const loadInvitations = useCallback(async (silent = false): Promise<void> => {
     const seq = ++loadSeqRef.current;
     const isStale = () => seq !== loadSeqRef.current;
     if (!silent) setIsLoading(true);
@@ -669,7 +671,7 @@ export default function AIInterviewTrackInvitesModal({
     } catch (error) {
       if (isStale()) return;
       console.error('Failed to load AI interview invitations:', error);
-      if (!silent) toast.error('Could not load invitations. Please try again.');
+      if (!silent) showErrorToast(error, "Couldn't load invitations", { id: 'ai-interview-track-invites-load', retry: () => { void loadInvitations(); } });
     } finally {
       // A stale run leaves the spinner to the run that replaced it.
       if (!isStale()) setIsLoading(false);
@@ -739,7 +741,7 @@ export default function AIInterviewTrackInvitesModal({
       toast.success(`Exported ${rows.length} ${rows.length === 1 ? 'invite' : 'invites'} to ${format === 'csv' ? 'CSV' : 'Excel'}`);
       setShowExportModal(false);
     } catch (err) {
-      toast.error(friendlyErrorMessage(err, "Couldn't export invites. Please try again."));
+      showErrorToast(err, "Couldn't export invites");
     } finally {
       setIsExporting(false);
     }
@@ -753,7 +755,7 @@ export default function AIInterviewTrackInvitesModal({
       setAllPages({ key: allPagesKey, rows: rows.map(lockedRow) });
       setSelectedIds(new Set(rows.filter((inv) => isBulkActionable(inv) && !rowJdLocked(inv)).map((inv) => inv.id)));
     } catch (err) {
-      toast.error(friendlyErrorMessage(err, "Couldn't select every page. Please try again."));
+      showErrorToast(err, "Couldn't select invitations on every page", { retry: () => { void selectAllPages(); } });
     } finally {
       setAllPagesLoading(false);
     }
@@ -780,7 +782,7 @@ export default function AIInterviewTrackInvitesModal({
       const succeeded = results.filter((r) => r.status === 'fulfilled').length;
       const failed = results.length - succeeded;
       if (succeeded > 0) toast.success(`Revoked ${succeeded} invitation${succeeded === 1 ? '' : 's'}.`);
-      if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
+      if (failed > 0) showErrorToast(results.find((r): r is PromiseRejectedResult => r.status === 'rejected')?.reason ?? null, `Couldn't revoke ${failed} invitation${failed === 1 ? '' : 's'}`);
       // Keep only the ones that failed ticked, so a retry acts on them; once
       // anything changed, the cached "Select all pages" rows are stale — drop them.
       setSelectedIds(new Set(targets.filter((_: any, i: number) => results[i].status === 'rejected').map((inv: any) => inv.id)));
@@ -1248,13 +1250,7 @@ export default function AIInterviewTrackInvitesModal({
               await loadInvitations(true);
               await onChanged?.();
             } catch (err: any) {
-              const detail = err?.response?.data?.detail;
-              const msg =
-                (typeof detail === 'object' && detail?.message) ||
-                (typeof detail === 'string' && detail) ||
-                err?.message ||
-                'Failed to resend email';
-              toast.error(msg);
+              showErrorToast(err, `Couldn't resend the invitation to ${inv.candidate_email}`);
             } finally {
               setResendingId(null);
               setResendTarget(null);
@@ -1281,7 +1277,7 @@ export default function AIInterviewTrackInvitesModal({
               await loadInvitations(true);
               await onChanged?.();
             } catch (err: any) {
-              toast.error(friendlyErrorMessage(err, "Couldn't revoke invitation. Please try again."));
+              showErrorToast(err, `Couldn't revoke the invitation for ${inv.candidate_email}`);
             } finally {
               setRevokingId(null);
               setRevokeTarget(null);
@@ -1423,13 +1419,13 @@ export default function AIInterviewTrackInvitesModal({
         await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
         toast.success(`Invitation updated and sent to ${email}`);
       } catch (sendErr: any) {
-        toast.error(friendlyErrorMessage(sendErr, 'Details saved, but the invitation could not be sent. Try Edit again.'));
+        showErrorToast(sendErr, "Details saved, but couldn't send the invitation");
       }
       await loadInvitations(true);
       await onChanged?.();
       setEditTarget(null);
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't update invitation. Please try again."));
+      showErrorToast(err, "Couldn't update the invitation");
     } finally {
       setSavingEdit(false);
     }

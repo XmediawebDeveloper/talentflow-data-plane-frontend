@@ -8,7 +8,7 @@ import {
   MoreVertical, Monitor, RefreshCw, X, History, Link2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
@@ -714,18 +714,12 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
         await assessmentService.resendInvitation(assessmentId, target.id);
         toast.success(`Invitation updated and sent to ${email}`);
       } catch (sendErr: any) {
-        const detail = sendErr?.response?.data?.detail;
-        const msg =
-          (typeof detail === 'object' && detail?.message) ||
-          (typeof detail === 'string' && detail) ||
-          sendErr?.message ||
-          'Details saved, but the invitation could not be sent — try Edit again.';
-        toast.error(msg);
+        showErrorToast(sendErr, "Couldn't send the invitation — the new details were saved");
       }
       await onSaved();
       onClose();
     } catch (err: any) {
-      toast.error(friendlyErrorMessage(err, "Couldn't update invitation. Please try again."));
+      showErrorToast(err, "Couldn't update invitation");
     } finally {
       setSaving(false);
     }
@@ -820,7 +814,7 @@ export function RevokeInvitationDialog({ target, onClose, getAssessmentId, onRev
           toast.success(`Invitation for ${target.candidate_email} has been revoked`);
           await onRevoked();
         } catch (err: any) {
-          toast.error(friendlyErrorMessage(err, "Couldn't revoke invitation. Please try again."));
+          showErrorToast(err, "Couldn't revoke invitation");
         } finally {
           setRevoking(false);
           onClose();

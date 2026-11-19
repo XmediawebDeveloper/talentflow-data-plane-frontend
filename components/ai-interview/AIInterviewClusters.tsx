@@ -9,6 +9,7 @@ import {
   Trash2, AlertTriangle, CheckCheck, Info, Lock, ClipboardList, Search, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
@@ -1498,7 +1499,7 @@ export default function AIInterviewClusters() {
           setJdDescription(si.jd_description as string);
         }
       } catch (err) {
-        toast.error('Failed to load interview configuration');
+        showErrorToast(err, "Couldn't load the interview configuration", { id: 'ai-interview-clusters-load', retry: () => { void load(); } });
         console.error(err);
       } finally {
         setLoading(false);
@@ -2575,10 +2576,7 @@ export default function AIInterviewClusters() {
       // /expand-skills) instead of a generic "failed" — so the recruiter knows to
       // top up the OpenAI account or add skills manually, rather than silently
       // getting fabricated "<skill> – Concept N" placeholder clones.
-      const _reason = (err instanceof Error && err.message && err.message.trim())
-        ? err.message.trim()
-        : 'Failed to generate clusters. Please try again, or add skills manually.';
-      toast.error(_reason, { duration: 9000 });
+      showErrorToast(err, "Couldn't generate clusters");
     } finally {
       generationInFlightRef.current = false;
       setGenerating(false);
@@ -2865,8 +2863,8 @@ export default function AIInterviewClusters() {
         semantic_skill_check: false,
       });
       router.push(target);
-    } catch {
-      toast.error('Failed to save');
+    } catch (err) {
+      showErrorToast(err, "Couldn't save clusters");
     } finally {
       setSaving(false);
     }
@@ -2964,8 +2962,8 @@ export default function AIInterviewClusters() {
       const si = JSON.parse(config.special_instructions || '{}');
       si.flexible_finalized = false;
       await aiInterviewService.update(id, { special_instructions: JSON.stringify(si) });
-    } catch {
-      toast.error('Failed to re-open clusters for editing');
+    } catch (err) {
+      showErrorToast(err, "Couldn't reopen clusters for editing");
     }
   };
 
@@ -3005,7 +3003,7 @@ export default function AIInterviewClusters() {
       });
       return true;
     } catch (err) {
-      toast.error((err as Error)?.message || 'Failed to save draft');
+      showErrorToast(err, "Couldn't save draft");
       return false;
     }
   };
@@ -3020,7 +3018,7 @@ export default function AIInterviewClusters() {
       toast.success(message);
       router.push(exitHref);
     } catch (err) {
-      toast.error((err as Error)?.message || 'Failed to save draft');
+      showErrorToast(err, "Couldn't save draft");
     } finally {
       setSaving(false);
     }

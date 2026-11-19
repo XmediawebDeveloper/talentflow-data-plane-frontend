@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, CheckCircle, Copy, Download, FileSpreadsheet, Info, Link2, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import readXlsxFile from 'read-excel-file/browser';
 import { EMAIL_FORMAT_ERROR, isValidEmailFormat } from '@/lib/utils/email';
 import { NAME_FORMAT_ERROR, isValidCandidateName } from '@/lib/utils/name';
@@ -432,7 +432,7 @@ export default function ExtraCandidatesInput({
       commit(rows.map((r) => (r.id === row.id ? { ...r, linked: true } : r)));
       toast.success(`Invitation link for ${row.name} copied`, { description: link });
     } catch (err) {
-      toast.error(friendlyErrorMessage(err, 'Could not create the link. Please try again.'));
+      showErrorToast(err, `Couldn't create the invitation link for ${row.name}`);
     } finally {
       setLinking(null);
     }
@@ -508,8 +508,10 @@ export default function ExtraCandidatesInput({
       commit([...rows, ...kept]);
       setOrigin('all');
       setPage(1);
-    } catch {
-      toast.error('Could not read that file. Use an .xlsx, .xls or .csv with Name and Email columns.');
+    } catch (error) {
+      showErrorToast(error, "Couldn't read that file", {
+        description: 'Use an .xlsx, .xls or .csv file with Name and Email columns.',
+      });
     }
   };
 

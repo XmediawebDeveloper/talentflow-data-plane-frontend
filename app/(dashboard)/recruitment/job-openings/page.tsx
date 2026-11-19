@@ -14,7 +14,7 @@ import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -256,7 +256,7 @@ export default function JobOpeningsPage() {
         ? `${formatJobSubject({ ...updated, versionNumber: updated.versionNumber ?? 1 })} status updated to ${mapStatus(status)}.`
         : 'Job status updated');
     } catch (error) {
-      toast.error('Failed to update job status');
+      showErrorToast(error, "Couldn't update the job status");
     }
   };
 
@@ -334,9 +334,7 @@ export default function JobOpeningsPage() {
     } catch (error) {
       console.error('Failed to create new JD version:', error);
       setEditWarningDialog(prev => ({ ...prev, creating: false }));
-      toast.error('Could not create new version', {
-        description: error instanceof Error ? error.message : 'Please try again.',
-      });
+      showErrorToast(error, "Couldn't create a new version");
     }
   };
 
@@ -352,7 +350,7 @@ export default function JobOpeningsPage() {
       if (quotaError && (quotaError.error === 'QUOTA_EXHAUSTED' || quotaError.error === 'QUOTA_INSUFFICIENT')) {
         toast.error('Job publishing quota exhausted. Please upgrade your plan.');
       } else {
-        toast.error('Failed to publish job');
+        showErrorToast(error, "Couldn't publish the job");
       }
     }
   };
@@ -397,7 +395,7 @@ export default function JobOpeningsPage() {
       toast.success(formatJobActionMessage(job, 'disabled'));
       closeDisableDialog();
     } catch (error) {
-      toast.error('Failed to disable job');
+      showErrorToast(error, "Couldn't disable the job");
       // Stay open so the recruiter can retry — closing here would look like
       // the disable went through.
       setDisableDialog(prev => ({ ...prev, disabling: false }));
@@ -412,7 +410,7 @@ export default function JobOpeningsPage() {
       markVersionStatus(job.id, 'published');
       toast.success(formatJobActionMessage(job, 're-enabled'));
     } catch (error) {
-      toast.error(friendlyErrorMessage(error, `Couldn't re-enable ${formatJobSubject({ ...job, versionNumber: job.versionNumber ?? 1 })}. Please try again.`));
+      showErrorToast(error, `Couldn't re-enable ${formatJobSubject({ ...job, versionNumber: job.versionNumber ?? 1 })}`);
     }
   };
 
@@ -434,7 +432,7 @@ export default function JobOpeningsPage() {
       toast.success(formatJobActionMessage(job, 'archived'));
       setArchiveDialog({ open: false, job: null, busy: false });
     } catch (error) {
-      toast.error('Failed to archive job');
+      showErrorToast(error, "Couldn't archive the job");
       /* Left open on failure — closing it would look like the archive worked. */
       setArchiveDialog(prev => ({ ...prev, busy: false }));
     }
@@ -446,7 +444,7 @@ export default function JobOpeningsPage() {
       markVersionStatus(job.id, 'published');
       toast.success(formatJobActionMessage(job, 'unarchived and published'));
     } catch (error) {
-      toast.error('Failed to unarchive job');
+      showErrorToast(error, "Couldn't unarchive the job");
     }
   };
 
@@ -497,7 +495,7 @@ export default function JobOpeningsPage() {
       markVersionsDeleted([job.id]);
       toast.success(formatJobActionMessage(job, 'deleted'));
     } catch (error: any) {
-      toast.error(friendlyErrorMessage(error, "Couldn't delete job. Please try again."));
+      showErrorToast(error, "Couldn't delete the job");
     }
   };
 
@@ -537,7 +535,7 @@ export default function JobOpeningsPage() {
     } else if (updatedIds.length > 0) {
       toast.warning(`${updatedIds.length} ${done} · ${failed} failed`);
     } else {
-      toast.error(`Failed to ${verb} ${failed === 1 ? 'job' : `${failed} jobs`}`);
+      showErrorToast(null, `Couldn't ${verb} ${failed === 1 ? 'the job' : `${failed} jobs`}`);
     }
   };
 
@@ -718,7 +716,7 @@ export default function JobOpeningsPage() {
           }}
           onError={(error) => {
             setAiMatchRunJob(null);
-            toast.error(error || 'Failed to run AI Talent Match');
+            showErrorToast(error || null, "Couldn't run AI Talent Match");
           }}
         />
       )}

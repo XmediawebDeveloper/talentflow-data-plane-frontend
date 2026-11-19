@@ -13,19 +13,36 @@ const SCORING_ELIGIBILITY =
 export const MATCH_ELIGIBILITY =
   'Every job is listed in every status except Draft — Published, Republished, Disabled and Archived — and View Versions shows its versions the same way. Only Published (or Republished) jobs and versions can be selected for AI Talent Match; Disabled and Archived ones are shown greyed out for reference. Drafts are not listed.';
 
+export type JobEligibilityLegendItem = { label: string; tone: string; Icon: typeof Check; hint: string };
+
+/* Chip tones for the three things a list can do with a status. */
+const SELECTABLE = 'bg-success-subtle text-success ring-success-line';
+const GREYED = 'bg-[var(--muted)] text-[var(--muted-foreground)] ring-[var(--border)]';
+const HIDDEN = 'bg-[var(--card)] text-[var(--text-muted)] ring-[var(--border)] line-through';
+
 /* The statuses the sentence names, as a glanceable legend. */
-const LEGEND: { label: string; tone: string; Icon: typeof Check; hint: string }[] = [
-  { label: 'Published', tone: 'bg-success-subtle text-success ring-success-line', Icon: Check, hint: 'Can be selected' },
-  { label: 'Republished', tone: 'bg-success-subtle text-success ring-success-line', Icon: Check, hint: 'Can be selected' },
-  { label: 'Disabled', tone: 'bg-[var(--muted)] text-[var(--muted-foreground)] ring-[var(--border)]', Icon: Minus, hint: 'Shown greyed out for reference' },
-  { label: 'Archived', tone: 'bg-[var(--muted)] text-[var(--muted-foreground)] ring-[var(--border)]', Icon: Minus, hint: 'Shown greyed out for reference' },
-  { label: 'Draft', tone: 'bg-[var(--card)] text-[var(--text-muted)] ring-[var(--border)] line-through', Icon: EyeOff, hint: 'Not listed' },
+const LEGEND: JobEligibilityLegendItem[] = [
+  { label: 'Published', tone: SELECTABLE, Icon: Check, hint: 'Can be selected' },
+  { label: 'Republished', tone: SELECTABLE, Icon: Check, hint: 'Can be selected' },
+  { label: 'Disabled', tone: GREYED, Icon: Minus, hint: 'Shown greyed out for reference' },
+  { label: 'Archived', tone: GREYED, Icon: Minus, hint: 'Shown greyed out for reference' },
+  { label: 'Draft', tone: HIDDEN, Icon: EyeOff, hint: 'Not listed' },
+];
+
+/** Create Assessment's list: Disabled jobs are hidden there, not greyed. */
+export const ASSESSMENT_ELIGIBILITY_LEGEND: JobEligibilityLegendItem[] = [
+  { label: 'Published', tone: SELECTABLE, Icon: Check, hint: 'Can be selected' },
+  { label: 'Republished', tone: SELECTABLE, Icon: Check, hint: 'Can be selected' },
+  { label: 'Archived', tone: GREYED, Icon: Minus, hint: 'Shown greyed out for reference' },
+  { label: 'Disabled', tone: HIDDEN, Icon: EyeOff, hint: 'Not listed' },
+  { label: 'Draft', tone: HIDDEN, Icon: EyeOff, hint: 'Not listed' },
 ];
 
 export default function JobEligibilityNote({
   className = '',
   description = SCORING_ELIGIBILITY,
   showLegend = false,
+  legend = LEGEND,
 }: {
   className?: string;
   /** The rule this list applies. Defaults to the Resume Scoring wording. */
@@ -33,6 +50,8 @@ export default function JobEligibilityNote({
   /** Status chips (Published · Republished · Disabled · Archived · Draft)
    *  beside the title, ahead of the full sentence. */
   showLegend?: boolean;
+  /** The chips, when this list treats a status differently from scoring. */
+  legend?: JobEligibilityLegendItem[];
 }) {
   if (showLegend) {
     return (
@@ -43,7 +62,7 @@ export default function JobEligibilityNote({
             Job Eligibility
           </p>
           <ul className="flex flex-wrap items-center gap-1.5" aria-label="Job statuses">
-            {LEGEND.map(({ label, tone, Icon, hint }) => (
+            {legend.map(({ label, tone, Icon, hint }) => (
               <li key={label} title={hint} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${tone}`}>
                 <Icon className="h-3 w-3 shrink-0" />{label}
               </li>

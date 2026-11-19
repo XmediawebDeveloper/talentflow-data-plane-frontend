@@ -21,7 +21,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { Skeleton } from '@/components/ui/skeleton';
 import AppModal from '@/components/ui/app-modal';
@@ -187,7 +187,7 @@ export default function AddSeatsModal({
         if (checkoutErr?.message?.includes('cancelled')) {
           toast.info('Payment cancelled');
         } else {
-          toast.error(friendlyErrorMessage(checkoutErr, "Payment failed. Please try again."));
+          showErrorToast(checkoutErr, "Couldn't complete payment");
         }
         return;
       }
