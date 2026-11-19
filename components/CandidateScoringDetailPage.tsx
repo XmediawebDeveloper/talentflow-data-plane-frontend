@@ -281,18 +281,22 @@ export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitl
   /* The sticky tab bar below pins directly under the sticky breadcrumb, so its
      offset is the breadcrumb's real height — re-measured on resize, because the
      bar grows when its RecordPager row wraps. Hardcoding the height let the
-     crumb bar overlap and swallow the tab bar's clicks. */
-  const breadcrumbBarRef = useRef<HTMLElement | null>(null);
+     crumb bar overlap and swallow the tab bar's clicks.
+     A callback ref (state), not useRef + []-effect: the first render is the
+     !isDataReady skeleton, which has no breadcrumb, so a mount-only effect
+     found null, never measured, and left the tabs pinned at 52px — half
+     tucked under a wrapped (taller) breadcrumb. */
+  const [breadcrumbBarEl, breadcrumbBarRef] = useState<HTMLElement | null>(null);
   const [tabBarTop, setTabBarTop] = useState(52);
   useEffect(() => {
-    const bar = breadcrumbBarRef.current;
+    const bar = breadcrumbBarEl;
     if (!bar || typeof ResizeObserver === 'undefined') return;
     const measure = () => setTabBarTop(bar.getBoundingClientRect().height);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(bar);
     return () => observer.disconnect();
-  }, []);
+  }, [breadcrumbBarEl]);
 
   // Share Resume dialog state.
   const [showShareResumeModal, setShowShareResumeModal] = useState(false);
@@ -1706,8 +1710,11 @@ Best regards`);
             )}
 
             {/* ml-auto keeps the actions right-aligned on one line, and simply
-                wraps to the next line when the badges run out of room. */}
-            <div className="flex flex-wrap items-center gap-2 ml-auto">
+                wraps to the next line when the badges run out of room.
+                Flat (wide Create / Send buttons): below xl they drop to their
+                own full-width row, left-aligned under the badges instead of
+                hanging off the right edge. */}
+            <div className={`flex flex-wrap items-center gap-2 ${flatHeaderActions ? 'w-full xl:w-auto xl:ml-auto' : 'ml-auto'}`}>
               {/* Share leads the group: sending the resume on is a step that
                   usually comes before inviting anyone to anything. */}
               {RESUME_EMAIL_SHARE_ENABLED && viewResumeId && (

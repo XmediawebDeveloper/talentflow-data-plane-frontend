@@ -7529,7 +7529,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
                 className="tf-jobs-refresh flex-shrink-0 !h-9"
               >
-                <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
+                <span className="hidden max-sm:inline 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
               </Button>
               </div>
             </div>
