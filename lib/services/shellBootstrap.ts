@@ -11,6 +11,9 @@ import api, { getTokens } from './api';
  *   quota_status          (QuotaContext)               /usage/quota-status
  *   user_settings         (SessionTimeoutProvider)     /user-settings
  *   experience_levels     (dashboard layout)           /master-data/experience-levels?include_inactive=true
+ *   chat_unread_count     (Header chat badge)          /chat/unread-count
+ *   notification_counts   (Header bell badge)          /notifications/count?exclude_chat=true
+ *   terms_<DOCUMENT_TYPE> (TermsProvider, x3)          /public/terms-and-conditions/status?document_type=...
  *
  * Each provider calls `takeBootstrapPart(name)` for its FIRST load only:
  *  - hit  -> the exact body that endpoint would have returned;
@@ -30,7 +33,12 @@ export type ShellBootstrapPartName =
   | 'pending_plan_changes'
   | 'quota_status'
   | 'user_settings'
-  | 'experience_levels';
+  | 'experience_levels'
+  | 'chat_unread_count'
+  | 'notification_counts'
+  | 'terms_TERMS_AND_CONDITIONS'
+  | 'terms_PRIVACY_POLICY'
+  | 'terms_COOKIES_POLICY';
 
 interface BootstrapPart {
   status: number;

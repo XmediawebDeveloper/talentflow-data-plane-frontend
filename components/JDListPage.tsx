@@ -10,6 +10,7 @@ import ExportFormatModal from '@/components/ExportFormatModal';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 // FIX-003: Import Sheet for inline JD creation
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -293,7 +294,7 @@ export default function JDListPage() {
       } else if (errorResponse?.error === 'TENANT_INACTIVE') {
         setAccessError(errorResponse.message || 'Your organization\'s account is inactive.');
       } else {
-        toast.error('Failed to load job descriptions');
+        showErrorToast(error, "Couldn't load job descriptions", { id: 'jd-list-load', retry: fetchJDs });
       }
     } finally {
       setLoading(false);
@@ -326,7 +327,7 @@ export default function JDListPage() {
       fetchJDs();
       setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' });
     } catch (error) {
-      toast.error('Failed to archive');
+      showErrorToast(error, "Couldn't archive the job description");
     } finally {
       setConfirmLoading(false);
     }
@@ -341,7 +342,7 @@ export default function JDListPage() {
       fetchJDs();
       setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' });
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to delete job description');
+      showErrorToast(error, "Couldn't delete the job description");
     } finally {
       setConfirmLoading(false);
     }
@@ -360,7 +361,7 @@ export default function JDListPage() {
       toast.success('Job description published');
       fetchJDs();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to publish');
+      showErrorToast(error, "Couldn't publish the job description");
     }
     setActiveDropdown(null);
   };
@@ -374,7 +375,7 @@ export default function JDListPage() {
       fetchJDs();
       setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' });
     } catch (error) {
-      toast.error('Failed to disable');
+      showErrorToast(error, "Couldn't disable the job description");
     } finally {
       setConfirmLoading(false);
     }
@@ -408,7 +409,7 @@ export default function JDListPage() {
         toast.success(`${successCount} job description(s) deleted`);
       }
       if (failCount > 0) {
-        toast.error(`Failed to delete ${failCount} job description(s)`);
+        showErrorToast(null, `Couldn't delete ${failCount} job description(s)`);
       }
 
       // Keep the selection when every delete failed so the user can retry;
@@ -419,7 +420,7 @@ export default function JDListPage() {
         fetchJDs();
       }
     } catch (error) {
-      toast.error('Failed to delete job descriptions');
+      showErrorToast(error, "Couldn't delete the job descriptions");
     }
   };
 

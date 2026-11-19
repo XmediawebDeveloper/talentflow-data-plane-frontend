@@ -6,8 +6,12 @@ const RAZORPAY_KEY_ID = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
 const RAZORPAY_SCRIPT_URL = 'https://checkout.razorpay.com/v1/checkout.js';
 // Bypass switch — when true, openCheckout returns a fake success without
 // opening the Razorpay modal. Backend must also have RAZORPAY_BYPASS_ENABLED=true.
+// Both values are inlined at build time, so a production build compiles the
+// bypass branch out entirely ("full application" #20).
 const RAZORPAY_BYPASS_ENABLED =
-  process.env.NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED === 'true';
+  process.env.NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED === 'true' &&
+  process.env.NEXT_PUBLIC_ENVIRONMENT !== 'production' &&
+  process.env.NEXT_PUBLIC_ENVIRONMENT !== 'prod';
 
 interface CheckoutParams {
   orderId: string;

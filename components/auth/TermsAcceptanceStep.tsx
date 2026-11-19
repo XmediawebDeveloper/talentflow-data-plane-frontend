@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { ArrowLeft, Check, Loader2, FileText } from 'lucide-react';
 import type { TermsAndConditions } from '@/lib/types/terms';
+import { sanitizeHtml } from '@/lib/utils/sanitizeHtml';
 
 interface TermsAcceptanceStepProps {
   terms: TermsAndConditions;
@@ -53,7 +54,7 @@ export default function TermsAcceptanceStep({
         ref={contentRef}
         onScroll={handleScroll}
         className="h-64 overflow-y-auto border border-gray-200 rounded-xl p-4 bg-gray-50 prose prose-sm max-w-none mb-4"
-        dangerouslySetInnerHTML={{ __html: terms.content_html }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(terms.content_html) }}
       />
 
       {/* Checkbox fallback */}

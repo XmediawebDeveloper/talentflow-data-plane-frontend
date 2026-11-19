@@ -11,6 +11,7 @@ import remarkBreaks from 'remark-breaks';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDVersion, JDAssessmentResultsResponse, AssessmentResultItem } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -82,7 +83,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
       setResults(data);
     } catch (error) {
       console.error('Failed to fetch assessment results:', error);
-      toast.error('Failed to load assessment results');
+      showErrorToast(error, "Couldn't load assessment results", { id: `jd-${jdId}-assessment-results`, retry: fetchResults });
     } finally {
       setLoading(false);
     }
@@ -546,7 +547,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
       setResumes(data);
     } catch (error) {
       console.error('Failed to fetch scored resumes:', error);
-      toast.error('Failed to load scored resumes');
+      showErrorToast(error, "Couldn't load scored resumes", { id: `jd-${jdId}-scored-resumes`, retry: fetchResumes });
     } finally {
       setLoading(false);
     }
@@ -855,7 +856,7 @@ export default function JDDetailsPage() {
       setJd(data);
     } catch (error) {
       console.error('Failed to fetch JD:', error);
-      toast.error('Failed to load job description');
+      showErrorToast(error, "Couldn't load the job description", { id: `jd-${jdId}-load`, retry: fetchJD });
     } finally {
       setLoading(false);
     }
@@ -888,7 +889,7 @@ export default function JDDetailsPage() {
       toast.success('Job description published!');
       fetchJD();
     } catch (error) {
-      toast.error('Failed to publish');
+      showErrorToast(error, "Couldn't publish the job description");
     }
   };
 
@@ -899,7 +900,7 @@ export default function JDDetailsPage() {
       toast.success('Job description archived');
       fetchJD();
     } catch (error) {
-      toast.error('Failed to archive');
+      showErrorToast(error, "Couldn't archive the job description");
     }
   };
 

@@ -269,32 +269,16 @@ export const AUTH_THEME_CSS = `
   width: min(560px, 100%, 54vh);
   margin: 2px 0 auto;
 }
-.tf-hero-art img {
+/* The Lottie (AuthHeroArt.tsx) draws on a transparent background, themed per
+   mode, so it sits straight on the page in both. The box holds the animation's
+   own 535×365 ratio before it loads, so nothing below it moves. */
+.tf-hero-lottie {
   display: block;
   width: 100%;
-  height: auto;
-  /* The artwork ships with a baked-in light background (its assistant is white,
-     so the backdrop cannot be keyed out). Feathering the edges dissolves the
-     rectangle into the page in both themes instead of showing a hard seam. */
-  -webkit-mask-image:
-    radial-gradient(ellipse 94% 94% at 50% 46%, #000 66%, transparent 100%),
-    linear-gradient(to bottom, #000 70%, transparent 99%);
-  mask-image:
-    radial-gradient(ellipse 94% 94% at 50% 46%, #000 66%, transparent 100%),
-    linear-gradient(to bottom, #000 70%, transparent 99%);
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
+  aspect-ratio: 535 / 365;
 }
-/* On dark, feathering can't help: the artwork's background is light all the way
-   through, so a faded edge just becomes a glowing blob. Present it as a framed
-   illustration plate instead, which reads as deliberate. A transparent-background
-   export of the same artwork would let this rule be deleted. */
-.dark .tf-hero-art img {
-  -webkit-mask-image: none;
-  mask-image: none;
-  border-radius: var(--tf-radius-md);
-  border: 1px solid var(--tf-border);
-  filter: saturate(0.94) brightness(0.96);
+.tf-hero-lottie svg {
+  display: block;
 }
 
 .tf-auth-features {

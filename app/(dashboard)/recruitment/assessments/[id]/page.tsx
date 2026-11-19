@@ -14,6 +14,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { jobLineageKey, orderTotalJobs } from '@/lib/utils/assessmentJobOrder';
 import { PAGER_LIST_PARAM, parseAssessmentPagerList, readAssessmentPagerOrder } from '@/lib/utils/assessmentPagerList';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 
 /**
  * Mirrors AssessmentDetailsView's real shell: scrolling bg-slate-50 main,
@@ -400,6 +401,7 @@ function AssessmentDetailsContent() {
       fetchAssessment(); // Refresh data
     } catch (err) {
       console.error('[TalentFlow] Failed to update assessment:', err);
+      showErrorToast(err, "Couldn't update assessment");
     }
   };
 

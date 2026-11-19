@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { findInvalidSkillPunctuation } from '@/lib/skillDuplicates';
@@ -70,14 +71,14 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
   const [topicInputErrors, setTopicInputErrors] = useState<Record<number, string>>({});
 
   // Load published JDs
-  const loadJDs = useCallback(async () => {
+  const loadJDs = useCallback(async (): Promise<void> => {
     try {
       setLoadingJds(true);
       const result = await aiInterviewService.getPublishedJDs();
       setJds(result.items);
     } catch (error) {
       console.error('Failed to load JDs:', error);
-      toast.error('Failed to load job descriptions');
+      showErrorToast(error, "Couldn't load job descriptions", { id: 'ai-interview-creation-jds-load', retry: () => { void loadJDs(); } });
     } finally {
       setLoadingJds(false);
     }
@@ -124,8 +125,8 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
       const result = await aiInterviewService.uploadIntroVideo(file);
       setIntroVideoUrl(result.url || result.file_url || '');
       toast.success('Video uploaded successfully');
-    } catch {
-      toast.error('Failed to upload video');
+    } catch (err) {
+      showErrorToast(err, "Couldn't upload the video");
       setIntroVideoFile(null);
     } finally {
       setUploadingVideo(false);
@@ -235,7 +236,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
       ));
     } catch (error) {
       console.error('Failed to suggest topics:', error);
-      toast.error('Failed to get topic suggestions');
+      showErrorToast(error, "Couldn't get topic suggestions", { retry: () => { void handleSuggestTopics(roundIndex); } });
     } finally {
       setSuggestingTopics(null);
     }
@@ -299,7 +300,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
       onCreated();
     } catch (error) {
       console.error('Failed to save draft:', error);
-      toast.error('Failed to save draft');
+      showErrorToast(error, "Couldn't save draft");
     } finally {
       setSavingDraft(false);
     }
@@ -325,7 +326,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
       onCreated();
     } catch (error) {
       console.error('Failed to publish:', error);
-      toast.error('Failed to publish configuration');
+      showErrorToast(error, "Couldn't publish AI interview configuration");
     } finally {
       setPublishing(false);
     }

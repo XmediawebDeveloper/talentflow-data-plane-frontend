@@ -9,7 +9,7 @@ import { MobileRecordCardVariantProvider } from '@/components/ui/mobile-record-c
 /**
  * Persistent frame for the organization tab groups:
  *   User Management — Users, Roles & Permissions, Usage History
- *   Teams           — Teams, Chat (opened from the dashboard's Teams tile)
+ *   Teams           — Teams (Chat is its own page now: app/(dashboard)/chat)
  *
  * The page card, breadcrumb, tab bar and the grey tab panel live HERE, so they
  * stay mounted while switching tabs — only the panel's content changes, with a
@@ -26,7 +26,6 @@ const TAB_PAGES: Record<string, { label: string; group: OrganizationTabGroup }> 
   '/organization/usage-history': { label: 'Usage History', group: 'users' },
   '/organization/role-management': { label: 'Roles & Permissions', group: 'users' },
   '/organization/team-management': { label: 'Teams', group: 'teams' },
-  '/organization/team-chat': { label: 'Chat', group: 'teams' },
 };
 
 /** Each group's landing tab — the breadcrumb's middle crumb links here. */
@@ -45,20 +44,12 @@ export default function OrganizationLayout({ children }: { children: React.React
   const { label, group } = page;
   const root = GROUP_ROOT[group];
 
-  // Chat fills the viewport height (its message list scrolls inside), so the
-  // frame becomes a flex column down to the content; it never scrolls the page,
-  // so its tab bar doesn't need to stick. On short screens (phone landscape)
-  // that would leave the message list ~0px tall, so there the frame grows to
-  // its content and the page scrolls down to a screen-tall chat window.
-  const isChat = pathname === '/organization/team-chat';
-  const fill = isChat ? 'flex flex-1 min-h-0 flex-col [@media(max-height:500px)]:flex-none' : '';
-
   return (
-    <main className={`flex-1 overflow-x-clip bg-white xl:bg-slate-50 dark:bg-slate-900 xl:dark:bg-slate-950 ${isChat ? 'flex h-full min-h-0 flex-col [@media(max-height:500px)]:h-auto [@media(max-height:500px)]:flex-none' : ''}`}>
-      <div className={`mx-auto w-full max-w-[1400px] ${fill}`}>
+    <main className="flex-1 overflow-x-clip bg-white xl:bg-slate-50 dark:bg-slate-900 xl:dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
         {/* Standard page panel: 16px inset on phones, 32px from md (same as
             every other page). OrganizationTabs' sticky band mirrors this padding. */}
-        <div className={`my-0 xl:my-5 w-full rounded-none xl:rounded-2xl bg-white shadow-none xl:shadow-2xl md:p-8 dark:bg-slate-900 p-4 ${fill}`}>
+        <div className="my-0 xl:my-5 w-full rounded-none xl:rounded-2xl bg-white shadow-none xl:shadow-2xl md:p-8 dark:bg-slate-900 p-4">
           <PageBreadcrumb
             barRef={crumbRef}
             className="mb-4 shrink-0 md:mb-6"
@@ -68,19 +59,15 @@ export default function OrganizationLayout({ children }: { children: React.React
                 : [{ label: 'Dashboard', href: '/dashboard' }, { label: root.label, href: root.href }, { label }]
             }
           />
-          <OrganizationTabs group={group} stickyTop={isChat ? undefined : crumbHeight} />
+          <OrganizationTabs group={group} stickyTop={crumbHeight} />
 
           {/* The active tab's panel — joins the tab bar's baseline on desktop
               (-mt-5 cancels the tab bar's mb-5). */}
-          {/* Chat: no grey inset — the chat window IS the panel, edge to edge
-              and down to the bottom (the panel's border frames it). */}
-          <div className={`rounded-xl border border-gray-200 lg:-mt-5 lg:rounded-t-none lg:border-t-0 dark:border-slate-700 ${
-            isChat ? 'overflow-hidden bg-white p-0 dark:bg-slate-900' : 'bg-slate-100 p-4 sm:p-5 dark:bg-slate-800/50'
-          } ${fill}`}>
+          <div className="rounded-xl border border-gray-200 bg-slate-100 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0 dark:border-slate-700 dark:bg-slate-800/50">
             {/* Keyed by route so the fade replays on every tab switch. Opacity
                 only — a transform here would re-anchor the pages' fixed-position
                 popups to this box while it animates. */}
-            <div key={pathname} className={`animate-in fade-in duration-200 motion-reduce:animate-none ${fill}`}>
+            <div key={pathname} className="animate-in fade-in duration-200 motion-reduce:animate-none">
               {/* User Management tabs: phone / tablet cards, toolbars, menus and
                   selects use the Job Openings module's layout (MobileRecordCardVariant). */}
               {group === 'users'

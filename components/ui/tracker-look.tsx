@@ -293,7 +293,7 @@ export function TrackerTimeline({ events, hiddenCount = 0, onHistory }: { events
 /** Score cell: the % in a pill, green on a pass and red on a fail, with the
  *  result inside it; a grey dash (its reason as the tooltip) when empty. */
 export function TrackerScorePill({ value, pass, why }: { value: number | null; pass: boolean | null; why?: string }) {
-  if (value == null) return <span className="text-gray-300 dark:text-slate-600 cursor-help" title={why}>—</span>;
+  if (value == null) return <span className="text-gray-300 dark:text-slate-500 cursor-help" title={why}>—</span>;
   const tone = pass === false
     ? 'bg-destructive-subtle text-destructive ring-destructive-line'
     : 'bg-success-subtle text-success ring-success-line';

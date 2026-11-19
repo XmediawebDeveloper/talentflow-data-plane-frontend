@@ -5,7 +5,7 @@
  * Falls back to polling if WebSocket connection fails.
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { dispatchAccessRestrictedEvent } from '@/lib/services/api';
+import { dispatchAccessRestrictedEvent, getAccessToken } from '@/lib/services/api';
 
 // Server close code for "this account was deactivated" (app/routers/websocket.py).
 // Distinct from the generic auth failure so we can stop reconnecting.
@@ -129,7 +129,7 @@ export function useNotificationWebSocket({
       // between disconnect and reconnect.  Using the live localStorage value ensures
       // reconnections never fail due to a stale token.
       const liveToken =
-        (typeof window !== 'undefined' && localStorage.getItem('accessToken')) || token;
+        (typeof window !== 'undefined' && getAccessToken()) || token;
 
       if (!liveToken) {
         console.log('[WebSocket] No token available for connection, skipping');

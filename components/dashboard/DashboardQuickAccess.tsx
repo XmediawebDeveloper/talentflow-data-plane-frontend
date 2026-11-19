@@ -37,7 +37,7 @@ const ITEM_SUBTITLE: Record<string, string> = {
   'audit-trail': 'Activity log',
   'support-tickets': 'Help & tickets',
   'help-desk': 'Internal desk',
-  teams: 'Teams & team chat',
+  teams: 'Members & groups',
 };
 
 // Short, always-visible reason under a disabled tile; the full sentence is in
@@ -253,18 +253,21 @@ export default function DashboardQuickAccess() {
     [isTenantAdmin, user?.permissions, planFeaturesLoading, hasPlanFeature],
   );
 
-  /* Teams + Chat, as one tile at the end (they used to be tabs on User
-     Management). Chat is open to everyone, so the tile is never locked: it
-     opens Teams when the plan and permissions allow it, otherwise Chat. */
+  /* Teams, as a tile at the end. It follows the Teams page and the backend
+     (the plan's Teams feature + View Teams; the owner always) and greys out
+     with the reason otherwise. Chat is not a tile: it's in the profile menu
+     (above Support Tickets) and behind the header's chat icon. */
   const teamsTile: NavItem = useMemo(() => {
-    // Same rule as the Teams page and the backend: View Teams (owner always).
-    const canUseTeams = hasPlanFeature('teams') && hasPerm('canViewTeams');
+    const planAllows = hasPlanFeature('teams');
+    const permAllows = hasPerm('canViewTeams');
     return {
       id: 'teams',
       label: 'Teams',
       icon: UsersRound,
-      href: canUseTeams ? '/organization/team-management' : '/organization/team-chat',
+      href: '/organization/team-management',
       pending: planFeaturesLoading,
+      disabled: !planAllows || !permAllows,
+      disabledReason: !planAllows ? 'plan' : 'permission',
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTenantAdmin, user?.permissions, planFeaturesLoading, hasPlanFeature]);
@@ -275,14 +278,14 @@ export default function DashboardQuickAccess() {
 
   return (
     <section
-      aria-label="Quick access"
+      aria-label="Dashboard"
       className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_12px_rgba(15,23,42,0.06),0_20px_40px_-16px_rgba(15,23,42,0.18)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_18px_42px_-28px_rgba(0,0,0,0.75)]"
     >
       {/* Header */}
       <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 bg-white px-3 py-3 dark:bg-slate-900 sm:px-4 sm:py-4 md:px-8">
         <div className="flex items-center gap-2.5">
           <Rocket className="h-5 w-5 text-slate-900 dark:text-slate-50" />
-          <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50 sm:text-lg">Quick access</h2>
+          <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50 sm:text-lg">Dashboard</h2>
         </div>
         <span className="tf-badge gap-1.5 bg-white text-2xs text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800/70 dark:text-slate-300 dark:ring-slate-700 sm:px-3 sm:py-1.5 sm:text-2xs">
           <LayoutGrid className="h-3 w-3 text-slate-500 dark:text-slate-400" />

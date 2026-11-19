@@ -91,6 +91,7 @@ const LEGACY_KEY = 'bulk_invite_progress_state';
 const POLLER_PREFIX = 'bulk_invite_poller';
 const RETENTION_MS = 24 * 60 * 60 * 1000;
 const POLL_MS = 2500;
+/** Minimum gap between "my sends" re-reads on tab focus. */
 const MINE_EVERY_MS = 60 * 1000;
 /* The polling tab renews its lease every tick; a lease older than this is
    free (that tab closed or went to sleep). */
@@ -336,10 +337,22 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     // Async: the list is set after the server answers, not in this pass.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void pullMine();
-    const t = setInterval(() => {
-      if (document.visibilityState !== 'hidden') void pullMine();
-    }, MINE_EVERY_MS);
-    return () => clearInterval(t);
+    /* No steady poll: a run this browser knows is followed by the per-run poll
+       below, and one started on another device is picked up on the next tab
+       focus (at most once per MINE_EVERY_MS). A 60s poll on every page, with
+       nothing sending, cost a round trip a minute for nothing. */
+    let lastPull = Date.now();
+    const onFocus = () => {
+      if (document.visibilityState === 'hidden' || Date.now() - lastPull < MINE_EVERY_MS) return;
+      lastPull = Date.now();
+      void pullMine();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
   }, [identity, pullMine]);
 
   const [iconShown, setIconShown] = useState(false);

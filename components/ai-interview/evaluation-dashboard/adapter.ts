@@ -2313,9 +2313,11 @@ export function buildDashboardData(params: {
     // Legitimate causes: a section with 0 planned questions, a config saved
     // before mth/nth_question_skill_map existed, or `special_instructions` not
     // threaded into buildDashboardData by the calling tab.
+    // delivered=0 (section never reached, e.g. interview ended early) is not a
+    // missing plan — coverage is legitimately empty, so stay quiet.
     for (const sec of ['mth', 'nth'] as const) {
       const cfg = sec === 'mth' ? (cluster_config?.mth || []) : (cluster_config?.nth || []);
-      if (cfg.length > 0 && built[sec].raw.size === 0) {
+      if (cfg.length > 0 && deliveredMainCountBySection[sec] > 0 && built[sec].raw.size === 0) {
         console.warn(
           `[Coverage] ${sec.toUpperCase()}: no Question-Distribution plan resolved ` +
           `(planRows=${planRowsBySection[sec].length}, delivered=${deliveredMainCountBySection[sec]}) — ` +

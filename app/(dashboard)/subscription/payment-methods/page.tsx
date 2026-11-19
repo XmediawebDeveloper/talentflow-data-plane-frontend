@@ -5,7 +5,7 @@ import { Wallet, Plus, CreditCard, Trash2, Building2, X, Loader2, Sparkles, Arro
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -112,6 +112,7 @@ export default function PaymentMethodsPage() {
       }
     } catch (error) {
       console.error('Error fetching payment methods:', error);
+      showErrorToast(error, "Couldn't load payment methods", { id: 'payment-methods-load', retry: fetchPaymentMethods });
     } finally {
       setLoading(false);
     }
@@ -218,11 +219,11 @@ export default function PaymentMethodsPage() {
         resetForm();
       } else {
         const error = await response.json();
-        toast.error(friendlyErrorMessage(error, "Couldn't add payment method. Please try again."));
+        showErrorToast({ ...error, status: response.status }, "Couldn't add payment method");
       }
     } catch (error) {
       console.error('Error adding payment method:', error);
-      toast.error('Failed to add payment method');
+      showErrorToast(error, "Couldn't add payment method");
     } finally {
       setSubmitting(false);
     }
@@ -268,6 +269,7 @@ export default function PaymentMethodsPage() {
       }
     } catch (error) {
       console.error('Error setting default:', error);
+      showErrorToast(error, "Couldn't set the default payment method");
     }
   };
 
@@ -304,6 +306,7 @@ export default function PaymentMethodsPage() {
       }
     } catch (error) {
       console.error('Error deleting payment method:', error);
+      showErrorToast(error, "Couldn't delete the payment method");
     } finally {
       setDeleting(null);
     }

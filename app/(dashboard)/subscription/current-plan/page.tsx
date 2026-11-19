@@ -4,7 +4,7 @@ import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, C
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import api, { handleUnauthorized } from '@/lib/services/api';
+import api, { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { Tooltip } from '@/components/ui/tooltip';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -669,7 +670,7 @@ function CurrentPlanContent() {
     { id: 'usage-quotas', short: 'Usage', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view usage & quotas' },
     { id: 'billing-history', short: 'Billing', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', visible: isTenantAdmin || hasPermission('canViewBillingHistory'), deniedMessage: 'You do not have permission to view billing history' },
     { id: 'refund-history', short: 'Refunds', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', visible: isTenantAdmin || hasPermission('canViewRefundHistory'), deniedMessage: 'You do not have permission to view refund history' },
-    { id: 'dispute-history', short: 'Disputes', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', visible: isTenantAdmin || hasPermission('canViewDisputeHistory'), deniedMessage: 'You do not have permission to view dispute history' },
+    { id: 'dispute-history', short: 'Disputes', label: 'Payment Disputes', icon: AlertTriangle, href: '/subscription/dispute-history', visible: isTenantAdmin || hasPermission('canViewDisputeHistory'), deniedMessage: 'You do not have permission to view dispute history' },
     { id: 'unit-disputes', short: 'Units', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view unit disputes' },
     { id: 'payment-methods', short: 'Payments', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', visible: isTenantAdmin || hasPermission('canViewPaymentMethods'), deniedMessage: 'You do not have permission to view payment methods' },
   ];
@@ -864,7 +865,7 @@ function CurrentPlanContent() {
     }
 
     // Fallback: try to parse from JWT token
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
@@ -1271,7 +1272,7 @@ function CurrentPlanContent() {
   // Is an earlier plan payment still waiting to be applied?
   const fetchPurchaseStatus = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       const tid = tenantId || user?.tenantId;
       if (!token || !tid) return;
       const response = await fetch(`${API_URL}/subscription/${tid}/purchase-status`, {
@@ -1298,7 +1299,7 @@ function CurrentPlanContent() {
         return;
       }
 
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) return;
 
       const response = await fetch(`${API_URL}/subscription/queued-upgrades`, {
@@ -1333,7 +1334,7 @@ function CurrentPlanContent() {
       setIsApplyingUpgrade(true);
       setError(null);
 
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       const response = await fetch(`${API_URL}/subscription/queued-upgrades/${selectedQueuedUpgrade.id}/apply`, {
         method: 'POST',
         headers: {
@@ -1689,7 +1690,7 @@ function CurrentPlanContent() {
       setError(null);
       setSuccessMessage(null);
 
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
 
       // Determine plan ID and billing interval
       const hasAnnual = !!selectedPlanForPayment.annualPlanId;
@@ -1803,7 +1804,7 @@ function CurrentPlanContent() {
           if (rzpErr.message?.includes('cancelled')) {
             toast.info('Payment cancelled', { description: 'You can try again anytime.' });
           } else {
-            toast.error('Payment failed', { description: rzpErr.message });
+            showErrorToast(rzpErr, "Couldn't complete the payment");
           }
           setIsSelectingPlan(false);
           setPaymentStep('');
@@ -1993,10 +1994,7 @@ function CurrentPlanContent() {
         }
 
         setError(errorMessage);
-        toast.error('Plan Selection Failed', {
-          description: errorMessage,
-          duration: 6000,
-        });
+        showErrorToast(errorMessage, "Couldn't change your plan");
       }
     } catch (err) {
       console.error('Error selecting plan:', err);
@@ -2013,10 +2011,7 @@ function CurrentPlanContent() {
       }
 
       setError(errorMessage);
-      toast.error('Plan Selection Failed', {
-        description: errorMessage,
-        duration: 6000,
-      });
+      showErrorToast(errorMessage, "Couldn't change your plan");
     } finally {
       setIsSelectingPlan(false);
       setPaymentStep('');

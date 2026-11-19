@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cachedList, listCacheKey, onListCacheInvalidate, LIST_CACHE_TTL_MS } from '@/lib/utils/listCache';
+import { showErrorToast } from '@/lib/utils/errorToast';
 
 /**
  * The standard landing for a list module: the stat cards and ONE page of rows,
@@ -47,6 +48,10 @@ export interface UsePagedListOptions<T, S, Q extends PagedListQuery> {
   enabled?: boolean;
   /** Prefetch page+1 after the current page lands (default true). */
   prefetchNext?: boolean;
+  /** For callers that render no error state of their own: when the page
+   *  fails, show an error toast with this title and a Retry (= refresh).
+   *  Without it a failed load just looks like an empty list. */
+  errorToast?: string;
 }
 
 export interface UsePagedListResult<T, S> {
@@ -73,7 +78,9 @@ function statsFilters<Q extends PagedListQuery>(query: Q): Omit<Q, 'page' | 'pag
 export function usePagedList<T, S = unknown, Q extends PagedListQuery = PagedListQuery>(
   opts: UsePagedListOptions<T, S, Q>,
 ): UsePagedListResult<T, S> {
-  const { name, query, fetchPage, fetchStats, enabled = true, prefetchNext = true } = opts;
+  const { name, query, fetchPage, fetchStats, enabled = true, prefetchNext = true, errorToast } = opts;
+  const errorToastRef = useRef(errorToast);
+  errorToastRef.current = errorToast;
   const [items, setItems] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState<S | null>(null);
@@ -125,6 +132,12 @@ export function usePagedList<T, S = unknown, Q extends PagedListQuery = PagedLis
         if (seq !== seqRef.current) return;
         setError(err);
         setLoaded(true);
+        if (errorToastRef.current) {
+          showErrorToast(err, errorToastRef.current, {
+            id: `paged-list-${name}`,
+            retry: () => { freshRef.current = true; setReloadTick((t) => t + 1); },
+          });
+        }
       },
     );
     statsP.then(

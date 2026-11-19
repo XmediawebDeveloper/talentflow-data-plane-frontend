@@ -16,8 +16,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Forward auth token so DP backend can authenticate via get_current_user
-    const accessToken = request.cookies.get('accessToken')?.value;
-    const authHeader = accessToken ? `Bearer ${accessToken}` : '';
+    // (The access token is no longer in a cookie - security sheet #5 - so the
+    // caller's Authorization header is passed through.)
+    const authHeader = request.headers.get('authorization') || '';
 
     const apiUrl = `${DP_API_URL}/subscription/${tenant_id}/select-plan`;
     console.log('[Subscription API] Calling DP backend:', apiUrl);

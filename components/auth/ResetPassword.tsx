@@ -6,6 +6,7 @@ import { useTheme } from 'next-themes';
 import { Briefcase, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLoginUrl } from '@/lib/services/authService';
+import { getAccessToken, hasStoredSession, restoreSession } from '@/lib/services/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -30,8 +31,9 @@ export default function ResetPassword() {
 
   // Guard: if no access token, redirect to the org login page (not bare /login)
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
+    // Access token is restored from the session cookie asynchronously, so
+    // check for a session here, not for the in-memory token.
+    if (!hasStoredSession()) {
       router.replace(getLoginUrl());
     }
   }, [router]);
@@ -58,7 +60,8 @@ export default function ResetPassword() {
 
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('accessToken');
+      await restoreSession();
+      const token = getAccessToken();
       const response = await fetch(`${API_URL}/auth/set-password`, {
         method: 'POST',
         headers: {

@@ -6,7 +6,6 @@ import { getLoginUrl } from '@/lib/services/authService';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
 import Header from '@/components/Header';
-import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
 import { SessionTimeoutProvider } from '@/components/SessionTimeoutProvider';
 import { toast } from 'sonner';
 import { scoringService } from '@/lib/services/scoringService';
@@ -18,22 +17,66 @@ import { PlanChangeProvider, usePlanChange } from '@/components/providers/PlanCh
 import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail, PAYMENT_PENDING_EVENT, PaymentPendingDetail, redirectToPaymentPage, SESSION_EXPIRED_EVENT, clearTokens } from '@/lib/services/api';
 import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 import ExpiredAccountBlock from '@/components/subscription/ExpiredAccountBlock';
-import TermsReminderBanner from '@/components/terms/TermsReminderBanner';
 import TermsBlockingOverlay from '@/components/terms/TermsBlockingOverlay';
-import TermsAcceptanceModal from '@/components/terms/TermsAcceptanceModal';
-import PlanChangeReviewBanner from '@/components/plan-change/PlanChangeReviewBanner';
-import PlanChangeReviewModal from '@/components/plan-change/PlanChangeReviewModal';
 import PlanChangeSuspendedBlock from '@/components/plan-change/PlanChangeSuspendedBlock';
 import { AdminAssignedPlanProvider } from '@/components/providers/AdminAssignedPlanProvider';
 import { InviteDialogProvider } from '@/components/talent-match-invite/InviteDialogProvider';
-import AdminAssignedPlanBanner from '@/components/admin-assigned-plan/AdminAssignedPlanBanner';
-import AdminAssignedPlanModal from '@/components/admin-assigned-plan/AdminAssignedPlanModal';
-import GlobalScoringProgressIndicator from '@/components/GlobalScoringProgressIndicator';
-import BulkInviteProgressIndicator from '@/components/bulk-invite/BulkInviteProgressIndicator';
 import RouteGuard from '@/components/RouteGuard';
 import { masterDataService } from '@/lib/services';
 import { setConfiguredExperienceLevels } from '@/lib/utils/jobExperience';
 import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
+import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
+import { useExternalBackgroundTasks } from '@/lib/backgroundTasks';
+import dynamic from 'next/dynamic';
+
+/* Shell pieces that show nothing until their own data says so (banners,
+   review/acceptance modals, the floating progress widgets). Loaded as separate
+   chunks after the page hydrates instead of inside the layout's first bundle,
+   so the header and page paint sooner on a hard refresh. They read state from
+   their providers (not one-shot window events), so loading a moment later
+   misses nothing. The BLOCKING overlays (suspended / expired / terms block /
+   plan-change suspension) stay static on purpose: they must be ready to cover
+   the page the instant their condition is known. */
+const TermsReminderBanner = dynamic(() => import('@/components/terms/TermsReminderBanner'), { ssr: false });
+const TermsAcceptanceModal = dynamic(() => import('@/components/terms/TermsAcceptanceModal'), { ssr: false });
+const PlanChangeReviewBanner = dynamic(() => import('@/components/plan-change/PlanChangeReviewBanner'), { ssr: false });
+const PlanChangeReviewModal = dynamic(() => import('@/components/plan-change/PlanChangeReviewModal'), { ssr: false });
+const AdminAssignedPlanBanner = dynamic(() => import('@/components/admin-assigned-plan/AdminAssignedPlanBanner'), { ssr: false });
+const AdminAssignedPlanModal = dynamic(() => import('@/components/admin-assigned-plan/AdminAssignedPlanModal'), { ssr: false });
+const GlobalScoringProgressIndicator = dynamic(() => import('@/components/GlobalScoringProgressIndicator'), { ssr: false });
+const BulkInviteProgressIndicator = dynamic(() => import('@/components/bulk-invite/BulkInviteProgressIndicator'), { ssr: false });
+
+/* The two progress widgets render nothing until a task is tracked (scoring
+   run, invite send, minimized AI Talent Match run), yet mounting them fetched
+   ~17 chunks / ~245 KB gzipped on every dashboard page load. Mount them the
+   first time anything is tracked, then keep them mounted (their toasts and
+   "already finished at mount" bookkeeping live inside). */
+function BackgroundTaskWidgets() {
+  const { activeScoringJobs } = useScoringProgress();
+  const invite = useOptionalBulkInviteProgress();
+  const externalTasks = useExternalBackgroundTasks();
+  const needed = activeScoringJobs.length > 0
+    || (invite?.jobs.length ?? 0) > 0
+    || !!invite?.openResultsFor
+    || externalTasks.length > 0;
+  const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (needed) setMounted(true); }, [needed]);
+  if (!mounted && !needed) return null;
+  return (
+    <>
+      {/* Global scoring progress indicator - floating bottom-right widget.
+          Scoped to this (dashboard) layout, not the root layout, so it
+          never mounts on the (public) candidate-facing pages (assessment/
+          AI-interview token links) or the (auth)/(marketing) routes. */}
+      <GlobalScoringProgressIndicator />
+      {/* Create / Send bulk invitations - the same idea, bottom-LEFT, so a
+          scoring run and a send can be followed at the same time. */}
+      <BulkInviteProgressIndicator />
+    </>
+  );
+}
 
 // Paths allowed when subscription is expired/inactive
 const SUBSCRIPTION_ALLOWED_PATHS = [
@@ -198,7 +241,7 @@ export default function DashboardLayout({
     return !!permissions?.[permission];
   }, [isTenantAdmin, user]);
 
-  console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
+  console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
 
   // Initialize subscription status immediately based on tenant data
   useEffect(() => {
@@ -453,8 +496,8 @@ export default function DashboardLayout({
               </div>
             </div>
 
-            {/* Global subscription inactive modal - shown on all dashboard pages (not for suspended) */}
-            <SubscriptionInactiveModal />
+            {/* SubscriptionInactiveModal is mounted once in app/layout.tsx; a second
+                copy here opened two stacked modals on every dashboard page. */}
 
             {/* T&C blocking overlay - z-[95], below suspension z-[100] */}
             <TermsBlockingOverlay accountSuspended={accountSuspended} />
@@ -468,14 +511,7 @@ export default function DashboardLayout({
             {/* Admin-assigned plan payment modal - z-[88] */}
             <AdminAssignedPlanModal />
 
-            {/* Global scoring progress indicator - floating bottom-right widget.
-                Scoped to this (dashboard) layout, not the root layout, so it
-                never mounts on the (public) candidate-facing pages (assessment/
-                AI-interview token links) or the (auth)/(marketing) routes. */}
-            <GlobalScoringProgressIndicator />
-            {/* Create / Send bulk invitations - the same idea, bottom-LEFT, so a
-                scoring run and a send can be followed at the same time. */}
-            <BulkInviteProgressIndicator />
+            <BackgroundTaskWidgets />
 
             {/* Plan change suspended overlay - z-[98], above terms z-[95], below generic suspension z-[100] */}
             <PlanChangeSuspendedOverlay />

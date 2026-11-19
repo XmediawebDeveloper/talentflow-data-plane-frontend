@@ -4,6 +4,7 @@ import {
   Building2, User, Globe, CheckCircle, XCircle, Loader2, Phone
 } from 'lucide-react';
 import { User as UserType } from '@/lib/types/tenant';
+import { setTokens } from '@/lib/services/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -166,8 +167,7 @@ export default function SignUp({ onSignUp, onSwitchToLogin, onBackToPublic }: Si
 
       // Store tokens if provided
       if (data.access_token && data.refresh_token) {
-        localStorage.setItem('accessToken', data.access_token);
-        localStorage.setItem('refreshToken', data.refresh_token);
+        await setTokens(data.access_token, data.refresh_token);
       }
 
       // Convert to User type and login

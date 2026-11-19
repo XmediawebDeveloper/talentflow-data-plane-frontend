@@ -5,6 +5,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from '@/components/ui/enhanced-toast';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import ExportFormatModal from '@/components/ExportFormatModal';
@@ -238,7 +239,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
       await onRetryUpload(filesToRetry);
       toast.success('Selected files are being retried.');
     } catch (error) {
-      toast.error('Failed to retry selected files.');
+      showErrorToast(error, "Couldn't retry the selected files");
     } finally {
       setIsRetrying(false);
       setRetryingFiles(new Set());
@@ -766,7 +767,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           toast.success(`Retrying ${selectedErrors.length} failed upload${selectedErrors.length > 1 ? 's' : ''}.`);
                           setSelectedErrors([]);
                         } catch (error) {
-                          toast.error('Unable to retry failed uploads. Please try again.');
+                          showErrorToast(error, "Couldn't retry the failed uploads");
                         } finally {
                           setIsRetrying(false);
                           setRetryingFiles(new Set());
@@ -800,7 +801,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           toast.success(`Retrying ${selectedPending.length} pending upload${selectedPending.length > 1 ? 's' : ''}.`);
                           setSelectedPending([]);
                         } catch (error) {
-                          toast.error('Unable to retry pending uploads. Please try again.');
+                          showErrorToast(error, "Couldn't retry the pending uploads");
                         } finally {
                           setIsRetrying(false);
                           setRetryingFiles(new Set());
@@ -838,7 +839,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         setSelectedErrors([]);
                         setSelectedPending([]);
                       } catch (error) {
-                        toast.error('Unable to retry uploads. Please try again.');
+                        showErrorToast(error, "Couldn't retry the uploads");
                       } finally {
                         setIsRetrying(false);
                         setRetryingFiles(new Set());

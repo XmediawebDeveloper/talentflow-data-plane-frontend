@@ -32,11 +32,12 @@ import {
   MessageCircleMore,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { showErrorToast } from '@/lib/utils/errorToast';
 import chatService, {
   ChatConnectionStatus,
   Channel,
   Message,
+  MessageListResponse,
   Reaction,
 } from '@/lib/services/chatService';
 import { getTokens } from '@/lib/services/api';
@@ -152,7 +153,8 @@ export default function TeamChatPage() {
       }
       const failed = targets.length - done.size;
       if (failed > 0) {
-        toast.error(`Failed to ${pin ? 'pin' : 'unpin'} ${failed} message${failed === 1 ? '' : 's'}`);
+        const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+        showErrorToast(firstError?.reason ?? null, `Couldn't ${pin ? 'pin' : 'unpin'} ${failed} message${failed === 1 ? '' : 's'}`);
         // Keep only the failed ones selected so a retry is one tap.
         setSelectedMessageIds(new Set(targets.filter((m) => !done.has(m.id)).map((m) => m.id)));
       } else {
@@ -172,8 +174,7 @@ export default function TeamChatPage() {
       setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, is_pinned: false } : m)));
       toast.success('Message unpinned');
     } catch (error) {
-      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.error(detail || 'Failed to unpin message');
+      showErrorToast(error, "Couldn't unpin message");
     } finally {
       setUnpinningId(null);
     }
@@ -221,7 +222,7 @@ export default function TeamChatPage() {
       }
       const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
       if (firstError) {
-        toast.error(friendlyErrorMessage(firstError.reason, "Couldn't delete message. Please try again."));
+        showErrorToast(firstError.reason, "Couldn't delete message");
       }
       setDeleteTargets(null);
     } finally {
@@ -235,8 +236,8 @@ export default function TeamChatPage() {
       setCopiedMessageId(message.id);
       toast.success('Message copied');
       setTimeout(() => setCopiedMessageId((id) => (id === message.id ? null : id)), 1500);
-    } catch {
-      toast.error('Could not copy message');
+    } catch (error) {
+      showErrorToast(error, "Couldn't copy message");
     }
   };
   const [permissions, setPermissions] = useState<{ can_create_channel: boolean; role: string }>({
@@ -271,6 +272,14 @@ export default function TeamChatPage() {
   // (sockets, timers) that would otherwise read a stale `selectedChannel`.
   const [connectionStatus, setConnectionStatus] = useState<ChatConnectionStatus>('connecting');
   const selectedChannelIdRef = useRef<string | null>(null);
+  /* The first conversation's messages, delivered with the channel list on
+     landing (GET /chat/channels?include_messages=true) — used once by
+     fetchMessages instead of a second round trip. */
+  const prefetchedMessagesRef = useRef<{ channelId: string; data: MessageListResponse } | null>(null);
+  const connectionStatusRef = useRef<ChatConnectionStatus>('connecting');
+  // A message pushed while the tab was hidden stays unread until the reader is back.
+  const unreadWhileHiddenRef = useRef(false);
+  const channelsRefreshedAtRef = useRef(0);
   // Typing indicator: who else is typing in the open conversation (id → name),
   // plus the timers for our own outgoing typing signal.
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
@@ -393,6 +402,7 @@ export default function TeamChatPage() {
     // the first load and the socket opening would otherwise be missed.
     let wasDisconnected = true;
     const unsubscribeStatus = chatService.onStatus((status) => {
+      connectionStatusRef.current = status;
       setConnectionStatus(status);
       if (status === 'closed') wasDisconnected = true;
       if (status === 'open' && wasDisconnected) {
@@ -431,8 +441,9 @@ export default function TeamChatPage() {
                   : dm
               )
             );
-            // Away (tab hidden): leave it unread; returning to the tab refetches and marks it read.
-            if (document.visibilityState === 'visible') chatService.markAsRead(selectedChannel.id);
+            // Away (tab hidden): leave it unread; returning to the tab marks it read.
+            if (document.visibilityState === 'visible') void chatService.markAsRead(selectedChannel.id);
+            else unreadWhileHiddenRef.current = true;
           }
           break;
         }
@@ -500,11 +511,23 @@ export default function TeamChatPage() {
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') refreshChannelsSilently();
     }, 30000);
+    /* Returning to the tab. With the socket open, the open conversation is
+       already current (every message was pushed) — only mark what arrived
+       while away as read. With it down, catch up from the server. The list
+       refresh is skipped when the 30s refresh ran moments ago. */
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
-      refreshChannelsSilently();
+      if (Date.now() - channelsRefreshedAtRef.current >= 30000) refreshChannelsSilently();
       const openId = selectedChannelIdRef.current;
-      if (openId) fetchMessages(openId, { silent: true });
+      if (!openId) return;
+      if (connectionStatusRef.current === 'open') {
+        if (unreadWhileHiddenRef.current) {
+          unreadWhileHiddenRef.current = false;
+          void chatService.markAsRead(openId);
+        }
+        return;
+      }
+      fetchMessages(openId, { silent: true });
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
@@ -540,12 +563,19 @@ export default function TeamChatPage() {
   const fetchChannels = async ({ initial = true, selectFirst = false }: { initial?: boolean; selectFirst?: boolean } = {}) => {
     try {
       if (initial) setIsLoading(true);
-      const response = await chatService.listChannels();
+      const channelIdFromUrl = searchParams.get('channel');
+      // Landing: the first conversation's messages ride along with the list.
+      const response = await chatService.listChannels(
+        initial ? { includeMessages: true, open: channelIdFromUrl } : undefined,
+      );
+      channelsRefreshedAtRef.current = Date.now();
+      prefetchedMessagesRef.current = response.open_channel_id && response.open_messages
+        ? { channelId: response.open_channel_id, data: response.open_messages }
+        : null;
       setChannels(response.channels);
       setDirectMessages(response.direct_messages);
       setTotalUnread(response.total_unread);
 
-      const channelIdFromUrl = searchParams.get('channel');
       if (channelIdFromUrl) {
         const allChannels = [...response.channels, ...response.direct_messages];
         const targetChannel = allChannels.find((ch) => ch.id === channelIdFromUrl);
@@ -569,7 +599,10 @@ export default function TeamChatPage() {
     } catch (error: any) {
       console.error('Error fetching channels:', error);
       if (error.response?.status !== 404) {
-        toast.error('Failed to load channels');
+        showErrorToast(error, "Couldn't load channels", {
+          id: 'team-chat-channels',
+          retry: () => fetchChannels({ initial, selectFirst }),
+        });
       }
     } finally {
       if (initial) setIsLoading(false);
@@ -619,7 +652,7 @@ export default function TeamChatPage() {
       setMessages([]);
       await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
-      toast.error(friendlyErrorMessage(e, "Couldn't leave channel. Please try again."));
+      showErrorToast(e, "Couldn't leave channel");
     }
   };
 
@@ -643,7 +676,7 @@ export default function TeamChatPage() {
       setMessages([]);
       await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
-      toast.error(friendlyErrorMessage(e, "Couldn't delete channel. Please try again."));
+      showErrorToast(e, "Couldn't delete channel");
     }
   };
 
@@ -669,7 +702,7 @@ export default function TeamChatPage() {
       setMessages([]);
       await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
-      toast.error(friendlyErrorMessage(e, "Couldn't delete chat. Please try again."));
+      showErrorToast(e, "Couldn't delete chat");
     }
   };
 
@@ -684,7 +717,11 @@ export default function TeamChatPage() {
         setMessages([]);
         jumpToEndRef.current = true;
       }
-      const response = await chatService.listMessages(channelId);
+      const prefetched = prefetchedMessagesRef.current;
+      prefetchedMessagesRef.current = null;
+      const response = !silent && prefetched?.channelId === channelId
+        ? prefetched.data
+        : await chatService.listMessages(channelId);
       // A slow response for a channel the user has already left must not
       // overwrite the open conversation.
       if (selectedChannelIdRef.current !== channelId) return;
@@ -697,8 +734,11 @@ export default function TeamChatPage() {
         const newer = prev.filter((m) => !ids.has(m.id) && m.channel_id === channelId && m.created_at > lastAt);
         return newer.length > 0 ? [...response.messages, ...newer] : response.messages;
       });
-      // Only while it's actually on screen.
-      if (document.visibilityState === 'visible') await chatService.markAsRead(channelId);
+      /* No separate POST /read: GET /channels/{id}/messages (and the landing
+         list with include_messages) already marks the channel and its chat
+         notifications read server-side — the extra call was a third serial
+         round trip before the page settled. */
+      unreadWhileHiddenRef.current = false;
 
       setChannels((prev) => {
         const updated = prev.map((ch) => (ch.id === channelId ? { ...ch, unread_count: 0 } : ch));
@@ -712,7 +752,12 @@ export default function TeamChatPage() {
       });
     } catch (error) {
       console.error('Error fetching messages:', error);
-      if (!silent && selectedChannelIdRef.current === channelId) toast.error('Failed to load messages');
+      if (!silent && selectedChannelIdRef.current === channelId) {
+        showErrorToast(error, "Couldn't load messages", {
+          id: 'team-chat-messages',
+          retry: () => fetchMessages(channelId),
+        });
+      }
     } finally {
       // A stale request (the user already moved on) must not end the newer one's loading state.
       if (!silent && selectedChannelIdRef.current === channelId) setIsLoadingMessages(false);
@@ -724,6 +769,7 @@ export default function TeamChatPage() {
   // open one). No page skeleton.
   const refreshChannelsSilently = async () => {
     try {
+      channelsRefreshedAtRef.current = Date.now();
       const response = await chatService.listChannels();
       const openId = selectedChannelIdRef.current;
       // The open conversation is being read right now — it has no unread.
@@ -749,7 +795,7 @@ export default function TeamChatPage() {
       setAvailableUsers(users);
     } catch (error) {
       console.error('Error fetching users:', error);
-      toast.error('Failed to load team members');
+      showErrorToast(error, "Couldn't load team members", { id: 'team-chat-users', retry: fetchAvailableUsers });
     } finally {
       setIsLoadingUsers(false);
     }
@@ -821,7 +867,7 @@ export default function TeamChatPage() {
       bumpConversation(channelId, newMessage);
     } catch (error) {
       console.error('Error sending message:', error);
-      toast.error('Failed to send message');
+      showErrorToast(error, "Couldn't send message");
       // Give the text back — to the box if still here, else to that chat's draft.
       if (selectedChannelIdRef.current === channelId) setMessageInput((cur) => cur || content);
       else if (!draftsRef.current[channelId]) draftsRef.current[channelId] = content;
@@ -880,7 +926,7 @@ export default function TeamChatPage() {
       bumpConversation(channelId, newMessage);
     } catch (error: any) {
       console.error('Error uploading attachment:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't upload image. Please try again."));
+      showErrorToast(error, "Couldn't upload image");
     } finally {
       setIsUploadingAttachment(false);
     }
@@ -934,7 +980,7 @@ export default function TeamChatPage() {
       else await chatService.addReaction(messageId, emoji);
     } catch (error) {
       console.error('Error updating reaction:', error);
-      toast.error(alreadyMine ? 'Failed to remove reaction' : 'Failed to add reaction');
+      showErrorToast(error, alreadyMine ? "Couldn't remove reaction" : "Couldn't add reaction");
     }
     // Reconcile with the server quietly (also undoes the optimistic change on failure).
     if (channelId) void fetchMessages(channelId, { silent: true });
@@ -966,7 +1012,7 @@ export default function TeamChatPage() {
       openChannel(channel);
     } catch (error: any) {
       console.error('Error creating channel:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't create channel. Please try again."));
+      showErrorToast(error, "Couldn't create channel");
     } finally {
       setIsCreating(false);
     }
@@ -985,7 +1031,7 @@ export default function TeamChatPage() {
       setSelectedChannel(updatedChannel);
     } catch (error: any) {
       console.error('Error adding members:', error);
-      toast.error(friendlyErrorMessage(error, "Couldn't add members. Please try again."));
+      showErrorToast(error, "Couldn't add members");
     }
   };
 
@@ -1037,7 +1083,7 @@ export default function TeamChatPage() {
           return;
         }
       }
-      toast.error(friendlyErrorMessage(error, "Couldn't start conversation. Please try again."));
+      showErrorToast(error, "Couldn't start conversation");
     } finally {
       setIsCreatingDM(false);
     }

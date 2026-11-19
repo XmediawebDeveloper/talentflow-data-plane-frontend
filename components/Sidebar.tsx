@@ -204,7 +204,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
         { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, adminOnly: true },  // Admin only - can modify
         { id: 'billing-history', label: 'Billing History', icon: Receipt, billingAccess: true },
         { id: 'refund-history', label: 'Refund History', icon: RefreshCw, billingAccess: true },
-        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, billingAccess: true },
+        { id: 'dispute-history', label: 'Payment Disputes', icon: AlertTriangle, billingAccess: true },
       ]
     },
 
@@ -292,7 +292,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
 
   const visibleNavItems = useMemo(() => {
     const filtered = filterNavItems(allNavItems);
-    console.log('[SIDEBAR] User:', user?.email, 'Role:', user?.role);
+    console.log('[SIDEBAR] Role:', user?.role);
     console.log('[SIDEBAR] Permissions:', user?.permissions);
     console.log('[SIDEBAR] 🔍 canViewScoring:', user?.permissions?.canViewScoring);
     console.log('[SIDEBAR] 🔍 canViewAiMatch:', user?.permissions?.canViewAiMatch);
