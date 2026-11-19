@@ -34,7 +34,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { assessmentService } from '@/lib/services';
 import { toast } from 'sonner';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 
 import { User, Tenant, getRemainingUnits } from '@/lib/types/tenant';
 import UnitsWarningBanner from './UnitsWarningBanner';
@@ -127,7 +127,7 @@ export default function Dashboard({
     console.log('[Dashboard] fetchRecentActivities called');
     setLoadingActivities(true);
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       console.log('[Dashboard] Token exists:', !!token);
       if (!token) {
         console.log('[Dashboard] No token, skipping fetch');

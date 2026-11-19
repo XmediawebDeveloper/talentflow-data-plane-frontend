@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { hasStoredSession } from '@/lib/services/api';
 
 /**
  * Whether the visitor has a session, as the routing proxy sees it.
@@ -19,7 +20,7 @@ export function readSignedIn(): boolean {
   });
   if (hasCookie) return true;
   try {
-    return !!localStorage.getItem("accessToken");
+    return hasStoredSession();
   } catch {
     return false;
   }

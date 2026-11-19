@@ -44,14 +44,14 @@ export default function AuthHandoffPage() {
         return;
       }
 
-      setTokens(access, refresh);
-
       // Strip the fragment so the tokens don't sit in the address bar / history.
       window.history.replaceState(null, '', window.location.pathname);
 
-      // Hard redirect so all providers/contexts re-initialize with the new
-      // tokens (matches the behavior of a fresh login).
-      window.location.href = '/dashboard';
+      // Hard redirect once the session cookie is saved, so all providers/contexts
+      // re-initialize with the new session (matches a fresh login).
+      setTokens(access, refresh).finally(() => {
+        window.location.href = '/dashboard';
+      });
     } catch {
       router.replace('/login');
     }

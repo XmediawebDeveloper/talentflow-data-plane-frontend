@@ -2,7 +2,7 @@
  * Authentication Service
  */
 
-import api, { setTokens, clearTokens, handleApiError } from './api';
+import api, { setTokens, clearTokens, handleApiError, hasStoredSession } from './api';
 
 const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
 
@@ -244,21 +244,21 @@ export const authService = {
    */
   async login(data: LoginRequest): Promise<LoginResult> {
     try {
-      console.log('[AUTH] Attempting login for:', data.email);
+      console.log('[AUTH] Attempting login');
       const response = await api.post<LoginResult>('/auth/login', data);
       console.log('[AUTH] Login response status:', response.status);
       console.log('[AUTH] Login response data:', response.data);
 
       // Check if 2FA is required
       if (isTwoFactorRequired(response.data)) {
-        console.log('[AUTH] 2FA required for user:', response.data.user_email);
+        console.log('[AUTH] 2FA required');
         return response.data;
       }
 
       // Normal login - set tokens
       const loginResponse = response.data as LoginResponse;
       const { tokens } = loginResponse;
-      setTokens(tokens.access_token, tokens.refresh_token);
+      await setTokens(tokens.access_token, tokens.refresh_token);
       return loginResponse;
     } catch (error: any) {
       console.error('[AUTH] Login error:', error);
@@ -280,7 +280,7 @@ export const authService = {
       });
       console.log('[AUTH] 2FA verification successful');
       const { tokens } = response.data;
-      setTokens(tokens.access_token, tokens.refresh_token);
+      await setTokens(tokens.access_token, tokens.refresh_token);
       return response.data;
     } catch (error: any) {
       console.error('[AUTH] 2FA verification error:', error);
@@ -346,8 +346,9 @@ export const authService = {
    * Check if user is authenticated
    */
   isAuthenticated(): boolean {
-    const token = localStorage.getItem('accessToken');
-    return !!token;
+    // The access token is in memory and the refresh token in an httpOnly
+    // cookie; this is the non-secret "signed in on this browser" flag.
+    return hasStoredSession();
   },
 
   /**
@@ -435,7 +436,7 @@ export const authService = {
         refresh_token: refreshTokenValue,
       });
       // Update stored tokens
-      setTokens(response.data.access_token, response.data.refresh_token);
+      await setTokens(response.data.access_token, response.data.refresh_token);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

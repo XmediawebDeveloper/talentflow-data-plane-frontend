@@ -23,6 +23,7 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
 import { useRouter } from 'next/navigation';
 import { inviteUnitsReturnUrl, useInviteUnitsHandoff } from '@/lib/utils/inviteUnitsHandoff';
+import { getAccessToken } from '@/lib/services/api';
 
 // Addon interface
 interface Addon {
@@ -353,7 +354,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
   };
 
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     const apiKey = getApiKey();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -369,7 +370,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
 
   // Record usage via backend API (which proxies to admin API)
   const recordUsage = async (request: RecordUsageRequest): Promise<boolean> => {
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (!token) {
       setRecordError('Not authenticated. Please log in again.');
       return false;
@@ -851,7 +852,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
     setPaymentCaptured(false);
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) {
         setAddonPurchaseError('Not authenticated. Please log in again.');
         setPurchasingAddon(false);

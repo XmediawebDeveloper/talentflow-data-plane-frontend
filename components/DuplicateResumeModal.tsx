@@ -137,7 +137,8 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
       file,
       title: candidateName || 'New Resume',
       subtitle: file.name,
-      url: isPdf ? window.URL.createObjectURL(file) : undefined,
+      // Typed as PDF so the preview iframe can only ever show it as a PDF.
+      url: isPdf ? window.URL.createObjectURL(new Blob([file], { type: 'application/pdf' })) : undefined,
     });
   };
 

@@ -23,6 +23,7 @@ import SuccessAnimation from '@/components/ui/success-animation';
 import type { TermsAndConditions } from '@/lib/types/terms';
 // Auto-login support after paid signup payment — see handlePaymentSubmit.
 import { setTokens, clearTokens } from '@/lib/services/api';
+import { sanitizeHtml } from '@/lib/utils/sanitizeHtml';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -1479,13 +1480,13 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                 </div>
               ) : activeTermsTab === 'terms' ? (
                 termsConsentContent.terms ? (
-                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.terms.content_html }} style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', lineHeight: 1.7 }} />
+                  <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(termsConsentContent.terms.content_html) }} style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', lineHeight: 1.7 }} />
                 ) : (
                   <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', textAlign: 'center', padding: 40 }}>Terms &amp; Conditions content is currently unavailable. You may still proceed.</p>
                 )
               ) : (
                 termsConsentContent.privacy ? (
-                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.privacy.content_html }} style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', lineHeight: 1.7 }} />
+                  <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(termsConsentContent.privacy.content_html) }} style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', lineHeight: 1.7 }} />
                 ) : (
                   <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', textAlign: 'center', padding: 40 }}>Privacy Policy content is currently unavailable. You may still proceed.</p>
                 )

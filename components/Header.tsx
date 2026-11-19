@@ -24,6 +24,7 @@ import NameAvatar from '@/components/ui/name-avatar';
 import { clearRbacSessionCache } from '@/lib/utils/rbacSessionCache';
 import { focusRefreshDue, markRefreshed } from '@/lib/utils/focusRefresh';
 import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
+import { getAccessToken } from '@/lib/services/api';
 
 /* Highest unread count the bell badge spells out. 1-9 show as themselves;
    anything from 10 up reads "9+" — the count keeps growing behind the scenes
@@ -194,8 +195,8 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
   const [wsToken, setWsToken] = useState<string | null>(() => {
     // Initialise once from localStorage so the WS can connect immediately on mount.
     if (typeof window === 'undefined') return null;
-    const token = localStorage.getItem('accessToken');
-    console.log('[Header] wsToken initialised from localStorage:', token ? `✅ present (${token.substring(0, 20)}...)` : '❌ null/missing');
+    const token = getAccessToken();
+    console.log('[Header] wsToken initialised from localStorage:', token ? '✅ present' : '❌ null/missing');
     return token;
   });
 
@@ -211,8 +212,8 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     if (wsUserIdRef.current !== currentUserId) {
       // User identity actually changed (logged in / logged out / switched account).
       wsUserIdRef.current = currentUserId;
-      const token = currentUserId ? localStorage.getItem('accessToken') : null;
-      console.log('[Header] wsToken updated (identity change):', token ? `✅ present (${token.substring(0, 20)}...)` : '❌ null/missing');
+      const token = currentUserId ? getAccessToken() : null;
+      console.log('[Header] wsToken updated (identity change):', token ? '✅ present' : '❌ null/missing');
       setWsToken(token);
     }
     // Same user → do NOT touch wsToken. A permission refresh (or any other user-object

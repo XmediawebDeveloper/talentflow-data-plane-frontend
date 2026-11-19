@@ -3,7 +3,7 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Shield, Users, Check, X, Edit2, Save, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -144,7 +144,7 @@ export default function PermissionsPage() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) {
         setError('Not authenticated. Please log in.');
         setLoading(false);
@@ -193,7 +193,7 @@ export default function PermissionsPage() {
 
   const fetchRoleDetails = async (roleId: number, headers?: Record<string, string>) => {
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       const reqHeaders = headers || {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -243,7 +243,7 @@ export default function PermissionsPage() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) {
         throw new Error('Not authenticated');
       }

@@ -292,7 +292,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
 
   const visibleNavItems = useMemo(() => {
     const filtered = filterNavItems(allNavItems);
-    console.log('[SIDEBAR] User:', user?.email, 'Role:', user?.role);
+    console.log('[SIDEBAR] Role:', user?.role);
     console.log('[SIDEBAR] Permissions:', user?.permissions);
     console.log('[SIDEBAR] 🔍 canViewScoring:', user?.permissions?.canViewScoring);
     console.log('[SIDEBAR] 🔍 canViewAiMatch:', user?.permissions?.canViewAiMatch);

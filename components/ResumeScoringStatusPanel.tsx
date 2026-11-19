@@ -368,7 +368,7 @@ export default function ResumeScoringStatusPanel({
         console.log('[Scoring] All resumes completed successfully, auto-closing popup immediately');
         console.log('[Scoring] Building final results, scoringResumes:', scoringResumes);
         const scoredResults = scoringResumes.map(resume => {
-          console.log('[Scoring] Resume data:', resume.id, 'candidateName:', resume.candidateName, 'candidateEmail:', resume.candidateEmail);
+          console.log('[Scoring] Resume data:', resume.id);
           console.log('[Scoring] Scoring data:', 'score:', resume.score, 'criteriaScores:', resume.criteriaScores);
           console.log('[Scoring] Extended data:', 'professionalSummary:', resume.professionalSummary, 'technicalSkills:', resume.technicalSkills, 'languages:', resume.languages);
           return {

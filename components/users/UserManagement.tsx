@@ -29,7 +29,7 @@ import { ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import rbacService, { formatRoleName } from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
 import { RoleListItem } from '@/lib/types/rbac';
@@ -923,7 +923,7 @@ export default function UserManagement() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${getAccessToken()}`,
         },
         body: JSON.stringify({
           name: newUser.name,
@@ -1046,7 +1046,7 @@ export default function UserManagement() {
       const response = await fetch(`${API_URL}/users/${id}/deactivate`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${getAccessToken()}`,
         },
       });
 
@@ -1103,7 +1103,7 @@ export default function UserManagement() {
       const response = await fetch(`${API_URL}/users/${user.id}/${endpoint}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${getAccessToken()}`,
         },
       });
 
@@ -1154,7 +1154,7 @@ export default function UserManagement() {
     try {
       const response = await fetch(`${API_URL}/users/${user.id}/reset-password`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` },
       });
       if (response.status === 401) { handleUnauthorized(); return; }
       if (!response.ok) {
@@ -1187,7 +1187,7 @@ export default function UserManagement() {
       const response = await fetch(`${API_URL}/users/${user.id}/set-password`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${getAccessToken()}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -1225,7 +1225,7 @@ export default function UserManagement() {
     try {
       const response = await fetch(`${API_URL}/users/${user.id}/force-password-change`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` },
       });
       if (response.status === 401) { handleUnauthorized(); return; }
       if (!response.ok) {
@@ -1281,7 +1281,7 @@ export default function UserManagement() {
       try {
         const res = await fetch(`${API_URL}/users/${u.id}/deactivate`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+          headers: { 'Authorization': `Bearer ${getAccessToken()}` },
         });
         if (res.ok) {
           succeeded++;
@@ -1341,7 +1341,7 @@ export default function UserManagement() {
     try {
       await fetch(`${API_URL}/users/${userId}/identity-change`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` },
       });
     } catch { /* best effort — a stale request is replaced on the next save anyway */ }
   };
@@ -1353,7 +1353,7 @@ export default function UserManagement() {
     try {
       const res = await fetch(`${API_URL}/users/${editingUser.id}/identity-change/resend`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` },
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -1431,7 +1431,7 @@ export default function UserManagement() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${getAccessToken()}`,
         },
         body: JSON.stringify(requestBody),
       });
@@ -1465,7 +1465,7 @@ export default function UserManagement() {
         if (errorData.detail?.error === 'VERIFICATION_PENDING' && !otp && !staleRetried) {
           await fetch(`${API_URL}/users/${editingUser.id}/identity-change`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+            headers: { 'Authorization': `Bearer ${getAccessToken()}` },
           }).catch(() => undefined);
           setIsSaving(false);
           return await handleUpdateUser(undefined, true);
@@ -1489,7 +1489,6 @@ export default function UserManagement() {
         console.error('[UPDATE USER ERROR] Status Text:', response.statusText);
         console.error('[UPDATE USER ERROR] Error Data:', JSON.stringify(errorData, null, 2));
         console.error('[UPDATE USER ERROR] User ID that failed:', editingUser.id);
-        console.error('[UPDATE USER ERROR] User Email that failed:', editingUser.email);
         console.error('='.repeat(80));
 
         if (errorData.detail?.error === 'LAST_ADMIN_ROLE_CHANGE_BLOCKED') {

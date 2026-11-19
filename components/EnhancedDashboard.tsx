@@ -50,6 +50,7 @@ import { User, Tenant } from '@/lib/types/tenant';
 import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { getAccessToken } from '@/lib/services/api';
 
 // Module-level cache to prevent duplicate API calls across remounts
 const dashboardCache = {
@@ -307,7 +308,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
       setLoadingQuota(true);
       try {
-        const token = localStorage.getItem('accessToken');
+        const token = getAccessToken();
         if (!token) {
           console.warn('[EnhancedDashboard] No access token found');
           setLoadingQuota(false);

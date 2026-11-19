@@ -13,6 +13,7 @@ import type { TermsAcceptanceRecord, TermsAndConditions } from '@/lib/types/term
 import ListPagination from '@/components/ListPagination';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { sanitizeHtml } from '@/lib/utils/sanitizeHtml';
 
 const TITLE_TO_DOCUMENT_TYPE: Record<string, DocumentType> = {
   'Terms & Conditions': 'TERMS_AND_CONDITIONS',
@@ -318,7 +319,7 @@ export default function LegalCompliancePage() {
                   <span>{docError}</span>
                 </div>
               ) : viewingDoc ? (
-                <div dangerouslySetInnerHTML={{ __html: viewingDoc.content_html }} />
+                <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(viewingDoc.content_html) }} />
               ) : null}
             </div>
 

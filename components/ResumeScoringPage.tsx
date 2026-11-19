@@ -2521,7 +2521,7 @@ export default function ResumeScoringPage({
   const convertToScoredResumesFormat = (scoredData: ScoredResumeData) => {
     console.log('[ResumeScoringPage] Converting scored resumes:', scoredData.scoredResumes);
     return scoredData.scoredResumes.map((resume, index) => {
-      console.log('[ResumeScoringPage] Resume:', resume.id, 'candidateName:', resume.candidateName, 'candidateEmail:', resume.candidateEmail);
+      console.log('[ResumeScoringPage] Resume:', resume.id);
       const getResumeVersion = () => {
         if (resume.name === 'Sarah Johnson') return 'Current';
         if (resume.name === 'Michael Chen') return 'Version 2';

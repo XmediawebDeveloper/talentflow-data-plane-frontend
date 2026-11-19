@@ -27,7 +27,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { buildUnifiedDiff, buildDiffSidePairs } from '@/lib/utils/textDiff';
 import { formatJobExperienceText, formatJobExperienceBadge, formatExperienceLevelName } from '@/lib/utils/jobExperience';
@@ -1335,7 +1335,7 @@ Best regards`);
     console.log('[Scorecard] Requesting PDF for score_id:', fullResumeData.id);
 
     // Get token from localStorage
-    const token = localStorage.getItem('accessToken');
+    const token = getAccessToken();
     if (!token) {
       toast.error('Please login to download scorecard', { id: toastId });
       return null;
@@ -1389,7 +1389,8 @@ Best regards`);
       if (!blob) return;
       // A blob URL rather than the API URL: the endpoint needs the bearer
       // token, which an <iframe> src cannot carry.
-      setScorecardPreviewUrl(window.URL.createObjectURL(blob));
+      // Forced to PDF so the preview iframe can never run the response as HTML.
+      setScorecardPreviewUrl(window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' })));
       toast.dismiss(toastId);
     } catch (error) {
       console.error('[Scorecard] Preview error:', error);

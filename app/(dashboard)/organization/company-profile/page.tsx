@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useAuth } from '@/lib/hooks/useAuth';
 import authService from '@/lib/services/authService';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, getAccessToken } from '@/lib/services/api';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Button } from '@/components/ui/button';
@@ -338,7 +338,7 @@ export default function CompanyProfilePage() {
     setIsLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) { setError('Session expired. Please log in again.'); return; }
 
       const response = await fetch(`${API_URL}/settings/organization-profile`, {
@@ -383,7 +383,7 @@ export default function CompanyProfilePage() {
     setSuccessMessage('');
 
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAccessToken();
       if (!token) throw new Error('Session expired. Please log in again.');
 
       const response = await fetch(`${API_URL}/settings/organization-profile`, {

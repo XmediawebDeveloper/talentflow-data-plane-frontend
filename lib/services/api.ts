@@ -107,112 +107,171 @@ api.defaults.adapter = (config: InternalAxiosRequestConfig) => {
   return entry.promise;
 };
 
-// Token management
+// Token management (security sheet "full application" #5)
+//
+// The refresh token is never kept by the page: it lives in an httpOnly cookie
+// on this app's own host, written and read only by the /api/session routes
+// (app/api/session, lib/server/sessionCookies.ts). The short-lived access token
+// is held in memory only - not localStorage, not a cookie - and re-issued from
+// that cookie on each page load (restoreSession). An injected script can no
+// longer copy a session that outlives the page.
 let accessToken: string | null = null;
-let refreshToken: string | null = null;
+// Whether this browser may still have a session cookie. Starts from a
+// non-secret localStorage flag so a page load knows a refresh is worth trying.
+let hasSession = false;
+const SIGNED_IN_FLAG = 'tf_signed_in';
+// Changes on every sign-in; lets another tab tell "signed in again" apart.
+const SESSION_EPOCH_KEY = 'tf_session_epoch';
+// getTokens().refreshToken stand-in: the real token is in the httpOnly cookie.
+const SESSION_COOKIE_REFRESH = 'httponly-cookie';
+const SESSION_HEADERS = { 'Content-Type': 'application/json', 'X-TF-Session': '1' };
 
 // ✅ NEW: Permission version tracking for cache invalidation
 let permissionVersion: number | null = null;
 
-export const setTokens = (access: string, refresh: string) => {
+const readFlag = (key: string): string | null => {
+  try { return localStorage.getItem(key); } catch { return null; }
+};
+const writeFlag = (key: string, value: string | null) => {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch { /* storage unavailable */ }
+};
+
+// Tokens written by the pre-#5 code. Read once to move an existing session to
+// the cookie, then removed everywhere.
+const takeLegacyRefreshToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const legacy = readFlag('refreshToken') || Cookies.get('refreshToken') || null;
+  writeFlag('accessToken', null);
+  writeFlag('refreshToken', null);
+  Cookies.remove('accessToken', { path: '/' });
+  Cookies.remove('refreshToken', { path: '/' });
+  return legacy;
+};
+
+// The sign-in this page belongs to (see performSessionLogout).
+let pageSessionEpoch: string | null = null;
+
+if (typeof window !== 'undefined') {
+  pageSessionEpoch = readFlag(SESSION_EPOCH_KEY);
+  hasSession = readFlag(SIGNED_IN_FLAG) === '1'
+    || !!readFlag('refreshToken') || !!Cookies.get('refreshToken');
+}
+
+// Access tokens live 30 minutes. Renew shortly before expiry (and when a tab
+// wakes up) so the many raw fetch() callers that read getAccessToken() never
+// send an expired token; only axios/authFetch retry a 401 on their own.
+const RENEW_BEFORE_EXPIRY_MS = 2 * 60 * 1000;
+let accessTokenExpiresAt = 0;
+let renewTimer: ReturnType<typeof setTimeout> | null = null;
+
+const renewSoon = () => {
+  if (!hasSession || !accessToken) return;
+  refreshAccessToken(SESSION_COOKIE_REFRESH).catch(() => {
+    // A 401 here means the session ended; the next request shows that.
+  });
+};
+
+const scheduleRenewal = () => {
+  if (typeof window === 'undefined') return;
+  if (renewTimer) clearTimeout(renewTimer);
+  renewTimer = null;
+  if (!accessTokenExpiresAt) return;
+  const delay = Math.max(10_000, accessTokenExpiresAt - Date.now() - RENEW_BEFORE_EXPIRY_MS);
+  renewTimer = setTimeout(renewSoon, delay);
+};
+
+if (typeof window !== 'undefined') {
+  // Timers are paused or delayed in background tabs and on sleep.
+  const renewIfStale = () => {
+    if (document.visibilityState !== 'visible') return;
+    if (accessTokenExpiresAt && accessTokenExpiresAt - Date.now() < RENEW_BEFORE_EXPIRY_MS) renewSoon();
+  };
+  document.addEventListener('visibilitychange', renewIfStale);
+  window.addEventListener('focus', renewIfStale);
+}
+
+const applyAccessToken = (access: string) => {
   accessToken = access;
-  refreshToken = refresh;
-
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('accessToken', access);
-    localStorage.setItem('refreshToken', refresh);
-
-    // ✅ NEW: Extract and store permission version from JWT
-    try {
-      const payload = JSON.parse(atob(access.split('.')[1]));
-      if (payload.permission_version) {
-        permissionVersion = payload.permission_version;
-        localStorage.setItem('permission_version', String(permissionVersion));
-        console.log('[AUTH] Stored permission version:', permissionVersion);
-      }
-    } catch (e) {
-      console.log('[AUTH] Could not extract permission version from token');
+  accessTokenExpiresAt = 0;
+  try {
+    // JWT segments are base64url.
+    const payload = JSON.parse(atob(access.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (typeof payload.exp === 'number') accessTokenExpiresAt = payload.exp * 1000;
+    if (payload.permission_version) {
+      permissionVersion = payload.permission_version;
+      writeFlag('permission_version', String(permissionVersion));
     }
-
-    // Detect browser for optimal cookie settings
-    const getBrowserInfo = () => {
-      if (typeof navigator === 'undefined') return { name: 'unknown', isIOS: false };
-
-      const ua = navigator.userAgent.toLowerCase();
-      const isIOS = /iphone|ipad|ipod/.test(ua);
-      return {
-        name: ua.includes('firefox') ? 'firefox'
-            : isIOS && ua.includes('safari') ? 'ios-safari'
-            : ua.includes('safari') && !ua.includes('chrome') ? 'safari'
-            : ua.includes('arc') ? 'arc'
-            : ua.includes('chrome') ? 'chrome'
-            : 'other',
-        isIOS,
-        platform: navigator.platform
-      };
-    };
-
-    const browser = getBrowserInfo();
-
-    // Use universal cookie settings that work across all browsers
-    // Use 'lax' for better compatibility - 'strict' can be too restrictive in Firefox
-    const cookieOptions: Cookies.CookieAttributes = {
-      path: '/',
-      sameSite: 'lax',  // 'lax' provides good security while maintaining compatibility
-      secure: window.location.protocol === 'https:',
-      // Add domain for cross-subdomain support if needed
-      // domain: window.location.hostname.replace(/^[^.]+\./g, '') // e.g., .example.com
-    };
-
-    // Set cookies
-    Cookies.set('accessToken', access, { ...cookieOptions, expires: 7 });
-    Cookies.set('refreshToken', refresh, { ...cookieOptions, expires: 30 });
-
-    // Verify cookies were set (all privacy browsers can silently fail)
-    const verifyAccess = Cookies.get('accessToken');
-    if (!verifyAccess) {
-      console.warn(`[AUTH] ${browser.name} cookie set failed - relying on localStorage`, {
-        browser: browser.name,
-        isIOS: browser.isIOS,
-        secure: cookieOptions.secure,
-        protocol: window.location.protocol
-      });
-    } else {
-      console.log('[AUTH] Cookies set successfully', {
-        browser: browser.name,
-        isIOS: browser.isIOS
-      });
-    }
-
-    // iOS Safari has unique cookie limitations in web views
-    if (browser.isIOS && (browser.name === 'safari' || browser.name === 'ios-safari')) {
-      // iOS Safari in standalone/web view mode may not persist cookies
-      // Ensure localStorage is the source of truth
-      console.log('[AUTH] iOS Safari detected - localStorage will be primary storage');
-    }
+  } catch {
+    // Not a JWT we can read - the permission version just isn't tracked.
   }
+  scheduleRenewal();
+};
+
+/**
+ * Start (or rotate) the session: access token into memory, refresh token into
+ * the httpOnly cookie. Await it before navigating away, so the next page finds
+ * the cookie.
+ */
+export const setTokens = (access: string, refresh?: string | null): Promise<void> => {
+  applyAccessToken(access);
+  if (typeof window === 'undefined') return Promise.resolve();
+  hasSession = true;
+  takeLegacyRefreshToken();
+  writeFlag(SIGNED_IN_FLAG, '1');
+  if (!refresh) return Promise.resolve();
+  pageSessionEpoch = `${Date.now()}`;
+  writeFlag(SESSION_EPOCH_KEY, pageSessionEpoch);
+  return fetch('/api/session', {
+    method: 'POST',
+    headers: SESSION_HEADERS,
+    body: JSON.stringify({ refresh_token: refresh }),
+    credentials: 'same-origin',
+    keepalive: true,   // survives a navigation that starts right after login
+  }).then((res) => {
+    if (!res.ok) console.warn('[AUTH] Could not save the session cookie:', res.status);
+  }).catch((err) => {
+    console.warn('[AUTH] Could not save the session cookie:', err);
+  });
 };
 
 export const getTokens = () => {
-  if (!accessToken && typeof window !== 'undefined') {
-    // Try localStorage first; fall back to cookies (Firefox private mode can restrict localStorage)
-    try {
-      accessToken = localStorage.getItem('accessToken');
-      refreshToken = localStorage.getItem('refreshToken');
-      const storedVersion = localStorage.getItem('permission_version');
-      if (storedVersion) {
-        permissionVersion = parseInt(storedVersion, 10);
+  return { accessToken, refreshToken: hasSession ? SESSION_COOKIE_REFRESH : null };
+};
+
+/** The in-memory access token (null before restoreSession on a fresh page). */
+export const getAccessToken = (): string | null => accessToken;
+
+/** True when this browser has (or may have) a signed-in session. Non-secret. */
+export const hasStoredSession = (): boolean => hasSession;
+
+let restoreInFlight: Promise<boolean> | null = null;
+
+/**
+ * Get an access token for this page from the session cookie. Safe to call many
+ * times; resolves true when the page has a usable access token. A legacy
+ * localStorage session is moved to the cookie first, so nobody is signed out
+ * by the switch.
+ */
+export const restoreSession = (): Promise<boolean> => {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  if (accessToken) return Promise.resolve(true);
+  if (!hasSession) return Promise.resolve(false);
+  if (!restoreInFlight) {
+    restoreInFlight = (async () => {
+      const legacy = takeLegacyRefreshToken();
+      if (legacy) await setTokens('', legacy);
+      try {
+        await refreshAccessToken(SESSION_COOKIE_REFRESH);
+        return true;
+      } catch {
+        return false;
       }
-    } catch {
-      // localStorage unavailable (e.g. Firefox strict ETP in private mode)
-    }
-    // Cookie fallback — set by setTokens() alongside localStorage
-    if (!accessToken) {
-      accessToken = Cookies.get('accessToken') ?? null;
-      refreshToken = Cookies.get('refreshToken') ?? null;
-    }
+    })().finally(() => { restoreInFlight = null; });
   }
-  return { accessToken, refreshToken };
+  return restoreInFlight;
 };
 
 // ✅ NEW: Permission version helper functions
@@ -249,15 +308,17 @@ export const clearPermissionVersion = (): void => {
 
 export const clearTokens = () => {
   accessToken = null;
-  refreshToken = null;
+  hasSession = false;
+  accessTokenExpiresAt = 0;
+  scheduleRenewal();  // cancels a pending renewal
 
   if (typeof window !== 'undefined') {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-
-    // Remove cookies with the same path used when setting them
-    Cookies.remove('accessToken', { path: '/' });
-    Cookies.remove('refreshToken', { path: '/' });
+    takeLegacyRefreshToken();
+    writeFlag(SIGNED_IN_FLAG, null);
+    // Drop the httpOnly session cookie (only the server can).
+    void fetch('/api/session', {
+      method: 'DELETE', headers: SESSION_HEADERS, credentials: 'same-origin', keepalive: true,
+    }).catch(() => { /* cookie expires on its own; the backend session is already revoked */ });
 
     // Drop unsent support-ticket drafts (saved per user by SupportCenter) so the
     // next person on this browser never sees them.
@@ -346,8 +407,8 @@ export const performSessionLogout = () => {
   // The user already signed in again in another tab: this tab only holds the
   // old token. Clearing here would wipe the NEW session and raise the modal
   // in that tab too — a loop. Reload onto the new session instead.
-  const storedAccess = localStorage.getItem('accessToken');
-  if (storedAccess && storedAccess !== accessToken) {
+  const epoch = readFlag(SESSION_EPOCH_KEY);
+  if (epoch && epoch !== pageSessionEpoch) {
     forceNavigate(window.location.href);
     return;
   }
@@ -374,6 +435,7 @@ export const authFetch = async (
   url: string,
   options: RequestInit = {}
 ): Promise<Response> => {
+  if (!getAccessToken() && hasSession) await restoreSession();
   const { accessToken } = getTokens();
 
   const headers = {
@@ -415,7 +477,9 @@ export const authFetch = async (
 
 // Request interceptor - add auth token
 api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
+    // Fresh page: the access token is re-issued from the session cookie first.
+    if (!getAccessToken() && hasSession) await restoreSession();
     const { accessToken } = getTokens();
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
@@ -609,14 +673,27 @@ export const dispatchPlanChangePendingEvent = (detail: PlanChangePendingDetail) 
 // (success or failure) so a later expiry starts a fresh refresh.
 let refreshInFlight: Promise<string> | null = null;
 
-const refreshAccessToken = (currentRefreshToken: string): Promise<string> => {
+// The refresh token is in the httpOnly cookie, so the refresh goes through this
+// app's /api/session/refresh route (it calls the backend's /auth/refresh). The
+// argument is kept for older callers and ignored.
+const refreshAccessToken = (_currentRefreshToken?: string): Promise<string> => {
   if (!refreshInFlight) {
-    refreshInFlight = axios
-      .post(`${API_BASE_URL}/auth/refresh`, { refresh_token: currentRefreshToken })
-      .then((response) => {
-        const { access_token, refresh_token } = response.data;
-        setTokens(access_token, refresh_token);
-        return access_token as string;
+    refreshInFlight = fetch('/api/session/refresh', {
+      method: 'POST', headers: SESSION_HEADERS, credentials: 'same-origin', cache: 'no-store',
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.access_token) {
+          if (res.status === 401) {
+            // The session is gone (logged out, revoked, expired).
+            hasSession = false;
+            writeFlag(SIGNED_IN_FLAG, null);
+          }
+          throw Object.assign(new Error(data?.detail || 'Session refresh failed'), { status: res.status });
+        }
+        applyAccessToken(data.access_token);
+        hasSession = true;
+        return data.access_token as string;
       })
       .finally(() => {
         refreshInFlight = null;

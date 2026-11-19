@@ -70,6 +70,7 @@ import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
 import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
 import { useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { getAccessToken } from '@/lib/services/api';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -922,7 +923,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '').replace(/\/api\/v1$/, '') || 'localhost:8000';
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    const token = typeof window !== 'undefined' ? getAccessToken() : null;
     if (!token) return;
 
     const wsUrl = `${protocol}//${apiBase}/api/v1/ws/ai-interview/${liveSession.id}/monitor?token=${encodeURIComponent(token)}`;
@@ -2033,7 +2034,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       const results = await resumeService.list({ search: email, page_size: 50, include_archived: true });
       const items = results.items || [];
       const match: any = pickResumeByEmail(items as any[], email, interview.candidate_name || liveSession.candidate_name);
-      console.info('[CandidateResultsView] resume lookup by e-mail', { email, hits: items.length, matched: match?.id ?? null });
+      console.info('[CandidateResultsView] resume lookup by e-mail', { hits: items.length, matched: match?.id ?? null });
       if (match?.id) setResumeEmailMismatch(false);
       return match?.id || null;
     } catch (err) {

@@ -648,7 +648,7 @@ export default function CandidateResultDetails({
           // get(id) without logView — an availability check, not a view.
           const verified = await verifyResumeBelongsToInvite(match.resume_id, email, id => resumeService.get(id));
           if (verified) return verified;
-          console.info('[CandidateResultDetails] linked resume rejected: missing or e-mail mismatch', { resumeId: match.resume_id, email });
+          console.info('[CandidateResultDetails] linked resume rejected: missing or e-mail mismatch', { resumeId: match.resume_id });
           setResumeEmailMismatch(true);
         } catch (err) {
           // Never shown unverified; the e-mail search below may still find it.
@@ -679,7 +679,7 @@ export default function CandidateResultDetails({
       const results = await resumeService.list({ search: email, page_size: 50, include_archived: true });
       const items = results.items || [];
       const byEmail: any = pickResumeByEmail(items as any[], email, name);
-      console.info('[CandidateResultDetails] resume lookup by e-mail', { email, hits: items.length, matched: byEmail?.id ?? null, name });
+      console.info('[CandidateResultDetails] resume lookup by e-mail', { hits: items.length, matched: byEmail?.id ?? null });
       if (byEmail?.id) setResumeEmailMismatch(false);
       return byEmail?.id || null;
     } catch (err) {
