@@ -170,3 +170,103 @@ export function InterviewIllustration() {
     </Illustration>
   );
 }
+
+/** Create JD, nothing generated yet: AI writing a job description — text
+ *  lines on a page, a cursor at the last one, and a magic wand with sparkles. */
+export function GenerateJDIllustration() {
+  /* x, y, width of each text line on the page. */
+  const lines: [number, number, number][] = [
+    [92, 52, 40], [92, 64, 52], [92, 74, 46], [92, 84, 52], [92, 94, 30],
+  ];
+  return (
+    <Illustration>
+      {ids => (
+        <>
+          {/* The page being written, with a soft shadow under it. */}
+          <rect x="80" y="20" width="76" height="98" rx="8" fill={DEEP} opacity="0.12" transform="translate(3 4)" />
+          <rect x="80" y="20" width="76" height="98" rx="8" fill="#fff" />
+          <rect x="80" y="20" width="76" height="22" rx="8" fill={`url(#${ids.blue})`} />
+          <rect x="80" y="34" width="76" height="8" fill={`url(#${ids.blue})`} />
+          <circle cx="93" cy="31" r="5" fill="#fff" opacity="0.9" />
+          <rect x="102" y="27" width="34" height="4" rx="2" fill="#fff" opacity="0.9" />
+          <rect x="102" y="34" width="22" height="3" rx="1.5" fill="#fff" opacity="0.6" />
+          {lines.map(([x, y, w], i) => (
+            <rect
+              key={i}
+              x={x}
+              y={y}
+              width={w}
+              height="4"
+              rx="2"
+              fill={i === 0 ? ACCENT : '#A9CBFF'}
+            />
+          ))}
+          <rect x="125" y="91" width="2.5" height="10" rx="1" fill={DEEP} />
+          {/* Magic wand, its tip glowing over the page's corner. */}
+          <path d="M196 104l-34-34" stroke={DEEP} strokeWidth="7" strokeLinecap="round" />
+          <path d="M196 104l-34-34" stroke="#6AA5FF" strokeWidth="3" strokeLinecap="round" opacity="0.6" />
+          <path d="M170 78l-8-8" stroke="#fff" strokeWidth="7" strokeLinecap="round" />
+          <circle cx="160" cy="68" r="11" fill="#A9CBFF" opacity="0.5" />
+          {/* AI sparkles: four-point stars around the wand and page. */}
+          {([[160, 68, 9], [182, 40, 7], [60, 46, 6], [204, 80, 5], [62, 98, 4]] as const).map(([cx, cy, r], i) => (
+            <path
+              key={i}
+              d={`M${cx} ${cy - r}C${cx + r * 0.15} ${cy - r * 0.15} ${cx + r * 0.15} ${cy - r * 0.15} ${cx + r} ${cy}C${cx + r * 0.15} ${cy + r * 0.15} ${cx + r * 0.15} ${cy + r * 0.15} ${cx} ${cy + r}C${cx - r * 0.15} ${cy + r * 0.15} ${cx - r * 0.15} ${cy + r * 0.15} ${cx - r} ${cy}C${cx - r * 0.15} ${cy - r * 0.15} ${cx - r * 0.15} ${cy - r * 0.15} ${cx} ${cy - r}z`}
+              fill={i === 0 ? '#fff' : i % 2 ? ACCENT : '#7FB0FF'}
+              stroke={i === 0 ? ACCENT : 'none'}
+              strokeWidth={i === 0 ? 1.5 : 0}
+            />
+          ))}
+          <circle cx="40" cy="72" r="3.5" fill="none" stroke="#7FB0FF" strokeWidth="2" />
+          <circle cx="214" cy="56" r="3" fill="none" stroke="#7FB0FF" strokeWidth="2" />
+        </>
+      )}
+    </Illustration>
+  );
+}
+
+/** Create JD, manual input, nothing written yet: a pencil writing the job
+ *  description page, with a clipboard behind it for "paste". The same page as
+ *  GenerateJDIllustration, so the two modes read as a pair — pencil instead of
+ *  wand, and no AI sparkles. */
+export function ManualJDIllustration() {
+  /* x, y, width of each text line; the last is mid-sentence at the pencil. */
+  const lines: [number, number, number][] = [
+    [92, 52, 40], [92, 64, 52], [92, 74, 46], [92, 84, 52], [92, 94, 38],
+  ];
+  return (
+    <Illustration>
+      {ids => (
+        <>
+          <Sparkles />
+          {/* Clipboard tucked behind the page. */}
+          <g transform="rotate(-10 78 72)">
+            <rect x="52" y="32" width="50" height="78" rx="7" fill="#DCE9FF" stroke="#A9CBFF" strokeWidth="2" />
+            <rect x="66" y="27" width="22" height="10" rx="3" fill={`url(#${ids.light})`} />
+            <path d="M60 52h18M60 62h14M60 72h18" stroke="#A9CBFF" strokeWidth="3" strokeLinecap="round" />
+          </g>
+          {/* The page, with a soft shadow under it. */}
+          <rect x="80" y="20" width="76" height="98" rx="8" fill={DEEP} opacity="0.12" transform="translate(3 4)" />
+          <rect x="80" y="20" width="76" height="98" rx="8" fill="#fff" />
+          <rect x="80" y="20" width="76" height="22" rx="8" fill={`url(#${ids.blue})`} />
+          <rect x="80" y="34" width="76" height="8" fill={`url(#${ids.blue})`} />
+          <circle cx="93" cy="31" r="5" fill="#fff" opacity="0.9" />
+          <rect x="102" y="27" width="34" height="4" rx="2" fill="#fff" opacity="0.9" />
+          <rect x="102" y="34" width="22" height="3" rx="1.5" fill="#fff" opacity="0.6" />
+          {lines.map(([x, y, w], i) => (
+            <rect key={i} x={x} y={y} width={w} height="4" rx="2" fill={i === 0 ? ACCENT : '#A9CBFF'} />
+          ))}
+          {/* Pencil, its point at the end of the last line. */}
+          <g transform="translate(132 98) rotate(-45)">
+            <path d="M0 0l10-5.5v11z" fill="#FCE3C4" />
+            <path d="M0 0l3.6-2v4z" fill="#0F1E3D" />
+            <rect x="10" y="-5.5" width="46" height="11" fill={`url(#${ids.blue})`} />
+            <rect x="10" y="-1.2" width="46" height="2.4" fill="#fff" opacity="0.35" />
+            <rect x="56" y="-5.5" width="5" height="11" fill="#E6EFFE" />
+            <rect x="61" y="-5.5" width="10" height="11" rx="3" fill="#A9CBFF" />
+          </g>
+        </>
+      )}
+    </Illustration>
+  );
+}

@@ -4180,3 +4180,39 @@ tbody tr.tf-row-match[data-row-selected="true"]:hover { background-color: color-
   .tf-hbtn:is(:hover, :focus-visible) .tf-hicon-sun .tf-hicon-rays,
   .tf-hbtn:is(:hover, :focus-visible) .tf-hicon-monitor { transform: none; }
 }
+
+/* Create JD mode cards (components/jobs/JDModeIcons.tsx): the selected card's
+   icon moves — AI sparkles twinkle, the pencil writes its line. Only under
+   [data-active=true]; still under reduced motion. */
+.tf-mode-star-main, .tf-mode-star-a, .tf-mode-star-b,
+.tf-mode-ink, .tf-mode-pencil { transform-box: fill-box; }
+.tf-mode-star-main, .tf-mode-star-a, .tf-mode-star-b { transform-origin: center; }
+.tf-mode-ink { transform-origin: left center; }
+[data-active="true"] .tf-mode-star-main { animation: tf-mode-star-main 2.4s ease-in-out infinite; }
+[data-active="true"] .tf-mode-star-a { animation: tf-mode-twinkle 1.6s ease-in-out infinite; }
+[data-active="true"] .tf-mode-star-b { animation: tf-mode-twinkle 1.6s ease-in-out .8s infinite both; }
+@keyframes tf-mode-star-main {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(.86) rotate(12deg); }
+}
+@keyframes tf-mode-twinkle {
+  0%, 100% { transform: scale(.4); opacity: .35; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+[data-active="true"] .tf-mode-ink { animation: tf-mode-ink 2.2s cubic-bezier(.22,1,.36,1) infinite; }
+[data-active="true"] .tf-mode-pencil { animation: tf-mode-pencil 2.2s cubic-bezier(.22,1,.36,1) infinite; }
+@keyframes tf-mode-ink {
+  0% { transform: scaleX(0); opacity: 1; }
+  55% { transform: scaleX(1); opacity: 1; }
+  85% { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+@keyframes tf-mode-pencil {
+  0% { transform: translateX(-10px); }
+  55%, 85% { transform: translateX(0); }
+  100% { transform: translateX(-10px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-active="true"] .tf-mode-star-main, [data-active="true"] .tf-mode-star-a, [data-active="true"] .tf-mode-star-b,
+  [data-active="true"] .tf-mode-ink, [data-active="true"] .tf-mode-pencil { animation: none; }
+}
