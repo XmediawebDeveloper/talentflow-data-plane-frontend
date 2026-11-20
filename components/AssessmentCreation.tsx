@@ -3,7 +3,7 @@
 import { formatExperienceRange, formatJdExperience } from '@/lib/utils/jobExperience';
 import ChipsReveal from '@/components/ui/chips-reveal';
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
-import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw, ClipboardList, FileSearch } from 'lucide-react';
+import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, ChevronRight, RefreshCw, ClipboardList, FileSearch } from 'lucide-react';
 import { SectionHeader, SummaryLocation } from '@/components/ai-interview/ConfigSummary';
 import { isLiveAssessmentStatus, type AssessmentResponse, type HRTopic } from '@/lib/services/assessmentService';
 import { Button } from '@/components/ui/button';
@@ -96,6 +96,39 @@ const filterCompilable = (langs: string[] | undefined | null): string[] => {
  * held, so a second one can't be made in the first place.
  */
 const JD_RADIO_GROUP = 'assessment-jd-version-selection';
+
+/**
+ * Ref for the two Configure columns (both `lg:sticky lg:self-start`).
+ *
+ * Each column scrolls with the page until its OWN end is on screen, then
+ * stops; the longer one keeps scrolling, and both leave together at the foot
+ * of the row. A column that fits the screen simply pins at the top.
+ *
+ * That is `position: sticky` with `top = min(gap, viewport - height - gap)`:
+ * negative for a column taller than the screen, so it pins only once its
+ * bottom has arrived. The height is measured (ResizeObserver), since cards
+ * open and close. A module-level function, not a hook, so its identity is
+ * stable and React attaches it once; the returned function is the cleanup.
+ */
+function stickyColumnRef(el: HTMLDivElement | null) {
+  if (!el) return;
+  const GAP = 24;
+  let scroller: HTMLElement | null = el.parentElement;
+  while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+  const measure = () => {
+    const port = scroller ? scroller.clientHeight : window.innerHeight;
+    el.style.top = `${Math.min(GAP, port - el.offsetHeight - GAP)}px`;
+  };
+  measure();
+  const observer = new ResizeObserver(measure);
+  observer.observe(el);
+  if (scroller) observer.observe(scroller);
+  window.addEventListener('resize', measure);
+  return () => {
+    observer.disconnect();
+    window.removeEventListener('resize', measure);
+  };
+}
 
 /**
  * The green badge a JD VERSION carries once it has an assessment — on the job
@@ -3487,13 +3520,18 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
    * card, and it owns the scrolling — so repeating them stacked two white
    * cards inside a rounded frame and nested a scroll container in a scroll
    * container. Same content either way; only the frame around it differs. */
+  /* Scrolling is the app shell's (`.tf-page-scroll`), exactly as on the AI
+     Interview Configure page: this shell is NOT a scroll container of its own.
+     It used to be (`overflow-y-auto`), which gave Configure a second, inner
+     scrollbar that the breadcrumb and sidebar pinned against instead of the
+     page's. The sheet fills the screen like AI Interview's, too. */
   const stepShellClass = embedded
     ? 'relative'
-    : 'tf-page overflow-x-hidden overflow-y-auto relative';
+    : 'tf-page relative';
   const stepColumnClass = embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]';
   const stepCardClass = embedded
     ? 'p-4 sm:p-5 w-full'
-    : 'tf-page-sheet';
+    : 'tf-page-sheet min-h-[calc(100dvh-7rem)]';
 
   // Deep-linked with a JD already chosen (Job Details → Assessment → Create,
   // which lands on ?step=configure&jd_id=…). The auto-select effect can only run
@@ -3639,16 +3677,21 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               <Button
                 variant="primary"
                 onClick={() => {
-                  if (!canCreateJd) return;
+                  /* A job is already picked: Create New Job is off until the
+                     selection is cleared. */
+                  if (!canCreateJd || jdPick) return;
                   handleCreateNewJD();
                 }}
-                aria-disabled={!canCreateJd}
-                title={!canCreateJd ? 'You do not have permission to create job descriptions' : undefined}
-                className={`flex-shrink-0 ${!canCreateJd ? 'opacity-50 cursor-not-allowed' : ''}`}
-                icon={<Plus className="w-4 h-4" />}
+                aria-disabled={!canCreateJd || !!jdPick}
+                title={!canCreateJd
+                  ? 'You do not have permission to create job descriptions'
+                  : jdPick ? 'Clear the selected job to create a new one' : undefined}
+                className={`flex-shrink-0 ${!canCreateJd || jdPick ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
+                {/* Text then a chevron, like the cards' Create button — no "+". */}
                 <span className="hidden sm:inline">Create New Job</span>
                 <span className="sm:hidden">New Job</span>
+                <ChevronRight className="w-4 h-4" />
               </Button>
             }
           />
@@ -3866,6 +3909,44 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   const skippedNote = newerVersionsNote(job, allJdVersions, version =>
                     versionHasAssessment(versionKey, version.id), 'an assessment');
 
+                  const cardBadges = (
+                    <>
+                          {(() => {
+                            // Same detection `handleJobSelect` uses, so the
+                            // badge matches what configuration will actually
+                            // do — and the same helper the version rows below
+                            // call, so a card and its own v3 row cannot
+                            // disagree. See `codingRequiredFor`.
+                            const codingDetected = codingRequiredFor(job);
+                            return codingDetected ? (
+                              <span className="px-2 sm:px-2.5 py-1 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded text-xs flex items-center gap-1 whitespace-nowrap flex-shrink-0">
+                                <Code className="w-3 h-3" />
+                                Coding
+                              </span>
+                            ) : (
+                              <span className="px-2 sm:px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs flex items-center gap-1 whitespace-nowrap flex-shrink-0">
+                                <Code className="w-3 h-3" />
+                                {/* "No Coding" on phones too — a bare "N/A"
+                                    beside a code icon did not say what was not
+                                    applicable. */}
+                                No Coding
+                              </span>
+                            );
+                          })()}
+
+                          {/* Assessment status for the version this card acts
+                              on. Green where one exists, neutral where the
+                              version is still free — and it names the version
+                              whenever that is not the latest, so the badge can
+                              never be read as a statement about the job. */}
+                          <AssessmentStatusBadge
+                            created={latestHasAssessment}
+                            createdAt={latestAssessment?.createdAt}
+                          />
+
+                    </>
+                  );
+
                   return (
                     <div
                       key={job.id}
@@ -3957,7 +4038,6 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                 ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
                                 : job}
                               metaSingleLine
-                              phoneGrid
                               /* Coloured like the Job Openings badges; applicants read "scored". */
                               coloredCountBadges
                               applicantsLabel="scored"
@@ -3986,94 +4066,13 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           )}
                         </div>
 
-                        {/* Right side — the coding round this JD implies, the
-                            assessment state of the version this card would
-                            build against, its action, and the eye that reads
-                            the full version history. */}
-                        {/* Phones: this row wraps under the job, so it starts
-                            where the job's text does (past the radio, `pl-6`)
-                            rather than hugging the right edge on its own. */}
-                        <div className="flex flex-wrap items-center justify-end max-sm:justify-start max-sm:pl-6 gap-2 sm:gap-3 w-full sm:w-auto sm:flex-shrink-0">
-                          {(() => {
-                            // Same detection `handleJobSelect` uses, so the
-                            // badge matches what configuration will actually
-                            // do — and the same helper the version rows below
-                            // call, so a card and its own v3 row cannot
-                            // disagree. See `codingRequiredFor`.
-                            const codingDetected = codingRequiredFor(job);
-                            return codingDetected ? (
-                              <span className="px-2 sm:px-2.5 py-1 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded text-xs flex items-center gap-1 whitespace-nowrap flex-shrink-0">
-                                <Code className="w-3 h-3" />
-                                Coding
-                              </span>
-                            ) : (
-                              <span className="px-2 sm:px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs flex items-center gap-1 whitespace-nowrap flex-shrink-0">
-                                <Code className="w-3 h-3" />
-                                {/* "No Coding" on phones too — a bare "N/A"
-                                    beside a code icon did not say what was not
-                                    applicable. */}
-                                No Coding
-                              </span>
-                            );
-                          })()}
-
-                          {/* Assessment status for the version this card acts
-                              on. Green where one exists, neutral where the
-                              version is still free — and it names the version
-                              whenever that is not the latest, so the badge can
-                              never be read as a statement about the job. */}
-                          <AssessmentStatusBadge
-                            created={latestHasAssessment}
-                            createdAt={latestAssessment?.createdAt}
-                          />
-
-                          {/* Create Assessment — always on the card, live only
-                              where the version it acts on is published (or
-                              republished) AND still free. It goes inert rather
-                              than disappearing on a version that already has
-                              one: a button that vanishes reads as this job
-                              having no action at all, where a greyed one beside
-                              a "Created" badge says exactly why. The version
-                              history stays open either way. */}
-                          {/* The action is the plus — same size and shape as
-                              the eye beside it, with the words in its label and
-                              tooltip where a screen reader and a hover find
-                              them. */}
-                          {/* Inert while any + on the picker is mid-action, and
-                              the pressed one turns its plus into the spinner —
-                              see `handleCreateForVersion`. The pressed button
-                              keeps its live colours so the row the recruiter
-                              acted on is the one that reads as working.
-
-                              Inert too until the eligibility index has landed.
-                              `isLoadingJobs` starts false and is raised by the
-                              mount effect, so the standalone route paints these
-                              rows from its `jobs` prop one frame before anyone
-                              knows which versions already have an assessment —
-                              and `versionHasAssessment` reads an empty set in
-                              that frame, which reports every version as free. A
-                              press landing there would carry a taken version
-                              into Configure, where nothing checks again. */}
-                          <button
-                            type="button"
-                            disabled={!latestAdd.enabled || !!startingAssessmentFor || !hasLoadedAssessmentEligibility || jobsLoadError === 'eligibility'}
-                            aria-busy={startingAssessmentFor === job.id}
-                            onClick={() => latestAdd.enabled && handleCreateForVersion(job)}
-                            className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all flex-shrink-0 ${
-                              latestAdd.enabled && hasLoadedAssessmentEligibility && jobsLoadError !== 'eligibility' && (!startingAssessmentFor || startingAssessmentFor === job.id)
-                                ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-white/10'
-                                : ADD_BUTTON_DISABLED
-                            }`}
-                            aria-label={latestAdd.label}
-                            title={latestAdd.label}
-                          >
-                            {startingAssessmentFor === job.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Plus className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-
+                        {/* Same layout as the AI Interview picker at every width: the eye
+                            stays at the card's top-right, and the actions sit in one
+                            right-aligned row at the card's foot. The Coding / Assessment
+                            badges ride beside the eye from sm, and join the foot row on
+                            phones. */}
+                        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                          <div className="hidden sm:flex items-center gap-3">{cardBadges}</div>
                           {/* A button, not a link: the popup reads a version
                               without navigating away from a half-made
                               assessment. Opens on the LIST — this Eye is about
@@ -4094,9 +4093,11 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         </div>
                       </div>
 
-                      {/* View Versions — the card's bottom-right corner, on its
-                          own single horizontal row so it clears the details
-                          above it whatever they wrap to.
+                      {/* Card actions — one right-aligned row at the card's
+                          foot, as on the AI Interview picker: View Versions |
+                          Create Config (plus the badges on phones).
+
+                          View Versions:
 
                           UNCONDITIONAL, and never disabled — not when the
                           latest version already has an assessment, and not when
@@ -4115,8 +4116,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           card's radio and Add act on that version directly
                           (needsVersionPicker). The eye still opens the full
                           history. */}
-                      {showVersionPicker && (
-                        <div className="mt-3 flex items-center justify-end max-sm:justify-start max-sm:pl-6 gap-2">
+                      <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                        <div className="flex flex-wrap items-center gap-2 sm:hidden">{cardBadges}</div>
+                        {showVersionPicker && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -4138,8 +4140,55 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             {versionsExpanded ? 'Hide Versions' : 'View Versions'}
                             <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
                           </button>
-                        </div>
-                      )}
+                        )}
+                          {/* Create Assessment — always on the card, live only
+                              where the version it acts on is published (or
+                              republished) AND still free. It goes inert rather
+                              than disappearing on a version that already has
+                              one: a button that vanishes reads as this job
+                              having no action at all, where a greyed one beside
+                              a "Created" badge says exactly why. The version
+                              history stays open either way. */}
+                          {/* Inert while any Create on the picker is mid-action, and
+                              the pressed one turns its chevron into the spinner —
+                              see `handleCreateForVersion`. The pressed button
+                              keeps its live colours so the row the recruiter
+                              acted on is the one that reads as working.
+
+                              Inert too until the eligibility index has landed.
+                              `isLoadingJobs` starts false and is raised by the
+                              mount effect, so the standalone route paints these
+                              rows from its `jobs` prop one frame before anyone
+                              knows which versions already have an assessment —
+                              and `versionHasAssessment` reads an empty set in
+                              that frame, which reports every version as free. A
+                              press landing there would carry a taken version
+                              into Configure, where nothing checks again. */}
+                          <button
+                            type="button"
+                            disabled={!latestAdd.enabled || !!startingAssessmentFor || !hasLoadedAssessmentEligibility || jobsLoadError === 'eligibility'}
+                            aria-busy={startingAssessmentFor === job.id}
+                            onClick={() => latestAdd.enabled && handleCreateForVersion(job)}
+                            className={`h-7 px-2.5 inline-flex items-center justify-center gap-1 rounded-md ring-1 text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
+                              latestAdd.enabled && hasLoadedAssessmentEligibility && jobsLoadError !== 'eligibility' && (!startingAssessmentFor || startingAssessmentFor === job.id)
+                                ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-white/10'
+                                : ADD_BUTTON_DISABLED
+                            }`}
+                            aria-label={latestAdd.label}
+                            title={latestAdd.label}
+                          >
+                            {/* "Create Config ›", same as the AI Interview picker's
+                                card button; the chevron turns into the spinner. */}
+                            <span className="sm:hidden">Create</span>
+                            <span className="hidden sm:inline">Create Config</span>
+                            {startingAssessmentFor === job.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+
+                      </div>
 
                       {/* Version history, expanded in place — the same panel
                           the Job Openings list opens, newest version first,
@@ -4300,7 +4349,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                   disabled={!add.enabled || !!startingAssessmentFor || !hasLoadedAssessmentEligibility || jobsLoadError === 'eligibility'}
                                   aria-busy={startingAssessmentFor === versionJob.id}
                                   onClick={() => add.enabled && handleCreateForVersion(versionJob)}
-                                  className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all ${
+                                  className={`h-7 px-2.5 inline-flex items-center justify-center gap-1 rounded-md ring-1 text-xs font-medium whitespace-nowrap transition-all ${
                                     add.enabled && hasLoadedAssessmentEligibility && jobsLoadError !== 'eligibility' && (!startingAssessmentFor || startingAssessmentFor === versionJob.id)
                                       ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-white/10'
                                       : ADD_BUTTON_DISABLED
@@ -4308,10 +4357,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                   aria-label={add.label}
                                   title={add.label}
                                 >
+                                  <span className="sm:hidden">Create</span>
+                                  <span className="hidden sm:inline">Create Config</span>
                                   {startingAssessmentFor === versionJob.id ? (
                                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                   ) : (
-                                    <Plus className="w-3.5 h-3.5" />
+                                    <ChevronRight className="w-3.5 h-3.5" />
                                   )}
                                 </button>
 
@@ -4864,6 +4915,56 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       </div>
     );
 
+    /* Save as Draft | Publish — the two buttons that end the step, drawn like
+       the AI Interview wizard's (Preview & Publish): same sizes, Publish with
+       the trailing chevron and its own progress. */
+    const stepActionButtons = (
+      <>
+        <Button
+          variant="secondary"
+          size="md"
+          onClick={() => handleGenerateAssessment(true)}
+          disabled={!isPercentageValid || isGenerating}
+          className="w-full sm:w-auto justify-center"
+        >
+          {generatingAction === 'draft' ? 'Saving...' : 'Save as Draft'}
+        </Button>
+        {/* Publish from here: the assessment is created and made live by this
+            button, and the Publish Assessment STEP that follows reports it.
+            Because the work happens here, the button carries its own progress.
+            The same two gates still apply. */}
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => {
+            if (!canPublishAssessment) return;
+            handleGenerateAssessment(false);
+          }}
+          disabled={!isPercentageValid || !hasValidHRSelection || isGenerating}
+          aria-disabled={!canPublishAssessment || !isPercentageValid || !hasValidHRSelection || isGenerating}
+          title={
+            !canPublishAssessment
+              ? 'You do not have permission to publish assessments'
+              : !isPercentageValid
+              ? 'Section percentages must total 100%'
+              : !hasValidHRSelection
+                ? 'Select at least one HR question before publishing'
+                : ''
+          }
+          className={`w-full sm:w-auto justify-center ${!canPublishAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
+          icon={generatingAction === 'publish' ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+        >
+          {generatingAction === 'publish' ? 'Publishing...' : (
+            <>
+              <span className="sm:hidden">Publish</span>
+              <span className="hidden sm:inline">Publish Assessment</span>
+              <ChevronRight className="w-4 h-4" />
+            </>
+          )}
+        </Button>
+      </>
+    );
+
     return (
       <div className={stepShellClass}>
         {/* Auto-saving overlay */}
@@ -4954,8 +5055,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               editable popup and the create flow behave exactly as before. */}
           <fieldset disabled={readOnly} className="min-w-0 m-0 p-0 border-0">
           <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
-            {/* Left Column - Main Content */}
-            <div className="flex-1 min-w-0 space-y-4 sm:space-y-6">
+            {/* Left Column - Main Content. Pinned like the sidebar — see
+                `stickyColumnRef`: whichever column is shorter stops at its
+                end while the other scrolls on. */}
+            <div ref={stickyColumnRef} className="flex-1 min-w-0 space-y-4 sm:space-y-6 lg:sticky lg:self-start">
               {/* Assessment Rounds - the rounds AND the section each one
                   configures, in a single card.
 
@@ -5320,35 +5423,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
             </div>
 
-            {/* Right Column - Sidebar.
-
-                STICKY FROM `lg` UP, which is the same breakpoint the row turns
-                two-column at — below it the layout stacks and the sidebar
-                stays in normal flow, where a pinned panel would only eat the
-                screen the form needs.
-
-                `lg:self-start` is what makes it possible at all: a flex item
-                stretches to the row's height by default, and an element that
-                is already as tall as its container can never stick. Shrinking
-                it to its own content height is the same `sticky … self-start`
-                pairing the assessment and candidate detail pages use for their
-                nav asides.
-
-                It stops on its own at the foot of the row, because a sticky
-                element never leaves its containing block — no listener, no
-                measured height.
-
-                THE HEIGHT CAP IS NOT DECORATION. This column ends in the
-                Save as Draft / Publish card, and a sticky panel taller than
-                the scrollport pins its top and pushes its own bottom
-                permanently below the fold — the two buttons that end the step
-                would have become unreachable on a 768px-tall laptop, which is
-                exactly where this column's ~640px lands. Capped and scrolled
-                internally instead. The figure is the scrollport minus the
-                offsets: 4.5rem header (`h-[72px]` at lg) + 1.5rem top offset +
-                1.5rem breathing room at the bottom. Nothing shows while the
-                content fits, which is the common case. */}
-            <div className="w-full lg:w-80 lg:flex-shrink-0 space-y-4 lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100dvh-7.5rem)] lg:overflow-y-auto">
+            {/* Right Column - Sidebar. Full content height — no height cap, no
+                inner scrollbar. From lg it scrolls with the page until its own
+                last card is on screen, stops there while the longer column
+                scrolls on, and both leave together at the foot of the row
+                (see `stickyColumnRef`). Stacked below lg, so plain flow. */}
+            <div ref={stickyColumnRef} className="w-full lg:w-80 lg:flex-shrink-0 space-y-4 lg:sticky lg:self-start">
               {/* Configuration Summary — Job Details. Same card the AI
                   Interview Configure page's sidebar leads with: Role Title,
                   Experience, Industry, Location, Employment Type and JD
@@ -5704,62 +5784,28 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   action that would change the assessment, so the card goes
                   rather than sitting there greyed out. The sidebar's
                   `space-y-4` closes the gap on its own. */}
-              {!readOnly && (
+              {/* Popup only: on the page the two buttons sit in the bar at
+                  the foot of the page, as on the AI Interview wizard. */}
+              {!readOnly && embedded && (
               <div className="tf-card-soft p-3 sm:p-4">
-                {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleGenerateAssessment(true)}
-                    disabled={!isPercentageValid || isGenerating}
-                    /* `sm:` only: in the stacked phone column a 0% flex-basis
-                       collapsed both buttons to ~20px tall. */
-                    className="sm:flex-1"
-                  >
-                    {generatingAction === 'draft' ? 'Saving...' : 'Save as Draft'}
-                  </Button>
-                  {/* Publish from here: the assessment is created and made
-                      live by this button, and the Publish Assessment STEP that
-                      follows reports it. Because the work happens here, the
-                      button carries its own progress — otherwise a recruiter
-                      would press it and watch nothing happen while the create
-                      and publish calls run. The same two gates still apply. */}
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      if (!canPublishAssessment) return;
-                      handleGenerateAssessment(false);
-                    }}
-                    disabled={!isPercentageValid || !hasValidHRSelection || isGenerating}
-                    aria-disabled={!canPublishAssessment || !isPercentageValid || !hasValidHRSelection || isGenerating}
-                    title={
-                      !canPublishAssessment
-                        ? 'You do not have permission to publish assessments'
-                        : !isPercentageValid
-                        ? 'Section percentages must total 100%'
-                        : !hasValidHRSelection
-                          ? 'Select at least one HR question before publishing'
-                          : ''
-                    }
-                    className={`sm:flex-1 ${!canPublishAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    {generatingAction === 'publish' ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Publishing...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        Publish
-                      </>
-                    )}
-                  </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  {stepActionButtons}
                 </div>
               </div>
               )}
             </div>
           </div>
+
+          {/* ── Wizard actions ── one bar at the foot of the page, in normal
+              flow (not sticky), Save as Draft | Publish at its end — the AI
+              Interview wizard's own bar. Phones: two equal halves. */}
+          {!readOnly && !embedded && (
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
+              <div className="grid grid-cols-2 sm:flex sm:flex-row sm:items-center gap-2">
+                {stepActionButtons}
+              </div>
+            </div>
+          )}
           </fieldset>
         </div>
 
