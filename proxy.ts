@@ -20,6 +20,7 @@ const publicRoutes = [
   '/assessment', // Candidate assessment portal (public)
   '/ai-interview', // Candidate AI interview portal (public)
   '/verify', // Candidate mobile environment verification portal (public)
+  '/handoff', // Post-signup cross-subdomain sign-in (token validated server-side)
 ];
 
 // Define protected dashboard routes (authentication required).
@@ -58,6 +59,42 @@ const RESERVED_SUBDOMAINS = new Set([
   'mail', 'smtp', 'ftp', 'ns', 'ns1', 'ns2',
   'health', 'status', 'monitoring', 'internal',
 ]);
+
+// A tenant subdomain is one DNS label. Anything else (dots, slashes, spaces,
+// a forged header value) is never treated as a tenant.
+const SUBDOMAIN_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+function isValidSubdomainLabel(sub: string | null | undefined): sub is string {
+  return typeof sub === 'string' && SUBDOMAIN_LABEL.test(sub);
+}
+
+// "?org=<sub>" is a local-development shortcut (no wildcard DNS on localhost).
+// On the real site the tenant comes from the hostname only.
+function allowsOrgParam(isLocalhost: boolean): boolean {
+  return isLocalhost || process.env.NODE_ENV !== 'production';
+}
+
+// Fail closed: when the org can't be checked, don't serve it.
+function tenantUnavailable(isDocumentRequest: boolean): NextResponse {
+  if (!isDocumentRequest) {
+    return new NextResponse('Service temporarily unavailable', {
+      status: 503, headers: { 'Retry-After': '30', 'Cache-Control': 'no-store' },
+    });
+  }
+  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>Temporarily unavailable</title></head>'
+    + '<body style="font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;display:flex;'
+    + 'min-height:100vh;align-items:center;justify-content:center;margin:0;padding:16px">'
+    + '<main style="max-width:28rem;text-align:center"><h1 style="font-size:1.25rem">'
+    + 'We can&apos;t reach your organization right now</h1>'
+    + '<p style="color:#475569">Please try again in a moment.</p>'
+    + '<p><a href="" style="color:#2563eb">Try again</a></p></main></body></html>';
+  return new NextResponse(html, {
+    status: 503,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '30', 'Cache-Control': 'no-store' },
+  });
+}
 
 function isReservedSubdomain(sub: string): boolean {
   const s = (sub || '').toLowerCase();
@@ -161,14 +198,30 @@ export async function proxy(request: NextRequest) {
     // the backend ("[MIDDLEWARE] Unknown subdomain ... redirecting to root"
     // repeating endlessly). Skip tenant extraction for these so they never
     // validate or redirect — they just fall through to normal root routing.
-    if (!isReservedSubdomain(candidateSubdomain)) {
+    if (!isReservedSubdomain(candidateSubdomain) && isValidSubdomainLabel(candidateSubdomain)) {
       tenantSubdomain = candidateSubdomain;
       isRealSubdomain = true;
     }
   }
-  // Local dev fallback: localhost:3000?org=acme (skip DB validation)
-  if (!tenantSubdomain) {
-    tenantSubdomain = request.nextUrl.searchParams.get('org');
+  // Local dev fallback: localhost:3000?org=acme (skip DB validation).
+  // Never on the real site: there a forged ?org= would set the tenant header
+  // without the DB check below.
+  const orgParam = (request.nextUrl.searchParams.get('org') || '').trim().toLowerCase();
+  if (!tenantSubdomain && orgParam && allowsOrgParam(isLocalhost) && isValidSubdomainLabel(orgParam)) {
+    tenantSubdomain = orgParam;
+  }
+  // Real site, root domain, "?org=acme": send the visitor to that org's own
+  // host, where the hostname (validated below) decides the tenant.
+  if (
+    !tenantSubdomain && orgParam && !allowsOrgParam(isLocalhost) && isOnBaseDomain
+    && isDocumentRequest && isValidSubdomainLabel(orgParam) && !isReservedSubdomain(orgParam)
+  ) {
+    const target = new URL(`https://${orgParam}.${BASE_DOMAIN}`);
+    target.pathname = pathname;
+    request.nextUrl.searchParams.forEach((value, key) => {
+      if (key !== 'org') target.searchParams.append(key, value);
+    });
+    return NextResponse.redirect(target);
   }
 
   // Permanent fix: any request on a non-base-domain, non-localhost host
@@ -217,13 +270,16 @@ export async function proxy(request: NextRequest) {
             );
             return NextResponse.redirect(`https://${BASE_DOMAIN}`);
           }
-          // For non-404 errors (5xx, 503, etc.) — allow through rather than blocking all traffic
-          console.log(`[MIDDLEWARE] Subdomain validation returned ${resp.status} for "${tenantSubdomain}", allowing through`);
+          // Any other error (5xx, 503, ...): fail closed — an org that
+          // couldn't be checked is never served or cached as valid.
+          console.log(`[MIDDLEWARE] Subdomain validation returned ${resp.status} for "${tenantSubdomain}"; refusing`);
+          return tenantUnavailable(isDocumentRequest);
         }
-        // Valid (or non-fatal error) — the cache cookie is set below on the final response
+        // Valid — the cache cookie is set below on the final response
       } catch (err) {
-        // Backend unreachable — allow through rather than blocking all traffic
-        console.log('[MIDDLEWARE] Subdomain validation fetch error:', err);
+        // Backend unreachable / timed out: fail closed.
+        console.log('[MIDDLEWARE] Subdomain validation fetch error; refusing:', err instanceof Error ? err.name : 'error');
+        return tenantUnavailable(isDocumentRequest);
       }
     }
   }
@@ -240,9 +296,13 @@ export async function proxy(request: NextRequest) {
   //   - If cookie has org → redirect to /login?org=<org>  (returning org user)
   //   - If no cookie     → redirect to /signup            (brand new user)
   if (!tenantSubdomain && pathname === '/login') {
-    const cookieSubdomain = request.cookies.get('tf-subdomain')?.value;
-    if (cookieSubdomain) {
-      // Org user without ?org= in URL — restore it from cookie
+    const cookieSubdomain = (request.cookies.get('tf-subdomain')?.value || '').toLowerCase();
+    if (isValidSubdomainLabel(cookieSubdomain) && !isReservedSubdomain(cookieSubdomain)) {
+      // Org user without ?org= in URL — restore it from cookie. On the real
+      // site that means the org's own host (?org= is dev-only there).
+      if (!allowsOrgParam(isLocalhost) && isOnBaseDomain) {
+        return NextResponse.redirect(`https://${cookieSubdomain}.${BASE_DOMAIN}/login`);
+      }
       const url = request.nextUrl.clone();
       url.searchParams.set('org', cookieSubdomain);
       return NextResponse.redirect(url);
@@ -287,6 +347,7 @@ export async function proxy(request: NextRequest) {
     '/assessment',
     '/ai-interview',
     '/verify', // Candidate mobile environment verification portal (public)
+    '/handoff', // Post-signup sign-in on the new tenant's host (app/(auth)/handoff)
     ...protectedRoutes,
   ];
   if (tenantSubdomain) {
@@ -348,7 +409,7 @@ export async function proxy(request: NextRequest) {
     // Use tenantSubdomain from URL/hostname first, fall back to tf-subdomain cookie
     // (cookie persists on protected routes — see cookie management below).
     const orgToPreserve = tenantSubdomain || request.cookies.get('tf-subdomain')?.value;
-    if (orgToPreserve) {
+    if (orgToPreserve && isValidSubdomainLabel(orgToPreserve)) {
       url.searchParams.set('org', orgToPreserve);
     }
 
@@ -389,7 +450,9 @@ export async function proxy(request: NextRequest) {
   }
 
   // Forward subdomain as request header so server components can read it via headers()
+  // A client-sent x-tenant-subdomain is always dropped: only this proxy sets it.
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete('x-tenant-subdomain');
   if (tenantSubdomain) {
     requestHeaders.set('x-tenant-subdomain', tenantSubdomain);
   }

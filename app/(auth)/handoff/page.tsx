@@ -15,14 +15,17 @@
  * server — they exist only in the browser, which keeps the tokens out of
  * access logs, proxies, and referrer headers.
  *
- * This page reads the fragment, persists the tokens, scrubs the URL, and then
- * sends the user to the dashboard. If the fragment is missing or malformed,
- * we fall back to /login.
+ * This page reads the fragment, scrubs the URL, and exchanges the refresh
+ * token through this app's /api/session route, which has the backend validate
+ * it (/auth/refresh) BEFORE the httpOnly session cookie is set. Anyone can
+ * craft a handoff link, so the fragment's access token is never trusted or
+ * stored - the page uses the fresh one the exchange returns. Missing,
+ * malformed or refused tokens fall back to /login.
  */
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { setTokens } from '@/lib/services/api';
+import { clearTokens, exchangeHandoffSession } from '@/lib/services/api';
 
 export default function AuthHandoffPage() {
   const router = useRouter();
@@ -36,10 +39,9 @@ export default function AuthHandoffPage() {
       }
 
       const params = new URLSearchParams(fragment.slice(1));
-      const access = params.get('access_token');
       const refresh = params.get('refresh_token');
 
-      if (!access || !refresh) {
+      if (!refresh) {
         router.replace('/login');
         return;
       }
@@ -47,10 +49,16 @@ export default function AuthHandoffPage() {
       // Strip the fragment so the tokens don't sit in the address bar / history.
       window.history.replaceState(null, '', window.location.pathname);
 
-      // Hard redirect once the session cookie is saved, so all providers/contexts
-      // re-initialize with the new session (matches a fresh login).
-      setTokens(access, refresh).finally(() => {
-        window.location.href = '/dashboard';
+      // Hard redirect once the validated session cookie is saved, so all
+      // providers/contexts re-initialize with the new session (matches a fresh
+      // login). A refused token signs nobody in.
+      exchangeHandoffSession(refresh).then((ok) => {
+        if (ok) {
+          window.location.href = '/dashboard';
+        } else {
+          clearTokens();
+          router.replace('/login');
+        }
       });
     } catch {
       router.replace('/login');

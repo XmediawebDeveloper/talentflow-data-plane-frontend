@@ -14,6 +14,7 @@ import { detectSubdomain } from '@/lib/utils/subdomain';
 import ForgotPasswordModal from './ForgotPasswordModal';
 import { AUTH_THEME_CSS } from './authTheme';
 import AuthBrandPanel from './AuthBrandPanel';
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
 
 interface LoginProps {
   onBackToPublic?: () => void;
@@ -184,8 +185,8 @@ export default function Login({ onBackToPublic }: LoginProps) {
       } catch {
         // Fallback to raw URL if parsing fails
       }
-      console.log('[LOGIN] Tenant has pending payment, redirecting to:', response.pending_payment_redirect);
-      router.push(response.pending_payment_redirect);
+      // Backend-supplied: same-site paths only (security sheet N4).
+      router.push(safeReturnUrl(response.pending_payment_redirect, '/complete-payment'));
       return;
     }
 

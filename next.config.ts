@@ -9,12 +9,11 @@ const nextConfig: NextConfig = {
   // Standalone output: emits .next/standalone with a self-contained server.js —
   // lets the Docker image ship without node_modules (~250MB instead of ~2GB).
   output: 'standalone',
-  // Type-checking during `next build` was measured at ~117s of a ~150s build
-  // (see .next/trace-build) — the dominant cost. Skipped here for build speed;
-  // run `npx tsc --noEmit` separately (e.g. in CI or pre-commit) to still catch
-  // type errors, since they will no longer fail this build.
+  // Type errors FAIL the build (security sheet F8). Skipping the check saved
+  // ~117s of a ~150s build, but twice let a ReferenceError that tsc flags ship
+  // to staging. tsc --noEmit is clean; keep it that way.
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   allowedDevOrigins: ['abi.0sms.com', '*.0sms.com','10.10.9.149'],
   serverExternalPackages: [
@@ -109,6 +108,10 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: '/organization/team-chat', destination: '/chat', permanent: false },
+      /* Signup's "Go to dashboard" link targets /auth/handoff, but the page
+         lives in the (auth) route group, i.e. at /handoff. The #fragment with
+         the tokens stays in the browser across the redirect. */
+      { source: '/auth/handoff', destination: '/handoff', permanent: false },
     ];
   },
 
@@ -191,13 +194,18 @@ const nextConfig: NextConfig = {
             key: 'Permissions-Policy',
             value: 'fullscreen=*',
           },
-          // "full application" #12. The CSP is limited to directives that can't
-          // break the app (no script-src: inline scripts, WASM models, avatar
-          // and proctoring libraries; no object-src: blob-URL PDF previews use
-          // the browser's PDF plugin); it blocks framing by other sites and
-          // <base> hijacking.
+          // "full application" #12 / security sheet F2. The CSP is limited to
+          // directives that can't break the app: it blocks framing by other
+          // sites, <base> hijacking, and plugin content (<object>/<embed>) from
+          // anywhere but this origin. object-src keeps 'self' blob: because the
+          // resume / scorecard PDF previews are blob: URLs in iframes, and a
+          // blob: document inherits this policy - Chrome's PDF viewer is a
+          // plugin under object-src, so 'none' would blank those previews.
+          // script-src is DEFERRED: inline scripts, WASM models and the avatar /
+          // proctoring libraries need a nonce-based policy (per-request nonce
+          // from proxy.ts) - a separate piece of work.
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'; base-uri 'self'" },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'; base-uri 'self'; object-src 'self' blob:" },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           ...(process.env.NODE_ENV === 'production'

@@ -7,6 +7,7 @@ import api from '@/lib/services/api';
 import { Job } from '@/lib/types/types';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { cachedList, listCacheKey, LIST_CACHE_TTL_MS } from '@/lib/utils/listCache';
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
 
 interface TopicSettings {
   hr_enabled: boolean;
@@ -37,7 +38,8 @@ export default function CreateAssessmentPage() {
 
   // Check for pre-selected JD from query params
   const preSelectedJdId = searchParams.get('jd_id') || searchParams.get('jobId');
-  const returnUrl = searchParams.get('returnUrl');
+  // Same-site paths only (security sheet N4): never an off-site redirect.
+  const returnUrl = safeReturnUrl(searchParams.get('returnUrl'));
 
   useEffect(() => {
     let cancelled = false;

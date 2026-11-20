@@ -303,16 +303,21 @@ export default function AIInterviewJDSelection() {
                   variant="primary"
                   size="md"
                   onClick={() => {
-                    if (!canCreateJD) return;
+                    /* A job is already picked: Create New Job is off until the
+                       selection is cleared. */
+                    if (!canCreateJD || jdPick) return;
                     router.push('/recruitment/jd-creation?from=ai-interview');
                   }}
-                  aria-disabled={!canCreateJD}
-                  title={!canCreateJD ? 'You do not have permission to create job descriptions' : ''}
-                  icon={<Plus className="w-4 h-4" />}
-                  className={`flex-shrink-0 ${!canCreateJD ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  aria-disabled={!canCreateJD || !!jdPick}
+                  title={!canCreateJD
+                    ? 'You do not have permission to create job descriptions'
+                    : jdPick ? 'Clear the selected job to create a new one' : ''}
+                  className={`flex-shrink-0 ${!canCreateJD || jdPick ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
+                  {/* Text then a chevron, like the cards' Create Config — no "+". */}
                   <span className="hidden sm:inline">Create New Job</span>
                   <span className="sm:hidden">New Job</span>
+                  <ChevronRight className="w-4 h-4" />
                 </Button>
               }
             />

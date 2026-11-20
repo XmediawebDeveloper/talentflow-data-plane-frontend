@@ -437,7 +437,7 @@ class ChatService {
       return 'ws://localhost:8001';
     };
 
-    const wsUrl = `${getWsBaseUrl()}/api/v1/chat/ws/${channelId}?token=${token}`;
+    const wsUrl = `${getWsBaseUrl()}/api/v1/chat/ws/${encodeURIComponent(channelId)}?token=${encodeURIComponent(token)}`;
     const socket = new WebSocket(wsUrl);
     this.ws = socket;
     this.setStatus('connecting');

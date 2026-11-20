@@ -248,6 +248,36 @@ export const setTokens = (access: string, refresh?: string | null): Promise<void
   });
 };
 
+/**
+ * Start a session from tokens this page did not get from its own sign-in
+ * (the cross-subdomain /auth/handoff link). The refresh token is checked by
+ * the backend through /api/session before any cookie is set; the access token
+ * that came with the link is never used. Resolves false when it is refused.
+ */
+export const exchangeHandoffSession = async (refresh: string): Promise<boolean> => {
+  if (typeof window === 'undefined' || !refresh) return false;
+  try {
+    const res = await fetch('/api/session', {
+      method: 'POST',
+      headers: SESSION_HEADERS,
+      body: JSON.stringify({ refresh_token: refresh, validate: true }),
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || typeof data?.access_token !== 'string' || !data.access_token) return false;
+    takeLegacyRefreshToken();
+    applyAccessToken(data.access_token);
+    hasSession = true;
+    writeFlag(SIGNED_IN_FLAG, '1');
+    pageSessionEpoch = `${Date.now()}`;
+    writeFlag(SESSION_EPOCH_KEY, pageSessionEpoch);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const getTokens = () => {
   return { accessToken, refreshToken: hasSession ? SESSION_COOKIE_REFRESH : null };
 };
