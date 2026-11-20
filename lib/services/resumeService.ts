@@ -691,9 +691,11 @@ export const resumeService = {
   /**
    * List all upload batches
    */
-  async listUploadBatches(limit: number = 20, onlyProcessing: boolean = false): Promise<any> {
+  /** `mine` (default): only the batches this user uploaded, on any device —
+   *  the server scopes it (the list used to be tenant-wide). */
+  async listUploadBatches(limit: number = 20, onlyProcessing: boolean = false, mine: boolean = true): Promise<any> {
     try {
-      const response = await api.get(`/resumes/upload/batches?limit=${limit}&only_processing=${onlyProcessing}`);
+      const response = await api.get(`/resumes/upload/batches?limit=${limit}&only_processing=${onlyProcessing}&mine=${mine}`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

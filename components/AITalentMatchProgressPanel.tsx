@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { removeBackgroundTask, upsertBackgroundTask } from '@/lib/backgroundTasks';
+import { markLocalTalentMatch, removeBackgroundTask, upsertBackgroundTask } from '@/lib/backgroundTasks';
 
 interface AITalentMatchProgressPanelProps {
   jobTitle: string;
@@ -62,11 +62,19 @@ export default function AITalentMatchProgressPanel({
       title: jobTitle,
       pct: heldResults ? 100 : progress,
       done: !!heldResults,
+      // No real progress to show (one request): "Matching…" on every device.
+      indeterminate: !heldResults,
       detail: heldResults ? `${heldResults.length} matching candidate${heldResults.length === 1 ? '' : 's'} found` : undefined,
       onOpen: () => openFromDock.current(),
     });
   }, [view, error, progress, heldResults, jobTitle, taskId]);
   useEffect(() => () => removeBackgroundTask(taskId), [taskId]);
+  /* While this popup lives, the dock leaves out the run's server row (this
+     popup / its minimized row is that run here). */
+  useEffect(() => {
+    markLocalTalentMatch(jobId, true);
+    return () => markLocalTalentMatch(jobId, false);
+  }, [jobId]);
 
   const minimize = () => {
     if (view !== 'popup') return;
