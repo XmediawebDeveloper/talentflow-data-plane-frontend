@@ -372,14 +372,23 @@ export default function AIInterviewPreview() {
 
   const interviewId = interview?.id;
   const interviewJdId = interview?.jd_id;
+  const storedInterviewVersion = interview?.interview_version;
   useEffect(() => {
     if (!published || !interviewId) return;
+    /* The stored version (V1, V2..) — the number the All Interviews table
+       shows first (interviewVersionOrdinal). Only a record without one (older
+       backend / row not backfilled) still derives it from every config, which
+       re-downloaded the whole default + archived config lists after publish. */
+    if (typeof storedInterviewVersion === 'number' && storedInterviewVersion > 0) {
+      setInterviewVersion(storedInterviewVersion);
+      return;
+    }
     let cancelled = false;
     resolveAIInterviewVersion({ id: interviewId, jd_id: interviewJdId })
       .then((v) => { if (!cancelled) setInterviewVersion(v); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [published, interviewId, interviewJdId]);
+  }, [published, interviewId, interviewJdId, storedInterviewVersion]);
 
   const mthRound = rounds.find(r => r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical');
   const nthRound = rounds.find(r => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have');
