@@ -202,14 +202,27 @@ export default function GlobalScoringProgressIndicator() {
   useEffect(() => {
     if (!restoredFor) return;
     const isDone = (job: ScoringJob) => job.total > 0 && job.queued === 0 && job.processing === 0;
-    if (!announcedRef.current) {
-      announcedRef.current = new Set(activeScoringJobs.filter(isDone).map(job => job.jobId));
+    const seen = seenJobsRef.current;
+    if (restoredSeenRef.current !== restoredFor) {
+      restoredSeenRef.current = restoredFor;
+      const finished = activeScoringJobs.filter(job => isDone(job) && !job.announcedAt).map(job => job.jobId);
+      announcingRef.current = new Set(finished);
+      markAnnounced(finished);
+      activeScoringJobs.forEach(job => seen.add(job.jobId));
       return;
     }
-    const announced = announcedRef.current;
-    activeScoringJobs.forEach(job => {
-      if (!isDone(job) || announced.has(job.jobId)) return;
-      announced.add(job.jobId);
+    const announcing = announcingRef.current;
+    const toAnnounce = activeScoringJobs.filter(job => {
+      const firstSighting = !seen.has(job.jobId);
+      seen.add(job.jobId);
+      if (firstSighting && isDone(job)) { announced.add(job.jobId); return; }
+      if (!isDone(job)) { announcing.delete(job.jobId); return false; }
+      return !job.announcedAt && !announcing.has(job.jobId);
+    });
+    if (!toAnnounce.length) return;
+    toAnnounce.forEach(job => announcing.add(job.jobId));
+    markAnnounced(toAnnounce.map(job => job.jobId));
+    toAnnounce.forEach(job => {
       /* A Job Details run is keyed by its batch id; the JD id is on its rows. */
       const jdId = job.items[0]?.jobId || job.jobId;
       const cached = jdMetaCache.get(jdId) ?? jdMetaCache.get(job.jobId);
