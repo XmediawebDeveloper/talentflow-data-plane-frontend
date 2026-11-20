@@ -72,7 +72,7 @@ const STATUS_TABS = [
 // JD versions a job can have (backend MAX_JD_VERSIONS = 5)
 const VERSION_OPTIONS = [
   { value: 'all', label: 'All Versions' },
-  ...[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `Version ${n}` })),
+  ...[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `v${n}` })),
 ];
 
 export default function JDListPage() {

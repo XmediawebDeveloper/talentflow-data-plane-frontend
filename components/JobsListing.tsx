@@ -1147,7 +1147,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     experienceFilter !== 'all' && { key: 'experience', label: 'Experience', value: EXPERIENCE_LABELS[experienceFilter] ?? String(experienceFilter), onRemove: () => search.setFilter('experience', 'all') },
     datePostedFromFilter !== '' && { key: 'datePostedFrom', label: 'Posted From', value: formatChipDate(datePostedFromFilter), onRemove: () => search.setFilter('datePostedFrom', '') },
     datePostedToFilter !== '' && { key: 'datePostedTo', label: 'Posted To', value: formatChipDate(datePostedToFilter), onRemove: () => search.setFilter('datePostedTo', '') },
-    versionFilter !== 'all' && { key: 'version', label: 'Version', value: `Version ${versionFilter}`, onRemove: () => search.setFilter('version', 'all') },
+    versionFilter !== 'all' && { key: 'version', label: 'Version', value: `v${versionFilter}`, onRemove: () => search.setFilter('version', 'all') },
     // No control on this page sets these, but a restored saved view can — and they count.
     departmentFilter !== 'all' && { key: 'department', label: 'Department', value: String(departmentFilter), onRemove: () => search.setFilter('department', 'all') },
     applicantsFilter !== 'all' && { key: 'applicants', label: 'Applicants', value: String(applicantsFilter), onRemove: () => search.setFilter('applicants', 'all') },
@@ -1583,7 +1583,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                   <SearchableSelect
                     value={versionFilter === 'all' ? '' : versionFilter}
                     onChange={(v) => search.setFilter('version', v || 'all')}
-                    options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `Version ${n}` }))}
+                    options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `v${n}` }))}
                     allLabel="All Versions"
                     placeholder="All Versions"
                     searchPlaceholder="Search version..."
