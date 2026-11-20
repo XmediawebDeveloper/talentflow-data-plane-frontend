@@ -593,7 +593,20 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
       /* Finished runs: only the newest batch per JD (a JD-keyed run in the
          corner is one row per JD), skipped when that JD already has a row here
          or was cleared from the corner after the batch started. */
-      const jdsInCorner = new Set(current.flatMap(j => [j.jobId, j.items[0]?.jobId].filter(Boolean) as string[]));
+      /* JD → when its newest row here started. A finished batch NEWER than
+         that still shows (it used to be skipped whenever the JD already had a
+         row — so a run started on another device for the same JD, finished
+         before this browser looked, never appeared here). */
+      const jdLatest = new Map<string, number>();
+      /* A JD this browser scored itself: its runs merge into its own row, so
+         a finished batch of that JD is already shown there — never added twice. */
+      const localJds = new Set<string>();
+      current.forEach(j => {
+        const jds = [j.jobId, j.items[0]?.jobId].filter(Boolean) as string[];
+        if (!j.serverTracked) { jds.forEach(jd => localJds.add(jd)); return; }
+        const t = new Date(j.startedAt).getTime() || 0;
+        jds.forEach(jd => { if (t > (jdLatest.get(jd) ?? -1)) jdLatest.set(jd, t); });
+      });
       const cutoff = Date.now() - JOB_RETENTION_MS;
       const newestPerJd = new Set<string>();
       let finishedAdopted = 0;
@@ -601,8 +614,10 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
         if (newestPerJd.has(b.jd_id)) continue;
         newestPerJd.add(b.jd_id);
         if (finishedAdopted >= MAX_ADOPT_FINISHED) break;
-        if (isBatchActive(b) || known.has(b.batch_id) || dismissed.has(b.batch_id) || jdsInCorner.has(b.jd_id)) continue;
+        if (isBatchActive(b) || known.has(b.batch_id) || dismissed.has(b.batch_id)) continue;
         const startedAt = b.created_at ? new Date(b.created_at).getTime() : 0;
+        if (localJds.has(b.jd_id)) continue;
+        if (jdLatest.has(b.jd_id) && startedAt <= (jdLatest.get(b.jd_id) ?? 0)) continue;
         if (startedAt <= cutoff || startedAt <= (dismissedJdsRef.current[b.jd_id] ?? 0)) continue;
         adopt.push(b);
         finishedAdopted += 1;
@@ -633,6 +648,16 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
         }
         const existing = jobsRef.current.find(j => j.jobId === status.batch_id);
         syncScoringJob(jobFromServer(status, summaries.get(status.batch_id), existing));
+        /* One row per JD for runs picked up from the server: a newer batch of
+           the JD replaces an older finished one (not removed — just replaced). */
+        if (!existing) {
+          setActiveScoringJobs(prev => {
+            const next = prev.filter(j => !(j.serverTracked && j.jobId !== status.batch_id && !isJobActive(j)
+              && (j.items[0]?.jobId || '') === status.jd_id
+              && (new Date(j.startedAt).getTime() || 0) < (new Date(status.created_at || 0).getTime() || 0)));
+            return next.length === prev.length ? prev : next;
+          });
+        }
       });
     } catch (error) {
       // Offline / signed out: the next read retries.
