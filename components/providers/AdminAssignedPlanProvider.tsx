@@ -91,7 +91,8 @@ export function AdminAssignedPlanProvider({ children }: { children: React.ReactN
   // Polling fallback — matches PlanChangeProvider cadence
   useEffect(() => {
     const POLL_INTERVAL = 5 * 60 * 1000;
-    const timer = setInterval(fetchPending, POLL_INTERVAL);
+    // Skipped when a focus re-check already read it within the last minute.
+    const timer = setInterval(() => { if (focusRefreshDue('admin-assigned-plan')) fetchPending(); }, POLL_INTERVAL);
     return () => clearInterval(timer);
   }, [fetchPending]);
 

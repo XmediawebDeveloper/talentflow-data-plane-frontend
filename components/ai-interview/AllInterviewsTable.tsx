@@ -1116,10 +1116,10 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
             )}
           </button>
           </FilterChipsHover>
+          {/* Reset — immediately after More Filters, as on every list. */}
+          {isNarrowed && <ToolbarResetButton onClick={clearAll} />}
           {/* Sort by lands here — see `useListSortSlot`. */}
           <span data-list-sort-slot className="contents" />
-          {/* Reset — after More Filters and Sort by, as on Job Openings. */}
-          {isNarrowed && <ToolbarResetButton onClick={clearAll} />}
           {/* Actions (N) + Clear — only while rows are ticked. */}
           {selectedRows.length > 0 && (
             <ListBulkActions>

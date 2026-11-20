@@ -295,6 +295,12 @@ const entityIcons: Record<string, React.ElementType> = {
 export default function AuditTrailPage() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [stats, setStats] = useState<AuditStats | null>(null);
+  /* The four summary cards' own figures: the period's standing totals, read
+     WITHOUT the action / entity / user / error-origin filters, so filtering
+     the list never moves a card. `stats` above keeps those filters — the
+     cards' drill-down popups are faceted by them. Both follow the date range,
+     which each card names ("Last N days"). */
+  const [cardStats, setCardStats] = useState<AuditStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -546,12 +552,19 @@ export default function AuditTrailPage() {
       if (entityFilter) statsParams.append('entity_type', entityFilter);
       if (userFilter) statsParams.append('user_id', userFilter);
       if (errorOriginFilter) statsParams.append('error_origin', errorOriginFilter);
-      const response = await fetch(`${API_URL}/audits/stats?${statsParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+      const faceted = !!(actionFilter || entityFilter || userFilter || errorOriginFilter);
+      // The cards' unfiltered totals: a second read only while a filter is on
+      // (with none, the response below already is the unfiltered one).
+      const [response, cardResponse] = await Promise.all([
+        fetch(`${API_URL}/audits/stats?${statsParams}`, { headers }),
+        faceted
+          ? fetch(`${API_URL}/audits/stats?${new URLSearchParams({ days: statsDays })}`, { headers }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
 
       if (response.status === 401) {
         handleUnauthorized();
@@ -560,8 +573,11 @@ export default function AuditTrailPage() {
 
       if (response.ok) {
         const data = await response.json();
+        const cardData = !faceted ? data : cardResponse?.ok ? await cardResponse.json() : null;
         if (isStale()) return;
         setStats(data);
+        // A failed unfiltered read keeps the last totals rather than showing filtered ones.
+        if (cardData) setCardStats(cardData);
       }
     } catch (err) {
       console.error('Error fetching stats:', err);
@@ -1059,7 +1075,7 @@ export default function AuditTrailPage() {
 
         {/* Stats Cards — Total Actions opens the list; the other three open a
             filter popup that lets the user drill into a specific user/action/entity. */}
-        {stats && (
+        {stats && cardStats && (
           <div ref={statsPopupRef} className="relative mb-4 sm:mb-6 lg:mb-8">
             <div className="tf-grid-stats">
               <button
@@ -1072,14 +1088,14 @@ export default function AuditTrailPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate tf-label max-sm:text-xs">Total Actions</p>
-                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{stats.total_actions.toLocaleString()}</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{cardStats.total_actions.toLocaleString()}</p>
                     <p
                       className="tf-meta mt-1 sm:mt-2 flex items-center gap-1"
                       title={isCustomRange && customFrom ? `Summary counts cover ${customFrom} to today` : undefined}
                     >
                       <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       <span>
-                        {isCustomRange && customFrom ? `Since ${customFrom}` : `Last ${stats.period_days} days`}
+                        {isCustomRange && customFrom ? `Since ${customFrom}` : `Last ${cardStats.period_days} days`}
                         <span className="text-gray-400 dark:text-slate-500"> · {anyFilterActive ? 'Click to clear filters' : 'Click to view all'}</span>
                       </span>
                     </p>
@@ -1097,7 +1113,7 @@ export default function AuditTrailPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate tf-label max-sm:text-xs">Active Users</p>
-                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{stats.active_users_count ?? (totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />)}</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{cardStats.active_users_count ?? (totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />)}</p>
                     <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {userFilter ? 'Filtering by 1 user' : 'Click to filter'}
@@ -1116,7 +1132,7 @@ export default function AuditTrailPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate tf-label max-sm:text-xs">Action Types</p>
-                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{Object.keys(stats.actions_by_type).length}</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{Object.keys(cardStats.actions_by_type).length}</p>
                     <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <Filter className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {actionFilter ? 'Filtering by 1 action' : 'Click to filter'}
@@ -1135,7 +1151,7 @@ export default function AuditTrailPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate tf-label max-sm:text-xs">Entity Types</p>
-                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{Object.keys(stats.actions_by_entity).length}</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{Object.keys(cardStats.actions_by_entity).length}</p>
                     <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <ScrollText className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {entityFilter ? 'Filtering by 1 entity' : 'Click to filter'}

@@ -409,7 +409,9 @@ export const handleUnauthorized = () => {
     showSessionExpired();
     return;
   }
-  refreshAccessToken(currentRefreshToken).catch(showSessionExpired);
+  refreshAccessToken(currentRefreshToken).catch((err) => {
+    if (isSessionGone(err)) showSessionExpired();
+  });
 };
 
 // Called by the SessionExpiredModal when the user clicks "OK".
@@ -473,8 +475,10 @@ export const authFetch = async (
         ...options,
         headers: { ...headers, Authorization: `Bearer ${fresh}` },
       });
-    } catch {
-      // Refresh refused — fall through to the session-expired modal.
+    } catch (err) {
+      // A refresh that failed for a passing reason (server busy, network) is
+      // not a logout: fail this request and keep the session.
+      if (!isSessionGone(err)) throw new Error('Could not reach the server. Please try again.');
     }
   }
 
@@ -677,6 +681,12 @@ export const dispatchPlanChangePendingEvent = (detail: PlanChangePendingDetail) 
     window.dispatchEvent(new CustomEvent(PLAN_CHANGE_PENDING_EVENT, { detail }));
   }
 };
+
+// True when a refresh failed because the session really ended (the refresh
+// route answers 401 for a revoked / expired / logged-out session). Anything
+// else - 429, 5xx, network - is temporary and must not log the user out.
+const isSessionGone = (err: unknown): boolean =>
+  (err as { status?: number } | null)?.status === 401;
 
 // Single in-flight token refresh. Every caller that needs a refresh (parallel
 // 401s, the permission-version check below) awaits the same POST /auth/refresh
@@ -942,8 +952,10 @@ api.interceptors.response.use(
           showSessionExpired();
         }
       } catch (refreshError) {
-        // Token refresh failed - logout immediately
-        showSessionExpired();
+        // Log out only when the server says the session is over (401). A busy
+        // server (429), a 5xx or a network blip during refresh used to log the
+        // user out mid-work.
+        if (isSessionGone(refreshError)) showSessionExpired();
       }
     }
 

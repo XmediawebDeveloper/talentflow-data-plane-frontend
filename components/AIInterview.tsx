@@ -791,7 +791,7 @@ export default function AIInterview() {
          the paged list; nothing here downloads every config. A change re-reads
          the jobs on screen (their versions feed the row menus). */
       try {
-        const value = await aiInterviewService.getConfigStats();
+        const value = await aiInterviewService.getConfigStats({ reuseRecent: firstLoad });
         if (isStale()) return;
         setStats(value);
         setInterviewedCount(typeof value.interview_sessions === 'number' ? value.interview_sessions : null);
@@ -817,7 +817,7 @@ export default function AIInterview() {
       /* The stats and the interviewed count do not depend on the config list,
          so they are asked for NOW, beside it, instead of one after another
          behind it (three serial round trips before the page could settle). */
-      const statsRequest = aiInterviewService.getConfigStats().then(
+      const statsRequest = aiInterviewService.getConfigStats({ reuseRecent: firstLoad }).then(
         (value) => ({ ok: true as const, value }),
         (error) => ({ ok: false as const, error }),
       );

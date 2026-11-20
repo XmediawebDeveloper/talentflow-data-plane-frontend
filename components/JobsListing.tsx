@@ -28,6 +28,7 @@ import {
 } from '@/lib/utils/jobOpeningDisplay';
 import { jdService, type JDLineageVersion, type JobOpeningsFilters, type JobOpeningsStats, type JobOpeningsTab } from '@/lib/services/jdService';
 import { usePagedList } from '@/lib/hooks/usePagedList';
+import { cachedList, listCacheKey, LIST_CACHE_TTL_MS } from '@/lib/utils/listCache';
 import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
@@ -322,6 +323,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
       datePostedTo: '',
       createdBy: 'all',
       workMode: 'all',
+      version: 'all',
     },
     countFilters: (f) =>
       [
@@ -338,6 +340,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
         f.datePostedTo !== '',
         f.createdBy !== 'all',
         f.workMode !== 'all',
+        f.version !== 'all',
       ].filter(Boolean).length,
   });
   const searchQuery = search.appliedQuery;
@@ -355,6 +358,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     datePostedTo: datePostedToFilter,
     createdBy: createdByFilter,
     workMode: workModeFilter,
+    version: versionFilter,
   } = search.filters;
 
   // All / AI Generated / Manual: one white chip that slides to the active
@@ -489,7 +493,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     {
       searchQuery, statusFilter, creationMethodFilter, locationFilter,
       departmentFilter, industryFilter, experienceFilter, employmentTypeFilter,
-      applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter,
+      applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter, versionFilter,
       sortBy, sortOrder, currentPage, itemsPerPage, pageView,
     },
     (s) => {
@@ -529,6 +533,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
         datePostedTo: typeof s.datePostedToFilter === 'string' ? s.datePostedToFilter : '',
         createdBy: typeof s.createdByFilter === 'string' ? s.createdByFilter : 'all',
         workMode: typeof s.workModeFilter === 'string' ? s.workModeFilter : 'all',
+        version: typeof s.versionFilter === 'string' ? s.versionFilter : 'all',
       });
       if (typeof s.sortBy === 'string') setSortBy(s.sortBy as JobSortBy);
       if (s.sortOrder === 'asc' || s.sortOrder === 'desc') setSortOrder(s.sortOrder);
@@ -559,7 +564,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     applicants: applicantsFilter,
     date_from: datePostedFromFilter || undefined,
     date_to: datePostedToFilter || undefined,
-  }), [searchQuery, creationMethodFilter, locationFilter, departmentFilter, industryFilter, employmentTypeFilter, workModeFilter, createdByFilter, experienceFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter]);
+    version: versionFilter,
+  }), [searchQuery, creationMethodFilter, locationFilter, departmentFilter, industryFilter, employmentTypeFilter, workModeFilter, createdByFilter, experienceFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, versionFilter]);
   const hasCriteria = Object.values(serverFilters).some((v) => v !== undefined && v !== null && v !== '' && v !== 'all');
   const listQuery = useMemo(() => ({
     ...serverFilters,
@@ -590,15 +596,31 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
         total: res.total ?? 0,
       };
     },
-    // Each card is a tab, so the tab is not a stats filter.
-    fetchStats: (f) => {
-      const { status_tab: _tab, ...filters } = f as typeof f & { status_tab?: string };
-      void _tab;
-      return jdService.getJobStats(filters as JobOpeningsFilters);
-    },
+    // Each card is a tab, so the tab is not a stats filter: switching tabs
+    // re-reads the list only (it used to re-ask /jd/stats with the same filters).
+    statsIgnore: ['status_tab'],
+    fetchStats: (f) => jdService.getJobStats(f as JobOpeningsFilters),
   });
   refreshListRef.current = paged.refresh;
   const serverStats = paged.stats;
+
+  /* The four overview cards are the tenant's standing totals: they never move
+     with search, the dropdowns, More Filters, AI / Manual or the status tab.
+     So they read GET /jd/stats with NO filters, apart from `serverStats` above
+     (which follows the filters, for the tab badges). Re-read whenever the
+     filtered stats are (`serverStats` is a new object after every read); the
+     list cache answers it unless a write has cleared it, so changing a filter
+     costs no extra request, and a publish / archive / delete still updates the
+     cards. The last totals stay on screen while a re-read is in flight. */
+  const [cardStats, setCardStats] = useState<JobOpeningsStats | null>(null);
+  useEffect(() => {
+    if (!listStateRestored) return;
+    let cancelled = false;
+    cachedList(listCacheKey('job-openings:card-stats'), () => jdService.getJobStats({}), { ttlMs: LIST_CACHE_TTL_MS })
+      .then((s) => { if (!cancelled) setCardStats(s); })
+      .catch((err) => { if (!cancelled) console.warn('[JobsListing] card stats failed', err); });
+    return () => { cancelled = true; };
+  }, [listStateRestored, serverStats]);
 
   useEffect(() => {
     if (paged.error) showErrorToast(paged.error, "Couldn't load job openings", { id: 'jobs-list-load', retry: () => refreshListRef.current?.() });
@@ -1050,12 +1072,11 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   const uniqueCreators = serverStats?.facets?.creators ?? [];
   const uniqueWorkModes = serverStats?.facets?.work_modes ?? [];
 
-  /* Each status card IS its tab — clicking it opens that tab — so its number
-     is exactly the row count that tab lists for the current search/filters
-     (GET /jd/stats builds it from the same server-side filter as the list).
-     The versions pill counts the versions that HAVE the card's status.
-     With no search/filter these are the same numbers the page showed when it
-     computed them from every JD version in the browser. */
+  /* The tab badges follow the current search/filters (GET /jd/stats builds
+     them from the same server-side filter as the list), so a badge is the row
+     count its tab lists. The four cards above do NOT: they are the unfiltered
+     totals (`cardStats`), and their versions pill counts the versions that
+     HAVE the card's status. */
   const statusPillCount = (pill: string): number | null =>
     serverStats ? serverStats.jobs?.[pill.toLowerCase() as JobOpeningsTab] ?? 0 : null;
   const methodPillCount = (method: 'ai' | 'manual' | null): number | null => {
@@ -1071,20 +1092,20 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     </span>
   );
   const stats = {
-    total: serverStats?.total ?? 0,
-    published: serverStats?.published ?? 0,
-    draft: serverStats?.draft ?? 0,
-    archived: serverStats?.archived ?? 0,
-    totalVersions: serverStats?.versions?.all ?? 0,
-    publishedVersions: serverStats?.versions?.published ?? 0,
-    draftVersions: serverStats?.versions?.draft ?? 0,
-    archivedVersions: serverStats?.versions?.archived ?? 0,
+    total: cardStats?.total ?? 0,
+    published: cardStats?.published ?? 0,
+    draft: cardStats?.draft ?? 0,
+    archived: cardStats?.archived ?? 0,
+    totalVersions: cardStats?.versions?.all ?? 0,
+    publishedVersions: cardStats?.versions?.published ?? 0,
+    draftVersions: cardStats?.versions?.draft ?? 0,
+    archivedVersions: cardStats?.versions?.archived ?? 0,
   };
 
   /* The stat cards show a placeholder until the counts land — never a
    * partial tally that would then jump. */
-  const statValue = (count: number) => (serverStats ? count : <StatValuePlaceholder />);
-  const statVersions = (count: number) => (serverStats ? <StatVersions count={count} /> : <StatVersionsPlaceholder />);
+  const statValue = (count: number) => (cardStats ? count : <StatValuePlaceholder />);
+  const statVersions = (count: number) => (cardStats ? <StatVersions count={count} /> : <StatVersionsPlaceholder />);
 
   const activeFiltersCount = search.activeFilterCount;
   const filtersActive = search.filtersApplied;
@@ -1126,6 +1147,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     experienceFilter !== 'all' && { key: 'experience', label: 'Experience', value: EXPERIENCE_LABELS[experienceFilter] ?? String(experienceFilter), onRemove: () => search.setFilter('experience', 'all') },
     datePostedFromFilter !== '' && { key: 'datePostedFrom', label: 'Posted From', value: formatChipDate(datePostedFromFilter), onRemove: () => search.setFilter('datePostedFrom', '') },
     datePostedToFilter !== '' && { key: 'datePostedTo', label: 'Posted To', value: formatChipDate(datePostedToFilter), onRemove: () => search.setFilter('datePostedTo', '') },
+    versionFilter !== 'all' && { key: 'version', label: 'Version', value: `v${versionFilter}`, onRemove: () => search.setFilter('version', 'all') },
     // No control on this page sets these, but a restored saved view can — and they count.
     departmentFilter !== 'all' && { key: 'department', label: 'Department', value: String(departmentFilter), onRemove: () => search.setFilter('department', 'all') },
     applicantsFilter !== 'all' && { key: 'applicants', label: 'Applicants', value: String(applicantsFilter), onRemove: () => search.setFilter('applicants', 'all') },
@@ -1258,7 +1280,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   useEffect(() => {
     if (skipPageResetRef.current) { skipPageResetRef.current = false; return; }
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter, sortBy, sortOrder]);
+  }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter, versionFilter, sortBy, sortOrder]);
 
   // Keep the current page in range when the list shrinks (e.g. after deleting the
   // jobs on the last page), so the view never gets stuck on an empty page past
@@ -1459,9 +1481,10 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
             activeFilterCount={activeFiltersCount}
             filtersApplied={filtersActive}
             onClearFilters={clearAllFilters}
-            // Sort by sits right after More Filters, in the search row.
+            // Sort by sits after More Filters (and its Reset), in the search row.
+            // Always shown — an empty or filtered-to-nothing list keeps it.
             afterFiltersActions={
-            totalMatching > 0 ? (
+            (
               <div className="tf-jobs-sort flex items-center gap-2">
                 <span className="tf-body">Sort by</span>
                 {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
@@ -1491,7 +1514,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                   </button>
                 </div>
               </div>
-            ) : null
+            )
             }
           />
 
@@ -1553,6 +1576,18 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     placeholder="All Levels"
                     searchPlaceholder="Search level..."
                     ariaLabel="Filter by experience level"
+                  />
+                </div>
+                <div>
+                  <label className="block tf-label mb-1.5">Version</label>
+                  <SearchableSelect
+                    value={versionFilter === 'all' ? '' : versionFilter}
+                    onChange={(v) => search.setFilter('version', v || 'all')}
+                    options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `v${n}` }))}
+                    allLabel="All Versions"
+                    placeholder="All Versions"
+                    searchPlaceholder="Search version..."
+                    ariaLabel="Filter by JD version"
                   />
                 </div>
                 <div>
@@ -1914,7 +1949,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
 
             {/* Phones: one "Sort" button that opens a menu — the fields, then the order
                 (worded for the field). From sm the inline Sort control above is used. */}
-            {pageRows.length > 0 && (
+            {/* Always shown, an empty list included. */}
+            {(
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button

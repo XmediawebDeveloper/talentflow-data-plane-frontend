@@ -126,7 +126,8 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     const POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
     const timer = setInterval(() => {
-      fetchPendingChanges();
+      // Skipped when a focus re-check already read it within the last minute.
+      if (focusRefreshDue('plan-changes')) fetchPendingChanges();
     }, POLL_INTERVAL);
     return () => clearInterval(timer);
   }, [fetchPendingChanges]);
