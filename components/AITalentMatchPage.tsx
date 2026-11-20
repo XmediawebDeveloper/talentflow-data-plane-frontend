@@ -1651,6 +1651,12 @@ export default function AITalentMatchPage({
       // A republish forks the JD into a new row with its own id, so a job's
       // match history is scattered across every row in its lineage, not just
       // the current one.
+      const listFor = (id: string) =>
+        aiMatchService.listSessions({ jd_id: id, page_size: 100 }).catch(() => ({ items: [], total: 0, page: 1, page_size: 100 }));
+      // This row's own sessions are needed whatever the lineage says, so they
+      // are asked for beside the lineage instead of after it (one round trip
+      // less; a single-version job needs nothing more).
+      const ownListP = listFor(anyRowId);
       let lineageIds: string[];
       try {
         const lineage = await jdService.getLineageVersions(anyRowId);
@@ -1663,18 +1669,28 @@ export default function AITalentMatchPage({
       if (!lineageIds.includes(anyRowId)) lineageIds.push(anyRowId);
 
       const sessionLists = await Promise.all(
-        lineageIds.map(id =>
-          aiMatchService.listSessions({ jd_id: id, page_size: 100 }).catch(() => ({ items: [], total: 0, page: 1, page_size: 100 }))
-        )
+        lineageIds.map(id => (id === anyRowId ? ownListP : listFor(id)))
       );
       const allSessions = sessionLists.flatMap(list => list.items || []);
 
       // listSessions returns each session with results: [] — the scores this
-      // table shows only exist on the single-session record, so every version
-      // has to be re-fetched individually (same gap JobDetailView's AI match
-      // tab hit).
+      // table shows only exist on the single-session record. All of them come
+      // back from ONE POST /ai-match/sessions/batch (chunks of 200); a session
+      // the batch could not answer falls back to its own GET, as before.
+      const batched = new Map<string, AIMatchSessionResponse>();
+      try {
+        const ids = allSessions.map(session => session.id);
+        for (let i = 0; i < ids.length; i += 200) {
+          const map = await aiMatchService.getSessionsBatch(ids.slice(i, i + 200));
+          map.forEach((value, id) => batched.set(id, value.session));
+        }
+      } catch (error) {
+        console.warn('AI match session batch failed, fetching one by one:', error);
+      }
       const hydratedSessions = await Promise.all(
         allSessions.map(async (session) => {
+          const fromBatch = batched.get(session.id);
+          if (fromBatch) return fromBatch;
           try {
             const { session: fullSession } = await aiMatchService.getSession(session.id);
             return fullSession;

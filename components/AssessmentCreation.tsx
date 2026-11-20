@@ -1,12 +1,11 @@
 'use client';
 
-import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { formatExperienceRange, formatJdExperience } from '@/lib/utils/jobExperience';
 import ChipsReveal from '@/components/ui/chips-reveal';
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw, ClipboardList, FileSearch } from 'lucide-react';
 import { SectionHeader, SummaryLocation } from '@/components/ai-interview/ConfigSummary';
-import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
+import { isLiveAssessmentStatus, type AssessmentResponse, type HRTopic } from '@/lib/services/assessmentService';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
@@ -35,7 +34,8 @@ import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/comp
 import { loadJobAssessmentHierarchy } from '@/lib/utils/jobAssessmentHierarchy';
 import AssessmentJobBinding from '@/components/assessments/AssessmentJobBinding';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
-import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
+import { seedJobCandidateCounts, useJobCandidateCountsFor } from '@/lib/hooks/useJobCandidateCounts';
+import { cachedList, listCacheKey, listReadOptions, type ListReadOptions } from '@/lib/utils/listCache';
 import JobEligibilityNote, { ASSESSMENT_ELIGIBILITY_LEGEND } from '@/components/jobs/JobEligibilityNote';
 import { PageHeader } from '@/components/ui/page-header';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
@@ -409,9 +409,6 @@ function JDSkillsReveal({
    like the first; the gates below call `isSelectableVersion` directly now, so
    which question a control is asking is legible at the call site. */
 
-/** Same page size the Job Openings page reads the JD list in. */
-const JD_BATCH_SIZE = 100;
-
 /**
  * Every JD version this recruiter can see — unfiltered, and paged to the end.
  *
@@ -426,22 +423,47 @@ const JD_BATCH_SIZE = 100;
  * Any status test therefore belongs AFTER the lineage collapse, on the full
  * list (see `availableJobs`), never in this request.
  */
-const fetchAllJdVersions = async (onFirstPage?: (items: JDResponse[]) => void) => {
-  // Progressive read: the first screen of jobs to `onFirstPage` at once, the
-  // full list (100-row pages, in parallel) returned when it's all in.
-  if (onFirstPage) return jdService.listAllMineProgressive(onFirstPage, 10);
-  const firstPage = await jdService.list({ page: 1, page_size: JD_BATCH_SIZE, source: 'my-jds' });
-  const items = [...firstPage.items];
-  const totalPages = Math.max(
-    firstPage.total_pages || Math.ceil(firstPage.total / JD_BATCH_SIZE),
-    1,
+/** The standalone route this flow writes its step into. */
+const CREATE_ROUTE = '/recruitment/assessments/create';
+
+type JdVersionsRead = {
+  items: JDResponse[];
+  /** "N assessed" / "N interviewed" per JD id, as GET /jd returned them with
+   *  each page (`include_candidate_counts`) — kept with the rows so a reused
+   *  read re-seeds the picker's chips without asking again. */
+  counts: Record<string, { assessed: number; interviewed: number }>;
+};
+
+/* One read of this list per open: the route page no longer reads it as well,
+   and an arrival within LIST_CACHE_TTL_MS of the last one (e.g. back from a
+   Create JD detour) reuses it. Any write clears it (lib/utils/listCache). */
+const JD_VERSIONS_CACHE_KEY = listCacheKey('assessment-create|jd-versions', { source: 'my-jds', counts: 1 });
+
+const fetchAllJdVersions = async (
+  onFirstPage?: (items: JDResponse[]) => void,
+  opts?: ListReadOptions,
+): Promise<JDResponse[]> => {
+  /* Progressive read: the first screen of jobs to `onFirstPage` at once, the
+     full list (100-row pages, in parallel) returned when it's all in. Every
+     page brings the picker's candidate counts for its own rows, so the chips
+     no longer page every assessment and AI interview config tenant-wide. */
+  const read = await cachedList<JdVersionsRead>(
+    JD_VERSIONS_CACHE_KEY,
+    async () => {
+      const counts: JdVersionsRead['counts'] = {};
+      const items = await jdService.listAllMineProgressive(onFirstPage, 10, {
+        includeCandidateCounts: true,
+        onPage: (res) => {
+          seedJobCandidateCounts(res.candidate_counts);
+          Object.assign(counts, res.candidate_counts ?? {});
+        },
+      });
+      return { items, counts };
+    },
+    listReadOptions(opts),
   );
-  // Pages 2+ in parallel (a few at a time), kept in page order — was one by one.
-  const rest = await fetchRemainingPages(totalPages, (page) =>
-    jdService.list({ page, page_size: JD_BATCH_SIZE, source: 'my-jds' }),
-  );
-  for (const nextPage of rest) items.push(...nextPage.items);
-  return items;
+  seedJobCandidateCounts(read.counts);
+  return read.items;
 };
 
 /**
@@ -778,10 +800,6 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // Discard button, then cleared.
   const pendingLeaveActionRef = useRef<(() => void) | null>(null);
   const [jdSearch, setJdSearch] = useState('');
-  /* The "N assessed" / "N interviewed" chips the Job Descriptions cards and
-     the Score Resume job list carry, so a job reads the same here. Fetched
-     only while the job-selection step is on screen. */
-  const candidateCounts = useJobCandidateCounts(step === 'select-jd');
   /* JD picker paging. The page is stored WITH the search it belongs to — the
      same trick the Apply to Job dialog uses — so a new query starts back at
      page one by comparison rather than by an effect that resets it a render
@@ -881,10 +899,30 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       return p;
     };
 
+    /* The step is written to the address with the History API, not
+       `router.replace`. Every step lives at this same route, so there is
+       nothing to navigate to: `router.replace` still sent a server (RSC)
+       request for the new query string, and whenever that answer could not be
+       used as a soft navigation, Next fell back to a full document load —
+       which is the "whole page re-ran right after picking a job" (the route
+       page's own reads, its skeleton, then this component's reads again).
+       Next documents `history.replaceState` for exactly this and syncs it
+       into `useSearchParams` / `usePathname` (state `null`, so the router
+       copies its own entry state in), with no request and no remount.
+       Hosted inline on the Assessments page the flow STAYS there: the step and
+       job live in state (as in `embedded` mode), and the address is left
+       alone. It used to navigate to the create page on the first step change,
+       which mounted that route and re-read the JD list, topics, HR bank and
+       eligibility (~2.6 s) for a flow that already had them. Trade-off: a
+       reload mid-flow lands on the Assessments page, not on this step. */
+    const writeUrl = (query: string) => {
+      if (typeof window === 'undefined' || window.location.pathname !== CREATE_ROUTE) return;
+      window.history.replaceState(null, '', `${CREATE_ROUTE}${query ? `?${query}` : ''}`);
+    };
+
     // When going back to select-jd, clear step/jd params (but keep the origin)
     if (newStep === 'select-jd') {
-      const q = withOrigin(new URLSearchParams()).toString();
-      router.replace(`/recruitment/assessments/create${q ? `?${q}` : ''}`, { scroll: false });
+      writeUrl(withOrigin(new URLSearchParams()).toString());
       return;
     }
 
@@ -892,8 +930,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
     if (jobId || selectedJob?.id) {
       params.set('jd_id', jobId || selectedJob?.id || '');
     }
-    const queryString = withOrigin(params).toString();
-    router.replace(`/recruitment/assessments/create${queryString ? `?${queryString}` : ''}`, { scroll: false });
+    writeUrl(withOrigin(params).toString());
   };
 
   /**
@@ -1236,6 +1273,19 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   };
 
   const [sections, setSections] = useState<SectionConfig[]>(getInitialSections());
+  /* The route page no longer holds this component back until the topic
+     settings have loaded, so they can land after mount. Until a job is chosen
+     (or for an edit) nothing has written `sections` but the initial defaults,
+     so re-deriving them here is exactly what mounting with the settings
+     already in hand produced. Selecting a job sets every round itself. */
+  const topicTechnicalEnabled = topicSettings?.technical_enabled ?? true;
+  const topicCodingEnabled = topicSettings?.coding_enabled ?? true;
+  useEffect(() => {
+    if (selectedJob || editAssessmentId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSections(getInitialSections());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicTechnicalEnabled, topicCodingEnabled]);
   const [newTopic, setNewTopic] = useState({ section: '' as 'HR' | 'Technical' | 'Coding', value: '' });
   const [isGenerating, setIsGenerating] = useState(false);
   /* WHICH of the Configure step's two buttons is working. Both run
@@ -1262,7 +1312,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   }, [editAssessmentId, initialProctoringSettings, userToggledProctoring]);
 
   const [localJobs, setLocalJobs] = useState<Job[]>(jobs);
-  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  /* True from the first frame when the host passes no jobs (the route page
+     no longer reads them itself): the mount effect raises it anyway, and
+     starting false painted "No jobs available" for the frame before it ran. */
+  const [isLoadingJobs, setIsLoadingJobs] = useState(jobs.length === 0);
   /* True while the first screen of jobs is showing and the rest are still
      loading — the empty state and the count wait for the full list. */
   const [isLoadingMoreJobs, setIsLoadingMoreJobs] = useState(false);
@@ -1328,10 +1381,17 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   const [newHRQuestion, setNewHRQuestion] = useState<HRQuestionFormState>(EMPTY_HR_QUESTION_FORM);
   const [isSavingHRQuestion, setIsSavingHRQuestion] = useState(false);
 
-  const loadHRQuestionBank = useCallback(async function loadBank(): Promise<HRBankQuestion[]> {
+  /* `reuseRecent` on arrival only — the same 30 s entry the HR Question Bank
+     page reads (one key), so coming back shows the bank it just read. The
+     re-read after adding a question asks the server. */
+  const loadHRQuestionBank = useCallback(async function loadBank(opts?: ListReadOptions): Promise<HRBankQuestion[]> {
     try {
-      const response = await api.get('/hr-question-bank');
-      const data = Array.isArray(response.data) ? response.data : [];
+      const raw = await cachedList(
+        listCacheKey('hr-question-bank'),
+        async () => (await api.get('/hr-question-bank')).data,
+        listReadOptions(opts),
+      );
+      const data = Array.isArray(raw) ? raw : [];
       const mapped: HRBankQuestion[] = data
         .map((q: any) => ({
           id: q.id,
@@ -1349,14 +1409,14 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       setHrQuestionBank([]);
       showErrorToast(error, "Couldn't load the HR question bank", {
         id: 'hr-question-bank-load',
-        retry: () => loadBank(),
+        retry: () => loadBank({ fresh: true }),
       });
       return [];
     }
   }, []);
 
   useEffect(() => {
-    loadHRQuestionBank();
+    loadHRQuestionBank({ reuseRecent: true });
   }, [loadHRQuestionBank]);
 
   useEffect(() => {
@@ -1439,7 +1499,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         correct_answer: null,
       });
 
-      const refreshedQuestions = await loadHRQuestionBank();
+      const refreshedQuestions = await loadHRQuestionBank({ fresh: true });
       const createdQuestion = refreshedQuestions.find(q => q.text.trim().toLowerCase() === questionText.toLowerCase());
       if (createdQuestion && selectedHRQuestions.length < HR_QUESTION_LIMIT) {
         setSelectedHRQuestions(prev => (prev.includes(createdQuestion.id) ? prev : [...prev, createdQuestion.id]));
@@ -1883,7 +1943,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
          every row it built, which was survivable only while the request itself
          was published-filtered; over the full list it would have marked every
          draft version published and put each one on a card of its own. */
-      const items = await fetchAllJdVersions();
+      const items = await fetchAllJdVersions(undefined, { fresh: true });
       if (items.length > 0) {
         const mappedJobs: Job[] = items.map((jd: any) => ({
           ...mapJDToJob(jd),
@@ -1923,6 +1983,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
            Skipped when a JD is pre-selected by link: that flow should go
            straight to Configure, not flash the picker while it resolves. */
         const showFirstPageEarly = !(preSelectedJobId || urlJdId || editAssessmentId);
+        /* On arrival a read from the last 30 s is reused (back from a Create
+           JD detour, a second open); Retry asks the server. Nothing here is a
+           check made before a write: the "+" re-reads the job's assessments
+           fresh (`loadJobAssessmentHierarchy`) and the backend enforces one
+           assessment per JD version on create. */
+        const readOpts: ListReadOptions = jobsReloadToken > 0 ? { fresh: true } : { reuseRecent: true };
         const [jdResult, eligibilityResult] = await Promise.allSettled([
           fetchAllJdVersions(showFirstPageEarly ? (firstItems) => {
             setLocalJobs(firstItems.map((jd: JDResponse & { coding_required?: boolean; supported_languages?: string[] }) => ({
@@ -1932,8 +1998,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             })));
             setIsLoadingMoreJobs(true);
             setIsLoadingJobs(false);
-          } : undefined),
-          assessmentService.getJDsWithAssessments(),
+          } : undefined, readOpts),
+          assessmentService.getJDsWithAssessments(readOpts),
         ]);
         if (jdResult.status === 'rejected') throw jdResult.reason;
         const jdItems = jdResult.value;
@@ -3021,14 +3087,20 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         // `content_edited` tells it which checkpoint that is — untouched
         // defaults "Saved as Draft", an edited configuration "Draft
         // Updated" (see `hasConfigureEdits`).
+        /* Publish rides on the create (`publish: true`) — one round trip
+           instead of create-then-publish. The backend runs the /publish
+           endpoint's own code for it. A reply that is not live (a refused
+           publish, or an older backend that ignores the flag) falls back to
+           the separate publish call, which reports any refusal as before. */
         resultAssessment = await assessmentService.create({
           ...assessmentData,
           save_and_exit: saveAsDraft,
           content_edited: hasConfigureEdits || userToggledProctoring,
+          ...(saveAsDraft ? {} : { publish: true }),
         });
 
-        // If not saving as draft, publish immediately
-        if (!saveAsDraft) {
+        // Not saving as draft and the create did not publish it: publish now.
+        if (!saveAsDraft && !isLiveAssessmentStatus(resultAssessment?.status)) {
           resultAssessment = publishedRecordOr(
             await assessmentService.publish(resultAssessment.id),
             resultAssessment,
@@ -3378,6 +3450,16 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   const pagedAvailableJobs = filteredAvailableJobs.slice(
     (jdSafePage - 1) * jdItemsPerPage,
     jdSafePage * jdItemsPerPage,
+  );
+  /* The "N assessed" / "N interviewed" chips the Job Descriptions cards and
+     the Score Resume job list carry, so a job reads the same here — for the
+     cards on screen only, while the job-selection step is showing. They come
+     with the JD list's own pages (`include_candidate_counts`, seeded in
+     `fetchAllJdVersions`), the way Score Resume's picker gets them, instead of
+     paging every assessment and AI interview config tenant-wide. */
+  const candidateCounts = useJobCandidateCountsFor(
+    pagedAvailableJobs.map(job => job.id),
+    step === 'select-jd',
   );
   /* The pick is held outside the list, so it survives paging and searching —
      and every card on screen can be inert because of a job that is not. Where

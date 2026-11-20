@@ -16,8 +16,15 @@ import { createPortal } from 'react-dom';
 import LeaveInterviewDialog, { type LeaveInterviewBusy } from './LeaveInterviewDialog';
 import InterviewEditLockGate from './InterviewEditLockGate';
 import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams, WizardLayer } from './embeddedWizardNav';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
-import { loadAllInterviewConfigs } from '@/components/talent-match-invite/inviteVersions';
+import {
+  aiInterviewService,
+  isJdDisabled,
+  JD_DISABLED_ACTION_MESSAGE,
+  isLiveConfigForJd,
+  AINotConfiguredError,
+  AI_NOT_CONFIGURED_MESSAGE,
+} from '@/lib/services/aiInterviewService';
+import { cachedList, listCacheKey, listReadOptions } from '@/lib/utils/listCache';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import { Button } from '@/components/ui/button';
 import type {
@@ -1411,7 +1418,10 @@ export default function AIInterviewConfig() {
   const inviteOriginQuery = inviteOrigin?.query ?? '';
 
   const [selectedJd, setSelectedJd] = useState<PublishedJD | null>(null);
-  const selectedJdLocations = useJdLocations(selectedJd?.id);
+  /* By the URL's id, not selectedJd's: the JD record's read starts with the
+     page's first wave instead of after the JD list lands (selectedJd is only
+     ever this same id). */
+  const selectedJdLocations = useJdLocations(jdId);
   const [loadingJd, setLoadingJd] = useState(true);
   // Set when loadJD decides to navigate elsewhere, so the loader stays on screen
   // through the handoff instead of flashing an empty page.
@@ -1468,21 +1478,29 @@ export default function AIInterviewConfig() {
    * lost. Same number of round trips as before — one of them is just an update
    * now instead of a second create.
    */
-  const ensureDraftId = async (payload: any): Promise<{ id: string; mine: boolean }> => {
+  const ensureDraftId = async (
+    payload: any,
+    // Next's save: the create also runs the AI-key check (see proceedToClusters).
+    requireAiConfig = false,
+  ): Promise<{ id: string; mine: boolean }> => {
     if (existingDraftIdRef.current) return { id: existingDraftIdRef.current, mine: false };
     let mine = false;
     if (!draftCreateRef.current) {
       mine = true;
+      const track = (created: AIInterviewResponse) => {
+        existingDraftIdRef.current = created.id;
+        // A new interview stays "unsaved" until Save as Draft keeps it.
+        markUnsavedVersion(created.id);
+        setLoadedConfig({ id: created.id, status: 'draft', version: created.interview_version ?? 1, invited: false });
+        return created.id;
+      };
       draftCreateRef.current = aiInterviewService
-        .create(payload)
-        .then((created) => {
-          existingDraftIdRef.current = created.id;
-          // A new interview stays "unsaved" until Save as Draft keeps it.
-          markUnsavedVersion(created.id);
-          setLoadedConfig({ id: created.id, status: 'draft', version: created.interview_version ?? 1, invited: false });
-          return created.id;
-        })
+        .create(payload, { requireAiConfig })
+        .then(track)
         .catch((err) => {
+          // An older backend created the draft before the key check failed:
+          // keep it tracked so the next save updates it instead of making another.
+          if (err instanceof AINotConfiguredError && err.created) track(err.created);
           // Let the next caller retry rather than stranding the wizard with a
           // permanently rejected promise.
           draftCreateRef.current = null;
@@ -1668,18 +1686,25 @@ export default function AIInterviewConfig() {
       try {
         setLoadingJd(true);
 
-        // Load JD; if editing a specific config, fetch it directly instead of
-        // searching drafts. The live-config guard rides along in the same
-        // Promise.all so it costs no extra round trip on the common path.
-        const [jdResult, specificConfig, liveConfig] = await Promise.all([
-          aiInterviewService.getPublishedJDs(),
+        // ONE wave. The JD list is the one the picker just read (reused on
+        // arrival — any write clears it); with a specific config_id it is read
+        // directly; otherwise every config (the default list + the archived
+        // one, one request each) answers all three questions below — the
+        // live-config guard, the one-interview-per-version guard and the draft
+        // to restore — which used to be three serial reads (paged live lookup,
+        // then both full lists, then a draft-only list).
+        const [jdResult, specificConfig, allConfigs] = await Promise.all([
+          aiInterviewService.getPublishedJDs({ reuseRecent: true }),
           // With pending edits overlaid: an existing config is edited as pending
           // edits (lib/utils/aiInterviewEditSession), and this is where they show.
           configId ? aiInterviewService.get(configId, { withPending: true }).catch(() => null) : Promise.resolve(null),
           // A failed lookup must not block configuring — fall through as "no
           // blocker" rather than stranding the recruiter on a transient error.
-          configId ? Promise.resolve(null) : aiInterviewService.findLiveConfigForJd(jdId).catch(() => null),
+          configId ? Promise.resolve(null) : aiInterviewService.listAllConfigsSplit().catch(() => null),
         ]);
+        /* findLiveConfigForJd's answer: the first live config of this JD in the
+           default list's (newest-first) order. */
+        const liveConfig = allConfigs?.live.find((c) => isLiveConfigForJd(c, jdId)) ?? null;
 
         const jd = jdResult.items.find(j => j.id === jdId);
         if (!jd) {
@@ -1743,7 +1768,11 @@ export default function AIInterviewConfig() {
            it is restored below. A failed lookup does not block, like the live
            check above. */
         if (!configId) {
-          const ofJob = (await loadAllInterviewConfigs().catch(() => [] as AIInterviewResponse[]))
+          /* loadAllInterviewConfigs' list (default + archived, de-duplicated),
+             already in hand. */
+          const seen = new Set<string>();
+          const ofJob = [...(allConfigs?.live ?? []), ...(allConfigs?.archived ?? [])]
+            .filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)))
             .filter((c) => c.jd_id === jdId);
           if (ofJob.length > 0 && !ofJob.some((c) => c.status === 'draft')) {
             const latest = ofJob.reduce((best, c) =>
@@ -1767,8 +1796,14 @@ export default function AIInterviewConfig() {
         // Look for an existing config: specific config_id takes priority, then search drafts by jd_id
         let existingDraft: AIInterviewResponse | null = specificConfig;
         if (!existingDraft) {
-          const draftResult = await aiInterviewService.listConfigs({ status: 'draft', page_size: 50, compact: true }).catch(() => null);
-          existingDraft = draftResult?.items?.find(
+          /* This JD's newest draft. The default list holds every draft, in the
+             same newest-first order the draft-only list had, so it is read from
+             there; the draft-only read runs only when that list is not in hand
+             (a config_id that failed to load, or a failed list read). */
+          const drafts = allConfigs
+            ? allConfigs.live
+            : (await aiInterviewService.listConfigs({ status: 'draft', page_size: 50, compact: true }).catch(() => null))?.items;
+          existingDraft = drafts?.find(
             (c: AIInterviewResponse) => c.jd_id === jdId && c.status === 'draft'
           ) ?? null;
           // The list row is the stored draft; with pending edits on it, read
@@ -2235,9 +2270,17 @@ export default function AIInterviewConfig() {
   }, [loadingJd, jdId, mth.skills.length, nth.skills.length]);
 
   /* ── Fetch HR question bank on mount ── */
+  /* `reuseRecent` on arrival — the same 30 s entry the HR Question Bank page
+     and the Assessment wizard read (one key), so a visit moments after either
+     shows the bank without asking again. Any write (e.g. adding a question)
+     clears it. */
   useEffect(() => {
-    api.get('/hr-question-bank').then(res => {
-      const data: any[] = res.data || [];
+    cachedList(
+      listCacheKey('hr-question-bank'),
+      async () => (await api.get('/hr-question-bank')).data,
+      listReadOptions({ reuseRecent: true }),
+    ).then((raw: unknown) => {
+      const data: any[] = Array.isArray(raw) ? raw : [];
       setHrBankQuestions(prev => mergeHRBankQuestions(prev, data.map(q => ({
         id: q.id,
         question_text: q.question_text,
@@ -2735,6 +2778,9 @@ export default function AIInterviewConfig() {
     // decides whether this config's audit trail gets a "Saved as Draft" /
     // "Draft Updated" row, not whether anything here is saved differently.
     isExiting = false,
+    // Next: the save itself runs GET /ai-config-status' check server-side
+    // (refused, nothing written, when the AI key is missing) — one request.
+    requireAiConfig = false,
   ): Promise<boolean> => {
     if (!selectedJd) return false;
     setSavingDraft(true);
@@ -2763,11 +2809,11 @@ export default function AIInterviewConfig() {
         // "Unpublished changes" that change nothing.
         const unchangedPublished = isExiting && loadedStatusRef.current === 'published'
           && !hasUnsavedChanges() && !pendingOnLoadRef.current && !hasPendingThisVisit(existingDraftIdRef.current);
-        if (!unchangedPublished) await aiInterviewService.update(existingDraftIdRef.current, payload);
+        if (!unchangedPublished) await aiInterviewService.update(existingDraftIdRef.current, payload, { requireAiConfig });
       } else {
         // Create the draft once, even if the debounced auto-save is racing this.
-        const { id, mine } = await ensureDraftId(payload);
-        if (!mine) await aiInterviewService.update(id, payload);
+        const { id, mine } = await ensureDraftId(payload, requireAiConfig);
+        if (!mine) await aiInterviewService.update(id, payload, { requireAiConfig });
       }
       // This save carried the exit flag, so the server has just written the
       // visit's checkpoint row — the unmount net must not write a second one.
@@ -2775,6 +2821,11 @@ export default function AIInterviewConfig() {
       if (!silent) toast.success('Draft saved!');
       return true;
     } catch (err: any) {
+      if (err instanceof AINotConfiguredError) {
+        // The message and duration Next showed for GET /ai-config-status.
+        toast.error(AI_NOT_CONFIGURED_MESSAGE, { duration: 9000 });
+        return false;
+      }
       // Always surface the real reason, even for silent (background) saves —
       // "silent" only suppresses the success confirmation, not failures.
       // Swallowing errors here left callers unable to show anything but a
@@ -2872,22 +2923,16 @@ export default function AIInterviewConfig() {
   const proceedToClusters = async () => {
     if (!selectedJd) return;
 
-    // 0. Cluster generation on the next page needs AI_CONFIG_OPENAI_API_KEY.
-    // Check availability BEFORE navigating — failing after the navigation
-    // strands the recruiter on the Clusters page with nothing to fix there.
-    const { available: aiAvailable } = await aiInterviewService.getAIConfigStatus();
-    if (!aiAvailable) {
-      toast.error(
-        'AI is not configured for this workspace (missing OpenAI API key). Contact your admin to configure it before continuing.',
-        { duration: 9000 }
-      );
-      return;
-    }
-
     isNavigatingRef.current = true;
 
     // 1. Save draft first so the Clusters page reads the latest skills.
-    const ok = await saveDraft(true);
+    // Cluster generation on the next page needs AI_CONFIG_OPENAI_API_KEY, so
+    // this save also checks it (`requireAiConfig`) BEFORE navigating — failing
+    // after the navigation strands the recruiter on the Clusters page with
+    // nothing to fix there. Missing key: the save is refused, nothing is
+    // written, and saveDraft shows the same message GET /ai-config-status led
+    // to — one request where the check and the save used to be two in series.
+    const ok = await saveDraft(true, undefined, false, true);
     if (!ok) {
       // saveDraft already surfaced the real failure reason — avoid stacking
       // a second, less specific toast on top of it.

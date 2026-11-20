@@ -18,6 +18,50 @@ export class InterviewBeingEditedError extends Error {
   }
 }
 
+/** The Configure page's text when cluster generation's OpenAI key is missing
+ *  (GET /ai-config-status `available: false`, or a write sent with
+ *  `requireAiConfig` refused with 412 AI_NOT_CONFIGURED). */
+export const AI_NOT_CONFIGURED_MESSAGE =
+  'AI is not configured for this workspace (missing OpenAI API key). Contact your admin to configure it before continuing.';
+
+/** A create / update sent with `requireAiConfig` found no AI key. `created` is
+ *  the config an OLDER backend (which ignores the flag) created anyway, so the
+ *  caller can still track it; null when nothing was written. */
+export class AINotConfiguredError extends Error {
+  constructor(public created: AIInterviewResponse | null = null) {
+    super(AI_NOT_CONFIGURED_MESSAGE);
+    this.name = 'AINotConfiguredError';
+  }
+}
+
+/* Candidate-flow statuses mean the interview is published and in use. */
+const LIVE_CONFIG_STATUSES = [
+  'published', 'invited', 'consent_pending', 'system_check', 'in_progress', 'scheduled',
+];
+
+/** `findLiveConfigForJd`'s test, for a caller that already holds the config
+ *  list (the first match in the list's newest-first order is the one). */
+export const isLiveConfigForJd = (c: AIInterviewResponse, jdId: string): boolean =>
+  c.jd_id === jdId && c.status !== 'archived' && LIVE_CONFIG_STATUSES.includes(c.status);
+
+/** Options for the wizard's create / update. `requireAiConfig` folds GET
+ *  /ai-config-status into the write: the server refuses it (nothing written)
+ *  when the key is missing, so Next costs one request instead of two. */
+export type AIInterviewWriteOptions = { requireAiConfig?: boolean };
+
+const isAiNotConfigured = (error: unknown): boolean => {
+  const response = (error as { response?: { status?: number; data?: { detail?: { error?: string } } } })?.response;
+  return response?.status === 412 && response?.data?.detail?.error === 'AI_NOT_CONFIGURED';
+};
+
+/* An older backend ignores `require_ai_config` and does not send this header;
+   then the old separate check runs after the write. */
+const aiConfigCheckedByServer = (headers: unknown): boolean => {
+  const h = headers as { get?: (name: string) => unknown; [k: string]: unknown } | undefined;
+  const value = typeof h?.get === 'function' ? h.get('x-ai-config-checked') : h?.['x-ai-config-checked'];
+  return value != null && String(value) !== '';
+};
+
 /* A wizard write refused because someone else is editing: tell the step's lock
    gate (so the user gets View only / Take over) and throw a typed error. Any other
    error falls through to the caller's usual handling. */
@@ -211,6 +255,10 @@ export interface PublishedJD {
   version_number?: number;   // job version (v1, v2, ...)
   created_by_name?: string;
   has_published_config?: boolean;
+  /** This version has an AI interview in any status but archived (draft
+   *  included) — the jd_ids of GET /configs' default list. Absent from an
+   *  older backend. */
+  has_config?: boolean;
   status?: 'published' | 'disabled' | 'archived';  // disabled/archived JDs are listed read-only
 }
 
@@ -797,22 +845,34 @@ export const aiInterviewService = {
   /**
    * Create interview
    */
-  async create(data: AIInterviewCreate): Promise<AIInterviewResponse> {
+  async create(data: AIInterviewCreate, opts?: AIInterviewWriteOptions): Promise<AIInterviewResponse> {
+    let created: AIInterviewResponse;
     try {
       // Trailing slash = the backend's route. Without it the backend answered with a
       // redirect, which behind the HTTPS proxy came back as http:// (mixed content).
-      const response = await api.post<AIInterviewResponse>('/ai-interview/', data);
+      const response = await api.post<AIInterviewResponse>(
+        '/ai-interview/',
+        data,
+        opts?.requireAiConfig ? { params: { require_ai_config: true } } : undefined,
+      );
       dispatchUnitsConsumed();
-      return response.data;
+      created = response.data;
+      if (!opts?.requireAiConfig || aiConfigCheckedByServer(response.headers)) return created;
     } catch (error) {
+      if (isAiNotConfigured(error)) throw new AINotConfiguredError();
       throw new Error(handleApiError(error));
     }
+    // Older backend: the config exists; run the separate check it skipped.
+    const { available } = await aiInterviewService.getAIConfigStatus();
+    if (!available) throw new AINotConfiguredError(created);
+    return created;
   },
 
   /**
    * Update interview
    */
-  async update(id: string, data: AIInterviewUpdate): Promise<AIInterviewResponse> {
+  async update(id: string, data: AIInterviewUpdate, opts?: AIInterviewWriteOptions): Promise<AIInterviewResponse> {
+    let updated: AIInterviewResponse;
     try {
       // While a wizard step is editing this EXISTING config, every content save
       // is staged as pending edits rather than written into the config — one
@@ -821,13 +881,23 @@ export const aiInterviewService = {
       // audit-only save_and_exit checkpoint) and status changes are never staged.
       const stage = data.stage_edits ?? (isStaging(id) && hasContentFields(data));
       const body = stage ? { ...data, stage_edits: true } : data;
-      const response = await api.put<AIInterviewResponse>(`/ai-interview/${id}`, body);
+      const response = await api.put<AIInterviewResponse>(
+        `/ai-interview/${id}`,
+        body,
+        opts?.requireAiConfig ? { params: { require_ai_config: true } } : undefined,
+      );
       if (stage) markPendingThisVisit(id);
-      return response.data;
+      updated = response.data;
+      if (!opts?.requireAiConfig || aiConfigCheckedByServer(response.headers)) return updated;
     } catch (error) {
       rethrowIfBeingEdited(id, error);
+      if (isAiNotConfigured(error)) throw new AINotConfiguredError();
       throw new Error(handleApiError(error));
     }
+    // Older backend: saved; run the separate check it skipped.
+    const { available } = await aiInterviewService.getAIConfigStatus();
+    if (!available) throw new AINotConfiguredError();
+    return updated;
   },
 
   /**
@@ -994,10 +1064,16 @@ export const aiInterviewService = {
   /**
    * Get published JDs for interview creation
    */
-  async getPublishedJDs(): Promise<{ items: PublishedJD[]; total: number }> {
+  /** Read through the shared list cache: the JD picker and the Configure step
+   *  it opens pass `reuseRecent` on arrival, so Configure reuses the picker's
+   *  read instead of asking again (any write clears it). */
+  async getPublishedJDs(opts?: ListReadOptions): Promise<{ items: PublishedJD[]; total: number }> {
     try {
-      const response = await api.get<{ items: PublishedJD[]; total: number }>('/ai-interview/jds-for-interview');
-      return response.data;
+      return await cachedList(
+        listCacheKey('ai-interview|jds-for-interview'),
+        async () => (await api.get<{ items: PublishedJD[]; total: number }>('/ai-interview/jds-for-interview')).data,
+        listReadOptions(opts),
+      );
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -1037,13 +1113,8 @@ export const aiInterviewService = {
    * need different handling and a different message.
    */
   async findLiveConfigForJd(jdId: string): Promise<AIInterviewResponse | null> {
-    // Candidate-flow statuses mean the interview is published and in use.
-    const LIVE_STATUSES = [
-      'published', 'invited', 'consent_pending', 'system_check', 'in_progress', 'scheduled',
-    ];
     try {
-      const isLive = (c: AIInterviewResponse) =>
-        c.jd_id === jdId && c.status !== 'archived' && LIVE_STATUSES.includes(c.status);
+      const isLive = (c: AIInterviewResponse) => isLiveConfigForJd(c, jdId);
       // Paginate rather than trusting one big page — a tenant with many
       // configs would otherwise silently fall off the end and get a duplicate.
       // Page 1 alone (a match there needs nothing more), then the rest a few
@@ -1691,7 +1762,9 @@ export const aiInterviewService = {
         // The interactive question costs a second model call (the finding, then
         // the substitution test that gates every rejection), so it gets longer
         // before the client gives up and lets the add through.
-        { timeout: args.timeoutMs ?? (args.interactive ? 12000 : 6000) },
+        // Read-only (the endpoint only reports), so it must not clear the
+        // shared GETs / list cache the step just read (`invalidatesCache`).
+        { timeout: args.timeoutMs ?? (args.interactive ? 12000 : 6000), invalidatesCache: false },
       );
       const findings = response.data?.findings;
       if (!Array.isArray(findings)) return null;
