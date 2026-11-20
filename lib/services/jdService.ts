@@ -187,7 +187,28 @@ export interface JDListResponse {
    *  what GET /jd/candidate-counts answers, in the same response. Absent/null
    *  on an older backend or a failed tally (the page then asks for them). */
   candidate_counts?: Record<string, { assessed: number; interviewed: number }> | null;
+  /** `include_scoring_counts` only: GET /scoring/jd/counts' answer for this
+   *  page's ids. Absent/null without scoring:read, on an older backend or a
+   *  failed count (the caller then asks /scoring/jd/counts itself). */
+  scoring_counts?: Record<string, { total: number; top: { scored_by_name: string; created_at: string | null } | null }> | null;
 }
+
+/** Extras the plain list can fold into each page, and a tap on every page. */
+export interface JdListAllMineOptions {
+  /** Ask each page for `scoring_counts` (GET /scoring/jd/counts' answer). */
+  includeScoringCounts?: boolean;
+  /** Ask each page for `candidate_counts` (GET /jd/candidate-counts' answer). */
+  includeCandidateCounts?: boolean;
+  /** Called with every page response as it lands (the small first read too). */
+  onPage?: (page: JDListResponse) => void;
+}
+
+/* Page count (100-row pages) the last listAllMineProgressive read found, so the
+   next one can start every page together with its small first read — one wave
+   instead of "first read, then the pages". Only a guess: pages past the real
+   end are ignored, and missing ones are still read once the total is known. */
+let lastMinePageCount: number | null = null;
+const MAX_EARLY_PAGES = 6;
 
 /** The Job Openings toolbar's filters — shared by `listJobs` and `getJobStats`,
  *  which the server builds from ONE filter function (card == list total). */
@@ -754,6 +775,10 @@ export const jdService = {
     page_size?: number;
     /** Only these JD ids — sent as repeated `ids=` (FastAPI's list form), not axios' default `ids[]=`. */
     ids?: string[];
+    /** Also return `scoring_counts` for this page's ids. */
+    include_scoring_counts?: boolean;
+    /** Also return `candidate_counts` for this page's ids. */
+    include_candidate_counts?: boolean;
   }): Promise<JDListResponse> {
     try {
       const response = await api.get<JDListResponse>('/jd', {
@@ -797,28 +822,55 @@ export const jdService = {
    * should show something at once: a small first read (`firstSize`, the rows
    * one picker page shows) goes to `onFirst` as soon as it lands — ~7 KB
    * gzipped instead of a 75 KB 100-row page — and also tells us the total;
-   * then every 100-row page is read in parallel (a few at a time) and the full
-   * list is returned. `onFirst` is skipped when that first read already is
-   * the full list. Not cached: callers that want reuse hold their own copy.
+   * every 100-row page is read in parallel and the full list is returned.
+   * When an earlier read learned the page count, those pages start TOGETHER
+   * with the first read (one wave); otherwise they start once it lands.
+   * `onFirst` is skipped when that first read already is the full list.
+   * `opts` folds per-row extras into every page (see JdListAllMineOptions).
+   * Not cached: callers that want reuse hold their own copy.
    */
   async listAllMineProgressive(
     onFirst?: (items: JDResponse[]) => void,
     firstSize = 10,
+    opts?: JdListAllMineOptions,
   ): Promise<JDResponse[]> {
     const PAGE_SIZE = 100;
-    const quick = await jdService.list({ page: 1, page_size: firstSize, source: 'my-jds' });
+    const read = (page: number, pageSize: number) =>
+      jdService
+        .list({
+          page,
+          page_size: pageSize,
+          source: 'my-jds',
+          ...(opts?.includeScoringCounts ? { include_scoring_counts: true } : {}),
+          ...(opts?.includeCandidateCounts ? { include_candidate_counts: true } : {}),
+        })
+        .then((res) => {
+          opts?.onPage?.(res);
+          return res;
+        });
+    const guess = lastMinePageCount ? Math.min(lastMinePageCount, MAX_EARLY_PAGES) : 0;
+    const quickP = read(1, firstSize);
+    const early = Array.from({ length: guess }, (_, i) => read(i + 1, PAGE_SIZE));
+    // Handled here so an early page nobody ends up needing can't surface as an
+    // unhandled rejection; Promise.all below still sees any failure it awaits.
+    early.forEach((p) => { p.catch(() => {}); });
+    const quick = await quickP;
     const total = quick.total ?? quick.items.length;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    lastMinePageCount = totalPages;
     if (quick.items.length >= total) return [...quick.items];
     onFirst?.(quick.items);
-    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    const [first, rest] = await Promise.all([
-      jdService.list({ page: 1, page_size: PAGE_SIZE, source: 'my-jds' }),
-      fetchRemainingPages(totalPages, (page) =>
-        jdService.list({ page, page_size: PAGE_SIZE, source: 'my-jds' }),
-      ),
+    const started = early.slice(0, totalPages);
+    // Pages the guess did not cover, a few at a time, in page order.
+    const missing = totalPages - started.length;
+    const [head, rest] = await Promise.all([
+      Promise.all(started),
+      missing > 0
+        ? fetchRemainingPages(missing + 1, (n) => read(started.length + n - 1, PAGE_SIZE))
+        : Promise.resolve([] as JDListResponse[]),
     ]);
-    const items = [...first.items];
-    for (const next of rest) items.push(...next.items);
+    const items: JDResponse[] = [];
+    for (const next of [...head, ...rest]) items.push(...next.items);
     return items;
   },
 

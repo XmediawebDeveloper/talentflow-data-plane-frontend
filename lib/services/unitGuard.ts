@@ -34,7 +34,16 @@ export async function ensureUnitsAvailable(
     return; // check unavailable — the backend decides on the action itself
   }
   if (result.can_proceed) return;
+  throw unitRefusalError(result, unitType);
+}
 
+/** The error a refused unit check shows — shared by ensureUnitsAvailable and
+ *  callers whose action ran the same check server-side (POST /scoring/bulk-async
+ *  with `validate_units` returns that check as `unit_check`). */
+export function unitRefusalError(
+  result: Awaited<ReturnType<typeof unitPoolService.validateBeforeAction>>,
+  unitType: UnitType,
+): InsufficientUnitsError {
   const name = result.unit_name || UNIT_TYPE_NAMES[unitType];
   const message =
     result.error === 'INSUFFICIENT_UNITS'
@@ -44,5 +53,5 @@ export async function ensureUnitsAvailable(
         : result.error === 'TENANT_EXPIRED'
           ? 'Your subscription has expired. Please contact your administrator to renew.'
           : result.message || `Not enough ${name} units for this action.`;
-  throw new InsufficientUnitsError(result.action_required ? `${message} ${result.action_required}` : message);
+  return new InsufficientUnitsError(result.action_required ? `${message} ${result.action_required}` : message);
 }
