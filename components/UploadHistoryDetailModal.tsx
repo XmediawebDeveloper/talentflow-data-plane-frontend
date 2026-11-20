@@ -3,6 +3,7 @@
 import { FileText, Copy, GitBranch, AlertTriangle, AlertCircle, CheckCircle, Calendar, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ViewResumeButton from '@/components/ui/view-resume-button';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 export interface UploadHistoryItem {
   id: string;
@@ -87,7 +88,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-3 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-in zoom-in-95 duration-200 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
         {/* Header */}
         <div className={`flex items-start justify-between p-4 sm:p-6 border-b ${config.borderColor} ${config.bgColor} shrink-0`}>
@@ -122,7 +123,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
 
             {item.candidateName && (
               <div className="flex items-center gap-2 text-sm py-2 border-t border-gray-200 dark:border-slate-700">
-                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 dark:text-slate-500 flex-shrink-0" />
                 <span className="text-gray-600 dark:text-slate-400">Candidate:</span>
                 <span className="font-medium text-gray-900 dark:text-slate-50 truncate">{item.candidateName}</span>
               </div>
@@ -210,6 +211,6 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
           )}
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

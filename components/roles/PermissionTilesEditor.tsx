@@ -11,6 +11,7 @@ import {
 } from '@/lib/constants/permissionCategories';
 import { isEntryPointLocked, isGroupFullyOn, labelOf } from '@/lib/permissions/permissionRules';
 import { permissionActionOf, permissionBadgeClass } from './PermissionSectionsView';
+import { clickableProps } from '@/lib/a11y/clickableProps';
 
 /**
  * The permission grid used by Create Role and Edit Role — same look as the Edit
@@ -86,7 +87,7 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
           <div className="tf-row-title flex items-center gap-1.5">
             {label}
             {isMandatory && <span className="text-xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>}
-            {lockedMain && <Lock className="w-3.5 h-3.5 text-gray-400" />}
+            {lockedMain && <Lock className="w-3.5 h-3.5 text-gray-500" />}
           </div>
         </div>
       </div>
@@ -110,7 +111,7 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
         return (
           <div key={category.id} className="tf-card-soft overflow-hidden">
             {/* Section header — the whole row toggles the section */}
-            <div
+            <div {...clickableProps}
               className="flex cursor-pointer select-none items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5"
               onClick={() => onToggleGroup(allCodes, category.name)}
             >
@@ -142,7 +143,7 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
                   key={sub.name}
                   className="ml-4 mr-3 mb-3 sm:ml-8 sm:mr-4 overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 border-l-4 border-l-brand-blue/30"
                 >
-                  <div
+                  <div {...clickableProps}
                     className="px-3 sm:px-4 py-2 flex items-center justify-between cursor-pointer select-none transition-colors bg-slate-50 dark:bg-slate-800/50"
                     onClick={() => onToggleGroup(subCodes, sub.name)}
                   >

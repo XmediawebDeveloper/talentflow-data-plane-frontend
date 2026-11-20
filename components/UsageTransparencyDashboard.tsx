@@ -31,6 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import FilterSelect from '@/components/ui/filter-select';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
+import { IconButton } from '@/components/ui/icon-button';
 
 const EXPORT_HEADERS = [
   'Date', 'Time', 'Unit Type', 'Units', 'Category', 'Status',
@@ -373,9 +374,9 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
           <div className="mb-6 p-4 bg-destructive-subtle border border-destructive-line rounded-xl flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
             <p className="text-sm text-destructive">{error}</p>
-            <button onClick={() => setError(null)} className="ml-auto" aria-label="Close">
+            <IconButton bare label="Close" onClick={() => setError(null)} className="ml-auto">
               <X className="w-4 h-4 text-destructive hover:text-destructive" />
-            </button>
+            </IconButton>
           </div>
         )}
 
@@ -685,7 +686,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                           {entry.overall_score}
                         </span>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-gray-500">-</span>
                       )}
                     </td>
                   </tr>
@@ -732,25 +733,23 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                     className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
                   />
                 </div>
-                <button
+                <IconButton bare label="Previous page"
                   onClick={() => setPage(Math.max(0, page - 1))}
                   disabled={page === 0}
                   className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                  aria-label="Previous page" title="Previous page"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
+                </IconButton>
                 <span className="tf-label px-1 whitespace-nowrap">
                   <span className="text-brand-blue font-semibold">{page + 1}</span> / {totalPages}
                 </span>
-                <button
+                <IconButton bare label="Next page"
                   onClick={() => setPage(page + 1)}
                   disabled={(page + 1) * limit >= data.total}
                   className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                  aria-label="Next page" title="Next page"
                 >
                   <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
+                </IconButton>
               </div>
             </div>
           )}

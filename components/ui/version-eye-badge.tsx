@@ -2,6 +2,7 @@
 
 import type { MouseEvent, ReactNode } from 'react';
 import { Eye, Loader2 } from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface VersionEyeBadgeProps {
   /** What the badge names — "v2", "Version 2". */
@@ -56,16 +57,14 @@ export default function VersionEyeBadge({
         <span className={`inline-flex items-center ${pad}`} title={labelTitle}>{label}</span>
       )}
       {onView && (
-        <button
+        <IconButton bare label={viewLabel}
           type="button"
           onClick={stop(onView)}
           disabled={loading}
-          title={viewLabel}
-          aria-label={viewLabel}
           className="inline-flex items-center justify-center px-1.5 border-l border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? <Loader2 className={`${icon} animate-spin`} /> : <Eye className={icon} />}
-        </button>
+        </IconButton>
       )}
     </span>
   );

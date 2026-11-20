@@ -602,7 +602,7 @@ export default function CompanyProfilePage() {
                   >
                     <Globe className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{websiteLabel}</span>
-                    <ExternalLink className="h-3 w-3 shrink-0 text-gray-400" />
+                    <ExternalLink className="h-3 w-3 shrink-0 text-gray-500" />
                   </a>
                 ) : (
                   <p className="tf-hint">No website added</p>
@@ -930,7 +930,7 @@ export default function CompanyProfilePage() {
                     <span className="font-semibold">
                       {companyData.founded}
                       {yearsActive !== null && yearsActive > 0 && (
-                        <span className="ml-1 font-normal text-gray-400 dark:text-slate-500">
+                        <span className="ml-1 font-normal text-gray-500 dark:text-slate-500">
                           ({yearsActive} {yearsActive === 1 ? 'year' : 'years'})
                         </span>
                       )}
@@ -1144,13 +1144,13 @@ function MobileRow({
   const empty = !children;
   const body = (
     <>
-      <Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+      <Icon className="h-4 w-4 shrink-0 text-gray-500 dark:text-slate-500" />
       <div className="min-w-0 flex-1">
         <p className="tf-caption">{label}</p>
         <p
           className={`text-sm ${wrap ? 'whitespace-pre-line break-words' : 'truncate'} ${
             empty
-              ? 'text-gray-400 dark:text-slate-500'
+              ? 'text-gray-500 dark:text-slate-500'
               : href
               ? 'font-medium text-brand-blue'
               : 'font-medium text-gray-900 dark:text-slate-50'
@@ -1173,8 +1173,8 @@ function MobileRow({
         >
           {body}
           {!trailing && (external
-            ? <ExternalLink className="h-3.5 w-3.5 shrink-0 text-gray-300 dark:text-slate-600" />
-            : <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 dark:text-slate-600" />)}
+            ? <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-slate-600" />
+            : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground dark:text-slate-600" />)}
         </a>
       ) : (
         <div className={`${rowClass} min-w-0 flex-1`}>{body}</div>
@@ -1224,11 +1224,11 @@ function InfoRow({
       }`}
     >
       <dt className="flex shrink-0 items-center gap-2 font-medium text-gray-500 dark:text-slate-400">
-        <Icon className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500" />
+        <Icon className="h-3.5 w-3.5 text-gray-500 dark:text-slate-500" />
         {label}
       </dt>
       <dd className="flex min-w-0 items-center font-medium text-gray-800 sm:justify-end dark:text-slate-100">
-        {children ?? <span className="font-normal text-gray-400 dark:text-slate-500">Not added</span>}
+        {children ?? <span className="font-normal text-gray-500 dark:text-slate-500">Not added</span>}
       </dd>
     </div>
   );
@@ -1252,7 +1252,7 @@ function CopyButton({ text, label, showText }: { text: string; label: string; sh
       onClick={copy}
       title={`Copy ${label}`}
       aria-label={`Copy ${label}`}
-      className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-slate-300"
+      className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-gray-500 transition-colors hover:text-gray-600 dark:hover:text-slate-300"
     >
       {copied ? <Check className="h-3.5 w-3.5 text-brand-teal" /> : <Copy className="h-3.5 w-3.5" />}
       {showText && <span>{copied ? 'Copied' : `Copy ${label}`}</span>}

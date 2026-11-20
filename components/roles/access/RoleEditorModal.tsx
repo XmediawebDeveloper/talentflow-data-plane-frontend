@@ -258,7 +258,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
           {showAssign && (
             <div className="mb-4 sm:col-span-2">
               <label className="mb-1.5 block text-[13px] font-medium text-gray-900 dark:text-slate-100">
-                Give this role to <span className="font-normal text-gray-400">(optional)</span>
+                Give this role to <span className="font-normal text-gray-500">(optional)</span>
               </label>
               <RoleUserPicker
                 value={assignees}

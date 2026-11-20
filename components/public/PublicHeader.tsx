@@ -4,6 +4,7 @@ import { Menu, X, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useTheme } from 'next-themes';
+import { IconButton } from '@/components/ui/icon-button';
 
 const navItems = [
   { label: "Home", page: "home" },
@@ -255,17 +256,16 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
 
           {/* Desktop Right Buttons */}
           <div style={rightButtonsStyle}>
-            <button
+            <IconButton bare label="Toggle dark mode"
               onClick={toggleDarkMode}
               style={darkModeButtonStyle}
-              aria-label="Toggle dark mode"
             >
               {isDark ? (
                 <Sun style={{ width: 20, height: 20, color: 'var(--raw-f59e0b)' }} />
               ) : (
                 <Moon style={{ width: 20, height: 20, color: 'var(--raw-6b7280)' }} />
               )}
-            </button>
+            </IconButton>
 
             <button onClick={onLogin} style={signInButtonStyle}>
               Sign In
@@ -277,17 +277,16 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
 
           {/* Mobile Buttons */}
           <div style={mobileButtonsStyle}>
-            <button
+            <IconButton bare label="Toggle dark mode"
               onClick={toggleDarkMode}
               style={darkModeButtonStyle}
-              aria-label="Toggle dark mode"
             >
               {isDark ? (
                 <Sun style={{ width: 20, height: 20, color: 'var(--raw-f59e0b)' }} />
               ) : (
                 <Moon style={{ width: 20, height: 20, color: 'var(--raw-6b7280)' }} />
               )}
-            </button>
+            </IconButton>
 
             <button
               style={menuButtonStyle}

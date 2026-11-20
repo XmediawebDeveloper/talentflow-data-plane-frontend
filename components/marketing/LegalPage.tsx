@@ -161,7 +161,7 @@ export function LegalPage({
                       href={`#${slug(section.title)}`}
                       className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-900/10 bg-mkt-surface px-3 text-[13px] font-medium text-slate-600 transition-colors active:bg-slate-900/5 dark:border-white/10 dark:text-slate-300"
                     >
-                      <span className="tabular-nums text-slate-400">{String(i + 1).padStart(2, "0")}</span>
+                      <span className="tabular-nums text-slate-500">{String(i + 1).padStart(2, "0")}</span>
                       {section.title}
                     </a>
                   </li>
@@ -211,7 +211,7 @@ export function LegalPage({
                     </span>
                     <div className="min-w-0 pt-0.5 sm:pt-1">
                       <h2 className={`${DISPLAY} flex items-baseline gap-2 text-base font-bold leading-snug tracking-[-0.02em] text-mkt-ink sm:text-xl`}>
-                        <span className="text-xs font-semibold tabular-nums text-slate-400 sm:text-sm">
+                        <span className="text-xs font-semibold tabular-nums text-slate-500 sm:text-sm">
                           {String(i + 1).padStart(2, "0")}
                         </span>
                         {section.title}

@@ -1,5 +1,7 @@
 import { AlertTriangle, CheckCircle, Info, XCircle, X } from 'lucide-react';
 import { ReactNode } from 'react';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
@@ -68,15 +70,14 @@ export function ConfirmationDialog({
       />
 
       {/* Dialog */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200 max-w-[95vw] sm:max-w-md w-full pointer-events-auto animate-in zoom-in-95 duration-200 overflow-hidden">
-          <button
+          <IconButton bare label="Close"
             onClick={onClose}
-            className="absolute top-4 right-4 p-1 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
-            aria-label="Close"
+            className="absolute top-4 right-4 p-1 text-gray-500 hover:text-gray-600 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
-          </button>
+          </IconButton>
           <div className="p-6">
             {/* Icon */}
             <div className={`w-12 h-12 ${config.iconBg} rounded-full flex items-center justify-center mx-auto mb-4`}>
@@ -106,7 +107,7 @@ export function ConfirmationDialog({
             </div>
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
     </>
   );
 }

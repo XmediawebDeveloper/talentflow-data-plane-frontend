@@ -4,6 +4,7 @@ import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, 
 import { User, Tenant } from '@/lib/types/tenant';
 import { authService, type LoginResponse } from '@/lib/services/authService';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface LoginProps {
   onLogin: (user: User, tenant?: Tenant) => void;
@@ -531,9 +532,9 @@ export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: Log
                     required
                     style={{ ...inputStyle, paddingRight: 48 }}
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={eyeButtonStyle}>
+                  <IconButton bare label={showPassword ? 'Hide password' : 'Show password'} type="button" onClick={() => setShowPassword(!showPassword)} style={eyeButtonStyle}>
                     {showPassword ? <EyeOff style={{ width: 20, height: 20 }} /> : <Eye style={{ width: 20, height: 20 }} />}
-                  </button>
+                  </IconButton>
                 </div>
               </div>
 

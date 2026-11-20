@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { User as UserType } from '@/lib/types/tenant';
 import { setTokens } from '@/lib/services/api';
+import { IconButton } from '@/components/ui/icon-button';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -687,9 +688,9 @@ export default function SignUp({ onSignUp, onSwitchToLogin, onBackToPublic }: Si
                       required
                       style={{ ...inputStyle, paddingRight: 40 }}
                     />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} style={eyeButtonStyle}>
+                    <IconButton bare label={showPassword ? 'Hide password' : 'Show password'} type="button" onClick={() => setShowPassword(!showPassword)} style={eyeButtonStyle}>
                       {showPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
-                    </button>
+                    </IconButton>
                   </div>
                 </div>
                 <div>
@@ -704,9 +705,9 @@ export default function SignUp({ onSignUp, onSwitchToLogin, onBackToPublic }: Si
                       required
                       style={{ ...inputStyle, paddingRight: 40 }}
                     />
-                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={eyeButtonStyle}>
+                    <IconButton bare label={showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'} type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={eyeButtonStyle}>
                       {showConfirmPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
-                    </button>
+                    </IconButton>
                   </div>
                 </div>
               </div>

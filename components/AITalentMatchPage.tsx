@@ -92,6 +92,9 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 import VersionEyeBadge from '@/components/ui/version-eye-badge';
+import { clickableProps, clickableRowProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* Shared row for both candidate tables' ⋮ Actions menu (Preview Resume /
    Score Resume / Invite Assessment / Invite AI Interview). */
@@ -3778,7 +3781,7 @@ export default function AITalentMatchPage({
                   their job (scoring runs per job). */}
               {multiJob && canRunScoring ? (
                 <DropdownMenuItem className={`${actionsMenuItemClass} !items-start text-gray-400`} disabled>
-                  <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                  <ClipboardList className="w-4 h-4 text-gray-500 mt-0.5" />
                   <span className="min-w-0">
                     <span className="block">Score Resumes</span>
                     <span className="block tf-micro-hint normal-case">Select candidates from one job to score them</span>
@@ -4019,15 +4022,13 @@ export default function AITalentMatchPage({
           actions={
             <div className="flex w-full items-center gap-2 flex-wrap sm:w-auto sm:justify-end">
               {onBack && (
-                <Button
+                <IconButton label="Back to Dashboard"
                   variant="secondary"
                   size="sm"
                   onClick={onBack}
-                 
-                  aria-label="Back to Dashboard" title="Back to Dashboard"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                </Button>
+                </IconButton>
               )}
               <Button
                 variant="primary"
@@ -4428,7 +4429,7 @@ export default function AITalentMatchPage({
                             {(() => {
                               const allPage = pageCandKeys.length > 0 && pageCandKeys.every(k => selectedCandKeys.has(k));
                               return (
-                                <button
+                                <IconButton bare label={allPage ? 'Deselect this page' : 'Select this page'}
                                   type="button"
                                   onClick={() => {
                                     if (allPage) {
@@ -4438,11 +4439,10 @@ export default function AITalentMatchPage({
                                     }
                                     setPartialCandJobs(prev => { const next = { ...prev }; pageCandKeys.forEach(k => { delete next[k]; }); return next; });
                                   }}
-                                  aria-label={allPage ? 'Deselect this page' : 'Select this page'}
                                   className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
                                 >
-                                  {allPage ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
-                                </button>
+                                  {allPage ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                                </IconButton>
                               );
                             })()}
                           </th>
@@ -4469,7 +4469,7 @@ export default function AITalentMatchPage({
                           const candTickedJobIds = candSelected ? candAllJobIds : (partialCandJobs[row.key] ?? []);
                           return (
                             <Fragment key={row.key}>
-                              <tr
+                              <tr {...clickableRowProps}
                                 /* A click anywhere on the row opens / closes its matched
                                    jobs; the tick, name, "+N more" and Actions buttons
                                    stop the click and only do their own thing. */
@@ -4478,12 +4478,10 @@ export default function AITalentMatchPage({
                                 className={`cursor-pointer transition-colors ${candSelected ? 'bg-brand-blue/[0.04]' : 'hover:bg-gray-50/70 dark:hover:bg-slate-800/40'}`}
                               >
                                 <td className="tf-td pl-4 pr-1 align-top">
-                                  <button
+                                  <IconButton bare label={candSelected || candPartly ? 'Deselect candidate' : 'Select candidate'} tooltip={candPartly ? 'Some of this candidate\'s jobs are selected' : undefined}
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); handleSelectCand(row.key); }}
                                     aria-pressed={candSelected ? true : candPartly ? 'mixed' : false}
-                                    aria-label={candSelected || candPartly ? 'Deselect candidate' : 'Select candidate'}
-                                    title={candPartly ? 'Some of this candidate\'s jobs are selected' : undefined}
                                     className="inline-flex p-1 mt-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
                                   >
                                     {candSelected ? (
@@ -4491,9 +4489,9 @@ export default function AITalentMatchPage({
                                     ) : candPartly ? (
                                       <MinusSquare className="w-4 h-4 text-brand-blue" />
                                     ) : (
-                                      <Square className="w-4 h-4 text-gray-400" />
+                                      <Square className="w-4 h-4 text-gray-500" />
                                     )}
-                                  </button>
+                                  </IconButton>
                                 </td>
                                 <td className="tf-td align-top">
                                   <div className="flex items-start gap-3">
@@ -4547,34 +4545,28 @@ export default function AITalentMatchPage({
                                   <div className="flex items-center gap-1.5">
                                     {/* ▾ — opens or closes this candidate's matched jobs; first in
                                         Actions, as on Resume Scoring. */}
-                                    <button
+                                    <IconButton bare label={isExpanded ? 'Collapse' : 'Expand'}
                                       type="button"
                                       onClick={() => toggleCandidateGroupExpanded(row.key)}
                                       aria-expanded={isExpanded}
-                                      aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                                      title={isExpanded ? 'Collapse' : 'Expand'}
                                       className={isExpanded ? ROW_ACTION_BUTTON_ACTIVE_CLASS : ROW_ACTION_BUTTON_CLASS}
                                     >
                                       <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    <button
+                                    </IconButton>
+                                    <IconButton bare label="View Resume"
                                       type="button"
                                       onClick={() => openCandidateResume(row, sortedCandidateRows)}
-                                      title="View Resume"
-                                      aria-label="View Resume"
                                       className={ROW_ACTION_BUTTON_CLASS}
                                     >
                                       <Eye className="w-4 h-4" />
-                                    </button>
-                                    <button
+                                    </IconButton>
+                                    <IconButton bare label="Attachments"
                                       type="button"
                                       onClick={() => handleAttachmentsClick(row.best)}
-                                      title="Attachments"
-                                      aria-label="Attachments"
                                       className={ROW_ACTION_BUTTON_CLASS}
                                     >
                                       <Paperclip className="w-4 h-4" />
-                                    </button>
+                                    </IconButton>
                                   </div>
                                 </td>
                               </tr>
@@ -4614,7 +4606,7 @@ export default function AITalentMatchPage({
                                               .filter(r => r.scoreId);
                                             return (
                                               <Fragment key={job.historyId}>
-                                              <tr
+                                              <tr {...clickableRowProps}
                                                 /* A scored match opens / closes its score table; a row inside that table opens the scorecard. */
                                                 onClick={() => { if (jobScoreId) toggleScoreSummary(job.jobId, job.jobTitle, jobScoreId); }}
                                                 title={jobScoreId ? (jobSummaryOpen ? 'Hide score' : 'Show score') : undefined}
@@ -4624,7 +4616,7 @@ export default function AITalentMatchPage({
                                                   {(() => {
                                                     const ticked = candTickedJobIds.includes(job.historyId);
                                                     return (
-                                                      <button
+                                                      <IconButton bare label={ticked ? 'Deselect this job match' : 'Select this job match'}
                                                         type="button"
                                                         onClick={() => {
                                                           const next = ticked
@@ -4633,11 +4625,10 @@ export default function AITalentMatchPage({
                                                           setCandJobSelection(row.key, next, candAllJobIds);
                                                         }}
                                                         aria-pressed={ticked}
-                                                        aria-label={ticked ? 'Deselect this job match' : 'Select this job match'}
                                                         className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
                                                       >
-                                                        {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
-                                                      </button>
+                                                        {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                                                      </IconButton>
                                                     );
                                                   })()}
                                                 </td>
@@ -4689,30 +4680,26 @@ export default function AITalentMatchPage({
                                                   <div className="inline-flex items-center gap-1.5">
                                                   <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
-                                                      <button
+                                                      <IconButton bare label="Actions"
                                                         type="button"
-                                                        aria-label="Actions"
-                                                        title="Actions"
                                                         className={ROW_ACTION_BUTTON_CLASS}
                                                       >
                                                         <MoreVertical className="w-4 h-4" />
-                                                      </button>
+                                                      </IconButton>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                                                       {candJobMenuItems(row, job, jobScoreId, candScoreNav)}
                                                     </DropdownMenuContent>
                                                   </DropdownMenu>
                                                   {jobScoreId ? (
-                                                    <button
+                                                    <IconButton bare label={jobSummaryOpen ? 'Hide score' : 'Show score'}
                                                       type="button"
                                                       onClick={() => toggleScoreSummary(job.jobId, job.jobTitle, jobScoreId)}
                                                       aria-expanded={jobSummaryOpen}
-                                                      aria-label={jobSummaryOpen ? 'Hide score' : 'Show score'}
-                                                      title={jobSummaryOpen ? 'Hide score' : 'Show score'}
                                                       className={jobSummaryOpen ? ROW_ACTION_BUTTON_ACTIVE_CLASS : ROW_ACTION_BUTTON_CLASS}
                                                     >
                                                       <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${jobSummaryOpen ? 'rotate-180' : ''}`} />
-                                                    </button>
+                                                    </IconButton>
                                                   ) : (
                                                     <span /* unscored: an invisible ▾-sized slot, so ⋮ sits in one column on every row */ aria-hidden="true" className={`${ROW_ACTION_BUTTON_CLASS} invisible pointer-events-none`}>
                                                       <ChevronDown className="w-4 h-4" />
@@ -4769,11 +4756,10 @@ export default function AITalentMatchPage({
                     const latestJob = sortedJobs[0];
 
                           const selectBtn = (
-                          <button
+                          <IconButton bare label={selectedCandKeys.has(row.key) ? 'Deselect candidate' : 'Select candidate'}
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleSelectCand(row.key); }}
                             aria-pressed={selectedCandKeys.has(row.key) ? true : isCandPartly(row.key) ? 'mixed' : false}
-                            aria-label={selectedCandKeys.has(row.key) ? 'Deselect candidate' : 'Select candidate'}
                             className="inline-flex p-1 mt-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
                           >
                             {selectedCandKeys.has(row.key) ? (
@@ -4781,9 +4767,9 @@ export default function AITalentMatchPage({
                             ) : isCandPartly(row.key) ? (
                               <MinusSquare className="w-4 h-4 text-brand-blue" />
                             ) : (
-                              <Square className="w-4 h-4 text-gray-400" />
+                              <Square className="w-4 h-4 text-gray-500" />
                             )}
-                          </button>
+                          </IconButton>
                           );
                             const nameBtn = (
                             <button
@@ -4800,23 +4786,21 @@ export default function AITalentMatchPage({
                             </>
                           ) : null;
                           const chevronBtn = (
-                          <button
+                          <IconButton bare label={isExpanded ? 'Collapse' : 'Expand'}
                             type="button"
                             onClick={() => toggleCandidateGroupExpanded(row.key)}
                             aria-expanded={isExpanded}
-                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                            title={isExpanded ? 'Collapse' : 'Expand'}
                             className={isExpanded ? ROW_ACTION_BUTTON_ACTIVE_CLASS : ROW_ACTION_BUTTON_CLASS}
                           >
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                          </button>
+                          </IconButton>
                           );
                           const actionsMenu = (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button type="button" aria-label="Actions" title="Actions" className={ROW_ACTION_BUTTON_CLASS}>
+                              <IconButton bare label="Actions" type="button" className={ROW_ACTION_BUTTON_CLASS}>
                                 <MoreVertical className="w-4 h-4" />
-                              </button>
+                              </IconButton>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                               <DropdownMenuItem className={actionsMenuItemClass} onSelect={() => openCandidateResume(row, sortedCandidateRows)}>
@@ -4845,7 +4829,7 @@ export default function AITalentMatchPage({
                                 const jobScoreId = scoreIdFor(job.jobId, job.resumeId);
                                 const ticked = gridTickedJobIds.includes(job.historyId);
                                 return (
-                                  <div
+                                  <div {...clickableProps}
                                     key={job.historyId}
                                     onClick={() => (jobScoreId ? openScoreDetail(job.jobId, job.jobTitle, jobScoreId, candScoreNav) : openCandidateMatch(job.historyId))}
                                     title={jobScoreId ? 'View Scorecard' : 'Open Match'}
@@ -4854,7 +4838,7 @@ export default function AITalentMatchPage({
                                     }`}
                                   >
                                     <div className="flex items-start gap-2">
-                                      <button
+                                      <IconButton bare label={ticked ? 'Deselect this job match' : 'Select this job match'}
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -4864,11 +4848,10 @@ export default function AITalentMatchPage({
                                           setCandJobSelection(row.key, next, gridAllJobIds);
                                         }}
                                         aria-pressed={ticked}
-                                        aria-label={ticked ? 'Deselect this job match' : 'Select this job match'}
                                         className="inline-flex p-0.5 mt-0.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
                                       >
-                                        {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
-                                      </button>
+                                        {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                                      </IconButton>
                                       <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-1.5 min-w-0">
                                           {jobRecord?.jobId && <JobIdBadge>{jobRecord.jobId}</JobIdBadge>}
@@ -4899,7 +4882,7 @@ export default function AITalentMatchPage({
                                         </div>
                                         <div className="mt-1 flex items-center gap-1 tf-meta">
                                           <Calendar className="w-3 h-3" />
-                                          <span className="truncate">{job.matchedByName || 'System'} · {formatISTDate(job.matchedAt.toISOString())} <span className="text-gray-400">{formatISTTime(job.matchedAt.toISOString())}</span></span>
+                                          <span className="truncate">{job.matchedByName || 'System'} · {formatISTDate(job.matchedAt.toISOString())} <span className="text-gray-500">{formatISTTime(job.matchedAt.toISOString())}</span></span>
                                         </div>
                                       </div>
                                       {/* Stops clicks here, as the list's Actions cell does — the
@@ -4907,9 +4890,9 @@ export default function AITalentMatchPage({
                                       <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
-                                            <button type="button" aria-label="Actions" title="Actions" className={ROW_ACTION_BUTTON_CLASS}>
+                                            <IconButton bare label="Actions" type="button" className={ROW_ACTION_BUTTON_CLASS}>
                                               <MoreVertical className="w-4 h-4" />
-                                            </button>
+                                            </IconButton>
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                                             {candJobMenuItems(row, job, jobScoreId, candScoreNav)}
@@ -4949,7 +4932,7 @@ export default function AITalentMatchPage({
                           fields={[
                             {
                               label: 'Latest Matched',
-                              value: <>{formatISTDate(latestJob.matchedAt.toISOString())} <span className="text-gray-400">{formatISTTime(latestJob.matchedAt.toISOString())}</span></>,
+                              value: <>{formatISTDate(latestJob.matchedAt.toISOString())} <span className="text-gray-500">{formatISTTime(latestJob.matchedAt.toISOString())}</span></>,
                             },
                           ]}
                           footer={
@@ -4976,7 +4959,7 @@ export default function AITalentMatchPage({
                       );
                     }
                     return (
-                      <div
+                      <div {...clickableProps}
                         key={row.key}
                         onClick={() => toggleCandidateGroupExpanded(row.key)}
                         aria-expanded={isExpanded}
@@ -5031,7 +5014,7 @@ export default function AITalentMatchPage({
                             <div className="tf-micro-hint uppercase tracking-wide">Latest Matched</div>
                             <div className="truncate">
                               <span className="text-gray-700 dark:text-slate-300">{formatISTDate(latestJob.matchedAt.toISOString())}</span>{' '}
-                              <span className="text-gray-400">{formatISTTime(latestJob.matchedAt.toISOString())}</span>
+                              <span className="text-gray-500">{formatISTTime(latestJob.matchedAt.toISOString())}</span>
                             </div>
                           </div>
                           {chevronBtn}
@@ -5104,14 +5087,13 @@ export default function AITalentMatchPage({
                       ]}
                       className="w-auto sm:w-auto data-[size=default]:h-8 sm:data-[size=default]:h-8 py-0 sm:py-0 pl-3 sm:pl-3 pr-2 sm:pr-2 border-0 bg-transparent dark:bg-transparent shadow-none rounded-full sm:rounded-full font-medium text-gray-800 dark:text-slate-200"
                     />
-                    <button
+                    <IconButton bare label={candidateSortOrder === 'asc' ? 'Sort descending' : 'Sort ascending'}
                       type="button"
                       onClick={() => setCandidateSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))}
                       className="ml-0.5 h-8 w-8 flex items-center justify-center rounded-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                      title={candidateSortOrder === 'asc' ? 'Sort descending' : 'Sort ascending'}
                     >
                       <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${candidateSortOrder === 'asc' ? '' : 'rotate-180'}`} />
-                    </button>
+                    </IconButton>
                   </div>
                 </div>
               </ListToolbar>
@@ -5475,7 +5457,7 @@ export default function AITalentMatchPage({
 
                       <div className="flex items-center justify-between tf-meta pt-2 border-t border-gray-100 dark:border-slate-800">
                         <span>{row.experience || '—'}</span>
-                        <div
+                        <div {...clickableProps}
                           onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(row.best); }}
                           className="inline-flex items-center gap-1 hover:text-brand-blue transition-colors"
                         >
@@ -5542,7 +5524,7 @@ export default function AITalentMatchPage({
                     </thead>
                     <tbody>
                       {paginatedAllResumeRows.map(({ key, row, job }, index) => (
-                        <tr
+                        <tr {...clickableRowProps}
                           key={key}
                           onClick={() => openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row))}
                           className={`border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer ${
@@ -5586,18 +5568,18 @@ export default function AITalentMatchPage({
                             </div>
                           </td>
                           <td className="tf-td whitespace-nowrap tf-body">
-                            {row.email ? row.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                            {row.email ? row.email : <span className="text-gray-500 dark:text-slate-500">-</span>}
                           </td>
                           <td className="tf-td whitespace-nowrap tf-body">
                             {(() => {
                               const numbers = splitPhoneNumbers(row.phone, 2);
                               return numbers.length > 0
                                 ? <div className="flex flex-col gap-0.5">{numbers.map((num, i) => <span key={i}>{num}</span>)}</div>
-                                : <span className="text-gray-400 dark:text-slate-500">-</span>;
+                                : <span className="text-gray-500 dark:text-slate-500">-</span>;
                             })()}
                           </td>
                           <td className="tf-td whitespace-nowrap tf-body">
-                            {row.location ? row.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                            {row.location ? row.location : <span className="text-gray-500 dark:text-slate-500">-</span>}
                           </td>
                           {/* Job ID — the job this match ran against, its JD code
                               off the job record (the badge every list uses). */}
@@ -5609,7 +5591,7 @@ export default function AITalentMatchPage({
                                 || allMatchSessions.find(s => s.id === job.historyId)?.jd_job_id;
                               return jdCode
                                 ? <JobIdBadge>{jdCode}</JobIdBadge>
-                                : <span className="text-gray-400 dark:text-slate-500">-</span>;
+                                : <span className="text-gray-500 dark:text-slate-500">-</span>;
                             })()}
                           </td>
                           <td className="tf-td">
@@ -5633,7 +5615,7 @@ export default function AITalentMatchPage({
                                     v{jobVersion}
                                   </span>
                                 )
-                                : <span className="text-gray-400 dark:text-slate-500">-</span>;
+                                : <span className="text-gray-500 dark:text-slate-500">-</span>;
                             })()}
                           </td>
                           <td className="tf-td min-w-[220px] max-w-[260px]">
@@ -5656,7 +5638,7 @@ export default function AITalentMatchPage({
                             {formatUploadedBy(row.best.uploadedByName, row.best.uploadedBy)}
                           </td>
                           <td className="tf-td whitespace-nowrap tf-body">
-                            {row.best.uploadDate ? formatISTDate(row.best.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                            {row.best.uploadDate ? formatISTDate(row.best.uploadDate) : <span className="text-gray-500 dark:text-slate-500">-</span>}
                           </td>
                           <td className="tf-td text-center whitespace-nowrap">
                             <span className="tf-badge border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
@@ -5690,14 +5672,12 @@ export default function AITalentMatchPage({
                           <td className="tf-td whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button
+                                <IconButton bare label="Actions"
                                   type="button"
-                                  aria-label="Actions"
-                                  title="Actions"
                                   className={ROW_ACTION_BUTTON_CLASS}
                                 >
                                   <MoreVertical className="w-4 h-4" />
-                                </button>
+                                </IconButton>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                                 <DropdownMenuItem
@@ -6190,16 +6170,14 @@ export default function AITalentMatchPage({
               const renderJobActionsMenu = (sizeClass: string) => (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
+                    <IconButton label={`More actions for ${item.jobTitle}`} tooltip="More actions"
                       variant="secondary"
                       size="sm"
                       onClick={(e) => e.stopPropagation()}
-                      aria-label={`More actions for ${item.jobTitle}`}
-                      title="More actions"
                       className={`${sizeClass} p-0`}
                     >
                       <MoreVertical className="w-4 h-4" />
-                    </Button>
+                    </IconButton>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenuItem className="group" onSelect={openResults}>
@@ -6247,14 +6225,12 @@ export default function AITalentMatchPage({
                 <div className="inline-flex items-center gap-1.5">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button
+                    <IconButton bare label="Actions"
                       type="button"
-                      aria-label="Actions"
-                      title="Actions"
                       className={ROW_ACTION_BUTTON_CLASS}
                     >
                       <MoreVertical className="w-4 h-4" />
-                    </button>
+                    </IconButton>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                     <DropdownMenuItem
@@ -6301,16 +6277,14 @@ export default function AITalentMatchPage({
                 </DropdownMenu>
                 {/* ▾ — the score, inline (scored candidates only). */}
                 {scored ? (
-                  <button
+                  <IconButton bare label={summaryOpen ? 'Hide score' : 'Show score'}
                     type="button"
                     onClick={() => toggleScoreSummary(item.jobId, item.jobTitle, scoreId!)}
                     aria-expanded={summaryOpen}
-                    aria-label={summaryOpen ? 'Hide score' : 'Show score'}
-                    title={summaryOpen ? 'Hide score' : 'Show score'}
                     className={summaryOpen ? ROW_ACTION_BUTTON_ACTIVE_CLASS : ROW_ACTION_BUTTON_CLASS}
                   >
                     <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${summaryOpen ? 'rotate-180' : ''}`} />
-                  </button>
+                  </IconButton>
                 ) : (
                   <span /* unscored: an invisible ▾-sized slot, so ⋮ sits in one column on every row */ aria-hidden="true" className={`${ROW_ACTION_BUTTON_CLASS} invisible pointer-events-none`}>
                     <ChevronDown className="w-4 h-4" />
@@ -6355,14 +6329,14 @@ export default function AITalentMatchPage({
                           >
                             {allPageTicked
                               ? <CheckSquare className="w-4 h-4 text-brand-blue" />
-                              : <Square className="w-4 h-4 text-gray-400" />}
+                              : <Square className="w-4 h-4 text-gray-500" />}
                             Select all
                           </button>
                           <div className="tf-grid-3 items-start">
                             {pagedCandidates.map(c => {
                               const { ticked, scoreId, scored, summaryOpen, jobScoreNav } = candRowInfo(c);
                               return (
-                                <div
+                                <div {...clickableProps}
                                   key={c.id}
                                   onClick={() => { if (scoreId) toggleScoreSummary(item.jobId, item.jobTitle, scoreId); }}
                                   title={scored ? (summaryOpen ? 'Hide score' : 'Show score') : undefined}
@@ -6457,7 +6431,7 @@ export default function AITalentMatchPage({
                           >
                             {allPageTicked
                               ? <CheckSquare className="w-4 h-4 text-brand-blue" />
-                              : <Square className="w-4 h-4 text-gray-400" />}
+                              : <Square className="w-4 h-4 text-gray-500" />}
                             Select all
                           </button>
                           <div className="tf-record-list">
@@ -6471,15 +6445,14 @@ export default function AITalentMatchPage({
                                   tooltip={scored ? (summaryOpen ? 'Hide score' : 'Show score') : undefined}
                                   selected={ticked || summaryOpen}
                                   select={
-                                    <button
+                                    <IconButton bare label={ticked ? 'Deselect candidate' : 'Select candidate'}
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); toggleCandTick(c); }}
                                       aria-pressed={ticked}
-                                      aria-label={ticked ? 'Deselect candidate' : 'Select candidate'}
                                       className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
                                     >
-                                      {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
-                                    </button>
+                                      {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                                    </IconButton>
                                   }
                                   title={
                                     <button
@@ -6537,7 +6510,7 @@ export default function AITalentMatchPage({
                             <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900 shadow-[0_1px_0_0_var(--border)]">
                               <tr>
                                 <th className="tf-th-cell w-10 tf-th">
-                                  <button
+                                  <IconButton bare label={allPageTicked ? 'Deselect these candidates' : 'Select these candidates'}
                                     type="button"
                                     onClick={() => {
                                       const next = allPageTicked
@@ -6545,13 +6518,12 @@ export default function AITalentMatchPage({
                                         : Array.from(new Set([...tickedIds, ...pageIds]));
                                       setJobRowSelection(jobKey, next, allIds);
                                     }}
-                                    aria-label={allPageTicked ? 'Deselect these candidates' : 'Select these candidates'}
                                     className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
                                   >
                                     {allPageTicked
                                       ? <CheckSquare className="w-4 h-4 text-brand-blue" />
-                                      : <Square className="w-4 h-4 text-gray-400" />}
-                                  </button>
+                                      : <Square className="w-4 h-4 text-gray-500" />}
+                                  </IconButton>
                                 </th>
                                 {candSortHeader('rating', 'Rating', 'center')}
                                 {candSortHeader('candidate', 'Candidate', 'left')}
@@ -6566,14 +6538,14 @@ export default function AITalentMatchPage({
                                 const { ticked, scoreId, scored, summaryOpen, jobScoreNav } = candRowInfo(c);
                                 return (
                                   <Fragment key={c.id}>
-                                  <tr
+                                  <tr {...clickableRowProps}
                                     /* A scored candidate's row opens / closes its score table; a row inside that table opens the scorecard. */
                                     onClick={() => { if (scoreId) toggleScoreSummary(item.jobId, item.jobTitle, scoreId); }}
                                     title={scored ? (summaryOpen ? 'Hide score' : 'Show score') : undefined}
                                     className={`${scored ? 'cursor-pointer' : ''} ${ticked ? 'bg-brand-blue/[0.04]' : 'hover:bg-gray-50/70 dark:hover:bg-slate-800/40'}`}
                                   >
                                     <td className="tf-td">
-                                      <button
+                                      <IconButton bare label={ticked ? 'Deselect candidate' : 'Select candidate'}
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -6581,11 +6553,10 @@ export default function AITalentMatchPage({
                                           setJobRowSelection(jobKey, next, allIds);
                                         }}
                                         aria-pressed={ticked}
-                                        aria-label={ticked ? 'Deselect candidate' : 'Select candidate'}
                                         className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
                                       >
-                                        {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
-                                      </button>
+                                        {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                                      </IconButton>
                                     </td>
                                     <td className="tf-td text-center">
                                       <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(c.matchScore ?? 0)}`}>
@@ -6682,16 +6653,14 @@ export default function AITalentMatchPage({
                             title="No candidates matched — nothing to select"
                             className="inline-flex p-1.5 -ml-1.5 rounded flex-shrink-0 cursor-not-allowed"
                           >
-                            <Square className="w-4 h-4 text-gray-300 dark:text-slate-600 bg-gray-100 dark:bg-slate-800 rounded-sm" />
+                            <Square className="w-4 h-4 text-muted-foreground dark:text-slate-600 bg-gray-100 dark:bg-slate-800 rounded-sm" />
                           </span>
                         )}
                         {hasMatches && (
-                          <button
+                          <IconButton bare label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'} tooltip={isPartlySelected ? 'Some candidates of this job are selected' : undefined}
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleSelectJob(jobKey); }}
                             aria-pressed={isSelected ? true : isPartlySelected ? 'mixed' : false}
-                            aria-label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'}
-                            title={isPartlySelected ? 'Some candidates of this job are selected' : undefined}
                             className="inline-flex p-1.5 -ml-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
                           >
                             {isSelected ? (
@@ -6699,9 +6668,9 @@ export default function AITalentMatchPage({
                             ) : isPartlySelected ? (
                               <MinusSquare className="w-4 h-4 text-brand-blue" />
                             ) : (
-                              <Square className="w-4 h-4 text-gray-400" />
+                              <Square className="w-4 h-4 text-gray-500" />
                             )}
-                          </button>
+                          </IconButton>
                         )}
                 </>
               );
@@ -6800,7 +6769,7 @@ export default function AITalentMatchPage({
                   select={jobSelect}
                   idBadge={jobData?.jobId ? <JobIdBadge className={JOB_ID_BADGE_FIT} title={jobData.jobId}>{jobData.jobId}</JobIdBadge> : undefined}
                   title={
-                    <span
+                    <span {...clickableProps}
                       className="cursor-pointer hover:text-brand-blue transition-colors"
                       title={item.jobTitle}
                       onClick={(e) => { e.stopPropagation(); openResults(); }}
@@ -6898,7 +6867,7 @@ export default function AITalentMatchPage({
                 />
               );
               return { key: item.id, mobileCard, card: (
-                <div
+                <div {...clickableProps}
                   key={item.id}
                   /* No lift on hover: the card grows when opened inline, and
                      a translating card under the pointer reads as jumpy. */
@@ -6933,7 +6902,7 @@ export default function AITalentMatchPage({
                         {jobData?.jobId && (
                           <JobIdBadge className={`h-7 leading-6 ${JOB_ID_BADGE_FIT}`} title={jobData.jobId}>{jobData.jobId}</JobIdBadge>
                         )}
-                        <h3
+                        <h3 {...clickableProps}
                           className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
                           title={item.jobTitle}
                           onClick={(e) => { e.stopPropagation(); openResults(); }}
@@ -7084,18 +7053,18 @@ export default function AITalentMatchPage({
                 /* List mode (xl+) — User-Management-uniform table row + an
                    expandable full-width row holding this job's candidates. */
                 <Fragment key={item.id}>
-                  <tr
+                  <tr {...clickableRowProps}
                     className={`transition-colors ${hasMatches ? 'cursor-pointer' : ''} ${isSelected ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/15' : isJobExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : 'hover:bg-brand-blue/5'}`}
                     onClick={() => { if (hasMatches) toggleRow(); }}
                     aria-expanded={hasMatches ? isJobExpanded : undefined}
                   >
                     <td className="tf-td">
                       {hasMatches ? (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); handleSelectJob(jobKey); }} aria-pressed={isSelected ? true : isPartlySelected ? 'mixed' : false} aria-label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'} className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded">
-                          {isSelected ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : isPartlySelected ? <MinusSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
-                        </button>
+                        <IconButton bare label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'} type="button" onClick={(e) => { e.stopPropagation(); handleSelectJob(jobKey); }} aria-pressed={isSelected ? true : isPartlySelected ? 'mixed' : false} className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded">
+                          {isSelected ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : isPartlySelected ? <MinusSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                        </IconButton>
                       ) : (
-                        <Square className="w-4 h-4 text-gray-300 dark:text-slate-600" />
+                        <Square className="w-4 h-4 text-muted-foreground dark:text-slate-600" />
                       )}
                     </td>
                     <td className="tf-td">
@@ -7167,9 +7136,9 @@ export default function AITalentMatchPage({
                       {/* Expand first, then the ⋮ menu — same order as Resume Scoring. */}
                       <div className="flex items-center justify-center gap-1">
                         {hasMatches && (
-                          <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); toggleRow(); }} aria-label={isJobExpanded ? 'Hide candidates' : 'View candidates'} title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"} className="h-8 w-8">
+                          <IconButton label={isJobExpanded ? 'Hide candidates' : 'View candidates'} tooltip={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"} variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); toggleRow(); }} className="h-8 w-8">
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
-                          </Button>
+                          </IconButton>
                         )}
                         {renderJobActionsMenu('h-8 w-8')}
                       </div>
@@ -7396,7 +7365,7 @@ export default function AITalentMatchPage({
         // dropdown, so the Action column reads the same one-click way as the
         // rest of the app's history tables.
         const renderVersionActions = (session: AIMatchSessionVersion['session']) => (
-          <button
+          <IconButton bare label="View match results"
             type="button"
             onClick={() => {
               userChangedView.current = true; // Prevent useEffect from resetting view
@@ -7414,16 +7383,14 @@ export default function AITalentMatchPage({
               updateUrlParams({ jdId: targetJobId, view: 'results' });
               setMatchHistoryModal(null);
             }}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
-            aria-label="View match results"
-            title="View match results"
+            className="p-1.5 rounded-lg text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
           >
             <Eye className="w-4 h-4" />
-          </button>
+          </IconButton>
         );
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[96vw] xl:max-w-6xl h-[85dvh] flex flex-col tf-round-edges">
               <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
@@ -7452,9 +7419,9 @@ export default function AITalentMatchPage({
                       {loadingHistoryJobId === modalKey ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setMatchHistoryModal(null)} className="" aria-label="Close">
+                  <IconButton label="Close" variant="secondary" size="sm" onClick={() => setMatchHistoryModal(null)} className="">
                     <X className="w-5 h-5" />
-                  </Button>
+                  </IconButton>
                 </div>
               </div>
 
@@ -7530,7 +7497,7 @@ export default function AITalentMatchPage({
                         <div className="flex-1 min-w-[11rem]">
                           <label className={filterLabelClass}>Search</label>
                           <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
                             <input
                               type="text"
                               value={historyModalFilter.search}
@@ -7673,7 +7640,7 @@ export default function AITalentMatchPage({
                                     </td>
                                     <td className="tf-td whitespace-nowrap text-gray-600 dark:text-slate-400">
                                       <div>{formatISTDate(version.lastMatchedAt)}</div>
-                                      <div className="text-gray-400 dark:text-slate-600">{formatISTTime(version.lastMatchedAt)}</div>
+                                      <div className="text-gray-500 dark:text-slate-600">{formatISTTime(version.lastMatchedAt)}</div>
                                     </td>
                                     <td className="tf-td">
                                       <span className="inline-flex px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-semibold">{candidateCount}</span>
@@ -7746,7 +7713,7 @@ export default function AITalentMatchPage({
                         <div className="mt-4 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
                           <div className="flex items-center justify-between mb-1">
                             <h4 className="tf-row-title">Rating Distribution (All Versions)</h4>
-                            <BarChart3 className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                            <BarChart3 className="w-4 h-4 text-gray-500 dark:text-slate-500 flex-shrink-0" />
                           </div>
                           <p className="tf-meta mb-3">Total candidates: {totalMatched}</p>
                           <div className="tf-grid-3">
@@ -7855,7 +7822,7 @@ export default function AITalentMatchPage({
                 </p>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         );
       })()}
 
@@ -8223,7 +8190,7 @@ export default function AITalentMatchPage({
                                       <span className="block text-gray-500 dark:text-slate-400">{formatISTTime(option.matchedAt.toISOString())}</span>
                                     </>
                                   ) : (
-                                    <span className="text-gray-400 dark:text-slate-500">{option.matched ? 'Matched just now' : 'Not matched'}</span>
+                                    <span className="text-gray-500 dark:text-slate-500">{option.matched ? 'Matched just now' : 'Not matched'}</span>
                                   )}
                                 </span>
                                 {option.statusLabel && tone && (
@@ -8705,7 +8672,7 @@ export default function AITalentMatchPage({
               </thead>
               <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-slate-700">
                 {paginatedCandidates.map((candidate, index) => (
-                  <tr
+                  <tr {...clickableRowProps}
                     key={candidate.id}
                     data-row-selected={selectedCandidates.includes(candidate.id)}
                     className={`hover:bg-brand-blue/[0.03] transition-colors cursor-pointer ${
@@ -8751,7 +8718,7 @@ export default function AITalentMatchPage({
                     </td>
                     {isResultColumnVisible('email') && (
                     <td className="tf-td tf-body">
-                      {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                      {candidate.email ? candidate.email : <span className="text-gray-500 dark:text-slate-500">-</span>}
                     </td>
                     )}
                     {isResultColumnVisible('phone') && (
@@ -8760,13 +8727,13 @@ export default function AITalentMatchPage({
                         const numbers = splitPhoneNumbers(candidate.phone, 2);
                         return numbers.length > 0
                           ? <div className="flex flex-col gap-0.5">{numbers.map((num, i) => <span key={i}>{num}</span>)}</div>
-                          : <span className="text-gray-400 dark:text-slate-500">-</span>;
+                          : <span className="text-gray-500 dark:text-slate-500">-</span>;
                       })()}
                     </td>
                     )}
                     {isResultColumnVisible('location') && (
                     <td className="tf-td tf-body">
-                      {candidate.location ? candidate.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                      {candidate.location ? candidate.location : <span className="text-gray-500 dark:text-slate-500">-</span>}
                     </td>
                     )}
                     {isResultColumnVisible('jobTitle') && (
@@ -8783,7 +8750,7 @@ export default function AITalentMatchPage({
                           v{resultsVersionNumber}
                         </span>
                       ) : (
-                        <span className="text-gray-400 dark:text-slate-500">-</span>
+                        <span className="text-gray-500 dark:text-slate-500">-</span>
                       )}
                     </td>
                     )}
@@ -8812,7 +8779,7 @@ export default function AITalentMatchPage({
                     )}
                     {isResultColumnVisible('uploadDate') && (
                     <td className="tf-td tf-body">
-                      {candidate.uploadDate ? formatISTDate(candidate.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                      {candidate.uploadDate ? formatISTDate(candidate.uploadDate) : <span className="text-gray-500 dark:text-slate-500">-</span>}
                     </td>
                     )}
                     {isResultColumnVisible('resumeVersion') && (
@@ -8856,14 +8823,12 @@ export default function AITalentMatchPage({
                     <td className="tf-td text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button
+                          <IconButton bare label="Actions"
                             type="button"
-                            aria-label="Actions"
-                            title="Actions"
                             className={ROW_ACTION_BUTTON_CLASS}
                           >
                             <MoreVertical className="w-4 h-4" />
-                          </button>
+                          </IconButton>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                           <DropdownMenuItem
@@ -8928,7 +8893,7 @@ export default function AITalentMatchPage({
                   router.push(`/recruitment/resume-view/${candidate.resumeId}`);
                 };
                 return (
-                  <div
+                  <div {...clickableProps}
                     key={candidate.id}
                     onClick={openResume}
                     className={`group relative flex flex-col min-h-[340px] rounded-xl border p-5 shadow-sm transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5 ${
@@ -8978,15 +8943,15 @@ export default function AITalentMatchPage({
                     {/* Contact + experience, one per line */}
                     <div className="mt-3 space-y-2 tf-meta">
                       <div className="flex items-center gap-2 min-w-0">
-                        <Phone className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                        <Phone className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 flex-shrink-0" />
                         <span className="truncate">{splitPhoneNumbers(candidate.phone, 1)[0] || '—'}</span>
                       </div>
                       <div className="flex items-center gap-2 min-w-0">
-                        <MapPin className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                        <MapPin className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 flex-shrink-0" />
                         <span className="truncate" title={candidate.location || ''}>{candidate.location || '—'}</span>
                       </div>
                       <div className="flex items-center gap-2 min-w-0">
-                        <Briefcase className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                        <Briefcase className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 flex-shrink-0" />
                         <span className="truncate">{candidate.experience || '—'}</span>
                       </div>
                     </div>

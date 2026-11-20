@@ -164,7 +164,7 @@ export function AnalysisView({ data }: { data: DashboardData }) {
                 <div key={idx} className={`p-4 rounded-lg border transition-all ${isCovered ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      {isCovered ? <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" /> : <Circle size={18} className="text-gray-400 flex-shrink-0" />}
+                      {isCovered ? <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" /> : <Circle size={18} className="text-gray-500 flex-shrink-0" />}
                       <div>
                         <div className="text-sm font-medium">{skill.name}</div>
                         <div className="tf-meta">{skill.clusterName}</div>
@@ -180,7 +180,7 @@ export function AnalysisView({ data }: { data: DashboardData }) {
                           {skill.level}
                         </div>
                       )}
-                      <span className={`text-xs uppercase tracking-wider font-semibold ${isCovered ? 'text-emerald-700' : 'text-gray-400'}`} style={{ fontFamily: 'var(--font-mono)' }}>
+                      <span className={`text-xs uppercase tracking-wider font-semibold ${isCovered ? 'text-emerald-700' : 'text-gray-500'}`} style={{ fontFamily: 'var(--font-mono)' }}>
                         {isCovered ? 'Assessed' : 'Not Tested'}
                       </span>
                     </div>

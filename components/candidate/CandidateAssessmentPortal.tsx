@@ -48,6 +48,7 @@ import { showErrorToast } from '@/lib/utils/errorToast';
 import { SegmentedRecorder, createCanvasRelayTrack, resetRecorderSegments } from '@/lib/proctoring/segmentedRecorder';
 import { beginLegitimateShare, endLegitimateShare, registerAppOwnedStream, unregisterAppOwnedStream } from '@/components/ai-interview/proctoring/ScreenRecordingGuard';
 import { ShareBarGateScreen } from './ShareBarGateScreen';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 const ENTIRE_SCREEN_REQUIRED_MESSAGE = 'Please select Entire Screen. Window and Current Tab sharing are not allowed.';
 const SCREEN_SHARE_REQUIRED_MESSAGE = 'Entire Screen sharing is mandatory to continue the assessment.';
@@ -2759,7 +2760,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       return (
         <>
         {screenShareStopped && (
-          <div className="fixed inset-0 z-[9999] bg-gray-900/85 flex items-center justify-center p-4">
+          <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[9999] bg-gray-900/85 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 text-center">
               <div className="w-14 h-14 rounded-full bg-destructive-subtle flex items-center justify-center mx-auto mb-4">
                 <Monitor className="w-7 h-7 text-destructive" />
@@ -2772,7 +2773,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                 {reshareBusy ? <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Opening share picker…</span> : 'Re-share Entire Screen'}
               </Button>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
         <AssessmentErrorBoundary token={token}>
           <AssessmentInterface
@@ -2908,7 +2909,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       </CandidateHrStepProvider>
       {/* Fullscreen exit overlay — mirrors AI Interview enforcement */}
       {step === 'assessment' && !useAdaptiveAssessmentMode && fullscreenStateSampled && !isFullscreenActive && (
-        <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
           <div className="bg-white border-2 border-warning rounded-2xl p-5 sm:p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
             <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
             <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
@@ -2937,7 +2938,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
               This event has been recorded
             </p>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
       {/* Proctoring Warning Modal - self-contained, subscribes to ProctoringEventBus */}
       <ProctoringWarningModal />

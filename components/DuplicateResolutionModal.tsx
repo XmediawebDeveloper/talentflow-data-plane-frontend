@@ -4,6 +4,8 @@ import { resumeService } from '@/lib/services';
 import { renderAsync } from 'docx-preview';
 import PdfDocumentViewer from '@/components/resumes/PdfDocumentViewer';
 import { openLinksInNewTab } from '@/lib/utils/externalUrl';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface DuplicateFile {
   fileName: string;
@@ -240,7 +242,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
 
   return (
     <>
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-6 py-5 flex-shrink-0">
@@ -267,12 +269,11 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                 </div>
               </div>
             </div>
-            <button
+            <IconButton bare label="Close"
               onClick={onClose}
-              className="p-2 text-gray-400 dark:text-slate-500 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-             aria-label="Close">
+              className="p-2 text-gray-500 dark:text-slate-500 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
               <X className="w-5 h-5" />
-            </button>
+            </IconButton>
           </div>
         </div>
 
@@ -300,21 +301,21 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                    <MapPin className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="tf-meta">Location</div>
                       <div className="tf-body">{currentFile.existingLocation}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <Calendar className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                    <Calendar className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="tf-meta">Upload Date</div>
                       <div className="tf-body">{currentFile.existingResumeDate}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <FileText className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                    <FileText className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="tf-meta">File Size</div>
                       <div className="tf-body">{currentFile.existingResumeSize}</div>
@@ -339,21 +340,21 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
-                    <FileText className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                    <FileText className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="text-xs text-gray-800 dark:text-slate-100">File Name</div>
                       <div className="tf-body truncate">{currentFile.fileName}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <Calendar className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                    <Calendar className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="text-xs text-gray-800 dark:text-slate-100">Upload Date</div>
                       <div className="tf-body">{currentFile.newResumeDate}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <FileText className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+                    <FileText className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="text-xs text-gray-800 dark:text-slate-100">File Size</div>
                       <div className="tf-body">{currentFile.newResumeSize}</div>
@@ -541,20 +542,20 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
 
     {/* Inline Preview Modal */}
     {showPreviewModal && (
-      <div className="fixed inset-0 bg-black/70 dark:bg-black/70 flex items-center justify-center z-[110]" onClick={closePreview}>
+      <ModalA11y><div className="fixed inset-0 bg-black/70 dark:bg-black/70 flex items-center justify-center z-[110]" onClick={closePreview}>
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-[90vw] h-[85dvh] max-w-[95vw] sm:max-w-4xl flex flex-col tf-round-edges" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
             <div className="flex items-center gap-2">
               <Eye className="w-5 h-5 text-brand-blue" />
               <h3 className="tf-section-title sm:text-lg">{previewTitle}</h3>
             </div>
-            <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
+            <IconButton bare label="Close" onClick={closePreview} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
               <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-            </button>
+            </IconButton>
           </div>
           <div className="flex-1 overflow-hidden">
             {previewUrl ? (
@@ -601,7 +602,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
             )}
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
     )}
     </>
   );

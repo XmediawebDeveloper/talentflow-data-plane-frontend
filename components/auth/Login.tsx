@@ -14,6 +14,7 @@ import { detectSubdomain } from '@/lib/utils/subdomain';
 import ForgotPasswordModal from './ForgotPasswordModal';
 import { AUTH_THEME_CSS } from './authTheme';
 import AuthBrandPanel from './AuthBrandPanel';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface LoginProps {
   onBackToPublic?: () => void;
@@ -547,14 +548,13 @@ export default function Login({ onBackToPublic }: LoginProps) {
                         required
                         className="tf-auth-input tf-auth-input--reveal"
                       />
-                      <button
+                      <IconButton bare label={showPassword ? 'Hide password' : 'Show password'}
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="tf-auth-reveal"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
                       >
                         {showPassword ? <EyeOff style={{ width: 17, height: 17 }} /> : <Eye style={{ width: 17, height: 17 }} />}
-                      </button>
+                      </IconButton>
                     </div>
                   </div>
 

@@ -49,6 +49,7 @@ import { useResumeSelection } from '@/components/resumes/ResumeSelectionContext'
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { NoMatchingResumesState, NoResumesYetState } from '@/components/resumes/ResumeEmptyStates';
 import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 interface SearchFilters {
   skills?: string[];
@@ -1342,7 +1343,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             onClick={() => !isDownloadingSelection && setIsZipDownloadModalOpen(false)}
           />
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="flex items-start justify-between gap-4 p-6 border-b border-gray-200">
@@ -1411,7 +1412,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 </button>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         </>
       )}
       </div>

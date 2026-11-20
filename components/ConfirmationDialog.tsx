@@ -1,5 +1,7 @@
 import { AlertTriangle, CheckCircle, Info, XCircle, Loader2, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
@@ -64,19 +66,18 @@ export default function ConfirmationDialog({
   const Icon = icon ?? typeIcon;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
         {/* Header */}
         <div className="px-6 sm:px-8 py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
           <h2 className="tf-section-title sm:text-lg">{title}</h2>
-          <button
+          <IconButton bare label="Close"
             onClick={onCancel}
             disabled={isLoading}
             className="p-1.5 text-gray-500 dark:text-slate-500 hover:bg-slate-100 hover:text-gray-700 dark:hover:text-slate-300 rounded-lg transition-colors flex-shrink-0 disabled:opacity-50"
-            aria-label="Close"
           >
             <X className="w-5 h-5" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Body */}
@@ -107,6 +108,6 @@ export default function ConfirmationDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

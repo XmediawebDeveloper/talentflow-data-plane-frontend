@@ -58,6 +58,8 @@ import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAss
 import { useDeleteRecordConfirm } from '@/components/recruitment/DeleteRecordModal';
 import { PAGER_LIST_PARAM, rememberAssessmentPagerOrder, type AssessmentPagerList } from '@/lib/utils/assessmentPagerList';
 import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* The whole set is read (pages of 100, `listAssessmentsBatched`), the same
    batch size and the same reason as the Assessments dashboard's own list: the
@@ -1064,7 +1066,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   n === 0 ? 'text-gray-400 cursor-not-allowed opacity-60' : verb === 'delete' ? 'cursor-pointer text-destructive' : 'cursor-pointer'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${n === 0 ? 'text-gray-300' : verb === 'delete' ? 'text-destructive' : 'text-menu-icon-archive'}`} />
+                <Icon className={`w-4 h-4 ${n === 0 ? 'text-muted-foreground dark:text-gray-300' : verb === 'delete' ? 'text-destructive' : 'text-menu-icon-archive'}`} />
                 <span>{BULK_COPY[verb].label} ({n === total ? n : `${n} of ${total}`})</span>
               </DropdownMenuItem>
             );
@@ -1349,14 +1351,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const actionsCell = (row: AssessmentRow) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
+        <IconButton bare label={`Actions for ${row.title}`} tooltip="Actions"
           type="button"
           className="h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-          aria-label={`Actions for ${row.title}`}
-          title="Actions"
         >
           <MoreVertical className="w-4 h-4" />
-        </button>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         {rowActions(row).map(({ key, label, icon: Icon, iconClassName, run, destructive, disabled, title }) => (
@@ -1660,19 +1660,17 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       {isLoading ? (
                         <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                       ) : (
-                        <button
+                        <IconButton bare label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
                           type="button"
                           onClick={toggleAllOnPage}
                           className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
-                          aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
-                          title={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
                         >
                           {allOnPageSelected ? (
                             <CheckSquare className="w-4 h-4 text-brand-blue" />
                           ) : (
-                            <Square className="w-4 h-4 text-gray-400" />
+                            <Square className="w-4 h-4 text-gray-500" />
                           )}
-                        </button>
+                        </IconButton>
                       )}
                     </th>
                     {COLUMNS.map((col) => {
@@ -1763,25 +1761,24 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   {!isLoading &&
                     !error &&
                     pageRows.map((row) => (
-                      <tr
+                      <tr {...((opensView(row)) ? clickableRowProps : {})}
                         key={row.id}
                         onClick={opensView(row) ? () => openAssessmentDetails(row) : undefined}
                         className={`${opensView(row) ? 'cursor-pointer' : ''} transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 ${selectedIds.has(row.id) ? 'bg-brand-blue/[0.04] dark:bg-brand-blue/10' : ''}`}
                       >
                         {/* 0. Select — its own click, never the row's open. */}
                         <td className="tf-td pl-3 sm:pl-4 lg:pl-6 pr-0 w-10" onClick={(e) => e.stopPropagation()}>
-                          <button
+                          <IconButton bare label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
                             type="button"
                             onClick={() => toggleSelected(row.id)}
                             className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
-                            aria-label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
                           >
                             {selectedIds.has(row.id) ? (
                               <CheckSquare className="w-4 h-4 text-brand-blue" />
                             ) : (
-                              <Square className="w-4 h-4 text-gray-400" />
+                              <Square className="w-4 h-4 text-gray-500" />
                             )}
-                          </button>
+                          </IconButton>
                         </td>
                         {/* 1. Job ID — secondary by design: the chip is the
                             house Job Openings badge, which reads as a
@@ -1896,18 +1893,17 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 selected={selectedIds.has(row.id)}
                 onClick={opensView(row) ? () => openAssessmentDetails(row) : undefined}
                 select={
-                  <button
+                  <IconButton bare label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
                     type="button"
                     onClick={() => toggleSelected(row.id)}
                     className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
-                    aria-label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
                   >
                     {selectedIds.has(row.id) ? (
                       <CheckSquare className="w-4 h-4 text-brand-blue" />
                     ) : (
-                      <Square className="w-4 h-4 text-gray-400" />
+                      <Square className="w-4 h-4 text-gray-500" />
                     )}
-                  </button>
+                  </IconButton>
                 }
                 idBadge={row.jobId ? <JobIdBadge>{row.jobId}</JobIdBadge> : undefined}
                 /* The job's Disabled / Archived tag sits beside the status on the top

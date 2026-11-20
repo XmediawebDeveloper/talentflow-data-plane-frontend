@@ -46,6 +46,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { DateField } from '@/components/ui/date-field';
 import FilterSelect from '@/components/ui/filter-select';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface TenantUnitPoolProps {
   compact?: boolean;
@@ -312,13 +313,13 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
       <div className="tf-panel p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-medium text-gray-900">Unit Pool</h3>
-          <button
+          <IconButton bare label="Refresh unit pool"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="p-1 text-gray-400 hover:text-gray-600"
+            className="p-1 text-gray-500 hover:text-gray-600"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
+          </IconButton>
         </div>
         <div className="space-y-2">
           {unitTypes.map(type => {
@@ -404,13 +405,13 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
             <Download className="w-4 h-4" />
             Export
           </button>
-          <button
+          <IconButton bare label="Refresh unit pool"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            className="p-2 text-gray-500 hover:text-gray-600 rounded-lg hover:bg-gray-100"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
+          </IconButton>
         </div>
       </div>
 
@@ -532,7 +533,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
       {pools.pools.RS.billing_cycle_end && (
         <div className="px-6 pb-6">
           <div className="p-4 bg-gray-50 rounded-lg flex items-center gap-3">
-            <Calendar className="w-5 h-5 text-gray-400" />
+            <Calendar className="w-5 h-5 text-gray-500" />
             <div className="flex-1">
               <p className="tf-body-secondary">
                 Billing Cycle: {pools.pools.RS.billing_cycle_start
@@ -569,7 +570,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
               )}
               <button
                 onClick={() => setShowHistoryPanel(false)}
-                className="text-sm text-gray-400 hover:text-gray-600"
+                className="text-sm text-gray-500 hover:text-gray-600"
               >
                 Close
               </button>
@@ -676,7 +677,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                               <span>{entry.balance_before.toLocaleString()}</span>
                             )}
                             {entry.balance_before != null && entry.balance_after != null && (
-                              <span className="text-gray-400 mx-1">→</span>
+                              <span className="text-gray-500 mx-1">→</span>
                             )}
                             {entry.balance_after != null && (
                               <span className={entry.balance_after < (entry.balance_before || 0) ? 'text-red-600' : 'text-green-600'}>

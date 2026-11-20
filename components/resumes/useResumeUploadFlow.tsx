@@ -30,6 +30,8 @@ import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { removeBackgroundTask, upsertBackgroundTask } from '@/lib/backgroundTasks';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Dynamic import to avoid SSR issues with docx-preview dependency
 const DuplicateResumeModal = dynamic(() => import('@/components/DuplicateResumeModal'), {
@@ -1403,7 +1405,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                               const t = TONE_CLASS[tone];
                               const isActive = uploadHistoryFilter === key;
                               return (
-                                <div
+                                <div {...clickableProps}
                                   key={key}
                                   onClick={() => setUploadHistoryFilter(isActive ? null : key)}
                                   className={`bg-white border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-colors ${isActive ? t.active : 'border-gray-200 hover:border-gray-300'}`}
@@ -1456,12 +1458,11 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                              uploadHistoryFilter === 'cancelled' ? 'Cancelled' :
                              'Pending'}
                           </span>
-                          <button
+                          <IconButton bare label="Close"
                             onClick={() => setUploadHistoryFilter(null)}
-                            className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                           aria-label="Close">
+                            className="ml-auto text-xs text-gray-500 hover:text-gray-600 transition-colors">
                             <X className="w-3.5 h-3.5" />
-                          </button>
+                          </IconButton>
                         </div>
                       )}
 
@@ -1668,7 +1669,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                                       { label: 'Cancelled', value: cancelledCount, tone: 'text-gray-700' },
                                     ].map(({ label, value, tone }) => (
                                       <div key={label} className="text-center px-1">
-                                        <div className={`text-base font-semibold tabular-nums leading-tight ${value > 0 ? tone : 'text-gray-300'}`}>{value}</div>
+                                        <div className={`text-base font-semibold tabular-nums leading-tight ${value > 0 ? tone : 'text-muted-foreground dark:text-gray-300'}`}>{value}</div>
                                         <div className="tf-micro-hint mt-0.5">{label}</div>
                                       </div>
                                     ))}
@@ -1873,7 +1874,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                                       {/* Short note: cancel only for queued items */}
                                       {record.statuses.some((f: any) => f.status === 'pending' || f.status === 'error' || f.status === 'cancelled') && (
                                         <p className="flex items-center gap-1.5 tf-micro-hint mb-2.5">
-                                          <Info className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                                          <Info className="w-3 h-3 flex-shrink-0 text-gray-500" />
                                           Retry is available for queued, failed &amp; cancelled files. Cancel is only available for queued files.
                                         </p>
                                       )}
@@ -1892,7 +1893,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                                             'cancelled', 'discarded',
                                           ].includes(file.status);
                                           return (
-                                          <div
+                                          <div {...clickableProps}
                                             key={file.id || idx}
                                             onClick={() => {
                                               if (isVersioned) {
@@ -2007,23 +2008,21 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                                             {file.id && !isTempRecord && !String(file.id).startsWith('temp-')
                                               && (file.status === 'pending' || file.status === 'error' || file.status === 'cancelled') && (
                                               <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                                                <button
+                                                <IconButton bare label="Retry this file" tooltip={file.status === 'cancelled' ? 'Re-queue this cancelled file' : 'Retry this file'}
                                                   disabled={retryingItems.has(file.id)}
                                                   onClick={(e) => handleRetryItem(record.id, file.id, e)}
                                                   className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10'}`}
-                                                  aria-label="Retry this file" title={file.status === 'cancelled' ? 'Re-queue this cancelled file' : 'Retry this file'}
                                                 >
                                                   <RefreshCw className={`w-3.5 h-3.5 ${retryingItems.has(file.id) ? 'animate-spin' : ''}`} />
-                                                </button>
+                                                </IconButton>
                                                 {file.status === 'pending' && (
-                                                  <button
+                                                  <IconButton bare label="Cancel this file (queued only)"
                                                     disabled={cancellingItems.has(file.id)}
                                                     onClick={(e) => handleCancelItem(record.id, file.id, file.fileName, e)}
                                                     className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors ${cancellingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-destructive hover:bg-destructive-subtle'}`}
-                                                    aria-label="Cancel this file (queued only)" title="Cancel this file (queued only)"
                                                   >
                                                     <X className="w-3.5 h-3.5" />
-                                                  </button>
+                                                  </IconButton>
                                                 )}
                                               </div>
                                             )}

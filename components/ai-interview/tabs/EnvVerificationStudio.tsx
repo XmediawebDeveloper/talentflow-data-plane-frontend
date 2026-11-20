@@ -23,6 +23,7 @@ import {
   AlertTriangle, Camera, Check, ChevronDown, ChevronRight, Download, Info, Loader2,
   Mic, Monitor, Pause, Play, Smartphone, Users, X,
 } from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
 
 export type EnvVerificationRecordLike = {
   verification_id: string;
@@ -157,7 +158,7 @@ function CheckLine({ state, title, hint }: { state: 'pass' | 'fail' | 'na' | 'in
   return (
     <li className="flex items-center gap-2.5 py-2" title={hint}>
       <span className={`grid place-items-center w-5 h-5 rounded-full shrink-0 ${
-        state === 'pass' ? 'bg-success-subtle text-success' : state === 'fail' ? 'bg-destructive-subtle text-destructive' : 'bg-gray-100 text-gray-400'
+        state === 'pass' ? 'bg-success-subtle text-success' : state === 'fail' ? 'bg-destructive-subtle text-destructive' : 'bg-gray-100 text-gray-500'
       }`}>
         {state === 'pass' ? <Check className="w-3 h-3" strokeWidth={3} />
           : state === 'fail' ? <X className="w-3 h-3" strokeWidth={3} />
@@ -165,8 +166,8 @@ function CheckLine({ state, title, hint }: { state: 'pass' | 'fail' | 'na' | 'in
           : <span className="w-1.5 h-0.5 bg-current rounded" />}
       </span>
       <span className={`text-sm ${state === 'fail' ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{title}</span>
-      {state === 'na' && <span className="ml-auto text-2xs text-gray-400">Not checked</span>}
-      {state === 'info' && <span className="ml-auto text-2xs text-gray-400 whitespace-nowrap">Not a violation</span>}
+      {state === 'na' && <span className="ml-auto text-2xs text-gray-500">Not checked</span>}
+      {state === 'info' && <span className="ml-auto text-2xs text-gray-500 whitespace-nowrap">Not a violation</span>}
     </li>
   );
 }
@@ -385,7 +386,7 @@ export default function EnvVerificationStudio({
                 {statusLabel}
               </span>
               <span
-                className="text-gray-400 cursor-help"
+                className="text-gray-500 cursor-help"
                 title={'How this check works:\n'
                   + '1. The candidate scans a QR code and records a 10-second video with their phone.\n'
                   + '2. First 5 seconds: the phone points at the laptop. The laptop shows only a plain colour and a one-time code, so any other app, AI tool or popup is easy to spot.\n'
@@ -401,17 +402,17 @@ export default function EnvVerificationStudio({
             <div className="mt-2 flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
               <span>Shown <span className="font-mono">{v.triggered_at ? formatTs(v.triggered_at) : '—'}</span></span>
               <span className="inline-flex items-center gap-1">
-                <Smartphone className="w-3.5 h-3.5 text-gray-400" />
+                <Smartphone className="w-3.5 h-3.5 text-gray-500" />
                 Scanned{' '}
                 {v.opened_at ? (
                   <>
                     <span className="font-mono">{formatTs(v.opened_at)}</span>
-                    {timeToScan != null && <span className="text-gray-400">({timeToScan}s later)</span>}
+                    {timeToScan != null && <span className="text-gray-500">({timeToScan}s later)</span>}
                   </>
                 ) : <span className="text-gray-400">—</span>}
               </span>
               <span className="inline-flex items-center gap-1">
-                <Check className="w-3.5 h-3.5 text-gray-400" />
+                <Check className="w-3.5 h-3.5 text-gray-500" />
                 Submitted{' '}
                 {v.submitted_at ? <span className="font-mono">{formatTs(v.submitted_at)}</span> : <span className="text-gray-400">—</span>}
               </span>
@@ -483,17 +484,16 @@ export default function EnvVerificationStudio({
           <div className="px-4 pt-3 pb-3 space-y-2 bg-white">
             {/* Controls — play, time, next issue */}
             <div className="flex items-center gap-3">
-              <button
+              <IconButton bare label={playing ? 'Pause' : 'Play'}
                 type="button"
                 onClick={togglePlay}
                 disabled={!videoSrc}
-                aria-label={playing ? 'Pause' : 'Play'}
                 className="grid place-items-center w-8 h-8 rounded-full bg-brand-blue text-white hover:bg-brand-blue/90 disabled:opacity-40"
               >
                 {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 translate-x-px" />}
-              </button>
+              </IconButton>
               <span className="font-mono text-sm tabular-nums text-gray-900">
-                {fmtClock(currentTime)} <span className="text-gray-400">/ {fmtClock(D)}</span>
+                {fmtClock(currentTime)} <span className="text-gray-500">/ {fmtClock(D)}</span>
               </span>
               {timedRows.length > 0 && (
                 <button
@@ -554,13 +554,13 @@ export default function EnvVerificationStudio({
               {/* Ruler: a timestamp every second */}
               <div className="relative h-4 mt-1">
                 {ticks.map(t => (
-                  <span key={t} className="absolute top-0 -translate-x-1/2 text-[10px] font-mono tabular-nums text-gray-400" style={{ left: pct(t) }}>
+                  <span key={t} className="absolute top-0 -translate-x-1/2 text-[10px] font-mono tabular-nums text-gray-500" style={{ left: pct(t) }}>
                     {t}s
                   </span>
                 ))}
               </div>
             </div>
-            <p className="text-2xs text-gray-400">
+            <p className="text-2xs text-gray-500">
               0–{DISPLAY_END}s: phone pointed at the laptop screen · {DISPLAY_END}s onward: room scan · numbers = issues
             </p>
           </div>
@@ -621,7 +621,7 @@ export default function EnvVerificationStudio({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900">
-                              <span className="text-gray-400">{iconForLabel(r.label, 'w-3.5 h-3.5')}</span>
+                              <span className="text-gray-500">{iconForLabel(r.label, 'w-3.5 h-3.5')}</span>
                               {r.label}
                             </span>
                             <span title={r.severity.hint} className={`text-2xs font-semibold whitespace-nowrap ${r.severity.cls}`}>{r.severity.label}</span>
@@ -637,7 +637,7 @@ export default function EnvVerificationStudio({
                                 <Play className="w-3 h-3" /> Watch at {fmtSec(r.seekSeconds)}
                               </button>
                             )}
-                            {r.absoluteTs && <span className="text-2xs font-mono text-gray-400">{formatTs(r.absoluteTs)}</span>}
+                            {r.absoluteTs && <span className="text-2xs font-mono text-gray-500">{formatTs(r.absoluteTs)}</span>}
                             {r.matchedFrames.length > 0 && r.matchedFrames[0].url && (
                               <button
                                 type="button"
@@ -706,7 +706,7 @@ export default function EnvVerificationStudio({
                   >
                     {f.url
                       ? <img src={f.url} alt={`Snapshot at ${fmtSec(t)}`} className="w-full h-full object-cover" />
-                      : <span className="absolute inset-0 grid place-items-center text-2xs text-gray-400">unavailable</span>}
+                      : <span className="absolute inset-0 grid place-items-center text-2xs text-gray-500">unavailable</span>}
                     <span className="absolute bottom-1 left-1 text-[10px] font-mono text-white bg-black/50 px-1 rounded">
                       {fmtSec(t)}{issues.length ? ` · #${issues[0]}` : ''}
                     </span>
@@ -736,7 +736,7 @@ export default function EnvVerificationStudio({
                     Colour check, second by second · {rgbMatched}/{rgb.length} matched
                   </p>
                   <div className="flex gap-2 mb-2.5 p-2.5 rounded-md bg-gray-50 ring-1 ring-gray-200 text-xs text-gray-600 leading-relaxed">
-                    <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" aria-hidden />
+                    <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-500" aria-hidden />
                     <div className="space-y-1">
                       <p>
                         <span className="font-medium text-gray-700">Why plain colours?</span>{' '}
@@ -773,7 +773,7 @@ export default function EnvVerificationStudio({
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={f.url} alt={`Camera frame at ${r.second - 0.5}s`} className="w-full h-full object-cover" loading="lazy" />
                             ) : (
-                              <span className="flex w-full h-full items-center justify-center text-2xs text-gray-400">
+                              <span className="flex w-full h-full items-center justify-center text-2xs text-gray-500">
                                 {framesLoading ? 'Loading…' : 'No frame'}
                               </span>
                             )}

@@ -26,6 +26,7 @@ import {
   canResendInvite,
 } from '@/components/AssessmentInviteActions';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The candidate list for an ASSESSMENT invite tracker.
@@ -353,11 +354,10 @@ export default function AssessmentInviteTable({
                         columns stay aligned. */}
                     <td className="tf-td pl-4 pr-0 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                       {isBulkActionable(invitation) && !archived && !jdDisabled ? (
-                        <button
+                        <IconButton bare label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
                           type="button"
                           role="checkbox"
                           aria-checked={selectedIds.has(invitation.id)}
-                          aria-label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
                           onClick={() => onToggleSelect(invitation.id)}
                           className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
                             selectedIds.has(invitation.id)
@@ -366,7 +366,7 @@ export default function AssessmentInviteTable({
                           }`}
                         >
                           {selectedIds.has(invitation.id) && <Check className="w-3 h-3 text-white" />}
-                        </button>
+                        </IconButton>
                       ) : (
                         <span className="inline-block w-5" />
                       )}
@@ -387,7 +387,7 @@ export default function AssessmentInviteTable({
                           <div className="space-y-1">
                             {timelineEvents(invitation).length === 0 ? (
                               <div className="flex items-center gap-2 whitespace-nowrap">
-                                <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                <Clock className="w-3 h-3 text-gray-500 flex-shrink-0" />
                                 <span>Created: {formatIST(invitation.created_at)}</span>
                               </div>
                             ) : (
@@ -598,11 +598,10 @@ export default function AssessmentInviteTable({
                 selected={isSelected}
                 onClick={rowOpensDetails ? () => onOpenResult(invitation) : undefined}
                 select={isBulkResendable(invitation) && !archived && !jdDisabled ? (
-                  <button
+                  <IconButton bare label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
                     type="button"
                     role="checkbox"
                     aria-checked={isSelected}
-                    aria-label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
                     onClick={() => onToggleSelect(invitation.id)}
                     className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
                       isSelected
@@ -611,7 +610,7 @@ export default function AssessmentInviteTable({
                     }`}
                   >
                     {isSelected && <Check className="w-3 h-3 text-white" />}
-                  </button>
+                  </IconButton>
                 ) : undefined}
                 idBadge={
                   <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
@@ -643,7 +642,7 @@ export default function AssessmentInviteTable({
                 <div className="mt-3 tf-meta space-y-1">
                   {timelineEvents(invitation).length === 0 ? (
                     <div className="flex items-center gap-2">
-                      <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                      <Clock className="w-3 h-3 text-gray-500 flex-shrink-0" />
                       <span>Created: {formatIST(invitation.created_at)}</span>
                     </div>
                   ) : (

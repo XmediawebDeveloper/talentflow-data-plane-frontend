@@ -21,6 +21,7 @@ import { DISPLAY } from "@/components/marketing/fonts";
 import { RevealGroup } from "@/components/marketing/motion";
 import { SECTION, SHELL } from "@/components/marketing/layout";
 import { MarketingPage, PageHero } from "@/components/marketing/PageShell";
+import { IconButton } from '@/components/ui/icon-button';
 
 /* ------------------------------------------------------------------ */
 
@@ -63,18 +64,18 @@ function Field({
     <div>
       <label htmlFor={id} className="mb-1.5 flex items-baseline gap-1.5 text-sm font-semibold text-mkt-ink">
         {label}
-        {optional && <span className="text-xs font-normal text-slate-400">Optional</span>}
+        {optional && <span className="text-xs font-normal text-slate-500">Optional</span>}
       </label>
       <div className="group/field relative">
         <Icon
           aria-hidden="true"
-          className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400 transition-colors duration-200 group-focus-within/field:text-mkt-accent"
+          className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-500 transition-colors duration-200 group-focus-within/field:text-mkt-accent"
         />
         <input
           id={id}
           aria-invalid={!!error || undefined}
           aria-describedby={error ? `${id}-error` : undefined}
-          className={`block h-12 w-full rounded-2xl border bg-mkt-canvas pl-11 pr-11 text-[15px] text-mkt-ink placeholder:text-slate-400 transition-[border-color,box-shadow,background-color] duration-200 hover:border-slate-900/25 focus:bg-mkt-surface focus:outline-none focus:ring-4 dark:placeholder:text-slate-500 ${
+          className={`block h-12 w-full rounded-2xl border bg-mkt-canvas pl-11 pr-11 text-[15px] text-mkt-ink placeholder:text-gray-500 transition-[border-color,box-shadow,background-color] duration-200 hover:border-slate-900/25 focus:bg-mkt-surface focus:outline-none focus:ring-4 dark:placeholder:text-slate-500 ${
             error
               ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
               : "border-slate-900/[0.12] focus:border-mkt-accent focus:ring-mkt-accent/15 dark:border-white/15"
@@ -121,14 +122,13 @@ function CopyEmail({ label, address }: { label: string; address: string }) {
           {address}
         </a>
       </div>
-      <button
+      <IconButton bare label={copied ? `${address} copied` : `Copy ${address}`}
         type="button"
         onClick={copy}
-        aria-label={copied ? `${address} copied` : `Copy ${address}`}
         className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-900/10 text-slate-500 transition-[color,border-color,background-color,scale] duration-200 hover:border-mkt-accent/40 hover:text-mkt-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid dark:border-white/15"
       >
         {copied ? <Check className="h-4 w-4 text-emerald-600" strokeWidth={3} /> : <Copy className="h-4 w-4" />}
-      </button>
+      </IconButton>
     </div>
   );
 }
@@ -335,7 +335,7 @@ export default function ContactPage() {
                         <span
                           aria-live="polite"
                           className={`text-xs tabular-nums ${
-                            formData.message.length > MAX_MESSAGE * 0.9 ? "text-amber-600" : "text-slate-400"
+                            formData.message.length > MAX_MESSAGE * 0.9 ? "text-amber-600" : "text-slate-500"
                           }`}
                         >
                           {formData.message.length}/{MAX_MESSAGE}
@@ -344,7 +344,7 @@ export default function ContactPage() {
                       <div className="group/field relative">
                         <MessageSquareText
                           aria-hidden="true"
-                          className="pointer-events-none absolute left-4 top-3.5 h-[18px] w-[18px] text-slate-400 transition-colors duration-200 group-focus-within/field:text-mkt-accent"
+                          className="pointer-events-none absolute left-4 top-3.5 h-[18px] w-[18px] text-slate-500 transition-colors duration-200 group-focus-within/field:text-mkt-accent"
                         />
                         <textarea
                           id="message"
@@ -354,7 +354,7 @@ export default function ContactPage() {
                           placeholder={activeTopic.hint}
                           value={formData.message}
                           onChange={set("message")}
-                          className="block w-full resize-y rounded-2xl border border-slate-900/[0.12] bg-mkt-canvas py-3 pl-11 pr-4 text-[15px] leading-relaxed text-mkt-ink placeholder:text-slate-400 transition-[border-color,box-shadow,background-color] duration-200 hover:border-slate-900/25 focus:border-mkt-accent focus:bg-mkt-surface focus:outline-none focus:ring-4 focus:ring-mkt-accent/15 dark:border-white/15 dark:placeholder:text-slate-500"
+                          className="block w-full resize-y rounded-2xl border border-slate-900/[0.12] bg-mkt-canvas py-3 pl-11 pr-4 text-[15px] leading-relaxed text-mkt-ink placeholder:text-gray-500 transition-[border-color,box-shadow,background-color] duration-200 hover:border-slate-900/25 focus:border-mkt-accent focus:bg-mkt-surface focus:outline-none focus:ring-4 focus:ring-mkt-accent/15 dark:border-white/15 dark:placeholder:text-slate-500"
                         />
                       </div>
                     </div>

@@ -9,6 +9,7 @@ import { authService, getLoginUrl } from '@/lib/services/authService';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
 import { hasStoredSession } from '@/lib/services/api';
+import { IconButton } from '@/components/ui/icon-button';
 
 export default function SetPassword() {
   const router = useRouter();
@@ -154,11 +155,11 @@ export default function SetPassword() {
                   placeholder="Min. 6 characters"
                   required
                   minLength={6}
-                  style={{ width: '100%', padding: '10px 40px 10px 38px', border: `1px solid ${newPassword && !newPasswordValid ? 'var(--raw-ef4444)' : (isDark ? 'var(--raw-4b5563)' : 'var(--raw-e5e7eb)')}`, borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box', background: isDark ? 'var(--raw-374151)' : undefined, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)' }}
+                  style={{ width: '100%', padding: '10px 40px 10px 38px', border: `1px solid ${newPassword && !newPasswordValid ? 'var(--raw-ef4444)' : (isDark ? 'var(--raw-4b5563)' : 'var(--raw-e5e7eb)')}`, borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', background: isDark ? 'var(--raw-374151)' : undefined, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)' }}
                 />
-                <button type="button" onClick={() => setShowNew(!showNew)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+                <IconButton bare label={showNew ? 'Hide password' : 'Show password'} type="button" onClick={() => setShowNew(!showNew)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
                   {showNew ? <EyeOff size={16} color="var(--raw-9ca3af)" /> : <Eye size={16} color="var(--raw-9ca3af)" />}
-                </button>
+                </IconButton>
               </div>
               {newPassword && !newPasswordValid && (
                 <p style={{ color: 'var(--raw-ef4444)', fontSize: '12px', marginTop: '4px' }}>Password must be at least 6 characters</p>
@@ -176,11 +177,11 @@ export default function SetPassword() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repeat your password"
                   required
-                  style={{ width: '100%', padding: '10px 40px 10px 38px', border: `1px solid ${confirmTouched && !passwordsMatch ? 'var(--raw-ef4444)' : (isDark ? 'var(--raw-4b5563)' : 'var(--raw-e5e7eb)')}`, borderRadius: '8px', fontSize: '14px', outline: 'none', boxSizing: 'border-box', background: isDark ? 'var(--raw-374151)' : undefined, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)' }}
+                  style={{ width: '100%', padding: '10px 40px 10px 38px', border: `1px solid ${confirmTouched && !passwordsMatch ? 'var(--raw-ef4444)' : (isDark ? 'var(--raw-4b5563)' : 'var(--raw-e5e7eb)')}`, borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', background: isDark ? 'var(--raw-374151)' : undefined, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)' }}
                 />
-                <button type="button" onClick={() => setShowConfirm(!showConfirm)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+                <IconButton bare label={showConfirm ? 'Hide confirmed password' : 'Show confirmed password'} type="button" onClick={() => setShowConfirm(!showConfirm)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
                   {showConfirm ? <EyeOff size={16} color="var(--raw-9ca3af)" /> : <Eye size={16} color="var(--raw-9ca3af)" />}
-                </button>
+                </IconButton>
               </div>
               {confirmTouched && !passwordsMatch && (
                 <p style={{ color: 'var(--raw-ef4444)', fontSize: '12px', marginTop: '4px' }}>Passwords do not match</p>

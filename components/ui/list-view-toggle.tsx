@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { LayoutGrid, List } from 'lucide-react';
 import { useIsMobile } from './use-mobile';
+import { IconButton } from '@/components/ui/icon-button';
 
 export type ListDisplayMode = 'list' | 'grid';
 
@@ -38,12 +39,10 @@ export default function ListViewToggle({
       data-list-view-toggle=""
       className={`inline-flex items-center gap-0.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-0.5 shrink-0 ${className} max-md:!hidden`}
     >
-      <button
+      <IconButton bare label="List view"
         type="button"
         onClick={() => onChange('list')}
         aria-pressed={value === 'list'}
-        aria-label="List view"
-        title="List view"
         className={`p-1 sm:p-2 rounded-md transition-colors ${
           value === 'list'
             ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
@@ -51,13 +50,11 @@ export default function ListViewToggle({
         }`}
       >
         <List className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-      </button>
-      <button
+      </IconButton>
+      <IconButton bare label="Grid view"
         type="button"
         onClick={() => onChange('grid')}
         aria-pressed={value === 'grid'}
-        aria-label="Grid view"
-        title="Grid view"
         className={`p-1 sm:p-2 rounded-md transition-colors ${
           value === 'grid'
             ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
@@ -65,7 +62,7 @@ export default function ListViewToggle({
         }`}
       >
         <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-      </button>
+      </IconButton>
     </div>
   );
 }

@@ -12,6 +12,8 @@ import {
   Video, Code, MessageSquare, Loader2, ArrowRight, Lightbulb, RotateCcw, Coins, Activity,
   Database, UserPlus, HelpCircle, Eye,
 } from 'lucide-react';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* ───────────────────────────── Mock data ───────────────────────────── */
 
@@ -62,9 +64,9 @@ function Term({ k, children }: { k: keyof typeof GLOSSARY; children?: ReactNode 
   return (
     <span className="relative inline-flex items-center gap-0.5">
       <span className="border-b border-dotted border-gray-400">{children ?? k}</span>
-      <button type="button" aria-label={`What is ${k}?`} onClick={() => setOpen((o) => !o)} onBlur={() => setOpen(false)} className="text-gray-400 hover:text-brand-blue">
+      <IconButton bare label={`What is ${k}?`} type="button" onClick={() => setOpen((o) => !o)} onBlur={() => setOpen(false)} className="text-gray-500 hover:text-brand-blue">
         <HelpCircle className="h-3.5 w-3.5" />
-      </button>
+      </IconButton>
       {open && (
         <span className="absolute left-0 top-6 z-30 w-64 rounded-lg border border-gray-200 bg-white p-3 text-xs font-normal text-gray-700 shadow-lg dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
           <b className="block text-gray-900 dark:text-slate-100">{k}</b>{GLOSSARY[k]}
@@ -95,7 +97,7 @@ function Stepper({ steps, current }: { steps: string[]; current: number }) {
               state === 'done' ? 'bg-success-subtle text-success-strong' : state === 'now' ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-500 dark:bg-slate-800'
             }`}>{state === 'done' ? <Check className="h-4 w-4" /> : i + 1}</span>
             <span className={`text-sm ${state === 'now' ? 'font-semibold text-gray-900 dark:text-slate-100' : 'text-gray-500'}`}>{s}</span>
-            {i < steps.length - 1 && <ChevronRight className="h-4 w-4 text-gray-300" />}
+            {i < steps.length - 1 && <ChevronRight className="h-4 w-4 text-muted-foreground dark:text-gray-300" />}
           </li>
         );
       })}
@@ -120,7 +122,7 @@ function Footer({ onBack, backLabel = 'Back', next, nextLabel, nextDisabled, hin
 function Toggle({ on, onChange, label, desc, icon: I }: { on: boolean; onChange: (v: boolean) => void; label: string; desc: string; icon: Icon }) {
   return (
     <button type="button" onClick={() => onChange(!on)} className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left transition ${on ? 'border-brand-blue/40 bg-brand-blue/5' : 'border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900'}`}>
-      <I className={`mt-0.5 h-5 w-5 ${on ? 'text-brand-blue' : 'text-gray-400'}`} />
+      <I className={`mt-0.5 h-5 w-5 ${on ? 'text-brand-blue' : 'text-gray-500'}`} />
       <span className="flex-1"><span className="tf-row-title block">{label}</span><span className="tf-meta">{desc}</span></span>
       <span className={`mt-1 h-5 w-9 rounded-full p-0.5 transition ${on ? 'bg-brand-blue' : 'bg-gray-300'}`}><span className={`block h-4 w-4 rounded-full bg-white transition ${on ? 'translate-x-4' : ''}`} /></span>
     </button>
@@ -144,7 +146,7 @@ function JobPicker({ value, onPick, need }: { value: string | null; onPick: (id:
                 : sel ? 'border-brand-blue bg-brand-blue/5' : 'border-gray-200 bg-white hover:border-brand-blue/40 dark:border-slate-700 dark:bg-slate-900'
             }`}>
             <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${sel ? 'border-brand-blue bg-brand-blue' : 'border-gray-300'}`}>{sel && <Check className="h-3 w-3 text-white" />}</span>
-            <Briefcase className="h-5 w-5 text-gray-400" />
+            <Briefcase className="h-5 w-5 text-gray-500" />
             <span className="min-w-0 flex-1">
               <span className="flex flex-wrap items-center gap-2"><span className="tf-row-title">{j.title}</span><span className="tf-id-chip">{j.code} · v{j.version}</span></span>
               <span className="tf-meta block">{j.dept}{j.note && need !== 'score' ? ` · ${j.note}` : ''}</span>
@@ -212,7 +214,7 @@ function ScoreFlow({ guide, onStart, onCancel }: { guide: boolean; onStart: (job
               <ul className="mt-2 max-h-48 space-y-1 overflow-auto">
                 {picked.map((id) => {
                   const r = RESUMES.find((x) => x.id === id)!;
-                  return <li key={id} className="flex items-center justify-between tf-body"><span>{r.name}</span><button onClick={() => toggle(id)} aria-label={`Remove ${r.name}`}><X className="h-3.5 w-3.5 text-gray-400" /></button></li>;
+                  return <li key={id} className="flex items-center justify-between tf-body"><span>{r.name}</span><IconButton bare label={`Remove ${r.name}`} onClick={() => toggle(id)}><X className="h-3.5 w-3.5 text-gray-500" /></IconButton></li>;
                 })}
               </ul>
             </aside>
@@ -337,7 +339,7 @@ function InterviewFlow({ guide, presetJob, onPublished, onCancel }: { guide: boo
           <div className="tf-card-soft tf-card-pad">
             <div className="flex flex-wrap gap-2">
               {regen ? <span className="tf-meta inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Generating…</span> : topics.map((t) => (
-                <span key={t} className="tf-stat-chip tf-stat-chip-info text-sm">{t}<button aria-label={`Remove ${t}`} onClick={() => setTopics(topics.filter((x) => x !== t))}><X className="h-3 w-3" /></button></span>
+                <span key={t} className="tf-stat-chip tf-stat-chip-info text-sm">{t}<IconButton bare label={`Remove ${t}`} onClick={() => setTopics(topics.filter((x) => x !== t))}><X className="h-3 w-3" /></IconButton></span>
               ))}
             </div>
             <button className="tf-btn tf-btn-sm tf-btn-secondary mt-4" onClick={() => { setRegen(true); setTimeout(() => { setTopics(['Game engine (Unity/Unreal)', 'C++ & scripting', 'Performance', 'Teamwork']); setRegen(false); }, 1200); }}>
@@ -462,7 +464,7 @@ function ProgressWindow({ task, onMinimize, onClose, onNext }: { task: Task; onM
   const pct = Math.round(((task.done + task.failed) / task.total) * 100);
   const strong = task.results?.filter((r) => r.score >= 80) ?? [];
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+    <ModalA11y innerDialog><div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
       <div role="dialog" aria-modal className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
         <header className="flex items-start justify-between gap-3 border-b border-gray-200 p-5 dark:border-slate-700">
           <div>
@@ -473,7 +475,7 @@ function ProgressWindow({ task, onMinimize, onClose, onNext }: { task: Task; onM
           <div className="flex gap-1">
             {/* Same two buttons, same words, in every progress window. */}
             <button onClick={onMinimize} className="tf-btn tf-btn-sm tf-btn-secondary" title="Keeps running — find it in Activity"><Minimize2 className="h-3.5 w-3.5" />Minimize</button>
-            {finished && <button onClick={onClose} className="tf-icon-btn" aria-label="Close"><X className="h-4 w-4" /></button>}
+            {finished && <IconButton bare label="Close" onClick={onClose} className="tf-icon-btn"><X className="h-4 w-4" /></IconButton>}
           </div>
         </header>
         <div className="p-5">
@@ -517,7 +519,7 @@ function ProgressWindow({ task, onMinimize, onClose, onNext }: { task: Task; onM
           )}
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }
 
@@ -534,7 +536,7 @@ function ActivityDock({ tasks, onOpen, onClear }: { tasks: Task[]; onOpen: (id: 
             <span className="tf-row-title inline-flex items-center gap-2"><Activity className="h-4 w-4 text-brand-blue" />Activity {running > 0 && <span className="tf-stat-chip tf-stat-chip-info">{running} running</span>}</span>
             <div className="flex gap-1">
               <button onClick={onClear} className="tf-meta px-1 hover:underline">Clear done</button>
-              <button onClick={() => setOpen(false)} className="tf-icon-btn h-7 w-7" aria-label="Hide activity"><ChevronRight className="h-4 w-4 rotate-90" /></button>
+              <IconButton bare label="Hide activity" onClick={() => setOpen(false)} className="tf-icon-btn h-7 w-7"><ChevronRight className="h-4 w-4 rotate-90" /></IconButton>
             </div>
           </div>
           <ul className="max-h-72 divide-y divide-gray-100 overflow-auto dark:divide-slate-700">
@@ -544,7 +546,7 @@ function ActivityDock({ tasks, onOpen, onClear }: { tasks: Task[]; onOpen: (id: 
               return (
                 <li key={t.id} className="px-3 py-2.5">
                   <div className="flex items-center gap-2">
-                    {t.kind === 'score' ? <FileSearch className="h-4 w-4 text-gray-400" /> : <Mail className="h-4 w-4 text-gray-400" />}
+                    {t.kind === 'score' ? <FileSearch className="h-4 w-4 text-gray-500" /> : <Mail className="h-4 w-4 text-gray-500" />}
                     <span className="tf-row-name flex-1 truncate">{t.title}</span>
                     {finished ? <CheckCircle2 className="h-4 w-4 text-success-strong" /> : <span className="tf-meta tabular-nums">{pct}%</span>}
                   </div>
@@ -682,7 +684,7 @@ export default function RecruitmentFlowPreview() {
                   ))}
                 </div>
                 <div className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 p-4 dark:border-slate-700">
-                  <Send className="h-5 w-5 text-gray-400" />
+                  <Send className="h-5 w-5 text-gray-500" />
                   <span className="tf-body flex-1">Already have an assessment or AI interview? Send it to candidates.</span>
                   <button onClick={() => { setInviteSeed({ target: 'assessment', jobId: 'j142', candidates: [] }); setFlow('invite'); }} className="tf-btn tf-btn-sm tf-btn-secondary">Invite candidates</button>
                 </div>

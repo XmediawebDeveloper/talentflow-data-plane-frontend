@@ -278,7 +278,7 @@ export function LandingPageContent() {
                       {stage}
                     </li>
                     {i < FLOW.length - 1 && (
-                      <li aria-hidden="true" className="text-slate-400 dark:text-slate-500">
+                      <li aria-hidden="true" className="text-slate-500 dark:text-slate-500">
                         <ChevronRight className="h-3.5 w-3.5" />
                       </li>
                     )}

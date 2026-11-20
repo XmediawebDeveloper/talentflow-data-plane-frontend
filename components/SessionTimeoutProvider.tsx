@@ -9,6 +9,8 @@ import { userSettingsApi } from '@/lib/services/settingsService';
 import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 import { toast } from 'sonner';
 import { forceNavigate } from '@/lib/utils/forcedNavigation';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -253,7 +255,7 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
 
       {/* Inactivity Warning Modal */}
       {isWarningVisible && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+        <ModalA11y><div className="fixed inset-0 z-[100] flex items-center justify-center">
           {/* Backdrop — no onClick handler, cannot be dismissed by clicking outside */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
@@ -267,13 +269,12 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
           >
             {/* Close — treated the same as Continue Session: dismissing it is the
                 user proving they're present, not an escape hatch from the timer. */}
-            <button
+            <IconButton bare label="Continue session"
               onClick={continueSession}
-              aria-label="Continue session"
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
             >
               <X className="w-5 h-5" strokeWidth={2} />
-            </button>
+            </IconButton>
 
             <div className="px-6 sm:px-8 pt-8 pb-6 text-center">
               <div className="relative w-20 h-20 mx-auto mb-5">
@@ -319,7 +320,7 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
               </p>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </SessionTimeoutContext.Provider>
   );

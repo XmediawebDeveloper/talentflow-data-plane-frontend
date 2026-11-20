@@ -113,7 +113,7 @@ export default function CountryPhoneInput({
           with only the enabled ones (India) choosable — the rest are greyed out. */}
       <div className="relative flex h-full shrink-0 items-center gap-1 pl-3 pr-1">
         <CountryFlag iso={country.iso} />
-        <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+        <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
         <select
           aria-label="Country"
           disabled={disabled}
@@ -137,7 +137,7 @@ export default function CountryPhoneInput({
         maxLength={maxLen}
         placeholder={placeholder ?? (country.iso === 'IN' ? '98765 43210' : 'Phone number')}
         onChange={(e) => emit(e.target.value.replace(/\D/g, '').slice(0, maxLen))}
-        className="h-full min-w-0 flex-1 bg-transparent pl-1.5 pr-3 text-gray-900 placeholder:text-gray-400 outline-none disabled:cursor-not-allowed dark:text-slate-100 dark:placeholder:text-slate-500"
+        className="h-full min-w-0 flex-1 bg-transparent pl-1.5 pr-3 text-gray-900 placeholder:text-gray-500 outline-none disabled:cursor-not-allowed dark:text-slate-100 dark:placeholder:text-slate-500"
       />
     </div>
   );

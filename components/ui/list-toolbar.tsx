@@ -352,7 +352,7 @@ export default function ListToolbar({
           // brand-blue focus + hover that SearchableSelect and DateField use, so
           // search, dropdowns and date fields read as one filter component.
           className={cn(
-            'w-full h-9 pl-9 pr-4 text-sm text-black dark:text-slate-100 placeholder:text-gray-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue',
+            'w-full h-9 pl-9 pr-4 text-sm text-black dark:text-slate-100 placeholder:text-gray-500 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue',
             searchInputClassName,
           )}
         />

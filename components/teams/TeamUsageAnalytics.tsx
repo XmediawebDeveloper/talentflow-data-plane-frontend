@@ -33,6 +33,8 @@ import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import FilterSelect from '@/components/ui/filter-select';
 import UnitActivityLog from './UnitActivityLog';
 import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -293,7 +295,7 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <p className="tf-caption">
             Consumption history
-            <span className="ml-1.5 font-normal text-gray-400 dark:text-slate-500">
+            <span className="ml-1.5 font-normal text-gray-500 dark:text-slate-500">
               {historyCountLabel(entries.length, total)}{f.active && ` · ${sorted.length} matching`}
             </span>
           </p>
@@ -523,7 +525,7 @@ function MemberListControls({ view, className = '' }: { view: MemberView; classN
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <div className="relative min-w-0 flex-1 sm:max-w-xs">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
         <input
           type="search"
           value={view.query}
@@ -607,14 +609,14 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
 
   return (
     <>
-      <tr
+      <tr {...clickableRowProps}
         onClick={toggle}
         className="cursor-pointer hover:bg-brand-blue/[0.04] dark:hover:bg-slate-800 transition-colors border-t border-gray-100 dark:border-slate-700/60 select-none"
       >
         {/* Member */}
         <td className="tf-td whitespace-nowrap">
           <div className="flex items-center gap-2">
-            <div className="text-gray-300 dark:text-slate-500 shrink-0">
+            <div className="text-muted-foreground dark:text-slate-500 shrink-0">
               {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </div>
             <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
@@ -632,7 +634,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
-              ${ru > 0 ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-200' : 'bg-gray-100 text-gray-400'}`}>
+              ${ru > 0 ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-200' : 'bg-gray-100 text-gray-500'}`}>
               {formatMeasure(ru, measure)}
             </span>
           </div>
@@ -642,7 +644,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
-              ${rs > 0 ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-100 text-gray-400'}`}>
+              ${rs > 0 ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-100 text-gray-500'}`}>
               {formatMeasure(rs, measure)}
             </span>
           </div>
@@ -652,7 +654,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
-              ${as_ > 0 ? 'bg-brand-cyan/15 text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan ring-1 ring-brand-cyan/30' : 'bg-gray-100 text-gray-400'}`}>
+              ${as_ > 0 ? 'bg-brand-cyan/15 text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan ring-1 ring-brand-cyan/30' : 'bg-gray-100 text-gray-500'}`}>
               {formatMeasure(as_, measure)}
             </span>
           </div>
@@ -662,7 +664,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
-              ${aiu > 0 ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-gray-100 text-gray-400'}`}>
+              ${aiu > 0 ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-gray-100 text-gray-500'}`}>
               {formatMeasure(aiu, measure)}
             </span>
           </div>
@@ -792,7 +794,7 @@ function TeamRow({
   return (
     <>
       {/* Team summary row — outer table 6 cols */}
-      <tr
+      <tr {...((canExpand) ? clickableRowProps : {})}
         id={`team-usage-${team.team_id}`}
         onClick={canExpand ? onToggle : undefined}
         className={`transition-colors border-t border-gray-200 dark:border-slate-700 select-none ${canExpand ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800' : ''}`}
@@ -801,7 +803,7 @@ function TeamRow({
           <div className="flex items-center gap-3">
             {/* The only expand affordance — the whole row toggles. */}
             {canExpand && (
-              <div className={expanded ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'} aria-label={expanded ? 'Hide members' : 'Show members'}>
+              <div className={expanded ? 'text-brand-blue' : 'text-gray-500 dark:text-slate-500'} aria-label={expanded ? 'Hide members' : 'Show members'}>
                 {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               </div>
             )}
@@ -818,7 +820,7 @@ function TeamRow({
           </td>
         ))}
         <td className="tf-td whitespace-nowrap">
-          <span className={`text-sm font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
+          <span className={`text-sm font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-muted-foreground dark:text-slate-500'}`}>
             {total > 0 ? formatMeasure(total, measure) : '—'}
           </span>
         </td>
@@ -924,7 +926,7 @@ function MobileLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
   const sorted = [...f.filtered].sort((a, b) => b.created_at.localeCompare(a.created_at));
   return (
     <div className="border-t border-gray-100 px-2.5 py-2.5 dark:border-slate-700/60">
-      <p className="mb-2 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
+      <p className="mb-2 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">
         History · {historyCountLabel(entries.length, total)}{f.active && ` · ${sorted.length} matching`}
       </p>
       <HistoryToolbar f={f} onDownload={() => downloadHistory(sorted, memberName, fromDate, toDate)} className="mb-2" />
@@ -991,15 +993,14 @@ function MobileMemberCard({ member, teamId, fromDate, toDate, isTop = false }: {
           </>
         }
         actions={
-          <button
+          <IconButton bare label={expanded ? 'Hide usage logs' : 'Show usage logs'}
             type="button"
             onClick={toggle}
             aria-expanded={expanded}
-            aria-label={expanded ? 'Hide usage logs' : 'Show usage logs'}
             className="tf-icon-btn-outline"
           >
             {expanded ? <ChevronDown className="text-brand-blue" /> : <ChevronRight />}
-          </button>
+          </IconButton>
         }
       />
       {expanded && (
@@ -1087,15 +1088,14 @@ function MobileTeamCard({
           </>
         }
         actions={canExpand ? (
-          <button
+          <IconButton bare label={expanded ? 'Hide team members' : 'Show team members'}
             type="button"
             onClick={onToggle}
             aria-expanded={expanded}
-            aria-label={expanded ? 'Hide team members' : 'Show team members'}
             className="tf-icon-btn-outline"
           >
             {expanded ? <ChevronDown className="text-brand-blue" /> : <ChevronRight />}
-          </button>
+          </IconButton>
         ) : undefined}
       >
         <ShareBar team={team} grandTotal={grandTotal} className="mt-2" />
@@ -1347,7 +1347,7 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
         <p className="mt-2 tf-meta">
           {q ? `${visible.length} of ${rows.length}` : rows.length} {rows.length === 1 ? 'member' : 'members'}
           {rows.some((r) => r.teams.length > 1) && (
-            <span className="text-gray-400 dark:text-slate-500">
+            <span className="text-gray-500 dark:text-slate-500">
               {' '}· Someone in more than one team is counted once here, so this can differ from the team totals above.
             </span>
           )}
@@ -1579,7 +1579,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
         <div className="flex flex-col gap-2 sm:gap-3 lg:flex-row lg:items-center">
         {teams.length > 1 && (
           <div className="relative w-full min-w-0 lg:flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
             <input
               type="search"
               value={teamQuery}
@@ -1633,7 +1633,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                     onClick={() => { setExportScope('team'); setShowExportMenu(false); }}
                     className="group w-full text-left px-4 py-2.5 tf-body flex items-center gap-2"
                   >
-                    <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                    <FileText className="w-4 h-4 text-gray-500 dark:text-slate-500" />
                     <span className={MENU_ITEM_SCALE_CLASS}>Team Level</span>
                   </button>
                   {/* Reads per-member usage, which only tenant admins can see. */}
@@ -1642,7 +1642,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                       onClick={() => { setExportScope('user'); setShowExportMenu(false); }}
                       className="group w-full text-left px-4 py-2.5 tf-body flex items-center gap-2"
                     >
-                      <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                      <Users className="w-4 h-4 text-gray-500 dark:text-slate-500" />
                       <span className={MENU_ITEM_SCALE_CLASS}>User Level (drill-down)</span>
                     </button>
                   )}

@@ -48,6 +48,8 @@ import {
   T_EYEBROW,
   T_BODY,
 } from '@/lib/constants/candidateLayout';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * Step 1 of the candidate assessment flow — "Job & Consent".
@@ -180,7 +182,7 @@ function TermsDialog({
   }, [onClose]);
 
   return (
-    <div
+    <ModalA11y innerDialog closeOnEscape={false}><div
       className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={onClose}
     >
@@ -197,14 +199,13 @@ function TermsDialog({
             <h2 id="terms-dialog-title" className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900">Consent &amp; Terms</h2>
             <p className="mt-1 tf-body-muted">Please review the rules, proctoring and terms below before starting your assessment.</p>
           </div>
-          <button
+          <IconButton bare label="Close"
             type="button"
             onClick={onClose}
-            className="p-2.5 -mr-2 -mt-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
-            aria-label="Close"
+            className="p-2.5 -mr-2 -mt-1 rounded-lg text-gray-500 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Body (scrolls) */}
@@ -292,7 +293,7 @@ function TermsDialog({
           )}
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }
 
@@ -424,7 +425,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                               {/* Dot separators only where the line stays on one row; on a
                                   phone the facts wrap, and a dot would start the next line. */}
                               {index > 0 && <span aria-hidden className="hidden sm:block w-1 h-1 rounded-full bg-gray-300 mr-0.5" />}
-                              <Icon className="w-3.5 h-3.5 shrink-0 text-gray-400" aria-hidden="true" />
+                              <Icon className="w-3.5 h-3.5 shrink-0 text-gray-500" aria-hidden="true" />
                               <span className="break-words">{label}</span>
                             </span>
                           ))}

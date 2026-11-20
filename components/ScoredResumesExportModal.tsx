@@ -8,6 +8,7 @@ import { formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { scoringService } from '@/lib/services/scoringService';
 import type { ScoredResume } from './ScoredResumesTable';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 /**
  * The "Export Scored Resumes" dialog — CSV or Excel, with the columns picked
@@ -266,7 +267,7 @@ export default function ScoredResumesExportModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
         <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-6 border-b border-gray-200 shrink-0">
           <div className="flex items-start gap-3 min-w-0">
@@ -381,6 +382,6 @@ export default function ScoredResumesExportModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

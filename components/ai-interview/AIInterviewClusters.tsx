@@ -46,6 +46,8 @@ import { useEditBaseline, useInterviewLeaveGuard } from './useInterviewLeaveGuar
 import ClusterGeneratingState, { CLUSTER_GENERATING_ID } from './ClusterGeneratingState';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { closestDuplicate } from '@/lib/skillDuplicates';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -301,7 +303,7 @@ function PrioritySelect({
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${info.dot}`} />
           <span className="truncate">{info.label}</span>
         </span>
-        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3.5 h-3.5 text-gray-500 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && !disabled && (
@@ -378,14 +380,12 @@ function DraggableClusterSkill({
       {isAiDerived && <Sparkles className="w-3 h-3 flex-shrink-0 opacity-70" />}
       <span className="font-medium min-w-0 break-words">{skillName}</span>
       {!isReadOnly && (
-        <button
+        <IconButton bare label="Close" tooltip={removalLocked ? 'Minimum skill count reached — removal disabled' : undefined}
           onClick={(e) => { e.stopPropagation(); if (removalLocked) return; onRemove(skillName, clusterId); }}
           disabled={removalLocked}
-          title={removalLocked ? 'Minimum skill count reached — removal disabled' : undefined}
-          className={`ml-0.5 transition-all ${removalLocked ? 'opacity-20 cursor-not-allowed' : 'opacity-50 hover:opacity-100 hover:text-destructive hover:scale-110'}`}
-         aria-label="Close">
+          className={`ml-0.5 transition-all ${removalLocked ? 'opacity-20 cursor-not-allowed' : 'opacity-50 hover:opacity-100 hover:text-destructive hover:scale-110'}`}>
           <X className="w-3 h-3" />
-        </button>
+        </IconButton>
       )}
     </span>
   );
@@ -498,14 +498,14 @@ function ClusterRow({
       )}
 
       {/* Collapsed header */}
-      <div
+      <div {...clickableProps}
         className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-3 cursor-pointer transition-all duration-200 ${expanded ? 'hover:bg-brand-blue/[0.04]' : 'hover:bg-brand-blue/[0.025]'}`}
         onClick={() => onToggleExpand(cluster.id)}
       >
         {/* Hide drag handle when read-only (flexible finalized) */}
         {!isReadOnly && (
           <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="hidden sm:block cursor-grab active:cursor-grabbing p-0.5 opacity-30 hover:opacity-70 transition-opacity">
-            <GripVertical className="w-4 h-4 text-gray-400" />
+            <GripVertical className="w-4 h-4 text-gray-500" />
           </div>
         )}
         <PriorityBadge p={cluster.priority} />
@@ -540,30 +540,26 @@ function ClusterRow({
             removing one meant opening it and scrolling past its skills. */}
         {!isReadOnly && (
           <>
-            <button
+            <IconButton bare label={`Rename ${cluster.name || 'cluster'}`} tooltip="Rename this cluster"
               type="button"
               onClick={(e) => { e.stopPropagation(); if (!expanded) onToggleExpand(cluster.id); }}
-              title="Rename this cluster"
-              aria-label={`Rename ${cluster.name || 'cluster'}`}
-              className="p-1 text-gray-400 hover:text-brand-blue transition-colors flex-shrink-0"
+              className="p-1 text-gray-500 hover:text-brand-blue transition-colors flex-shrink-0"
             >
               <Pencil className="w-3.5 h-3.5" />
-            </button>
-            <button
+            </IconButton>
+            <IconButton bare label={`Remove ${cluster.name || 'cluster'}`} tooltip={removalLocked ? 'Minimum skill count reached — removal disabled' : 'Remove this cluster'}
               type="button"
               onClick={(e) => { e.stopPropagation(); if (removalLocked) return; onRemove(cluster.id); }}
               disabled={removalLocked}
-              title={removalLocked ? 'Minimum skill count reached — removal disabled' : 'Remove this cluster'}
-              aria-label={`Remove ${cluster.name || 'cluster'}`}
               className={`p-1 transition-colors flex-shrink-0 ${
-                removalLocked ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500'
+                removalLocked ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-red-500'
               }`}
             >
               <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            </IconButton>
           </>
         )}
-        <div className={`flex items-center justify-center w-6 h-6 rounded-full flex-shrink-0 transition-all duration-300 ${expanded ? 'bg-brand-blue/15 text-brand-blue rotate-180' : 'text-gray-400 hover:bg-gray-100'}`}>
+        <div className={`flex items-center justify-center w-6 h-6 rounded-full flex-shrink-0 transition-all duration-300 ${expanded ? 'bg-brand-blue/15 text-brand-blue rotate-180' : 'text-gray-500 hover:bg-gray-100'}`}>
           <ChevronDown className="w-3.5 h-3.5" />
         </div>
       </div>
@@ -574,7 +570,7 @@ function ClusterRow({
           {/* Cluster name + Priority side-by-side for compactness */}
           <div className="tf-grid-3">
             <div className="sm:col-span-2">
-              <label className="text-2xs font-semibold text-gray-400 uppercase tracking-wider">Cluster Name</label>
+              <label className="text-2xs font-semibold text-gray-500 uppercase tracking-wider">Cluster Name</label>
               <input
                 type="text"
                 value={cluster.name}
@@ -585,7 +581,7 @@ function ClusterRow({
               />
             </div>
             <div>
-              <label className="text-2xs font-semibold text-gray-400 uppercase tracking-wider">Priority</label>
+              <label className="text-2xs font-semibold text-gray-500 uppercase tracking-wider">Priority</label>
               <PrioritySelect
                 value={cluster.priority}
                 onChange={(p) => onUpdate(cluster.id, { priority: p as Cluster['priority'] })}
@@ -619,7 +615,7 @@ function ClusterRow({
                 return (
                   <div className="mt-1.5">
                     <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1.5">
-                      <div className="text-2xs font-semibold uppercase tracking-wide text-gray-400">
+                      <div className="text-2xs font-semibold uppercase tracking-wide text-gray-500">
                         Skills ({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})
                       </div>
                       {commandCount > 0 && (
@@ -660,7 +656,7 @@ function ClusterRow({
             ) : (
               <p className="tf-hint mt-1">No skills assigned. Drag skills here from other clusters.</p>
             )}
-            {!isReadOnly && <p className="text-2xs text-gray-300 mt-1.5">Drag skills to move between clusters</p>}
+            {!isReadOnly && <p className="text-2xs text-muted-foreground dark:text-gray-300 mt-1.5">Drag skills to move between clusters</p>}
           </div>
 
           {/* Remove lives on the row's header now — see the trash there. */}
@@ -872,15 +868,14 @@ function CategorySection({
         </div>
         {/* Collapse — a long bucket is a lot of page to scroll past when the
             recruiter is working in the other one. */}
-        <button
+        <IconButton bare label={collapsed ? `Show ${title}` : `Hide ${title}`}
           type="button"
           onClick={() => setCollapsed(c => !c)}
           aria-expanded={!collapsed}
-          title={collapsed ? `Show ${title}` : `Hide ${title}`}
-          className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors flex-shrink-0"
+          className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors flex-shrink-0"
         >
           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`} />
-        </button>
+        </IconButton>
         {/* "Add Cluster" button removed per product feedback — cluster
             structure is finalized by the AI generator; manual cluster
             additions on this page are no longer offered. Use "Regenerate
@@ -920,15 +915,14 @@ function CategorySection({
             >
               <span className="min-w-0 break-words">{entry.name}</span>
               {!isReadOnly && (
-                <button
+                <IconButton bare label="Remove" tooltip={removalLocked ? 'Minimum skill count reached — removal disabled' : 'Remove'}
                   type="button"
                   onClick={() => { if (removalLocked) return; onRemoveSkillFromPool?.(entry.name); }}
                   disabled={removalLocked}
                   className={`ml-0.5 transition-all ${removalLocked ? 'opacity-20 cursor-not-allowed' : 'opacity-50 hover:opacity-100 hover:text-destructive hover:scale-110'}`}
-                  aria-label="Remove" title={removalLocked ? 'Minimum skill count reached — removal disabled' : 'Remove'}
                 >
                   <X className="w-3 h-3" />
-                </button>
+                </IconButton>
               )}
             </span>
           );
@@ -957,7 +951,7 @@ function CategorySection({
               <div className="mb-3">
                 <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                   <span className="tf-eyebrow tracking-wide">
-                    Skills <span className="text-gray-400 font-normal">({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})</span>
+                    Skills <span className="text-gray-500 font-normal">({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})</span>
                   </span>
                   {commandCount > 0 && (
                     <div className="flex items-center gap-2.5 tf-micro-hint">
@@ -977,7 +971,7 @@ function CategorySection({
                     16px text on phones) the search box was squeezed to ~90px. */}
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2.5">
                   <div className="relative w-full sm:w-auto sm:flex-1 min-w-0">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
                     <input
                       type="text"
                       value={skillQuery}
@@ -987,14 +981,13 @@ function CategorySection({
                       className="tf-input h-auto pl-8 pr-8 py-1.5 text-xs"
                     />
                     {skillQuery && (
-                      <button
+                      <IconButton bare label="Clear search"
                         type="button"
                         onClick={() => setSkillQuery('')}
-                        aria-label="Clear search"
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600"
                       >
                         <X className="w-3.5 h-3.5" />
-                      </button>
+                      </IconButton>
                     )}
                   </div>
                   <div className="sm:flex-shrink-0">
@@ -4047,7 +4040,7 @@ export default function AIInterviewClusters() {
                   <span className="tf-row-name">{row.primary}</span>
                   {row.secondaries.length > 0 && (
                     <>
-                      <span className="text-gray-300">+</span>
+                      <span className="text-muted-foreground dark:text-gray-300">+</span>
                       {row.secondaries.map((s, i) => (
                         <span key={`${row.q}-sec-${i}`} className="px-1.5 py-0.5 rounded text-2xs font-medium bg-gray-100 text-gray-700 ring-1 ring-gray-200">
                           {s}
@@ -4278,7 +4271,7 @@ export default function AIInterviewClusters() {
                           <div className="flex items-center justify-between mb-1">
                             <span className="tf-meta">{row.label}</span>
                             <span className={`text-xs font-semibold ${
-                              complete ? 'text-advice-positive' : row.done > 0 ? 'text-gray-900' : 'text-gray-400'
+                              complete ? 'text-advice-positive' : row.done > 0 ? 'text-gray-900' : 'text-gray-500'
                             }`}>
                               {row.done} / {row.total}
                             </span>

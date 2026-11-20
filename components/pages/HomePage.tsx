@@ -23,6 +23,7 @@ import {
   Search,
   Send,
 } from "lucide-react";
+import { IconButton } from '@/components/ui/icon-button';
 
 interface HomePageProps {
   onNavigate: (page: string) => void;
@@ -599,9 +600,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                   <p style={{ fontSize: 14, color: 'var(--raw-rgba-255-255-255-0p8)' }}>See how TalentFlow transforms recruiting</p>
                 </div>
               </div>
-              <button onClick={() => setDemoModalOpen(false)} style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close">
+              <IconButton bare label="Close" onClick={() => setDemoModalOpen(false)} style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer' }}>
                 <X style={{ width: 24, height: 24, color: 'var(--raw-ffffff)' }} />
-              </button>
+              </IconButton>
             </div>
 
             <div style={{

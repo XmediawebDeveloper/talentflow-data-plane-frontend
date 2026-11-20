@@ -36,6 +36,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import ResumeBulkConfirmModal, { type ResumeBulkConfirmKind } from '@/components/resumes/ResumeBulkConfirmModal';
 import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Folder-tree pane sizing. Kept in step with FolderTree's own clamp
 // (200–400px) so a width restored from storage is one the tree will honour.
@@ -1165,7 +1167,7 @@ export default function SelectSourceModal({
     // While the progress popup is minimized this component stays mounted (it owns
     // progressItems and the restore callback) but its overlay must not block the
     // page — hide it rather than unmounting, so "expand" can bring it straight back.
-    <div className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm ${isBulkProgressMinimized ? 'hidden' : 'flex'} items-center justify-center z-50 p-3 sm:p-6`}>
+    <ModalA11y><div className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm ${isBulkProgressMinimized ? 'hidden' : 'flex'} items-center justify-center z-50 p-3 sm:p-6`}>
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-[94vw] 2xl:max-w-[1680px] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] [@media(max-height:820px)]:sm:h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between px-4 sm:px-6 py-3 sm:py-4 [@media(max-height:820px)]:sm:py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
@@ -1189,12 +1191,11 @@ export default function SelectSourceModal({
             </div>
           </div>
           {!cancelInFooter && (
-            <button
+            <IconButton bare label="Close"
               onClick={onClose}
-              className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0"
-             aria-label="Close">
+              className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0">
               <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-            </button>
+            </IconButton>
           )}
         </div>
 
@@ -1298,7 +1299,7 @@ export default function SelectSourceModal({
                       : 'font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
-                <Icon className={`hidden sm:block h-4 w-4 shrink-0 ${allowed ? iconColor : 'text-gray-400'}`} />
+                <Icon className={`hidden sm:block h-4 w-4 shrink-0 ${allowed ? iconColor : 'text-gray-500'}`} />
                 {RESUME_TAB_LABEL[tab]}
                 {count !== undefined && count !== null && (
                   <span
@@ -1591,13 +1592,13 @@ export default function SelectSourceModal({
                 {/* min width so, beside Actions + Clear on a phone, the search
                     wraps to its own line instead of squeezing to nothing. */}
                 <div className="flex-1 min-w-[12rem] relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search by name, email, skills..."
-                    className="w-full h-9 pl-9 pr-4 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-gray-50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-800 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-colors"
+                    className="w-full h-9 pl-9 pr-4 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-gray-50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-800 placeholder:text-gray-500 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-colors"
                   />
                 </div>
                 </div>
@@ -1959,6 +1960,6 @@ export default function SelectSourceModal({
           onClose={() => setPreviewResume(null)}
         />
       )}
-    </div>
+    </div></ModalA11y>
   );
 }

@@ -30,6 +30,8 @@ import {
   AdjustmentLogEntry,
   getUnitTypeName,
 } from '@/lib/services/unitPoolService';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface UnitAdjustmentModalProps {
   tenantId: string;
@@ -161,7 +163,7 @@ export default function UnitAdjustmentModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+    <ModalA11y><div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90dvh] flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
@@ -183,20 +185,19 @@ export default function UnitAdjustmentModal({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <IconButton bare label={showHistory ? 'Hide adjustment history' : 'Show adjustment history'}
               onClick={() => setShowHistory(!showHistory)}
               className={`p-2 rounded-lg transition-colors ${
-                showHistory ? 'bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700'
+                showHistory ? 'bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50' : 'text-gray-500 dark:text-slate-500 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700'
               }`}
             >
               <History className="w-5 h-5" />
-            </button>
-            <button
+            </IconButton>
+            <IconButton bare label="Close"
               onClick={onClose}
-              className="p-2 text-gray-400 dark:text-slate-500 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
-             aria-label="Close">
+              className="p-2 text-gray-500 dark:text-slate-500 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">
               <X className="w-5 h-5" />
-            </button>
+            </IconButton>
           </div>
         </div>
 
@@ -204,7 +205,7 @@ export default function UnitAdjustmentModal({
         <div className="flex-1 overflow-y-auto p-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-              <Loader2 className="w-8 h-8 animate-spin text-gray-400 dark:text-slate-500" />
+              <Loader2 className="w-8 h-8 animate-spin text-gray-500 dark:text-slate-500" />
             </div>
           ) : showHistory ? (
             /* History View */
@@ -289,7 +290,7 @@ export default function UnitAdjustmentModal({
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          <Icon className={`w-4 h-4 ${isSelected ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`} />
+                          <Icon className={`w-4 h-4 ${isSelected ? 'text-gray-900 dark:text-slate-50' : 'text-gray-500 dark:text-slate-500'}`} />
                           <span className="tf-label">
                             {getUnitTypeName(type)}
                           </span>
@@ -477,6 +478,6 @@ export default function UnitAdjustmentModal({
           </div>
         )}
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

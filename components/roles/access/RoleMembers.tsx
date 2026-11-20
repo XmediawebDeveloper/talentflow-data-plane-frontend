@@ -84,7 +84,7 @@ export default function RoleMembers({ role, roleNames, onChanged }: {
   return (
     <div className="mt-5 border-t border-gray-100 pt-4 dark:border-slate-800">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
+        <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">
           People with this role · {total}
         </div>
         <button
@@ -102,7 +102,7 @@ export default function RoleMembers({ role, roleNames, onChanged }: {
         <ol className="mt-2 divide-y divide-gray-100 rounded-xl border border-gray-200 dark:divide-slate-800 dark:border-slate-700">
           {people.map((p, i) => (
             <li key={p.id} className="flex items-center gap-3 px-3.5 py-2">
-              <span className="w-6 shrink-0 text-right text-[13px] tabular-nums text-gray-400 dark:text-slate-500">{i + 1}.</span>
+              <span className="w-6 shrink-0 text-right text-[13px] tabular-nums text-gray-500 dark:text-slate-500">{i + 1}.</span>
               <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-gray-900 dark:text-slate-100">{p.name || p.email}</span>
               {p.email && <span className="hidden min-w-0 truncate text-xs text-gray-500 dark:text-slate-400 sm:block">{p.email}</span>}
             </li>

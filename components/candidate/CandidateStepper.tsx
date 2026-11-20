@@ -28,7 +28,7 @@ import { RECRUITER_BAR_ROW } from '@/lib/constants/candidateLayout';
 
 const DOT_COMPLETED = 'bg-brand-blue text-white shadow-sm';
 const DOT_CURRENT = 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-lg shadow-brand-blue/40 ring-2 ring-brand-blue/10';
-const DOT_UPCOMING = 'bg-gray-100 text-gray-400 ring-1 ring-gray-200';
+const DOT_UPCOMING = 'bg-gray-100 text-gray-500 ring-1 ring-gray-200';
 
 /** The current step's pulse, the same keyframes the AI interview uses. */
 function CurrentPulse() {
@@ -137,7 +137,7 @@ export default function CandidateStepper({ current: currentProp, steps: stepsPro
                 </div>
                 <span
                   className={`mt-1.5 text-xs leading-tight line-clamp-2 break-words ${
-                    isCurrent ? 'font-semibold text-brand-blue' : isCompleted ? 'font-medium text-gray-700' : 'font-medium text-gray-400'
+                    isCurrent ? 'font-semibold text-brand-blue' : isCompleted ? 'font-medium text-gray-700' : 'font-medium text-gray-500'
                   }`}
                 >
                   {label}
@@ -170,7 +170,7 @@ export default function CandidateStepper({ current: currentProp, steps: stepsPro
                   </div>
                   <span
                     className={`text-sm font-medium ${
-                      isCurrent ? 'text-brand-blue font-semibold' : isCompleted ? 'text-gray-700' : 'text-gray-400'
+                      isCurrent ? 'text-brand-blue font-semibold' : isCompleted ? 'text-gray-700' : 'text-gray-500'
                     }`}
                   >
                     {label}

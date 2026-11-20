@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Command, X } from 'lucide-react';
 import { useKeyboardShortcutSingle } from '@/lib/hooks/useKeyboardShortcut';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface Shortcut {
   keys: string[];
@@ -61,7 +63,7 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
           />
 
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+          <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
             <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden pointer-events-auto animate-in zoom-in-95 duration-200 flex flex-col">
               {/* Header */}
               <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-5 flex items-center justify-between">
@@ -74,12 +76,11 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
                     <p className="text-sm text-gray-100">Boost your productivity</p>
                   </div>
                 </div>
-                <button
+                <IconButton bare label="Close"
                   onClick={onClose}
-                  className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"
-                 aria-label="Close">
+                  className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors">
                   <X className="w-5 h-5 text-white" />
-                </button>
+                </IconButton>
               </div>
 
               {/* Content */}
@@ -122,7 +123,7 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
                 </p>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         </>
       )}
     </>

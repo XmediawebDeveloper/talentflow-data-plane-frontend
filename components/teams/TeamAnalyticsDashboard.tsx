@@ -46,6 +46,7 @@ import { useIsMobile } from '@/components/ui/use-mobile';
 import { useTeamReportRange, RangePresets, todayIST, UnitStatCard, UNIT_STAT_GRID, ReportScopeBadge, type Measure } from './reportControls';
 import { UNIT_KEYS, UNIT_LABELS, UNIT_CHART_COLOR, UNIT_TEXT_CLASS, UNIT_ICON, TOTAL_UNITS_ICON, type UnitKey } from '@/lib/constants/unitColors';
 import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface TeamAnalyticsDashboardProps {
   userRole: string;
@@ -272,15 +273,13 @@ async function downloadChartPng(root: HTMLElement | null, filename: string, subt
 
 function ChartDownloadButton({ onClick }: { onClick: () => void }) {
   return (
-    <button
+    <IconButton bare label="Download chart as PNG" tooltip="Download as PNG"
       type="button"
       onClick={onClick}
-      title="Download as PNG"
-      aria-label="Download chart as PNG"
-      className="shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800"
+      className="shrink-0 rounded-md p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800"
     >
       <ImageDown className="h-4 w-4" />
-    </button>
+    </IconButton>
   );
 }
 
@@ -724,7 +723,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
             </div>
             {trend.status === 'error' ? (
               <div className="flex flex-col items-center gap-2 py-8 text-center">
-                <ChartLine className="h-8 w-8 text-gray-300 dark:text-slate-600" />
+                <ChartLine className="h-8 w-8 text-muted-foreground dark:text-slate-600" />
                 <p className="tf-body-muted">Could not load the daily trend.</p>
                 <Button variant="secondary" size="sm" onClick={loadTrend}>Try again</Button>
               </div>
@@ -804,7 +803,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
                   {...(onOpenTeam ? { type: 'button' as const, onClick: () => onOpenTeam(team.id), title: 'Open in Team Usage' } : {})}
                   className={`flex w-full items-center gap-3 sm:flex-wrap sm:gap-4 rounded-xl bg-gray-50 dark:bg-slate-800/50 p-2.5 sm:p-3 text-left ring-1 ring-gray-100 dark:ring-slate-700/60 ${onOpenTeam ? 'transition-colors hover:ring-brand-blue/30' : ''}`}
                 >
-                  <div className={`flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full text-xs sm:text-sm font-semibold ${idle ? 'bg-gray-200 text-gray-400 dark:bg-slate-700 dark:text-slate-500' : 'bg-brand-blue text-white'}`}>
+                  <div className={`flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full text-xs sm:text-sm font-semibold ${idle ? 'bg-gray-200 text-gray-500 dark:bg-slate-700 dark:text-slate-500' : 'bg-brand-blue text-white'}`}>
                     {idle ? '–' : index + 1}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -851,7 +850,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
         {hasTeams && idleTeams.length > 0 && (
           <div className={`${CARD_CLASS} p-6 max-sm:p-3`}>
             <h4 className="tf-section-title max-sm:text-sm">
-              Teams With No Usage <span className="ml-1 text-sm font-normal text-gray-400 dark:text-slate-500">{idleTeams.length}</span>
+              Teams With No Usage <span className="ml-1 text-sm font-normal text-gray-500 dark:text-slate-500">{idleTeams.length}</span>
             </h4>
             <p className="mt-0.5 mb-3 tf-meta">No units used by these teams in the selected range.</p>
             <div className="flex flex-wrap gap-2">

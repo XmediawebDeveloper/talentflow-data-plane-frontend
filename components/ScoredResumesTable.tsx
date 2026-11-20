@@ -62,6 +62,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SelectAllMenu, SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import { ScoredResumesIllustration } from '@/components/jobs/JobResultsIllustrations';
+import { clickableProps, clickableRowProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* Action menu item styling — cloned from the Job Openings page's three-dot
    menu (JobsListing.tsx: gray-700 text, hover:bg-gray-50, px-4/py-2.5 rows,
@@ -142,7 +145,7 @@ export const JOB_TAB_FILTER_GRID_CLASS = 'tf-grid-4 [&>div]:min-w-0';
 export const JOB_TAB_FILTER_FIELD_CLASS = 'min-w-0';
 export const JOB_TAB_FILTER_LABEL_CLASS = 'block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium';
 export const JOB_TAB_FILTER_CONTROL_CLASS =
-  'w-full h-9 px-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue hover:border-brand-blue/40 transition-colors text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900';
+  'w-full h-9 px-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue hover:border-brand-blue/40 transition-colors text-sm text-black dark:text-slate-50 placeholder:text-gray-500 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900';
 
 /* FilterSelect trigger overrides matching FILTER_CONTROL_CLASS / JOB_TAB_FILTER_CONTROL_CLASS. */
 const FILTER_SELECT_TRIGGER_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-md sm:rounded-md border-gray-300';
@@ -670,7 +673,7 @@ export function renderInviteTargetItems({
     <>
       {/* Greyed and not clickable — with the reason right under the label. */}
       <DropdownMenuItem className={`${itemClass} !items-start text-gray-400`} disabled>
-        <Icon className="w-4 h-4 text-gray-400 mt-0.5" />
+        <Icon className="w-4 h-4 text-gray-500 mt-0.5" />
         <span className="min-w-0">
           <span className="block">{what} Invite</span>
           <span className="block tf-micro-hint normal-case">{reason}</span>
@@ -1241,12 +1244,10 @@ Best regards`);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
   /** ▸ / ▾ — opens or closes one candidate's job history. */
   const renderExpandButton = (key: string, expanded: boolean) => (
-    <button
+    <IconButton bare label={expanded ? 'Collapse' : 'Expand'}
       type="button"
       onClick={(e) => { e.stopPropagation(); toggleGroupExpanded(key); }}
       aria-expanded={expanded}
-      aria-label={expanded ? 'Collapse' : 'Expand'}
-      title={expanded ? 'Collapse' : 'Expand'}
       className={`p-2.5 rounded-lg border transition-all ${
         expanded
           ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue'
@@ -1254,7 +1255,7 @@ Best regards`);
       }`}
     >
       <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
-    </button>
+    </IconButton>
   );
   const toggleGroupExpanded = (key: string) => {
     setExpandedGroupKeys((prev) => {
@@ -1322,7 +1323,7 @@ Best regards`);
       className={`inline-flex items-center justify-center gap-1 min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums border ${
         activeVerdict && VERDICT_OF_KIND[kind] !== activeVerdict
           ? 'bg-gray-50 text-gray-400 border-gray-200 opacity-60'
-          : count > 0 ? VERDICT_COUNT_CLASS[kind] : 'bg-gray-50 text-gray-400 border-gray-200'
+          : count > 0 ? VERDICT_COUNT_CLASS[kind] : 'bg-gray-50 text-gray-500 border-gray-200'
       }`}
     >
       {label && <span className="font-medium">{label}</span>}
@@ -1990,7 +1991,7 @@ Best regards`);
           <div className="tf-body">{resume.scoredBy}</div>
           <div className="flex items-center gap-1 tf-meta">
             <Calendar className="w-3 h-3" />
-            <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
+            <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-500">{formatISTTime(resume.scoredDate)}</span></span>
           </div>
         </td>
       );
@@ -2106,7 +2107,7 @@ Best regards`);
       return (
         <>
           <div
-            className="flex items-center gap-2 px-3 pt-1.5 pb-1 text-2xs font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500"
+            className="flex items-center gap-2 px-3 pt-1.5 pb-1 text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500"
             title={rowInviteDisabled ? rowInviteDisabledTitle : undefined}
           >
             <UserPlus className="w-3.5 h-3.5" /> Invite
@@ -2157,7 +2158,7 @@ Best regards`);
       // Nothing left to view, download or invite from: the score was erased.
       return (
         <DropdownMenuItem className={scoredResumesMenuItemClass} disabled>
-          <Info className="w-4 h-4 text-gray-400" />
+          <Info className="w-4 h-4 text-gray-500" />
           <span className={`${MENU_ITEM_SCALE_CLASS} whitespace-normal max-w-[240px]`}>{RESUME_DELETED_ROW_MESSAGE}</span>
         </DropdownMenuItem>
       );
@@ -3090,7 +3091,7 @@ Best regards`);
                   ? isGroupSelected(groupRows)
                   : selectedResumes.includes(resume.id);
                 return (
-                <div
+                <div {...clickableProps}
                   key={groupKey || resume.id}
                   onClick={(e) => (groupKey ? toggleGroupExpanded(groupKey) : handleRowClick(resume.id, e))}
                   aria-expanded={groupKey ? cardExpanded : undefined}
@@ -3237,14 +3238,14 @@ Best regards`);
                   {!hiddenColumnIds?.includes('scoredDate') && (
                     <div className="space-y-0.5 tf-meta min-w-0">
                       <p className="[overflow-wrap:anywhere]">
-                        <span className="text-gray-400">Scored by:</span>{' '}
+                        <span className="text-gray-500">Scored by:</span>{' '}
                         <span className="text-gray-700">{resume.scoredBy || '—'}</span>
                       </p>
                       <p className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+                        <Calendar className="w-3.5 h-3.5 shrink-0 text-gray-500" />
                         <span>
                           <span className="text-gray-700">{formatISTDate(resume.scoredDate)}</span>{' '}
-                          <span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span>
+                          <span className="text-gray-500">{formatISTTime(resume.scoredDate)}</span>
                         </span>
                       </p>
                     </div>
@@ -3265,7 +3266,7 @@ Best regards`);
                         <div className="tf-micro-hint uppercase tracking-wide">Latest Updated</div>
                         <div className="truncate">
                           <span className="text-gray-700">{formatISTDate(resume.scoredDate)}</span>{' '}
-                          <span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span>
+                          <span className="text-gray-500">{formatISTTime(resume.scoredDate)}</span>
                         </div>
                       </div>
                     ) : (
@@ -3274,13 +3275,11 @@ Best regards`);
                     {groupKey && renderExpandButton(groupKey, cardExpanded)}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button
-                          aria-label="Actions"
-                          title="Actions"
+                        <IconButton bare label="Actions"
                           className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                         >
                           <MoreVertical className="w-4 h-4 text-gray-600" />
-                        </button>
+                        </IconButton>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
                         align="end"
@@ -3299,7 +3298,7 @@ Best regards`);
                       onClick={(e) => e.stopPropagation()}
                     >
                       {groupRows.map((row) => (
-                        <div
+                        <div {...clickableProps}
                           key={row.id}
                           // Opens this job's results, like the list's expanded row.
                           onClick={(e) => handleRowClick(row.id, e)}
@@ -3336,7 +3335,7 @@ Best regards`);
                               </div>
                               <div className="mt-1 flex items-center gap-1 tf-meta">
                                 <Calendar className="w-3 h-3" />
-                                <span>{formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span></span>
+                                <span>{formatISTDate(row.scoredDate)} <span className="text-gray-500">{formatISTTime(row.scoredDate)}</span></span>
                               </div>
                             </div>
                             {/* Stops clicks here, as the list's Actions cell does.
@@ -3347,13 +3346,11 @@ Best regards`);
                             <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button
-                                  aria-label="Actions"
-                                  title="Actions"
+                                <IconButton bare label="Actions"
                                   className="p-2 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all shrink-0"
                                 >
                                   <MoreVertical className="w-4 h-4 text-gray-600" />
-                                </button>
+                                </IconButton>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className={`${rowInviteMenuWidthClass} !rounded-lg !bg-white !py-1 !px-0 !shadow-xl`}>
                                 {renderRowMenuItems(row)}
@@ -3420,7 +3417,7 @@ Best regards`);
                   const groupSelected = isGroupSelected(rows);
                   return (
                     <Fragment key={key}>
-                      <tr
+                      <tr {...clickableRowProps}
                         /* Click anywhere on the row to open / close the
                            candidate's job history — no separate chevron. The
                            checkbox, name link, "+N more" and Actions stop the
@@ -3445,12 +3442,10 @@ Best regards`);
                             {(() => {
                               const st = groupSelectionState(rows);
                               return (
-                                <button
+                                <IconButton bare label={st !== 'none' ? 'Deselect candidate' : 'Select candidate'} tooltip={st === 'some' ? 'Some scores selected' : undefined}
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); handleSelectGroup(rows); }}
                                   aria-pressed={st !== 'none'}
-                                  aria-label={st !== 'none' ? 'Deselect candidate' : 'Select candidate'}
-                                  title={st === 'some' ? 'Some scores selected' : undefined}
                                   className="inline-flex p-1.5 -ml-1.5 hover:bg-gray-200 rounded flex-shrink-0"
                                 >
                                   {st === 'all' ? (
@@ -3458,9 +3453,9 @@ Best regards`);
                                   ) : st === 'some' ? (
                                     <MinusSquare className="w-4 h-4 text-brand-blue" />
                                   ) : (
-                                    <Square className="w-4 h-4 text-gray-400" />
+                                    <Square className="w-4 h-4 text-gray-500" />
                                   )}
-                                </button>
+                                </IconButton>
                               );
                             })()}
                             <div className="min-w-0 w-full">
@@ -3514,13 +3509,11 @@ Best regards`);
                           {renderExpandButton(key, isExpanded)}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button
-                                aria-label="Actions"
-                                title="Actions"
+                              <IconButton bare label="Actions"
                                 className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                               >
                                 <MoreVertical className="w-4 h-4 text-gray-600" />
-                              </button>
+                              </IconButton>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                               {renderActionsMenuItems(primary, rows)}
@@ -3553,7 +3546,7 @@ Best regards`);
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                   {rows.map((row) => (
-                                    <tr
+                                    <tr {...clickableRowProps}
                                       key={row.id}
                                       /* A click anywhere on this job's row opens its
                                          results — the same page the candidate's name
@@ -3567,31 +3560,28 @@ Best regards`);
                                       }`}
                                     >
                                       <td className="tf-td w-8" onClick={(e) => e.stopPropagation()}>
-                                        <button
+                                        <IconButton bare label={selectedResumes.includes(row.id) ? 'Deselect score' : 'Select score'}
                                           type="button"
                                           onClick={() => handleSelectResume(row.id)}
                                           aria-pressed={selectedResumes.includes(row.id)}
-                                          aria-label={selectedResumes.includes(row.id) ? 'Deselect score' : 'Select score'}
                                           className="inline-flex p-1 -ml-1 hover:bg-gray-200 rounded"
                                         >
                                           {selectedResumes.includes(row.id) ? (
                                             <CheckSquare className="w-4 h-4 text-brand-blue" />
                                           ) : (
-                                            <Square className="w-4 h-4 text-gray-400" />
+                                            <Square className="w-4 h-4 text-gray-500" />
                                           )}
-                                        </button>
+                                        </IconButton>
                                       </td>
                                       {tableColumns.filter((col) => col.id !== 'candidateName').map((col) => renderResumeCell(col, row))}
                                       <td className="tf-td whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
-                                            <button
-                                              aria-label="Actions"
-                                              title="Actions"
+                                            <IconButton bare label="Actions"
                                               className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                                             >
                                               <MoreVertical className="w-4 h-4 text-gray-600" />
-                                            </button>
+                                            </IconButton>
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end" className={`${rowInviteMenuWidthClass} !rounded-lg !bg-white !py-1 !px-0 !shadow-xl`}>
                                             {renderRowMenuItems(row)}
@@ -3647,7 +3637,7 @@ Best regards`);
                   key={key}
                   selected={groupSelected}
                   select={
-                    <button
+                    <IconButton bare label="Select group"
                       onClick={(e) => { e.stopPropagation(); handleSelectGroup(rows); }}
                       className="p-1 -m-1 hover:bg-gray-200 rounded flex-shrink-0"
                     >
@@ -3658,10 +3648,10 @@ Best regards`);
                         ) : st === 'some' ? (
                           <MinusSquare className="w-5 h-5 text-brand-blue" />
                         ) : (
-                          <Square className="w-5 h-5 text-gray-400" />
+                          <Square className="w-5 h-5 text-gray-500" />
                         );
                       })()}
-                    </button>
+                    </IconButton>
                   }
                   title={onViewCandidate ? (
                     <button
@@ -3681,19 +3671,17 @@ Best regards`);
                     { icon: <Mail className="w-3.5 h-3.5" />, label: primary.email },
                     {
                       icon: <Calendar className="w-3.5 h-3.5" />,
-                      label: <>Scored {formatISTDate(primary.scoredDate)} <span className="text-gray-400">{formatISTTime(primary.scoredDate)}</span></>,
+                      label: <>Scored {formatISTDate(primary.scoredDate)} <span className="text-gray-500">{formatISTTime(primary.scoredDate)}</span></>,
                     },
                   ]}
                   actions={
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button
-                          aria-label="Actions"
-                          title="Actions"
+                        <IconButton bare label="Actions"
                           className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                         >
                           <MoreVertical className="w-4 h-4 text-gray-600" />
-                        </button>
+                        </IconButton>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                         {renderActionsMenuItems(primary, rows)}
@@ -3707,7 +3695,7 @@ Best regards`);
                        Match (eye) and ⋮ side by side, all on one line. */
                     <div className="-mt-3 rounded-b-lg border border-t-0 border-brand-blue/40 divide-y divide-gray-200 dark:divide-slate-700 overflow-hidden">
                       {rows.map((row) => (
-                        <div
+                        <div {...clickableProps}
                           key={row.id}
                           // Opens this job's results, like the list's expanded row.
                           onClick={(e) => handleRowClick(row.id, e)}
@@ -3723,30 +3711,26 @@ Best regards`);
                             <div className="mt-0.5 tf-meta truncate">
                               <span className={MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}>{row.matchStatus}</span>
                               <span className="mx-1.5 text-gray-300">·</span>
-                              {formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span>
+                              {formatISTDate(row.scoredDate)} <span className="text-gray-500">{formatISTTime(row.scoredDate)}</span>
                             </div>
                           </div>
                           <div className="flex-shrink-0 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                             {onViewCandidate && (
-                              <button
+                              <IconButton bare label="Open Match"
                                 type="button"
                                 onClick={() => onViewCandidate(row)}
-                                aria-label="Open Match"
-                                title="Open Match"
                                 className="h-8 w-8 inline-flex items-center justify-center rounded-md text-brand-blue bg-brand-blue/5 border border-brand-blue/20 hover:bg-brand-blue/10 transition-colors"
                               >
                                 <Eye className="w-4 h-4" />
-                              </button>
+                              </IconButton>
                             )}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button
-                                  aria-label="Actions"
-                                  title="Actions"
+                                <IconButton bare label="Actions"
                                   className="h-8 w-8 inline-flex items-center justify-center rounded-md bg-gray-100 border border-gray-200 hover:bg-gray-200 data-[state=open]:bg-gray-200 transition-colors dark:bg-slate-800 dark:border-slate-700"
                                 >
                                   <MoreVertical className="w-4 h-4 text-gray-600 dark:text-slate-300" />
-                                </button>
+                                </IconButton>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                                 {renderActionsMenuItems(row)}
@@ -3818,13 +3802,13 @@ Best regards`);
                     in View by Job) — otherwise Select all is in the toolbar,
                     before the search box, and a second one here repeats it. */}
                 {compact && (
-                  <button onClick={handleSelectAll} className="inline-flex p-1.5 hover:bg-gray-100 rounded">
+                  <IconButton bare label="Select all resumes" onClick={handleSelectAll} className="inline-flex p-1.5 hover:bg-gray-100 rounded">
                     {allVisibleSelected ? (
                       <CheckSquare className="w-4 h-4 text-brand-blue" />
                     ) : (
-                      <Square className="w-4 h-4 text-gray-400" />
+                      <Square className="w-4 h-4 text-gray-500" />
                     )}
-                  </button>
+                  </IconButton>
                 )}
               </th>
               {tableColumns.map((col) => (
@@ -3838,7 +3822,7 @@ Best regards`);
           <tbody>
             {paginatedResumes.map((resume, index) => {
               return (
-              <tr
+              <tr {...clickableRowProps}
                 key={resume.id}
                 onClick={(e) => handleRowClick(resume.id, e)}
                 /* data-row-selected also tints the sticky checkbox / Actions
@@ -3871,13 +3855,11 @@ Best regards`);
                 <td className="tf-td whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button
-                        aria-label="Actions"
-                        title="Actions"
+                      <IconButton bare label="Actions"
                         className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                       >
                         <MoreVertical className="w-4 h-4 text-gray-600" />
-                      </button>
+                      </IconButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="end"
@@ -3939,16 +3921,16 @@ Best regards`);
             selected={selectedResumes.includes(resume.id)}
             onClick={(e) => handleRowClick(resume.id, e)}
             select={
-              <button
+              <IconButton bare label="Select resume"
                 onClick={() => handleSelectResume(resume.id)}
                 className="p-1 -m-1 hover:bg-gray-200 rounded shrink-0"
               >
                 {selectedResumes.includes(resume.id) ? (
                   <CheckSquare className="w-5 h-5 text-brand-blue" />
                 ) : (
-                  <Square className="w-5 h-5 text-gray-400" />
+                  <Square className="w-5 h-5 text-gray-500" />
                 )}
-              </button>
+              </IconButton>
             }
             idBadge={showJdId && cardJobCode
               ? <JobIdBadge className="min-w-0 truncate" title={cardJobCode}>{cardJobCode}</JobIdBadge>
@@ -3998,7 +3980,7 @@ Best regards`);
               ...(!hiddenColumnIds?.includes('version') ? [{ label: 'Resume Version', value: `v${resume.version || resume.resumeVersion || 1}` }] : []),
               ...(!hiddenColumnIds?.includes('scoredDate') ? [
                 { label: 'Scored by', value: <span title={resume.scoredBy || undefined}>{resume.scoredBy}</span> },
-                { label: 'Date', value: <>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></> },
+                { label: 'Date', value: <>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-500">{formatISTTime(resume.scoredDate)}</span></> },
               ] : []),
             ]}
             /* Invite / Share, then the table row's ⋮ menu (renderRowMenuItems),
@@ -4072,13 +4054,11 @@ Best regards`);
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    aria-label="Actions"
-                    title="Actions"
+                  <IconButton bare label="Actions"
                     className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
                   >
                     <MoreVertical className="w-4 h-4 text-gray-600" />
-                  </button>
+                  </IconButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="end"
@@ -4178,7 +4158,7 @@ Best regards`);
           open: the attachment with an eye to read it, then recipient, subject
           and message. */}
       {shareCandidate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 sm:p-6">
+        <ModalA11y><div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 sm:p-6">
           <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-5">
               <div className="flex items-start justify-between gap-3 mb-6">
@@ -4191,15 +4171,13 @@ Best regards`);
                     <p className="tf-body-muted">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                   </div>
                 </div>
-                <Button
+                <IconButton label="Close"
                   variant="secondary"
                   size="sm"
                   onClick={closeShareModal}
-                 
-                  aria-label="Close"
                 >
                   <X className="w-5 h-5" />
-                </Button>
+                </IconButton>
               </div>
 
               <div className="space-y-4">
@@ -4224,18 +4202,16 @@ Best regards`);
                           {shareFile?.sizeKb ? <> &middot; {Math.round(shareFile.sizeKb)} KB</> : null}
                         </div>
                       </div>
-                      <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <Button
+                      <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                      <IconButton label={`View ${shareCandidate.candidateName}'s resume`} tooltip="View resume"
                         type="button"
                         variant="secondary"
                         size="sm"
                         onClick={() => setIsSharePreviewOpen(true)}
                         className="flex-shrink-0"
-                        aria-label={`View ${shareCandidate.candidateName}'s resume`}
-                        title="View resume"
                       >
                         <Eye className="w-4 h-4" />
-                      </Button>
+                      </IconButton>
                     </div>
 
                     {/* The scorecard PDF, built on demand — same download
@@ -4256,19 +4232,17 @@ Best regards`);
                           {shareCandidate.scorePercentage != null && <> &middot; {formatOverallScore(shareCandidate.overallRating10, shareCandidate.scorePercentage)}</>}
                         </div>
                       </div>
-                      <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <Button
+                      <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                      <IconButton label={`View ${shareCandidate.candidateName}'s scorecard`} tooltip="View scorecard"
                         type="button"
                         variant="secondary"
                         size="sm"
                         onClick={handlePreviewScorecard}
                         disabled={loadingScorecardPreview}
                         className="flex-shrink-0"
-                        aria-label={`View ${shareCandidate.candidateName}'s scorecard`}
-                        title="View scorecard"
                       >
                         {loadingScorecardPreview ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                      </Button>
+                      </IconButton>
                     </div>
                   </div>
                 </div>
@@ -4323,7 +4297,7 @@ Best regards`);
               </div>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* The attachment, read in place. Rendered after the share dialog so it
@@ -4374,7 +4348,7 @@ Best regards`);
       {/* The scorecard, read in place. z-[60] puts it over the share
           dialog, the same level the resume preview uses. */}
       {scorecardPreviewUrl && scorecardPreviewCandidate && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
+        <ModalA11y><div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-2 border-b border-gray-100 bg-gray-50 flex-shrink-0">
               <div className="flex items-center gap-2 min-w-0">
@@ -4407,22 +4381,21 @@ Best regards`);
                 >
                   <span className="hidden sm:inline">Download</span>
                 </Button>
-                <Button
+                <IconButton label="Close"
                   variant="secondary"
                   size="sm"
                   onClick={closeScorecardPreview}
                   className="h-7 w-7 p-0"
-                  aria-label="Close"
                 >
                   <X className="w-4 h-4" />
-                </Button>
+                </IconButton>
               </div>
             </div>
             <div className="flex-1 min-h-0">
               <iframe src={scorecardPreviewUrl} title="Scorecard preview" className="w-full h-full" />
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {showColumnModal && (
@@ -4525,7 +4498,7 @@ export function BulkActionConfirmModal({
   const chosen = rows.filter((r) => included[bucketOf(r)] && !info.locked?.[bucketOf(r)]);
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" onClick={onCancel}>
+    <ModalA11y innerDialog><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" onClick={onCancel}>
       <div
         className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -4618,6 +4591,6 @@ export function BulkActionConfirmModal({
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

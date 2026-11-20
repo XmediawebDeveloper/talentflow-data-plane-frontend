@@ -11,8 +11,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Clock, Eye, Info, Layers, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { IconButton } from '@/components/ui/icon-button';
 
 export interface ScopeVersion {
   id: string;
@@ -141,9 +141,9 @@ export function VersionScopeSwitch({
           </button>
         )}
       </div>
-      <Button variant="secondary" size="sm" className="!h-6 !w-6 !px-0 !rounded-md" onClick={onViewJob} title={viewJobLabel} aria-label={viewJobLabel}>
+      <IconButton label={viewJobLabel} variant="secondary" size="sm" className="!h-6 !w-6 !px-0 !rounded-md" onClick={onViewJob}>
         <Eye className="h-3.5 w-3.5" />
-      </Button>
+      </IconButton>
     </div>
   );
 }

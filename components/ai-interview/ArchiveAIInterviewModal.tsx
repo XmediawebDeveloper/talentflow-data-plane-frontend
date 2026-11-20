@@ -4,6 +4,7 @@ import { Archive, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import AIInterviewConfigSummaryCard from '@/components/ai-interview/AIInterviewConfigSummaryCard';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 /**
  * What archiving an AI interview actually does, spelled out before it
@@ -55,7 +56,7 @@ export default function ArchiveAIInterviewModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
         <div className="px-5 sm:px-8 pt-7 sm:pt-8 pb-5 overflow-y-auto">
           {/* Header: tinted disc + title */}
@@ -125,6 +126,6 @@ export default function ArchiveAIInterviewModal({
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

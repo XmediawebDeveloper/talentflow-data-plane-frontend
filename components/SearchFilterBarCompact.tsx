@@ -6,6 +6,7 @@ import { DateField } from '@/components/ui/date-field';
 import FilterSelect from '@/components/ui/filter-select';
 import { ToolbarResetButton } from '@/components/ui/list-toolbar';
 import { FilterChipsHover, FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Labels the filter panel shows for each stored value — shared by the panel
 // and the active-filter tags so a tag reads exactly like the option picked.
@@ -260,23 +261,22 @@ export default function SearchFilterBarCompact({
         {/* Global Search Bar */}
         {!hideSearch ? (
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               type="text"
               placeholder="Search by name, email, phone, skills, title, or company..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full h-9 pl-9 pr-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-400"
+              className="w-full h-9 pl-9 pr-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-500"
             />
             {searchQuery && (
-              <button
+              <IconButton bare label="Close"
                 onClick={() => {
                   onSearchChange('');
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-200 rounded-full p-1 transition-colors"
-               aria-label="Close">
-                <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-              </button>
+                className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-200 rounded-full p-1 transition-colors">
+                <X className="w-4 h-4 text-gray-500 hover:text-gray-600" />
+              </IconButton>
             )}
           </div>
         ) : !inline ? (
@@ -387,7 +387,7 @@ export default function SearchFilterBarCompact({
                             placeholder="e.g., San Francisco"
                             value={filters.location || ''}
                             onChange={(e) => onFiltersChange({ ...filters, location: e.target.value || null })}
-                            className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
+                            className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-500"
                           />
                         </div>
                         <div>
@@ -433,7 +433,7 @@ export default function SearchFilterBarCompact({
                             placeholder="e.g., Google"
                             value={filters.currentCompany || ''}
                             onChange={(e) => onFiltersChange({ ...filters, currentCompany: e.target.value || null })}
-                            className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
+                            className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-500"
                           />
                         </div>
                         <div>
@@ -516,7 +516,7 @@ export default function SearchFilterBarCompact({
                             placeholder="Enter name..."
                             value={filters.uploadedBy || ''}
                             onChange={(e) => onFiltersChange({ ...filters, uploadedBy: e.target.value || null })}
-                            className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
+                            className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-500"
                           />
                         </div>
                         <div>

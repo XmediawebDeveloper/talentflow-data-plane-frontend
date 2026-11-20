@@ -53,6 +53,7 @@ import {
   isBina3DAvatarEnabled,
   type DeviceCapability,
 } from '@/lib/utils/deviceCapability';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 type Step =
   | 'loading'
@@ -3149,7 +3150,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           </p>
 
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6 flex items-center gap-3">
-            <Mail className="w-5 h-5 text-gray-400 shrink-0" />
+            <Mail className="w-5 h-5 text-gray-500 shrink-0" />
             <div>
               <p className="tf-meta">Sending OTP to</p>
               <p className="tf-label">{maskedEmail}</p>
@@ -3559,7 +3560,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             {/* Two lines: the headline, then the consequence. */}
             <p className="flex items-start gap-3 sm:pl-[17px] tf-meta leading-relaxed">
               <span className="w-7 flex justify-center flex-shrink-0 pt-px">
-                <Info className="w-4 h-4 text-gray-400" />
+                <Info className="w-4 h-4 text-gray-500" />
               </span>
               <span className="min-w-0">
                 <span className="block font-semibold text-gray-600">These actions are monitored.</span>
@@ -3826,7 +3827,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // now WITH screen sharing + fullscreen, and nothing ran unpaused underneath.
     if (screenReshareOnResume) {
       return (
-        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-5">
               <Monitor className="w-8 h-8 text-blue-600 dark:text-blue-400" />
@@ -3848,7 +3849,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               )}
             </button>
           </div>
-        </div>
+        </div></ModalA11y>
       );
     }
 
@@ -3875,7 +3876,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         />
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (
-          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
+          <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <div className="w-16 h-16 bg-destructive-subtle rounded-full flex items-center justify-center mx-auto mb-5">
                 <AlertTriangle className="w-8 h-8 text-destructive" />
@@ -3902,12 +3903,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 If you continue to decline, the interview will be marked as suspicious.
               </p>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
         {/* Grace-period countdown — shown while candidate has 10s to return
             before the hard-pause overlay kicks in. Silent otherwise. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && fullscreenGraceRemaining !== null && isFullscreenActive && (
-          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
+          <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
@@ -3931,12 +3932,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 Return Now
               </button>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
         {/* Hard-pause overlay (STAGING) — shown after the fullscreen grace expires.
             Production uses the unified "return to the interview" pause below. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && !isFullscreenActive && (
-          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
+          <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
@@ -3948,11 +3949,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               {timerSnapshot && (
                 <div className="mb-6">
                   <div className="flex flex-col items-center gap-1 rounded-xl bg-gray-50 border border-gray-200 px-3 py-3">
-                    <span className="text-2xs font-semibold text-gray-400 uppercase tracking-widest">Interview Time</span>
+                    <span className="text-2xs font-semibold text-gray-500 uppercase tracking-widest">Interview Time</span>
                     <span className={`font-mono font-bold text-xl tabular-nums ${timerSnapshot.remainingSeconds <= 60 ? 'text-destructive' : 'text-gray-900'}`}>
                       {formatTime(timerSnapshot.remainingSeconds)}
                     </span>
-                    <span className="text-2xs text-gray-400 font-medium">remaining</span>
+                    <span className="text-2xs text-gray-500 font-medium">remaining</span>
                   </div>
                 </div>
               )}
@@ -3967,7 +3968,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 This event has been recorded
               </p>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
       </>
     );

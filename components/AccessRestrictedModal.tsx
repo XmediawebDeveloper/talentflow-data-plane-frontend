@@ -10,6 +10,7 @@ import {
 } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { forceNavigate } from '@/lib/utils/forcedNavigation';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 // Auth / unauthenticated routes where a logged-in restriction modal makes no
 // sense (the user is already signed out or setting up their account).
@@ -92,7 +93,7 @@ export default function AccessRestrictedModal() {
   if (!isOpen || isExcludedPath) return null;
 
   return (
-    <div
+    <ModalA11y><div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       role="alertdialog"
       aria-modal="true"
@@ -138,14 +139,14 @@ export default function AccessRestrictedModal() {
             <div className="mt-5 mb-5 p-4 bg-slate-50 dark:bg-slate-950 rounded-lg border border-gray-100 dark:border-slate-700/60">
               {affectedUser.name && (
                 <div className="flex items-center gap-3 text-sm">
-                  <UserRound className="w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0" />
+                  <UserRound className="w-4 h-4 text-gray-500 dark:text-slate-500 shrink-0" />
                   <span className="text-gray-500 dark:text-slate-500">Name</span>
                   <span className="ml-auto font-medium text-gray-800 dark:text-slate-200 truncate">{affectedUser.name}</span>
                 </div>
               )}
               {affectedUser.email && (
                 <div className={`flex items-center gap-3 text-sm ${affectedUser.name ? 'mt-2.5' : ''}`}>
-                  <Mail className="w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0" />
+                  <Mail className="w-4 h-4 text-gray-500 dark:text-slate-500 shrink-0" />
                   <span className="text-gray-500 dark:text-slate-500">Email</span>
                   <span className="ml-auto font-medium text-gray-800 dark:text-slate-200 truncate">{affectedUser.email}</span>
                 </div>
@@ -164,6 +165,6 @@ export default function AccessRestrictedModal() {
           </button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

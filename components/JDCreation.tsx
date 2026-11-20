@@ -47,6 +47,9 @@ import { clearFreshDraftVersion, isFreshDraftVersion } from '@/lib/utils/jdDraft
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { showErrorToast } from '@/lib/utils/errorToast';
 import { formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -1185,7 +1188,7 @@ const TrailChildren = ({ entry, parentText, readOnly, onPromote, onUseJdWording 
         const isNarrowingNote = kindOf(i) === 'narrowed-from-jd-wording';
         return (
           <div key={`${rm}-${i}`} className="flex items-start gap-1.5 pt-1.5 text-left">
-            <span className="select-none text-gray-300 dark:text-slate-600 text-xs leading-5 font-mono flex-shrink-0">
+            <span className="select-none text-muted-foreground dark:text-slate-600 text-xs leading-5 font-mono flex-shrink-0">
               └──
             </span>
             <div className="min-w-0 flex-1">
@@ -1421,20 +1424,18 @@ const DraggableSkill = ({
             autoFocus
           />
           <div className="flex gap-1 ml-2">
-            <button
+            <IconButton bare label="Save"
               onClick={onSaveEdit}
               className="text-success hover:text-success px-2"
-              aria-label="Save" title="Save"
             >
               <CheckCircle className="w-4 h-4" />
-            </button>
-            <button
+            </IconButton>
+            <IconButton bare label="Cancel"
               onClick={onCancelEdit}
               className="text-destructive hover:text-destructive"
-              aria-label="Cancel" title="Cancel"
             >
               <X className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
         </>
       ) : (
@@ -1450,7 +1451,7 @@ const DraggableSkill = ({
               </div>
             )}
             <CheckCircle className={`w-4 h-4 ${tickColor} flex-shrink-0`} />
-            <span
+            <span {...clickableProps}
               className={`text-sm text-gray-700 dark:text-slate-300 min-w-0 truncate ${readOnly ? '' : 'cursor-pointer hover:text-gray-900'}`}
               onClick={() => !readOnly && onStartEdit(category, index, skill)}
               title={skill}
@@ -1461,18 +1462,15 @@ const DraggableSkill = ({
           </div>
           {!readOnly && (
             <div className="flex gap-1">
-              <button
+              <IconButton bare label="Edit"
                 onClick={() => onStartEdit(category, index, skill)}
                 className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-label="Edit" title="Edit"
               >
                 <Edit2 className="w-3.5 h-3.5" />
-              </button>
-              <button
+              </IconButton>
+              <IconButton bare label={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
                 onClick={() => onMove(skill, category, isMustHave ? 'niceToHaveSkills' : 'mustHaveSkills')}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
-                aria-label={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
-                title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
               >
                 {/* Phones: the lists stack (Must-Have above Nice-to-Have), so the arrow points down / up;
                     from sm they sit side by side, so right / left. */}
@@ -1487,14 +1485,13 @@ const DraggableSkill = ({
                     <ArrowLeft className="h-3.5 w-3.5 max-sm:hidden" />
                   </>
                 )}
-              </button>
-              <button
+              </IconButton>
+              <IconButton bare label="Delete"
                 onClick={() => onRemove(category, index)}
                 className="text-destructive hover:text-destructive"
-                aria-label="Delete" title="Delete"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </IconButton>
             </div>
           )}
         </>
@@ -1625,20 +1622,18 @@ const DraggableComment = ({
             autoFocus
           />
           <div className="flex gap-1 ml-2">
-            <button
+            <IconButton bare label="Save"
               onClick={onSaveEdit}
               className="text-success hover:text-success px-2"
-              aria-label="Save" title="Save"
             >
               <CheckCircle className="w-4 h-4" />
-            </button>
-            <button
+            </IconButton>
+            <IconButton bare label="Cancel"
               onClick={onCancelEdit}
               className="text-destructive hover:text-destructive"
-              aria-label="Cancel" title="Cancel"
             >
               <X className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
         </>
       ) : (
@@ -1654,7 +1649,7 @@ const DraggableComment = ({
               </div>
             )}
             <CheckCircle2 className={`w-4 h-4 ${iconColor} flex-shrink-0`} />
-            <span
+            <span {...clickableProps}
               className={`text-sm text-gray-700 dark:text-slate-300 flex-1 ${readOnly ? '' : 'cursor-pointer hover:text-gray-900'}`}
               onClick={() => !readOnly && onStartEdit(category, index, comment)}
               title={readOnly ? '' : 'Click to edit'}
@@ -1665,18 +1660,15 @@ const DraggableComment = ({
           </div>
           {!readOnly && (
             <div className="flex gap-1">
-              <button
+              <IconButton bare label="Edit"
                 onClick={() => onStartEdit(category, index, comment)}
                 className="text-gray-400 hover:text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-label="Edit" title="Edit"
               >
                 <Edit2 className="w-3.5 h-3.5" />
-              </button>
-              <button
+              </IconButton>
+              <IconButton bare label={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
                 onClick={() => onMove(comment, category, isMustHave ? 'niceToHaveComments' : 'mustHaveComments')}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
-                aria-label={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
-                title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
               >
                 {/* DOWN and UP, not right and left.
                     The two Additional Requirements lists are stacked one above
@@ -1686,14 +1678,13 @@ const DraggableComment = ({
                     the list the item actually travels to. The skills lists
                     above ARE side by side, which is why they keep left/right. */}
                 {isMustHave ? <ArrowDown className="h-3.5 w-3.5" /> : <ArrowUp className="h-3.5 w-3.5" />}
-              </button>
-              <button
+              </IconButton>
+              <IconButton bare label="Delete"
                 onClick={() => onRemove(category, index)}
                 className="text-destructive hover:text-destructive"
-                aria-label="Delete" title="Delete"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </IconButton>
             </div>
           )}
         </>
@@ -9083,7 +9074,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           ? 'bg-brand-blue text-white shadow-sm'
                           : isCurrent
                             ? 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-lg shadow-brand-blue/40 ring-2 ring-brand-blue/10'
-                            : 'bg-gray-100 text-gray-400 ring-1 ring-gray-200'
+                            : 'bg-gray-100 text-gray-500 ring-1 ring-gray-200'
                       }`}
                     >
                       {isComplete ? (
@@ -9105,7 +9096,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         ? 'text-brand-blue-deep'
                         : isComplete
                           ? 'text-gray-700'
-                          : 'text-gray-400'
+                          : 'text-gray-500'
                     }`}
                   >
                     {label}
@@ -9795,7 +9786,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </h2>
                   {((mode === 'ai' && generatedJD) || (mode === 'manual' && manualJD)) && (
                     <div className="flex gap-2">
-                      <Button
+                      <IconButton label="Copy to clipboard"
                         variant="secondary"
                         size="sm"
                         onClick={() => {
@@ -9804,12 +9795,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           toast.success({ title: 'Copied!', description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}copied to the clipboard.` });
                         }}
                         className=""
-                        title="Copy to clipboard"
-                        aria-label="Copy to clipboard"
                       >
                         <Copy className="w-4 h-4" />
-                      </Button>
-                      <Button
+                      </IconButton>
+                      <IconButton label="Download as text file"
                         variant="secondary"
                         size="sm"
                         onClick={() => {
@@ -9824,11 +9813,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           toast.success({ title: 'Downloaded!', description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}saved as a text file.` });
                         }}
                         className=""
-                        title="Download as text file"
-                        aria-label="Download as text file"
                       >
                         <Download className="w-4 h-4" />
-                      </Button>
+                      </IconButton>
                     </div>
                   )}
                 </div>
@@ -10123,19 +10110,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           Add button's size, with a tooltip. The typed text is
                           dropped; the list and any validation state are left as
                           they are. */}
-                      <Button
+                      <IconButton label="Cancel"
                         type="button"
                         variant="secondary"
                         onClick={() => {
                           setNewSkill('');
                           setEditingCategory(null);
                         }}
-                        aria-label="Cancel"
-                        title="Cancel"
                         className="flex-shrink-0"
                       >
                         <X className="w-4 h-4" />
-                      </Button>
+                      </IconButton>
                     </div>
                   )}
                   <DroppableSkillsContainer
@@ -10546,15 +10531,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                                           ))}
                                         </DropdownMenuContent>
                                       </DropdownMenu>
-                                      <button
+                                      <IconButton bare label="Dismiss" tooltip="Not needed for this role"
                                         type="button"
                                         onClick={() => handleResolvePossiblyMissed(phrase, null)}
-                                        aria-label="Dismiss"
-                                        title="Not needed for this role"
-                                        className="rounded-full p-0.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-700"
+                                        className="rounded-full p-0.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-700"
                                       >
                                         <X className="w-3 h-3" />
-                                      </button>
+                                      </IconButton>
                                     </>
                                   )}
                                 </span>
@@ -11351,12 +11334,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           <div className="tf-meta">{location.radius} km radius</div>
                         </div>
                         {!isRegenerating && (
-                          <button
+                          <IconButton bare label="Close"
                             onClick={() => handleRemoveLocation(index)}
-                            className="text-destructive hover:text-destructive ml-2"
-                           aria-label="Close">
+                            className="text-destructive hover:text-destructive ml-2">
                             <X className="w-4 h-4" />
-                          </button>
+                          </IconButton>
                         )}
                       </div>
                     </div>
@@ -12098,7 +12080,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 DOCX brand blue, PDF destructive red. Picking one downloads and
                 closes; the overlay and X close without downloading. */}
             {showDownloadFormatDialog && (
-              <div
+              <ModalA11y innerDialog><div
                 className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6"
                 onClick={() => setShowDownloadFormatDialog(false)}
               >
@@ -12119,16 +12101,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <p className="tf-body-secondary">Choose a file format</p>
                       </div>
                     </div>
-                    <Button
+                    <IconButton label="Close"
                       variant="secondary"
                       size="sm"
                       type="button"
                       onClick={() => setShowDownloadFormatDialog(false)}
-                      aria-label="Close"
                       className="flex-shrink-0"
                     >
                       <X className="w-5 h-5" />
-                    </Button>
+                    </IconButton>
                   </div>
                   <div className="p-4 sm:p-5 space-y-2.5">
                     {/* The upload modal's folded-corner format icon (FileFormatIcon),
@@ -12154,7 +12135,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     ))}
                   </div>
                 </div>
-              </div>
+              </div></ModalA11y>
             )}
 
             {/* Action Buttons */}

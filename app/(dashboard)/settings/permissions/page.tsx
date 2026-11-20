@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { clearRbacSessionCache } from '@/lib/utils/rbacSessionCache';
 import { showErrorToast } from '@/lib/utils/errorToast';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Neutral-gray skeleton mirroring the Permissions & Roles layout:
 // hero + 3-col grid (Roles list, then the module permissions panel).
@@ -342,9 +343,9 @@ export default function PermissionsPage() {
               <AlertCircle className="h-5 w-5" />
             </span>
             <span className="text-sm font-semibold text-destructive flex-1 min-w-0 break-words">{error}</span>
-            <button onClick={() => setError(null)} className="ml-auto text-destructive hover:text-destructive flex-shrink-0" aria-label="Close">
+            <IconButton bare label="Close" onClick={() => setError(null)} className="ml-auto text-destructive hover:text-destructive flex-shrink-0">
               <X className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
         )}
 
@@ -476,7 +477,7 @@ export default function PermissionsPage() {
                                   {hasPermission ? (
                                     <Check className="w-3 h-3 sm:w-4 sm:h-4 text-brand-cyan" />
                                   ) : (
-                                    <X className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500" />
+                                    <X className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 dark:text-slate-500" />
                                   )}
                                 </div>
                               )}

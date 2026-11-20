@@ -19,6 +19,7 @@ import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye, ShieldAlert, AudioLines, Smartphone, PackageX, PictureInPicture2 } from 'lucide-react';
 import { InterviewEventBus, ProctoringEvent, ProctoringEventType } from './InterviewEventBus';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface WarningItem {
   id: string;
@@ -174,9 +175,9 @@ const WarningCard = memo(function WarningCard({
           </p>
         </div>
         {!held && (
-          <button onClick={onDismiss} className={`flex-shrink-0 p-1 -mr-1 -mt-0.5 rounded hover:bg-black/5 ${colors.text}`} aria-label="Close">
+          <IconButton bare label="Close" onClick={onDismiss} className={`flex-shrink-0 p-1 -mr-1 -mt-0.5 rounded hover:bg-black/5 ${colors.text}`}>
             <X className="w-4 h-4" />
-          </button>
+          </IconButton>
         )}
       </div>
     </div>

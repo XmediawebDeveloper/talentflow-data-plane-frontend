@@ -5,6 +5,7 @@ import { useTerms } from '@/components/providers/TermsProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { getLoginUrl } from '@/lib/services/authService';
 import { useRouter } from 'next/navigation';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 interface TermsBlockingOverlayProps {
   accountSuspended?: boolean;
@@ -29,7 +30,7 @@ export default function TermsBlockingOverlay({ accountSuspended }: TermsBlocking
   };
 
   return (
-    <div className="fixed inset-0 z-[95]">
+    <ModalA11y><div className="fixed inset-0 z-[95]">
       <div className="min-h-[100dvh] bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
         <div className="max-w-[95vw] sm:max-w-2xl w-full">
           <div className="bg-white rounded-2xl shadow-2xl border-2 border-blue-200 overflow-hidden">
@@ -136,6 +137,6 @@ export default function TermsBlockingOverlay({ accountSuspended }: TermsBlocking
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

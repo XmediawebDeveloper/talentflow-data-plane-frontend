@@ -8,6 +8,8 @@ import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
 import { showErrorToast } from '@/lib/utils/errorToast';
 import { DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface VersionHistoryModalProps {
   candidateName?: string;
@@ -141,7 +143,7 @@ export default function VersionHistoryModal({
     : [];
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
@@ -160,12 +162,11 @@ export default function VersionHistoryModal({
               </p>
             </div>
           </div>
-          <button
+          <IconButton bare label="Close"
             onClick={onClose}
-            className="p-1 text-gray-500 dark:text-slate-500 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
-           aria-label="Close">
+            className="p-1 text-gray-500 dark:text-slate-500 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors">
             <X className="w-5 h-5" />
-          </button>
+          </IconButton>
         </div>
 
         {comparison ? (
@@ -326,32 +327,30 @@ export default function VersionHistoryModal({
                           {/* Read the version first, act on it second — hence the
                               eye ahead of Apply to Job. */}
                           {onView && (
-                            <button
+                            <IconButton bare label="View this version"
                               onClick={() => onView(version.id)}
                               className={`p-2 rounded-md transition-colors flex-shrink-0 ${
                                 index === 0
                                   ? 'text-brand-blue hover:bg-brand-blue/10'
                                   : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
                               }`}
-                              aria-label="View this version" title="View this version"
                             >
                               <Eye className="w-4 h-4" />
-                            </button>
+                            </IconButton>
                           )}
                           {onApplyToJob && (
-                            <button
+                            <IconButton bare label="Apply to Job"
                               onClick={() => onApplyToJob(version.id)}
                               className={`p-2 rounded-md transition-colors flex-shrink-0 ${
                                 index === 0
                                   ? 'text-brand-blue hover:bg-brand-blue/10'
                                   : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
                               }`}
-                              aria-label="Apply to Job" title="Apply to Job"
                             >
                               <Briefcase className="w-4 h-4" />
-                            </button>
+                            </IconButton>
                           )}
-                          <button
+                          <IconButton bare label={canDownload ? 'Download this version' : DOWNLOAD_BLOCKED_MESSAGE}
                             onClick={async () => {
                               if (!canDownload) return;
                               if (onDownload) {
@@ -381,10 +380,9 @@ export default function VersionHistoryModal({
                                 : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
                             } ${!canDownload ? 'opacity-50 cursor-not-allowed' : ''}`}
                             aria-disabled={!canDownload}
-                            title={canDownload ? 'Download this version' : DOWNLOAD_BLOCKED_MESSAGE}
                           >
                             <Download className="w-4 h-4" />
-                          </button>
+                          </IconButton>
                         </div>
                       </div>
 
@@ -447,6 +445,6 @@ export default function VersionHistoryModal({
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

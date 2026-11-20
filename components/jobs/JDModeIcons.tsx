@@ -9,7 +9,7 @@
 const TILE =
   'flex-shrink-0 grid place-items-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-[background-color,box-shadow,color] duration-300 ease-[cubic-bezier(.22,1,.36,1)]';
 const TILE_ON = 'bg-gradient-to-br from-[var(--raw-4f8bff)] to-brand-blue text-white shadow-md shadow-brand-blue/25';
-const TILE_OFF = 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500';
+const TILE_OFF = 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-500';
 
 /** A four-point sparkle centred on (cx, cy) with radius r. */
 function star(cx: number, cy: number, r: number) {

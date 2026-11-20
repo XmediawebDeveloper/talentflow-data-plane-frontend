@@ -83,7 +83,7 @@ return (
 
     {!hasData ? (
       <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
-        <Info className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
+        <Info className="w-8 h-8 sm:w-12 sm:h-12 text-muted-foreground dark:text-gray-300 mx-auto mb-2 sm:mb-3" />
         <p className="text-gray-600 mb-1">No metadata available</p>
         <p className="tf-body-muted">Assessment info will appear once the JD analysis is complete</p>
       </div>

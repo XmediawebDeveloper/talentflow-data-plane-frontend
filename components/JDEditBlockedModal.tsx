@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { Loader2, AlertTriangle, LayoutGrid, ShieldCheck, ChevronRight, X, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { JDUsageModule } from '@/lib/utils/jdUsageModules';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * "Cannot Edit Job Description" — shown when a published JD is held by a
@@ -88,7 +90,7 @@ export default function JDEditBlockedModal({
   };
 
   return (
-    <div
+    <ModalA11y><div
       className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       role="dialog"
       aria-modal="true"
@@ -113,16 +115,15 @@ export default function JDEditBlockedModal({
             </p>
           </div>
           {!cancelInFooter && (
-            <Button
+            <IconButton label="Close"
               variant="secondary"
               size="sm"
               onClick={onClose}
               disabled={creating}
               className="-mt-0.5 -mr-0.5 shrink-0"
-              aria-label="Close"
             >
               <X className="w-5 h-5" />
-            </Button>
+            </IconButton>
           )}
         </div>
 
@@ -185,7 +186,7 @@ export default function JDEditBlockedModal({
                           className="w-full text-left flex items-center gap-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 hover:border-brand-blue/40 hover:bg-brand-blue/[0.03] transition-colors"
                         >
                           {rowBody}
-                          <ChevronRight className="w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0" />
+                          <ChevronRight className="w-4 h-4 text-gray-500 dark:text-slate-500 shrink-0" />
                         </button>
                       ) : (
                         <div className="tf-panel flex items-center gap-3 px-3 py-2.5">
@@ -317,6 +318,6 @@ export default function JDEditBlockedModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

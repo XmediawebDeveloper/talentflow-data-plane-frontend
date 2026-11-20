@@ -10,6 +10,7 @@ import chatService, { type Channel } from '@/lib/services/chatService';
 import NameAvatar from '@/components/ui/name-avatar';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The header's chat icon.
@@ -304,17 +305,15 @@ export default function HeaderChatMenu({ unread, onUnreadChanged, onActivate, cu
                                   disabled={sending}
                                   placeholder={`Reply to ${conv.type === 'direct' ? conv.name : `#${conv.name}`}`}
                                   aria-label={`Reply to ${conv.name}`}
-                                  className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2.5 text-xs text-gray-900 placeholder:text-gray-400 focus:border-brand-blue/50 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+                                  className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2.5 text-xs text-gray-900 placeholder:text-gray-500 focus:border-brand-blue/50 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                                 />
-                                <button
+                                <IconButton bare label="Send reply" tooltip="Send (Enter)"
                                   type="submit"
                                   disabled={!draft.trim() || sending}
-                                  aria-label="Send reply"
-                                  title="Send (Enter)"
                                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-blue text-white transition-colors hover:bg-brand-blue-2 disabled:opacity-40"
                                 >
                                   {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                                </button>
+                                </IconButton>
                                 <button
                                   type="button"
                                   onClick={() => { setReplyingId(null); setDraft(''); }}

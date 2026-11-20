@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye, MousePointer, Smartphone, PackageX } from 'lucide-react';
 import { ProctoringEventBus, ProctoringEvent, ProctoringEventType } from '@/lib/ProctoringEventBus';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface WarningItem {
   id: string;
@@ -131,9 +132,9 @@ const WarningCard = memo(function WarningCard({
           </p>
         </div>
         {!held && (
-          <button onClick={onDismiss} className={`flex-shrink-0 p-1 rounded hover:bg-black/5 ${colors.text}`} aria-label="Close">
+          <IconButton bare label="Close" onClick={onDismiss} className={`flex-shrink-0 p-1 rounded hover:bg-black/5 ${colors.text}`}>
             <X className="w-4 h-4" />
-          </button>
+          </IconButton>
         )}
       </div>
       <div className="absolute top-2 right-10">

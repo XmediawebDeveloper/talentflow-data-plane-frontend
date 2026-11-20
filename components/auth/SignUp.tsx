@@ -25,6 +25,7 @@ import type { TermsAndConditions } from '@/lib/types/terms';
 // Auto-login support after paid signup payment — see handlePaymentSubmit.
 import { setTokens, clearTokens } from '@/lib/services/api';
 import { sanitizeHtml } from '@/lib/utils/sanitizeHtml';
+import { IconButton } from '@/components/ui/icon-button';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -2177,14 +2178,13 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                       required
                       className={`tf-auth-input tf-auth-input--reveal${form.password ? (passwordStrength === 5 ? ' is-valid' : passwordStrength >= 3 ? '' : ' is-invalid') : ''}`}
                     />
-                    <button
+                    <IconButton bare label={showPassword ? 'Hide password' : 'Show password'}
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="tf-auth-reveal"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
-                    </button>
+                    </IconButton>
                   </div>
                 </div>
                 <div className="tf-auth-field">
@@ -2202,14 +2202,13 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                       required
                       className={`tf-auth-input tf-auth-input--reveal${form.confirmPassword ? (passwordsMatch ? ' is-valid' : ' is-invalid') : ''}`}
                     />
-                    <button
+                    <IconButton bare label={showConfirmPassword ? 'Hide password' : 'Show password'}
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       className="tf-auth-reveal"
-                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                     >
                       {showConfirmPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
-                    </button>
+                    </IconButton>
                   </div>
                 </div>
               </div>

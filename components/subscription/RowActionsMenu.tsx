@@ -27,6 +27,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { IconButton } from '@/components/ui/icon-button';
 
 export type RowActionVariant = "primary" | "default" | "destructive";
 
@@ -84,17 +85,15 @@ export function RowActions({
             );
           }
           return (
-            <button
+            <IconButton bare label={a.label}
               key={a.key}
               type="button"
               onClick={a.onClick}
               disabled={a.disabled || a.loading}
               className="tf-btn tf-btn-secondary h-8 w-8 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue whitespace-normal gap-0 font-normal"
-              aria-label={a.label}
-              title={a.label}
             >
               <Icon className={iconCls} />
-            </button>
+            </IconButton>
           );
         })}
       </div>
@@ -103,14 +102,12 @@ export function RowActions({
       <div className="flex justify-end sm:hidden">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button
+            <IconButton bare label={menuLabel}
               type="button"
               className="tf-btn tf-btn-secondary h-8 w-8 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-colors hover:border-brand-blue/25 hover:bg-brand-blue/[0.04] hover:text-brand-blue focus:ring-2 focus:ring-brand-blue/30 whitespace-normal gap-0 font-normal"
-              aria-label={menuLabel}
-              title={menuLabel}
             >
               <MoreHorizontal className="h-4 w-4" />
-            </button>
+            </IconButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"

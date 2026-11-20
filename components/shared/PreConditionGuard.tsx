@@ -103,7 +103,7 @@ export default function PreConditionGuard({
         {/* Pre-Condition Checklist */}
         <div className="tf-panel p-6 mb-6">
           <h3 className="text-gray-900 mb-4 flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-gray-400" />
+            <CheckCircle className="w-5 h-5 text-gray-500" />
             Pre-Conditions Required
           </h3>
 

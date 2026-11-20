@@ -277,15 +277,15 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
             {/* Contact Info */}
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 tf-body-secondary">
               <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-gray-400" />
+                <Mail className="w-4 h-4 text-gray-500" />
                 <span>{applicant.email}</span>
               </div>
               <div className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-gray-400" />
+                <Phone className="w-4 h-4 text-gray-500" />
                 <span>{applicant.phone}</span>
               </div>
               <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-gray-400" />
+                <MapPin className="w-4 h-4 text-gray-500" />
                 <span>{applicant.location}</span>
               </div>
             </div>

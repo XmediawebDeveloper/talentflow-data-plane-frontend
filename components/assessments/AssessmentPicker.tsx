@@ -19,6 +19,8 @@ import { parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableProps, clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The "pick one assessment to invite to" list, drawn exactly as
@@ -364,7 +366,7 @@ export default function AssessmentPicker({
             </div>
           )}
           <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
             <input
               id="assessment-picker-search"
               /* No visible label — the placeholder says what it searches;
@@ -455,7 +457,7 @@ export default function AssessmentPicker({
                     const pick = () => toggle(a);
                     const lockReason = lockReasonOf(a);
                     return (
-                      <tr
+                      <tr {...clickableRowProps}
                         key={a.id}
                         onClick={pick}
                         aria-selected={isSelected}
@@ -537,15 +539,13 @@ export default function AssessmentPicker({
                           {a.created_by_name || '—'}
                         </td>
                         <td className="tf-td text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
-                          <button
+                          <IconButton bare label="Preview assessment" tooltip="Preview"
                             type="button"
                             onClick={() => setPreviewAssessment(a)}
                             className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-brand-blue/10 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
-                            aria-label="Preview assessment"
-                            title="Preview"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                          </button>
+                          </IconButton>
                         </td>
                       </tr>
                     );
@@ -591,15 +591,13 @@ export default function AssessmentPicker({
                   title={<span title={lockReason ?? (cleanTitleOf(a) || jobNameOf(a))}>{jobNameOf(a)}</span>}
                   titleAddon={jobBadge(a)}
                   actions={
-                    <button
+                    <IconButton bare label="Preview assessment" tooltip="Preview"
                       type="button"
                       onClick={() => setPreviewAssessment(a)}
                       className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-brand-blue/10 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
-                      aria-label="Preview assessment"
-                      title="Preview"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                    </button>
+                    </IconButton>
                   }
                   fields={[
                     { label: 'Job Version', value: a.jd_version ? <VersionPill kind="job" version={a.jd_version} /> : '—' },
@@ -674,7 +672,7 @@ export default function AssessmentPicker({
               if (opening) jdLineage.ensureLoaded(jdId, jdId);
             };
             return (
-              <div
+              <div {...clickableProps}
                 key={jobKey}
                 /* Clicking the card opens its versions. */
                 onClick={toggleExpanded}

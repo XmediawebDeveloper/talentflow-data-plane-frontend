@@ -289,7 +289,7 @@ export default function BillingReports<T extends ReportInvoice>({
       {/* Table filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search by invoice number, plan name, or description"
@@ -361,7 +361,7 @@ export default function BillingReports<T extends ReportInvoice>({
                       </td>
                       <td className="tf-td">
                         <div className="flex min-w-0 items-center gap-1.5">
-                          <CreditCard className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
+                          <CreditCard className="h-3.5 w-3.5 shrink-0 text-gray-500 dark:text-slate-500" />
                           <span className="min-w-0 truncate tf-body" title={getPaymentLabel(inv)}>{getPaymentLabel(inv)}</span>
                         </div>
                       </td>

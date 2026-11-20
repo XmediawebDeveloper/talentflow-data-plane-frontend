@@ -4,6 +4,7 @@ import { FileText, FileSearch, Briefcase, Sparkle, Plus, Loader2 } from 'lucide-
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import type { Job } from '@/lib/types/types';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 interface AITalentMatchConfirmModalProps {
   isOpen: boolean;
@@ -27,7 +28,7 @@ export default function AITalentMatchConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-in zoom-in-95 fade-in duration-200 max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
         <div className="px-6 sm:px-8 pt-8 pb-6 overflow-y-auto">
           {/* Header: small icon + title */}
@@ -124,6 +125,6 @@ export default function AITalentMatchConfirmModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

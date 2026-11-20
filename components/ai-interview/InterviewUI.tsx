@@ -36,6 +36,7 @@ import { INVALID_CAMERA_SELECTION_MESSAGE } from "@/lib/proctoring/virtualCamera
 // noise. Idempotent — safe even though face-verification also imports it.
 import "@/lib/tfjs-rejection-guard";
 import { keepAudioContextRunning, loadVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 interface FaceVerificationHandle {
   startVerification: (videoElement: HTMLVideoElement, intervalMs?: number) => void;
@@ -11203,7 +11204,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     <>
       {/* ── Concurrent-session blocked overlay (single-active-session guard) ── */}
       {concurrentBlocked && (
-        <div className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
           <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl">
             <div className="text-amber-400 text-5xl mb-4">🔒</div>
             <h2 className="text-xl font-bold text-white mb-2">Interview already open elsewhere</h2>
@@ -11221,11 +11222,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               Reload &amp; try again
             </Button>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
       {/* ── Connection lost overlay ── */}
       {!isConnected && !isClosing && status.startsWith('Connection lost') && (
-        <div className="fixed inset-0 z-[200] bg-slate-950/70 flex items-center justify-center backdrop-blur-sm p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[200] bg-slate-950/70 flex items-center justify-center backdrop-blur-sm p-4">
           {/* Same reconnect logic as before — this only changes what is shown:
               while the automatic retries are running ("...reconnecting in Ns...")
               the message is calm and Refresh is optional; once they are used
@@ -11239,7 +11240,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <p className="text-slate-600 dark:text-slate-300 mb-1 text-sm leading-relaxed">
                 Your connection dropped for a moment. We&apos;re reconnecting automatically — please stay on this page.
               </p>
-              <p className="text-slate-400 text-xs mb-6">{status.replace(/^Connection lost — /, '')}</p>
+              <p className="text-slate-500 text-xs mb-6">{status.replace(/^Connection lost — /, '')}</p>
               <button
                 onClick={() => window.location.reload()}
                 className="w-full px-6 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-500/15 text-brand-blue dark:text-sky-300 text-sm font-semibold ring-1 ring-sky-100 dark:ring-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/25 transition-colors"
@@ -11265,12 +11266,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               </button>
             </div>
           )}
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* ── Proctoring: Face not in frame overlay ── */}
       {isConnected && isFaceBlocked && (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
           <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl">
             <div className="text-amber-500 text-5xl mb-4">👤</div>
             <h2 className="text-xl font-bold text-white mb-2">Face Not Detected</h2>
@@ -11305,14 +11306,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               This will auto-dismiss when your face is detected
             </p>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Fullscreen overlay removed — no longer blocking the interview */}
 
       {/* ── Microphone issue popup ── */}
       {showMicPopup && (
-        <div className="fixed inset-0 z-[101] bg-black/80 flex items-center justify-center backdrop-blur-sm">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[101] bg-black/80 flex items-center justify-center backdrop-blur-sm">
           <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="text-amber-500 text-5xl mb-4">🎤</div>
             <h2 className="text-xl font-bold text-white mb-2">Microphone Issue?</h2>
@@ -11329,7 +11330,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             </div>
             <p className="tf-meta mt-3">Auto-closing in 15 seconds...</p>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Turn/silence banner moved INTO the chat panel (rendered as `turnBanner`
@@ -12578,7 +12579,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
       {/* End Interview Confirmation Modal */}
       {showEndConfirm && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
@@ -12671,12 +12672,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               </button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* ── Fullscreen exit overlay — shows when candidate leaves fullscreen mid-interview ── */}
       {isFullscreenExited && isConnected && !isClosing && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[var(--raw-0f1929)] border border-white/10 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5">
             {/* Warning icon */}
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/15 border border-amber-400/30">
@@ -12749,7 +12750,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               Return to Fullscreen
             </button>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* ── Camera/mic disconnected overlay — 3-minute pause+grace ──

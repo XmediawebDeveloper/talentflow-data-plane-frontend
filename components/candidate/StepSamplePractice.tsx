@@ -29,6 +29,7 @@ import { recordPcm16 } from '@/lib/utils/pcmEnroll';
 import { MicWaveform } from '@/components/ai-interview/MicWaveform';
 import { canOpenDevice } from '@/lib/utils/mediaDeviceProbe';
 import { revealAfterPaint, stickyOffset, candidateScrollBehavior } from '@/lib/utils/candidateScroll';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 // ── Component props ──────────────────────────────────────────────────────────
 
@@ -356,7 +357,7 @@ function PracticeTour({
       >
         <div className="flex items-center justify-between mb-1">
           <p className="text-sm font-bold text-gray-900">{step.title}</p>
-          <span className="text-2xs font-medium text-gray-400">{stepIndex + 1} / {steps.length}</span>
+          <span className="text-2xs font-medium text-gray-500">{stepIndex + 1} / {steps.length}</span>
         </div>
         <p className="tf-body-secondary leading-relaxed">{step.body}</p>
         <div className="flex items-center justify-end gap-2 mt-3">
@@ -2918,7 +2919,7 @@ export default function StepSamplePractice({
           interview once practice ends. Dismissible so they can scroll back
           through the practice thread first. */}
       {showStartPopup && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200 p-6 text-center">
             <div className="w-14 h-14 rounded-full bg-success-subtle flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-7 h-7 text-success" />
@@ -2953,7 +2954,7 @@ export default function StepSamplePractice({
               </button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </div>
   );

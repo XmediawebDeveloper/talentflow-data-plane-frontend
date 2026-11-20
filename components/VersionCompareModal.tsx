@@ -6,6 +6,8 @@ import { buildUnifiedDiff, buildDiffSidePairs, type DiffLine } from '@/lib/utils
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 export interface CompareVersion {
   /** Version number as shown to the user ("Version 2"). */
@@ -292,7 +294,7 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
   };
 
   return (
-    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center ${zIndexClassName} p-3 sm:p-4`}>
+    <ModalA11y><div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center ${zIndexClassName} p-3 sm:p-4`}>
       <div className={`bg-white rounded-2xl shadow-2xl w-full ${viewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85dvh] max-sm:h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden transition-all duration-300`}>
         {/* Header */}
         {/* Stacks below sm: title + view toggle + diff counts in one row
@@ -358,13 +360,12 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
                 </>
               )}
             </div>
-            <button
+            <IconButton bare label="Close"
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors max-sm:absolute max-sm:top-2 max-sm:right-2"
-              aria-label="Close"
             >
               <X className="w-5 h-5 text-gray-500" />
-            </button>
+            </IconButton>
           </div>
         </div>
 
@@ -495,6 +496,6 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

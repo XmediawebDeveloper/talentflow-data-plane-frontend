@@ -45,6 +45,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import { PLAN_FEATURE_METADATA, PlanFeatureKey } from '@/lib/types/planFeatures';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { clickableProps } from '@/lib/a11y/clickableProps';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -590,9 +591,9 @@ export default function Dashboard({
                       {included ? (
                         <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
                       ) : (
-                        <XCircle className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                        <XCircle className="w-4 h-4 text-muted-foreground dark:text-gray-300 flex-shrink-0" />
                       )}
-                      <span className={included ? 'text-gray-700' : 'text-gray-400'}>{meta.name}</span>
+                      <span className={included ? 'text-gray-700' : 'text-gray-500'}>{meta.name}</span>
                     </div>
                   );
                 })}
@@ -665,7 +666,7 @@ export default function Dashboard({
             ) : (
               <div className="space-y-4">
                 {publishedJDs.map((jd) => (
-                  <div
+                  <div {...clickableProps}
                     key={jd.id}
                     className="tf-panel p-5 hover:border-gray-300 hover:shadow-md transition-all cursor-pointer"
                     onClick={() => onViewJobDetails?.(jd)}
@@ -681,30 +682,30 @@ export default function Dashboard({
                         <div className="flex items-center gap-5 tf-body-secondary mb-3">
                           {jd.department && (
                             <div className="flex items-center gap-2">
-                              <Building2 className="w-4 h-4 text-gray-400" />
+                              <Building2 className="w-4 h-4 text-gray-500" />
                               {jd.department}
                             </div>
                           )}
                           {jd.location && (
                             <div className="flex items-center gap-2">
-                              <MapPin className="w-4 h-4 text-gray-400" />
+                              <MapPin className="w-4 h-4 text-gray-500" />
                               {jd.location}
                             </div>
                           )}
                           {jd.published_at && (
                             <div className="flex items-center gap-2">
-                              <Calendar className="w-4 h-4 text-gray-400" />
+                              <Calendar className="w-4 h-4 text-gray-500" />
                               Published {formatISTDate(jd.published_at)}
                             </div>
                           )}
                         </div>
                         <div className="flex items-center gap-4 tf-body-secondary">
                           <div className="flex items-center gap-1">
-                            <Users className="w-4 h-4 text-gray-400" />
+                            <Users className="w-4 h-4 text-gray-500" />
                             <span>{jd.applicants_count || 0} applicants</span>
                           </div>
                           <div className="flex items-center gap-1">
-                            <FileText className="w-4 h-4 text-gray-400" />
+                            <FileText className="w-4 h-4 text-gray-500" />
                             <span>{jd.scored_resumes_count || 0} scored</span>
                           </div>
                         </div>
@@ -810,19 +811,19 @@ export default function Dashboard({
                         <div className="flex items-center gap-5 tf-body-secondary mb-3">
                           {jd.department && (
                             <div className="flex items-center gap-2">
-                              <Building2 className="w-4 h-4 text-gray-400" />
+                              <Building2 className="w-4 h-4 text-gray-500" />
                               {jd.department}
                             </div>
                           )}
                           {jd.location && (
                             <div className="flex items-center gap-2">
-                              <MapPin className="w-4 h-4 text-gray-400" />
+                              <MapPin className="w-4 h-4 text-gray-500" />
                               {jd.location}
                             </div>
                           )}
                           {jd.created_at && (
                             <div className="flex items-center gap-2">
-                              <Calendar className="w-4 h-4 text-gray-400" />
+                              <Calendar className="w-4 h-4 text-gray-500" />
                               Created {formatISTDate(jd.created_at)}
                             </div>
                           )}

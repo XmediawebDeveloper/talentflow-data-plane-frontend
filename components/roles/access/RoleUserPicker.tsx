@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Search, X } from 'lucide-react';
 import { userService, type ApiUser } from '@/lib/services/userService';
 import NameAvatar from '@/components/ui/name-avatar';
+import { IconButton } from '@/components/ui/icon-button';
 
 export interface PickedUser {
   id: string;
@@ -114,7 +115,7 @@ export default function RoleUserPicker({ value, onChange, roleNames, lockedReaso
           locked ? 'cursor-not-allowed bg-gray-50 opacity-60 dark:bg-slate-800/50' : 'bg-white focus-within:border-brand-blue focus-within:ring-[3px] focus-within:ring-brand-blue/20 dark:bg-slate-900'
         }`}
       >
-        <Search className="h-4 w-4 shrink-0 text-gray-400" aria-hidden />
+        <Search className="h-4 w-4 shrink-0 text-gray-500" aria-hidden />
         <input
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
@@ -127,9 +128,9 @@ export default function RoleUserPicker({ value, onChange, roleNames, lockedReaso
           // The field's own border shows focus; the site-wide input outline
           // (globals.css input:focus-visible) would draw a second box inside it.
           style={{ outline: 'none' }}
-          className="min-w-0 flex-1 border-0 bg-transparent text-gray-900 outline-none placeholder:text-gray-400 dark:text-slate-100"
+          className="min-w-0 flex-1 border-0 bg-transparent text-gray-900 outline-none placeholder:text-gray-500 dark:text-slate-100"
         />
-        {loading && open && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-gray-400" aria-hidden />}
+        {loading && open && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-gray-500" aria-hidden />}
       </label>
 
       {open && !locked && (
@@ -168,13 +169,13 @@ export default function RoleUserPicker({ value, onChange, roleNames, lockedReaso
                       <span className="block truncate text-[13px] font-medium text-gray-900 dark:text-slate-100">{u.name || u.email}</span>
                       <span className="block truncate text-xs text-gray-500 dark:text-slate-400">{u.email}</span>
                     </span>
-                    <span className="shrink-0 text-xs text-gray-400 dark:text-slate-500">{already ? 'Has this role' : picked ? 'Added' : roleName}</span>
+                    <span className="shrink-0 text-xs text-gray-500 dark:text-slate-500">{already ? 'Has this role' : picked ? 'Added' : roleName}</span>
                   </button>
                 </li>
               );
             })}
             {shown < matches.length && (
-              <li className="px-3 py-2 text-center text-xs text-gray-400 dark:text-slate-500">Scroll for more…</li>
+              <li className="px-3 py-2 text-center text-xs text-gray-500 dark:text-slate-500">Scroll for more…</li>
             )}
           </ul>
         </div>
@@ -190,14 +191,13 @@ export default function RoleUserPicker({ value, onChange, roleNames, lockedReaso
             >
               {u.name}
               {u.currentRole && <span className="font-normal opacity-70">· from {u.currentRole}</span>}
-              <button
+              <IconButton bare label={`Remove ${u.name}`}
                 type="button"
                 onClick={() => remove(u.id)}
-                aria-label={`Remove ${u.name}`}
                 className="grid h-4 w-4 place-items-center rounded-full hover:bg-brand-blue/20"
               >
                 <X className="h-3 w-3" />
-              </button>
+              </IconButton>
             </span>
           ))}
         </div>

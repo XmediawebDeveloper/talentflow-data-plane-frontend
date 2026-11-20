@@ -353,9 +353,9 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
                   <item.icon className={`w-5 h-5 flex-shrink-0 ${isParentActive(item) ? 'text-brand-blue' : ''}`} />
                   <span className="flex-1 text-sm font-medium">{item.label}</span>
                   {expandedSections.includes(item.id) ? (
-                    <ChevronDown className={`w-4 h-4 ${isParentActive(item) ? 'text-brand-blue' : 'text-gray-400'}`} />
+                    <ChevronDown className={`w-4 h-4 ${isParentActive(item) ? 'text-brand-blue' : 'text-gray-500'}`} />
                   ) : (
-                    <ChevronRight className={`w-4 h-4 ${isParentActive(item) ? 'text-brand-blue' : 'text-gray-400'}`} />
+                    <ChevronRight className={`w-4 h-4 ${isParentActive(item) ? 'text-brand-blue' : 'text-gray-500'}`} />
                   )}
                 </button>
 

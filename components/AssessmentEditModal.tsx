@@ -6,6 +6,8 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface AssessmentEditModalProps {
   isOpen: boolean;
@@ -171,7 +173,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 flex-shrink-0">
@@ -186,14 +188,13 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
               </p>
             </div>
           </div>
-          <Button
+          <IconButton label="Close"
             variant="secondary"
             size="sm"
             onClick={handleCloseAttempt}
-            className="flex-shrink-0"
-            aria-label="Close">
+            className="flex-shrink-0">
             <X className="w-5 h-5" />
-          </Button>
+          </IconButton>
         </div>
 
         {/* Content */}
@@ -238,7 +239,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                     Duration <span className="text-destructive">*</span>
                   </label>
                   <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
                     <input
                       type="text"
                       value={editedAssessment.duration}
@@ -373,12 +374,12 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                         />
                       </div>
 
-                      <button
+                      <IconButton bare label="Delete section"
                         onClick={() => deleteSection(index)}
                         className="h-8 w-8 inline-flex items-center justify-center flex-shrink-0 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </IconButton>
                     </div>
                   </div>
                 ))}
@@ -448,6 +449,6 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
         }}
         isSaving={isSaving}
       />
-    </div>
+    </div></ModalA11y>
   );
 }

@@ -279,7 +279,7 @@ export function TalentMatchMock({ onSurface }: { onSurface?: boolean }) {
                 : "border-slate-900/[0.07] dark:border-white/[0.08]"
             } ${row.state === "rejected" ? "opacity-60" : ""}`}
           >
-            <span className="text-xs font-semibold tabular-nums text-slate-400">{i + 1}</span>
+            <span className="text-xs font-semibold tabular-nums text-slate-500">{i + 1}</span>
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium text-mkt-ink">{row.name}</span>
               <span className="mt-1 flex gap-0.5">
@@ -296,7 +296,7 @@ export function TalentMatchMock({ onSurface }: { onSurface?: boolean }) {
             <span className="flex items-center gap-2">
               <span className="text-sm font-bold tabular-nums text-mkt-ink">
                 {row.score}
-                <span className="text-2xs font-medium text-slate-400">/10</span>
+                <span className="text-2xs font-medium text-slate-500">/10</span>
               </span>
               <span className={`hidden rounded-full px-2 py-0.5 text-2xs font-semibold min-[400px]:inline ${FIT[row.fit]}`}>
                 {row.fit}
@@ -304,14 +304,14 @@ export function TalentMatchMock({ onSurface }: { onSurface?: boolean }) {
               <span className="flex gap-1">
                 <span
                   className={`grid h-6 w-6 place-items-center rounded-full ${
-                    row.state === "shortlisted" ? "bg-mkt-cyan text-white" : "border border-slate-900/10 text-slate-400 dark:border-white/15"
+                    row.state === "shortlisted" ? "bg-mkt-cyan text-white" : "border border-slate-900/10 text-slate-500 dark:border-white/15"
                   }`}
                 >
                   <Check className="h-3 w-3" strokeWidth={3} />
                 </span>
                 <span
                   className={`grid h-6 w-6 place-items-center rounded-full ${
-                    row.state === "rejected" ? "bg-rose-500 text-white" : "border border-slate-900/10 text-slate-400 dark:border-white/15"
+                    row.state === "rejected" ? "bg-rose-500 text-white" : "border border-slate-900/10 text-slate-500 dark:border-white/15"
                   }`}
                 >
                   <X className="h-3 w-3" strokeWidth={3} />

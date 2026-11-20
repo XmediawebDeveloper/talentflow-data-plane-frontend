@@ -22,6 +22,9 @@ import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 import NameAvatar from '@/components/ui/name-avatar';
+import { clickableProps, clickableRowProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // AS-24: localStorage key for column preferences (v2 with new columns)
 // v3: Result Status split into Score + Result, Completed became Status —
@@ -722,7 +725,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
         {/* Search and Inline Filter Bar */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex-1 basis-full sm:basis-[260px] min-w-[180px] sm:max-w-sm relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               type="text"
               placeholder="Search by name or email..."
@@ -842,13 +845,13 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <thead>
               <tr className="border-b border-gray-100 bg-white">
                 <th className="tf-th-cell text-left w-12 tf-sticky-col-left tf-th">
-                  <button onClick={handleSelectAll} className="p-1 hover:bg-brand-blue/5 rounded">
+                  <IconButton bare label="Select all results" onClick={handleSelectAll} className="p-1 hover:bg-brand-blue/5 rounded">
                     {selectedResults.length === filteredResults.length && filteredResults.length > 0 ? (
                       <CheckSquare className="w-4 h-4 text-brand-blue" />
                     ) : (
-                      <Square className="w-4 h-4 text-gray-400" />
+                      <Square className="w-4 h-4 text-gray-500" />
                     )}
-                  </button>
+                  </IconButton>
                 </th>
                 {enabledColumns.map((col) => (
                   <th
@@ -866,7 +869,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               {filteredResults.length === 0 ? (
                 <tr>
                   <td colSpan={enabledColumns.length + 2} className="p-0">
-                    <div className={`${TABLE_EMPTY_PANEL_CLASS} text-gray-400`}>
+                    <div className={`${TABLE_EMPTY_PANEL_CLASS} text-gray-500`}>
                       <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-50" />
                       <p className="text-sm">No assessment results found</p>
                       {searchTerm && (
@@ -878,7 +881,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               ) : (
                 paginatedResults.map((result, index) => (
                   <React.Fragment key={result.id}>
-                    <tr
+                    <tr {...clickableRowProps}
                       data-row-selected={selectedResults.includes(result.id)}
                       className={`border-b border-gray-100 hover:bg-brand-blue/5 transition-colors ${
                         index % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'
@@ -889,16 +892,16 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       }}
                     >
                       <td className="tf-td tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
-                        <button
+                        <IconButton bare label="Select result"
                           onClick={() => handleSelectResult(result.id)}
                           className="p-1 hover:bg-brand-blue/10 rounded"
                         >
                           {selectedResults.includes(result.id) ? (
                             <CheckSquare className="w-4 h-4 text-brand-blue" />
                           ) : (
-                            <Square className="w-4 h-4 text-gray-400" />
+                            <Square className="w-4 h-4 text-gray-500" />
                           )}
-                        </button>
+                        </IconButton>
                       </td>
   
                       {enabledColumns.map((col) => {
@@ -985,7 +988,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           return (
                             <td key={col.id} className="tf-td text-center">
                               <div className="flex flex-col items-center gap-1">
-                                <span className={`${SCORE_CELL_TEXT} ${scoringDone && techPct !== null ? (techPct >= 70 ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
+                                <span className={`${SCORE_CELL_TEXT} ${scoringDone && techPct !== null ? (techPct >= 70 ? 'text-success' : 'text-destructive') : 'text-gray-500'}`}>
                                   {scoringDone && techPct !== null ? `${Math.round(techPct)}%` : '—'}
                                 </span>
                                 {scoringDone && techPct !== null && (
@@ -1004,7 +1007,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           return (
                             <td key={col.id} className="tf-td text-center">
                               <div className="flex flex-col items-center gap-1">
-                                <span className={`${SCORE_CELL_TEXT} ${scoringDone && codingPct !== null ? (codingPct >= 70 ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
+                                <span className={`${SCORE_CELL_TEXT} ${scoringDone && codingPct !== null ? (codingPct >= 70 ? 'text-success' : 'text-destructive') : 'text-gray-500'}`}>
                                   {scoringDone && codingPct !== null ? `${Math.round(codingPct)}%` : '—'}
                                 </span>
                                 {scoringDone && codingPct !== null && (
@@ -1050,7 +1053,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                                 )}
                                 {!result.sent_at && !result.started_at && !result.completed_at && (
                                   <div className="flex items-center gap-2">
-                                    <Clock className="w-3 h-3 text-gray-400" />
+                                    <Clock className="w-3 h-3 text-gray-500" />
                                     <span>{result.created_at ? `Created: ${formatTimelineDate(result.created_at)}` : '-'}</span>
                                   </div>
                                 )}
@@ -1097,7 +1100,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           empty for Pending rows or users without download perms. */}
                       <td className="tf-td tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
-                          <Button
+                          <IconButton label={`View details for ${result.candidateName || 'candidate'}`} tooltip="View Details"
                             variant="secondary"
                             size="sm"
                             onClick={() => {
@@ -1110,26 +1113,22 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                               }
                             }}
                             className="w-9 h-9"
-                            title="View Details"
-                            aria-label={`View details for ${result.candidateName || 'candidate'}`}
                           >
                             <Eye className="w-3.5 h-3.5 shrink-0" />
-                          </Button>
-                          <Button
+                          </IconButton>
+                          <IconButton label={`Download PDF report for ${result.candidateName || 'candidate'}`} tooltip={canDownloadPDF ? 'Download PDF Report' : "You can view this result, but your role can't download the report"}
                             variant="secondary"
                             size="sm"
                             onClick={() => handleDownloadPDF(result.id)}
                             disabled={downloadingPDF === result.id || !canDownloadPDF}
                             className="w-9 h-9"
-                            title={canDownloadPDF ? 'Download PDF Report' : "You can view this result, but your role can't download the report"}
-                            aria-label={`Download PDF report for ${result.candidateName || 'candidate'}`}
                           >
                             {downloadingPDF === result.id ? (
                               <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
                             ) : (
                               <Download className="w-3 h-3 flex-shrink-0" />
                             )}
-                          </Button>
+                          </IconButton>
                         </div>
                       </td>
                     </tr>
@@ -1212,7 +1211,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       {displayMode === 'grid' && (
         <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
           {paginatedResults.length === 0 ? (
-            <div className="col-span-full py-12 text-center text-gray-400">
+            <div className="col-span-full py-12 text-center text-gray-500">
               <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p className="text-sm">No assessment results found</p>
               {searchTerm && <p className="text-xs mt-1">Try adjusting your search or filters</p>}
@@ -1294,7 +1293,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   />
 
                   {status !== 'Pending' && (
-                    <div
+                    <div {...clickableProps}
                       onClick={(e) => { e.stopPropagation(); openDetail(); }}
                       className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
                     >
@@ -1313,7 +1312,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       <div className="lg:hidden tf-record-list p-3">
         {filteredResults.length === 0 ? (
           <div className="py-12 text-center">
-            <div className="text-gray-400">
+            <div className="text-gray-500">
               <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p className="text-sm">No assessment results found</p>
               {searchTerm && (
@@ -1335,16 +1334,16 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               key={result.id}
               selected={selectedResults.includes(result.id)}
               select={
-                <button
+                <IconButton bare label="Select result"
                   onClick={() => handleSelectResult(result.id)}
                   className="p-1 -m-1 hover:bg-brand-blue/10 rounded"
                 >
                   {selectedResults.includes(result.id) ? (
                     <CheckSquare className="w-4 h-4 text-brand-blue" />
                   ) : (
-                    <Square className="w-4 h-4 text-gray-400" />
+                    <Square className="w-4 h-4 text-gray-500" />
                   )}
-                </button>
+                </IconButton>
               }
               idBadge={result.candidateDisplayId ? (
                 <span className="inline-flex items-center text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded whitespace-nowrap shrink-0">
@@ -1494,7 +1493,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
       {/* Export Format & Scope Selection Modal */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+        <ModalA11y><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
           <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
             {/* Step 1: Format Selection */}
             {exportStep === 'format' && (
@@ -1504,15 +1503,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     <h3 className="text-base sm:text-lg font-medium text-gray-900">Export Assessment Results</h3>
                     <p className="tf-body-muted mt-1">Step 1 of 2: Choose format</p>
                   </div>
-                  <button
+                  <IconButton bare label="Close"
                     onClick={() => {
                       setShowExportModal(false);
                       setExportStep('format');
                     }}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
-                   aria-label="Close">
+                    className="p-1 text-gray-500 hover:text-gray-600 rounded-md hover:bg-gray-100">
                     <X className="w-5 h-5" />
-                  </button>
+                  </IconButton>
                 </div>
 
                 <div className="p-5">
@@ -1562,15 +1560,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       Step 2 of 2: Choose what to export ({selectedFormat === 'csv' ? 'CSV' : 'Excel'})
                     </p>
                   </div>
-                  <button
+                  <IconButton bare label="Close"
                     onClick={() => {
                       setShowExportModal(false);
                       setExportStep('format');
                     }}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
-                   aria-label="Close">
+                    className="p-1 text-gray-500 hover:text-gray-600 rounded-md hover:bg-gray-100">
                     <X className="w-5 h-5" />
-                  </button>
+                  </IconButton>
                 </div>
 
                 <div className="p-5">
@@ -1653,7 +1650,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               </>
             )}
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </div>
   );

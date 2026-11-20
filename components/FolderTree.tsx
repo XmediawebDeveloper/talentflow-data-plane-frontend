@@ -9,6 +9,8 @@ import { Folder as FolderType, Resume } from '@/lib/types/types';
 import { toast } from 'sonner';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { SidebarNoFoldersState } from '@/components/resumes/ResumeEmptyStates';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Folder-actions (⋮) menu item styling — same neutral hover-changes-only-the-
 // background convention as every other ⋮ menu in the app (ResumeTable,
@@ -146,7 +148,7 @@ function DroppableFolderItem({
   const isDropTarget = isOver && canDrop;
 
   return (
-    <div
+    <div {...clickableProps}
       ref={drop as unknown as React.Ref<HTMLDivElement>}
       // `relative` so the row paints over the tree guide lines behind it — both
       // are positioned, so DOM order wins and the elbow passes under the icon
@@ -162,7 +164,7 @@ function DroppableFolderItem({
       onClick={() => onSelectFolder(folder.id)}
     >
       {hasChildren && (
-        <span
+        <span {...clickableProps}
           onClick={(e) => {
             e.stopPropagation();
             onToggleFolder(folder.id);
@@ -203,7 +205,7 @@ function DroppableFolderItem({
         && folder.id !== 'all'
         && !(folder.name.toLowerCase() === 'root' && !folder.parentId)
         && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
-        <button
+        <IconButton bare label="Folder actions"
           type="button"
           onClick={(e) => {
             e.preventDefault();
@@ -218,13 +220,12 @@ function DroppableFolderItem({
           className={`flex-shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 rounded hover:bg-blue-100 text-blue-600 transition-opacity ${
             hasMenu ? 'lg:opacity-100 bg-blue-100' : ''
           }`}
-          aria-label="Folder actions" title="Folder actions"
           aria-haspopup="menu"
           aria-expanded={hasMenu}
           data-folder-menu-trigger={folder.id}
         >
           <MoreVertical className="w-4 h-4" />
-        </button>
+        </IconButton>
       )}
       {children}
     </div>

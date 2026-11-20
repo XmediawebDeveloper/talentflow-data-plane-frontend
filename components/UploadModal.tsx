@@ -15,6 +15,9 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from './FolderTree';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import ErrorModal from './ErrorModal';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Default constants for fallback
 const DEFAULT_MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
@@ -221,7 +224,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
    *  selected without opening it. */
   const selectedFolderIconColorClass = useMemo(() => {
     const id = selectedFolder || rootFolder?.id;
-    if (!id) return 'text-gray-400 dark:text-slate-500';
+    if (!id) return 'text-gray-500 dark:text-slate-500';
     if (rootFolder && id === rootFolder.id) return 'text-brand-cyan';
     const folder = allFolders.find(entry => entry.folder.id === id)?.folder;
     if (folder?.name === 'Archived Resumes' && !folder.parentId) return 'text-amber-600';
@@ -377,7 +380,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
         <span className="flex-shrink-0 tf-hint">({folder.count})</span>
         {hasChildren && (
           <ChevronRight
-            className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0"
+            className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 flex-shrink-0"
             onClick={(e) => {
               e.stopPropagation();
               cancelScheduledClose();
@@ -797,7 +800,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
   const quotaFreePercent = Math.max(0, 100 - quotaPercent);
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+    <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden relative">
         {/* Header: an icon tile carries the modal's identity, so the title can
             stay one line and the subtitle explain the job. */}
@@ -830,7 +833,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                     title="Each resume you store consumes one Resume Storage Unit from your plan."
                   >
                     Resume Storage Units (RU)
-                    <Info className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
+                    <Info className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500" />
                   </span>
                   {isCheckingQuota ? (
                     <span className="tf-body-muted">Checking...</span>
@@ -903,7 +906,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                         : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/40 hover:bg-brand-blue/[0.03]'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-brand-blue' : 'text-gray-500 dark:text-slate-500'}`} />
                   <span className={`text-sm font-medium ${isActive ? 'text-brand-blue' : 'text-gray-700 dark:text-slate-200'}`}>
                     {label}
                   </span>
@@ -952,7 +955,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
             inert={hasSelectedFiles}
             aria-hidden={hasSelectedFiles}
           >
-          <div
+          <div {...clickableProps}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -1044,16 +1047,15 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                     <div className="tf-body truncate">{file.name}</div>
                     <div className="tf-meta">{formatFileSize(file.size)}</div>
                   </div>
-                  <button
+                  <IconButton bare label={`Remove ${file.name}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleRemoveFile(index);
                     }}
                     className="p-1 text-gray-500 dark:text-slate-500 hover:text-red-600 rounded flex-shrink-0"
-                    aria-label={`Remove ${file.name}`}
                   >
                     <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  </button>
+                  </IconButton>
                 </div>
               ))}
               {/* Bulk: add more by click or by dropping onto this panel. */}
@@ -1154,7 +1156,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
               Select Folder
               <span className="font-normal text-gray-500 dark:text-slate-400">(Optional)</span>
               <Info
-                className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500"
+                className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500"
                 aria-hidden="true"
               />
               <span className="sr-only">Resumes land in Root when no folder is chosen.</span>
@@ -1180,7 +1182,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                   >
                     <FolderOpen className={`w-4 h-4 flex-shrink-0 ${selectedFolderIconColorClass}`} />
                     <span className="flex-1 min-w-0 truncate text-left">{selectedFolderLabel}</span>
-                    <ChevronDown className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                    <ChevronDown className="w-4 h-4 text-gray-500 dark:text-slate-500 flex-shrink-0" />
                   </button>
 
                   {showFolderPicker && folderPickerAnchor && typeof document !== 'undefined' && createPortal(
@@ -1206,7 +1208,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                       >
                         {systemPickerFolders.length > 0 && (
                           <>
-                            <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide">
+                            <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide">
                               System Folders
                             </div>
                             {systemPickerFolders.map(folder => (
@@ -1242,7 +1244,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                         )}
                         {myPickerFolders.length > 0 && (
                           <>
-                            <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide">
+                            <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide">
                               My Folders
                             </div>
                             {myPickerFolders.map(folder => renderFolderPickerRow(folder, 0, []))}
@@ -1359,12 +1361,11 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                 <p className="text-sm font-medium text-red-900">No files selected!</p>
                 <p className="text-xs text-red-700">Please select at least one resume file to upload.</p>
               </div>
-              <button
+              <IconButton bare label="Close"
                 onClick={() => setShowNoFilesError(false)}
-                className="p-1 hover:bg-red-100 rounded flex-shrink-0"
-               aria-label="Close">
+                className="p-1 hover:bg-red-100 rounded flex-shrink-0">
                 <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600" />
-              </button>
+              </IconButton>
             </div>
           </div>
         )}
@@ -1416,6 +1417,6 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
         </div>
       </div>
 
-    </div>
+    </div></ModalA11y>
   );
 }

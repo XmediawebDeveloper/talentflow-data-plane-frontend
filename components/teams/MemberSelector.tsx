@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { Search, Check, Loader2, Crown, X } from 'lucide-react';
 import { ApiUser } from '@/lib/services/userService';
 import NameAvatar from '@/components/ui/name-avatar';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** A user who can't be picked because they're already in another team. */
 export interface UnavailableUser {
@@ -92,21 +93,20 @@ export default function MemberSelector({
               <NameAvatar name={m.name} fallback={m.email} src={m.avatar_url} userId={m.id} size="xs" className="h-5 w-5 text-2xs" />
               {m.id === teamLeadId && <Crown className="h-3 w-3 shrink-0" aria-label="Team lead" />}
               <span className="truncate">{m.name}</span>
-              <button
+              <IconButton bare label={`Remove ${m.name}`}
                 type="button"
                 onClick={() => onToggleMember(m.id)}
-                aria-label={`Remove ${m.name}`}
-                className="shrink-0 rounded-full p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                className="shrink-0 rounded-full p-0.5 text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
               >
                 <X className="h-3 w-3" />
-              </button>
+              </IconButton>
             </span>
           ))}
         </div>
       )}
 
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
         <input
           type="text"
           value={searchQuery}
@@ -196,15 +196,13 @@ export default function MemberSelector({
                   )}
                   {/* The lead is picked right on the row (selected members only). */}
                   {canPickLead && isSelected && (
-                    <button
+                    <IconButton bare label={isLead ? `Remove ${user.name} as team lead` : `Make ${user.name} team lead`} tooltip={isLead ? 'Team lead — click to remove' : 'Make team lead'}
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         onTeamLeadChange!(isLead ? '' : user.id);
                       }}
                       onKeyDown={(e) => e.stopPropagation()}
-                      title={isLead ? 'Team lead — click to remove' : 'Make team lead'}
-                      aria-label={isLead ? `Remove ${user.name} as team lead` : `Make ${user.name} team lead`}
                       aria-pressed={isLead}
                       className={`shrink-0 rounded-md p-1.5 transition-colors ${
                         isLead
@@ -213,7 +211,7 @@ export default function MemberSelector({
                       }`}
                     >
                       <Crown className="h-4 w-4" />
-                    </button>
+                    </IconButton>
                   )}
                 </div>
               );

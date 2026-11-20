@@ -7,6 +7,7 @@ import { Briefcase, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, Spa
 import { toast } from 'sonner';
 import { getLoginUrl } from '@/lib/services/authService';
 import { getAccessToken, hasStoredSession, restoreSession } from '@/lib/services/api';
+import { IconButton } from '@/components/ui/icon-button';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -389,9 +390,9 @@ export default function ResetPassword() {
                       e.target.style.backgroundColor = isDark ? 'var(--raw-374151)' : 'var(--raw-f9fafb)';
                     }}
                   />
-                  <button type="button" onClick={() => setShowNew(!showNew)} style={eyeButtonStyle}>
+                  <IconButton bare label={showNew ? 'Hide password' : 'Show password'} type="button" onClick={() => setShowNew(!showNew)} style={eyeButtonStyle}>
                     {showNew ? <EyeOff style={{ width: 20, height: 20 }} /> : <Eye style={{ width: 20, height: 20 }} />}
-                  </button>
+                  </IconButton>
                 </div>
                 {newPassword.length > 0 && !newPasswordValid && (
                   <p style={{ marginTop: '6px', fontSize: '13px', color: 'var(--raw-dc2626)' }}>
@@ -424,9 +425,9 @@ export default function ResetPassword() {
                       e.target.style.backgroundColor = isDark ? 'var(--raw-374151)' : 'var(--raw-f9fafb)';
                     }}
                   />
-                  <button type="button" onClick={() => setShowConfirm(!showConfirm)} style={eyeButtonStyle}>
+                  <IconButton bare label={showConfirm ? 'Hide confirmed password' : 'Show confirmed password'} type="button" onClick={() => setShowConfirm(!showConfirm)} style={eyeButtonStyle}>
                     {showConfirm ? <EyeOff style={{ width: 20, height: 20 }} /> : <Eye style={{ width: 20, height: 20 }} />}
-                  </button>
+                  </IconButton>
                 </div>
                 {confirmTouched && !passwordsMatch && (
                   <p style={{ marginTop: '6px', fontSize: '13px', color: 'var(--raw-dc2626)', display: 'flex', alignItems: 'center', gap: '4px' }}>

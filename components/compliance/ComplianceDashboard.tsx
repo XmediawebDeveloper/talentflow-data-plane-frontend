@@ -29,6 +29,7 @@ import complianceService, {
 } from '@/lib/services/complianceService';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import FilterSelect from '@/components/ui/filter-select';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ComplianceDashboardProps {
   showFullReport?: boolean;
@@ -78,7 +79,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12 tf-loader-center">
-        <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+        <RefreshCw className="w-6 h-6 animate-spin text-gray-500" />
       </div>
     );
   }
@@ -113,13 +114,13 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                 ]}
                 className="px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg border-gray-300"
               />
-              <button
+              <IconButton bare label="Refresh dashboard"
                 onClick={loadDashboardData}
                 disabled={isLoading}
-                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                className="p-2 text-gray-500 hover:text-gray-600 rounded-lg hover:bg-gray-100"
               >
                 <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-              </button>
+              </IconButton>
             </div>
           </div>
         </div>
@@ -204,9 +205,9 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
             <h3 className="font-semibold text-gray-900">Regulatory Compliance Status</h3>
           </div>
           {expandedSection === 'compliance' ? (
-            <ChevronDown className="w-5 h-5 text-gray-400" />
+            <ChevronDown className="w-5 h-5 text-gray-500" />
           ) : (
-            <ChevronRight className="w-5 h-5 text-gray-400" />
+            <ChevronRight className="w-5 h-5 text-gray-500" />
           )}
         </button>
         {expandedSection === 'compliance' && (
@@ -287,9 +288,9 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
               <span className="tf-body-muted">({modSummary.total_attempts} total)</span>
             </div>
             {expandedSection === 'attempts' ? (
-              <ChevronDown className="w-5 h-5 text-gray-400" />
+              <ChevronDown className="w-5 h-5 text-gray-500" />
             ) : (
-              <ChevronRight className="w-5 h-5 text-gray-400" />
+              <ChevronRight className="w-5 h-5 text-gray-500" />
             )}
           </button>
           {expandedSection === 'attempts' && (
@@ -350,9 +351,9 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
             <h3 className="font-semibold text-gray-900">Recent Corrections</h3>
           </div>
           {expandedSection === 'corrections' ? (
-            <ChevronDown className="w-5 h-5 text-gray-400" />
+            <ChevronDown className="w-5 h-5 text-gray-500" />
           ) : (
-            <ChevronRight className="w-5 h-5 text-gray-400" />
+            <ChevronRight className="w-5 h-5 text-gray-500" />
           )}
         </button>
         {expandedSection === 'corrections' && (
@@ -412,9 +413,9 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
               </span>
             </div>
             {expandedSection === 'summary' ? (
-              <ChevronDown className="w-5 h-5 text-gray-400" />
+              <ChevronDown className="w-5 h-5 text-gray-500" />
             ) : (
-              <ChevronRight className="w-5 h-5 text-gray-400" />
+              <ChevronRight className="w-5 h-5 text-gray-500" />
             )}
           </button>
           {expandedSection === 'summary' && (

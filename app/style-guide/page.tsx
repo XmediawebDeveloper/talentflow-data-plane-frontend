@@ -109,6 +109,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Progress } from '@/components/ui/progress';
 import { Skeleton, TableSkeleton } from '@/components/ui/skeleton';
 import { cn } from '@/components/ui/utils';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** Section wrapper — every block on this page is one design category. */
 function Section({
@@ -436,11 +437,11 @@ export default function StyleGuidePage() {
                 <div className="mb-3">
                   <div className="tf-micro-hint uppercase tracking-wide mb-1.5">Icon-only + kebab dropdown</div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <Button variant="secondary" size="sm" aria-label="Download"><Download className="w-4 h-4" /></Button>
-                    <Button variant="secondary" size="sm" aria-label="Edit"><Pencil className="w-4 h-4" /></Button>
+                    <IconButton label="Download" variant="secondary" size="sm"><Download className="w-4 h-4" /></IconButton>
+                    <IconButton label="Edit" variant="secondary" size="sm"><Pencil className="w-4 h-4" /></IconButton>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="secondary" size="sm" aria-label="More actions"><MoreVertical className="w-4 h-4" /></Button>
+                        <IconButton label="More actions" variant="secondary" size="sm"><MoreVertical className="w-4 h-4" /></IconButton>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem><Pencil className="w-4 h-4 mr-2" />Edit</DropdownMenuItem>
@@ -490,7 +491,7 @@ export default function StyleGuidePage() {
                   <div className="flex flex-wrap items-center gap-3">
                     <Button variant="primary" tone="onColor">Primary</Button>
                     <Button variant="secondary" tone="onColor" icon={<Download className="w-4 h-4" />}>Secondary</Button>
-                    <Button variant="secondary" tone="onColor" aria-label="More"><MoreVertical className="w-4 h-4" /></Button>
+                    <IconButton label="More" variant="secondary" tone="onColor"><MoreVertical className="w-4 h-4" /></IconButton>
                     <Button variant="destructive" tone="onColor" icon={<Trash2 className="w-4 h-4" />}>Delete</Button>
                     <Button variant="primary" tone="onColor" disabled>Disabled</Button>
                   </div>
@@ -565,7 +566,7 @@ export default function StyleGuidePage() {
               </div>
               <Collapsible open={sectionOpen} onOpenChange={setSectionOpen} className="max-w-sm rounded-lg border border-gray-200 dark:border-slate-700">
                 <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2.5 tf-label hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg">
-                  <span className="flex items-center gap-2"><Layers className="w-4 h-4 text-gray-400" /> Compensation & Benefits</span>
+                  <span className="flex items-center gap-2"><Layers className="w-4 h-4 text-gray-500" /> Compensation & Benefits</span>
                   <span className="tf-micro-hint">{sectionOpen ? 'Hide' : 'Show'}</span>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="px-3 pb-3 space-y-2 border-t border-gray-100 dark:border-slate-800">
@@ -684,7 +685,7 @@ export default function StyleGuidePage() {
               <div className="flex-1 flex flex-col">
                 <div className="h-9 shrink-0 flex items-center justify-between px-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                   <span className="tf-micro-hint">Job Descriptions</span>
-                  <div className="flex items-center gap-2 text-gray-400"><Bell className="w-3.5 h-3.5" /><div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-slate-700" /></div>
+                  <div className="flex items-center gap-2 text-gray-500"><Bell className="w-3.5 h-3.5" /><div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-slate-700" /></div>
                 </div>
                 <div className="flex-1 bg-slate-50 dark:bg-slate-950 p-3 tf-micro-hint">Content area — every workflow renders here, no full-page reloads for primary actions</div>
               </div>
@@ -894,7 +895,7 @@ export default function StyleGuidePage() {
                   </TabsList>
                 </Tabs>
                 <div className="mt-3 flex items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-900">
-                  <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                  <Search className="w-4 h-4 text-gray-500 shrink-0" />
                   <span className="tf-body-muted">Sticky search — stays visible while the list scrolls</span>
                 </div>
                 <div className="mt-3 flex items-center gap-2 rounded-lg bg-brand-blue/5 border border-brand-blue/20 px-3 py-2">

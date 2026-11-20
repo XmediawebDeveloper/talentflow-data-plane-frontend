@@ -9,6 +9,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { IconButton } from '@/components/ui/icon-button';
 
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -208,23 +209,22 @@ export default function IntegrationsPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     {integration.is_connected ? (
                       <>
-                        <Button variant="secondary" size="sm" aria-label="Settings" title="Settings">
+                        <IconButton label="Settings" variant="secondary" size="sm">
                           <Settings className="w-4 h-4" />
-                        </Button>
-                        <Button
+                        </IconButton>
+                        <IconButton label="Disconnect"
                           variant="destructive"
                           size="sm"
                           onClick={() => disconnectIntegration(integration.integration_type)}
                           disabled={disconnectingId === integration.integration_type}
                           className=""
-                          aria-label="Disconnect" title="Disconnect"
                         >
                           {disconnectingId === integration.integration_type ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             <Trash2 className="w-4 h-4" />
                           )}
-                        </Button>
+                        </IconButton>
                       </>
                     ) : (
                       <Button

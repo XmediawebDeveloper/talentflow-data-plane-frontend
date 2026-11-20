@@ -43,7 +43,7 @@ export default function FeatureNotAvailablePage({ feature }: FeatureNotAvailable
     <div className="flex-1 flex items-center justify-center p-8">
       <div className="max-w-md w-full text-center">
         <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-6">
-          <Icon className="w-8 h-8 text-gray-400" />
+          <Icon className="w-8 h-8 text-gray-500" />
         </div>
 
         <div className="tf-badge gap-1.5 bg-gray-100 text-gray-600 mb-4">

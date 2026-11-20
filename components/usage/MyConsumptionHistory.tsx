@@ -398,7 +398,7 @@ export default function MyConsumptionHistory() {
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="tf-td tf-body">
                         <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-gray-400" />
+                          <Clock className="w-4 h-4 text-gray-500" />
                           {formatIST(item.created_at)}
                         </div>
                       </td>

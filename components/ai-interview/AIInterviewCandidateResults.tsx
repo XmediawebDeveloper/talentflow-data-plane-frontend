@@ -54,6 +54,8 @@ import {
   INVITE_SOURCE_FILTER_OPTIONS,
   RESULT_FILTER_OPTIONS,
 } from './ColumnFilterFields';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** One filter per filterable column; '' means any. */
 const EMPTY_CANDIDATE_FILTERS = {
@@ -944,23 +946,23 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       className="tf-input w-14 h-8 px-2 text-center"
                     />
                   </div>
-                  <button
+                  <IconButton bare label="Previous page"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={safePage === 1}
                     className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" />
-                  </button>
+                  </IconButton>
                   <span className="text-sm text-brand-blue font-semibold px-2 tabular-nums">
                     {safePage} / {totalPages}
                   </span>
-                  <button
+                  <IconButton bare label="Next page"
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={safePage === totalPages}
                     className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="w-4 h-4" />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
             )}
@@ -972,19 +974,17 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                 <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                   <tr>
 <th className="tf-th-cell text-left w-12 tf-sticky-col-left tf-th">
-                      <button
+                      <IconButton bare label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
                         type="button"
                         onClick={toggleAllOnPage}
                         className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
-                        aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
-                        title={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
                       >
                         {allOnPageSelected ? (
                           <CheckSquare className="w-4 h-4 text-brand-blue" />
                         ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
+                          <Square className="w-4 h-4 text-gray-500" />
                         )}
-                      </button>
+                      </IconButton>
                     </th>
                     <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
                     <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
@@ -1152,7 +1152,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                     };
                     const key = rowKey(row);
                     return (
-                      <tr
+                      <tr {...clickableRowProps}
                         key={key}
                         /* Clicking anywhere on the row acts as View; the checkbox,
                            links and action buttons keep their own behaviour.
@@ -1168,18 +1168,17 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         className="transition-colors cursor-pointer hover:bg-brand-blue/5"
                       >
                         <td className="tf-td w-12 tf-sticky-col-left">
-                          <button
+                          <IconButton bare label={selectedKeys.has(rowKey(row)) ? 'Deselect candidate' : 'Select candidate'}
                             type="button"
                             onClick={() => toggleSelected(row)}
                             className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
-                            aria-label={selectedKeys.has(rowKey(row)) ? 'Deselect candidate' : 'Select candidate'}
                           >
                             {selectedKeys.has(rowKey(row)) ? (
                               <CheckSquare className="w-4 h-4 text-brand-blue" />
                             ) : (
-                              <Square className="w-4 h-4 text-gray-400" />
+                              <Square className="w-4 h-4 text-gray-500" />
                             )}
-                          </button>
+                          </IconButton>
                         </td>
                         {CANDIDATE_COLUMNS.map((c) => (
                           <td key={c.id} className={cells[c.id].className}>{cells[c.id].content}</td>
@@ -1204,18 +1203,17 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                     key={rowKey(row)}
                     selected={isSelected}
                     select={
-                      <button
+                      <IconButton bare label={isSelected ? 'Deselect candidate' : 'Select candidate'}
                         type="button"
                         onClick={() => toggleSelected(row)}
                         className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
-                        aria-label={isSelected ? 'Deselect candidate' : 'Select candidate'}
                       >
                         {isSelected ? (
                           <CheckSquare className="w-4 h-4 text-brand-blue" />
                         ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
+                          <Square className="w-4 h-4 text-gray-500" />
                         )}
-                      </button>
+                      </IconButton>
                     }
                     idBadge={
                       (row.candidate_cid || row._job_id) ? (
@@ -1312,23 +1310,23 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       className="tf-input w-14 h-8 px-2 text-center"
                     />
                   </div>
-                  <button
+                  <IconButton bare label="Previous page"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={safePage === 1}
                     className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" />
-                  </button>
+                  </IconButton>
                   <span className="text-sm text-brand-blue font-semibold px-2 tabular-nums">
                     {safePage} / {totalPages}
                   </span>
-                  <button
+                  <IconButton bare label="Next page"
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={safePage === totalPages}
                     className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronRight className="w-4 h-4" />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
             )}

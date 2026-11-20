@@ -315,7 +315,9 @@ input[type="password"]::-ms-clear {
 
   --text-primary: #111827;
   --text-secondary: #4b5563;
-  --text-muted: #9ca3af;
+  /* gray-500: the lightest grey that still reads as text on white (4.8:1,
+     WCAG AA). gray-400 was 2.5:1. Dark mode keeps its own value below. */
+  --text-muted: #6b7280;
 
   --sidebar-bg: #1f2937;
   --sidebar-active: #4b5563;
@@ -1888,9 +1890,50 @@ button:has(.menu-item-label):focus-visible {
   box-shadow: none;
 }
 
-/* The ⋮ trigger itself: closing its menu hands focus back to it, which drew
-   the same ring around the button after every click. */
-[aria-haspopup="menu"]:focus-visible {
+/* …but an option reached from the KEYBOARD (arrow keys / Tab → :focus-visible,
+   never mouse hover) must be unmistakable: a brand tint plus a 2px inset ring.
+   Same-or-higher specificity than the rule above and later in the file, so it
+   wins. The tint is a background-IMAGE because the items' own
+   `focus:!bg-gray-100` utilities are layered !important, which beat any
+   unlayered background-color. Radix also focuses options in script on mouse
+   hover, which browsers can report as :focus-visible, so this is skipped while
+   the last input was a pointer (html[data-input], set in app/layout.tsx). */
+html:not([data-input="pointer"]) [role="menuitem"][tabindex]:focus-visible,
+html:not([data-input="pointer"]) [role="menuitemcheckbox"][tabindex]:focus-visible,
+html:not([data-input="pointer"]) [role="menuitemradio"][tabindex]:focus-visible,
+html:not([data-input="pointer"]) [role="menuitem"]:focus-visible,
+html:not([data-input="pointer"]) [role="menuitemcheckbox"]:focus-visible,
+html:not([data-input="pointer"]) [role="menuitemradio"]:focus-visible,
+html:not([data-input="pointer"]) button:has(.menu-item-label):focus-visible {
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--ring) 12%, transparent),
+    color-mix(in srgb, var(--ring) 12%, transparent)
+  );
+  box-shadow: inset 0 0 0 2px var(--ring);
+}
+
+/* The ⋮ trigger: keyboard focus keeps the standard ring (the button rule
+   above). After a mouse/touch click, closing the menu hands focus back to the
+   trigger in script, which browsers also count as :focus-visible — so the
+   ring is hidden only while the last input was a pointer.
+   html[data-input="pointer"] is set by the inline script in app/layout.tsx. */
+html[data-input="pointer"] [aria-haspopup="menu"]:focus-visible {
+  outline: none;
+}
+
+/* A modal's own container (components/ui/modal-a11y.tsx) takes focus when it
+   opens, so Tab starts inside it — it isn't a control, so no ring. Its buttons
+   and fields still show theirs. */
+[data-modal-a11y]:focus,
+[data-modal-a11y]:focus-visible {
+  outline: none;
+}
+
+/* The dashboard's content area: "Skip to main content" (components/ui/skip-link.tsx)
+   lands focus here so the next Tab starts inside the page. It's a landing
+   spot, not a control — no ring around the whole page. */
+#main-content:focus,
+#main-content:focus-visible {
   outline: none;
 }
 
@@ -3790,9 +3833,9 @@ tbody tr.tf-row-match[data-row-selected="true"]:hover { background-color: color-
   .tf-caption       { @apply text-xs font-semibold text-gray-600 dark:text-[var(--text-secondary)]; }   /* small bold label (same look as tf-th) */
   .tf-body-muted    { @apply text-sm text-gray-500 dark:text-[var(--text-muted)]; }
   .tf-meta          { @apply text-xs text-gray-500 dark:text-[var(--text-muted)]; }                     /* helper, dates, 2nd line */
-  .tf-hint          { @apply text-xs text-gray-400 dark:text-[var(--text-muted)]; }                     /* faint hint, placeholder-like */
+  .tf-hint          { @apply text-xs text-gray-500 dark:text-[var(--text-muted)]; }                     /* faint hint, placeholder-like */
   .tf-micro         { @apply text-2xs font-semibold; }
-  .tf-micro-hint    { @apply text-2xs text-gray-400 dark:text-[var(--text-muted)]; }
+  .tf-micro-hint    { @apply text-2xs text-gray-500 dark:text-[var(--text-muted)]; }
   .tf-stat-value    { @apply text-xl font-bold text-gray-900 dark:text-[var(--text-primary)] tabular-nums; }
 
   /* ── Buttons (same values as components/ui/button.tsx) ── */
@@ -3812,14 +3855,14 @@ tbody tr.tf-row-match[data-row-selected="true"]:hover { background-color: color-
   /* ── Form controls (36px, same as <Input>, <Select>, <DateField>) ── */
   .tf-input {
     @apply h-9 w-full min-w-0 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-sm text-gray-900 dark:text-slate-100
-           placeholder:text-gray-400 dark:placeholder:text-slate-500 transition
+           placeholder:text-gray-500 dark:placeholder:text-slate-500 transition
            focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .tf-input-sm { @apply h-8 text-xs; }            /* dense table filters */
   .tf-textarea {
     @apply w-full min-w-0 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-slate-100
-           placeholder:text-gray-400 dark:placeholder:text-slate-500 transition
+           placeholder:text-gray-500 dark:placeholder:text-slate-500 transition
            focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40;
   }
   /* Native, browser-drawn controls (no forms plugin): light mode keeps the browser accent on purpose,

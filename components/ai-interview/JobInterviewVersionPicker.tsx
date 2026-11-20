@@ -12,6 +12,7 @@ import JobStatusBadge, { jobStatusBadgeKind } from '@/components/jobs/JobStatusB
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { ROUND_LABELS, ROUND_SHORT_LABELS, type AIInterviewPickerSelection } from './AIInterviewPicker';
 import ConfigurePreviewDialog from './ConfigurePreviewDialog';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Candidate-flow statuses are still live, published configs (same rule as AIInterviewPicker).
 const normalizeStatus = (status: string) =>
@@ -127,7 +128,7 @@ export default function JobInterviewVersionPicker({
 
       {versions.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 flex flex-col items-center gap-2 text-center px-4">
-          <Video className="w-8 h-8 text-gray-300" />
+          <Video className="w-8 h-8 text-muted-foreground dark:text-gray-300" />
           <div className="tf-label">
             {allVersions.length === 0 ? 'No AI interview for this job yet' : 'No active interview version for this job'}
           </div>
@@ -257,15 +258,13 @@ export default function JobInterviewVersionPicker({
                 </div>
 
                 <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 ${pill.className}`}>{pill.label}</span>
-                <button
+                <IconButton bare label="Preview interview"
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setPreviewId(c.id); }}
-                  title="Preview interview"
-                  aria-label="Preview interview"
                   className="shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-500 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
                 >
                   <Eye className="w-4 h-4" />
-                </button>
+                </IconButton>
               </div>
             );
           })}

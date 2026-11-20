@@ -95,7 +95,7 @@ export function StepTimeline({ steps }: { steps: TimelineStep[] }) {
                     ? "bg-mkt-surface font-semibold text-mkt-ink shadow-sm"
                     : i < active
                       ? "text-slate-600 dark:text-slate-300"
-                      : "text-slate-400 dark:text-slate-500"
+                      : "text-slate-500 dark:text-slate-500"
                 }`}
               >
                 <span
@@ -127,7 +127,7 @@ export function StepTimeline({ steps }: { steps: TimelineStep[] }) {
                 className={`absolute -left-12 top-6 grid h-10 w-10 place-items-center rounded-full border transition-[background-color,border-color,color] duration-500 sm:-left-16 sm:top-8 sm:h-14 sm:w-14 ${
                   reached
                     ? "border-transparent bg-mkt-accent-solid text-white shadow-[0_10px_24px_-10px_rgba(15,60,153,0.6)]"
-                    : "border-slate-900/10 bg-mkt-canvas text-slate-400 dark:border-white/15"
+                    : "border-slate-900/10 bg-mkt-canvas text-slate-500 dark:border-white/15"
                 }`}
               >
                 <Icon className="h-[18px] w-[18px] sm:h-6 sm:w-6" />

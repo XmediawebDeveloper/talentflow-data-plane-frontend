@@ -75,10 +75,10 @@ export function DateField({ id, value, onChange, min, max, placeholder = 'dd-mm-
             className,
           )}
         >
-          <span className={cn('truncate whitespace-nowrap', selected ? 'text-gray-900 dark:text-slate-100' : 'text-gray-400 dark:text-slate-500')}>
+          <span className={cn('truncate whitespace-nowrap', selected ? 'text-gray-900 dark:text-slate-100' : 'text-gray-500 dark:text-slate-500')}>
             {selected ? formatDMY(selected) : placeholder}
           </span>
-          <CalendarIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+          <CalendarIcon className="w-3.5 h-3.5 text-gray-500 shrink-0" />
         </button>
       </PopoverTrigger>
       {/* min-w, not w: a shrink-to-fit box (Radix gives Content no width of

@@ -91,6 +91,26 @@ export default function RootLayout({
         {/* The old token-recovery script copied tokens from localStorage into
             JS-readable cookies. Tokens are no longer kept there (security
             sheet #5: httpOnly session cookie + in-memory access token). */}
+        {/* Last input type on <html data-input="pointer|keyboard">. globals.css
+            uses it to keep the ⋮ menu trigger's focus ring for keyboard users
+            while hiding the ring that reappears after a mouse click (closing a
+            menu re-focuses its trigger in script). Modifier keys alone don't
+            count, so Ctrl/Shift-clicking stays "pointer". */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                var d = document.documentElement;
+                var set = function(v) { if (d.getAttribute('data-input') !== v) d.setAttribute('data-input', v); };
+                window.addEventListener('pointerdown', function() { set('pointer'); }, true);
+                window.addEventListener('keydown', function(e) {
+                  if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
+                  set('keyboard');
+                }, true);
+              })();
+            `,
+          }}
+        />
       </head>
       <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider

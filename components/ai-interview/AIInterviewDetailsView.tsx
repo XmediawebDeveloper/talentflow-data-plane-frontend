@@ -54,6 +54,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from './UnpublishedChangesChip';
 import ArchiveAIInterviewModal from './ArchiveAIInterviewModal';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* The Version History tab's eye opens a version's configuration in the same
    read-only dialog used elsewhere. Loaded lazily: that dialog renders this
@@ -1476,7 +1478,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   .filter((fact) => !!fact.label)
                   .map((fact, i) => (
                     <React.Fragment key={fact.key}>
-                      {i > 0 && <span aria-hidden className="text-gray-300">&bull;</span>}
+                      {i > 0 && <span aria-hidden className="text-muted-foreground dark:text-gray-300">&bull;</span>}
                       <div className="flex items-center gap-1.5 min-w-0">
                         {fact.icon && <fact.icon className="w-4 h-4 flex-shrink-0" />}
                         <span className="truncate" title={fact.label ?? undefined}>{fact.label}</span>
@@ -1746,47 +1748,41 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       the row), offered here for the first time: archiving a
                       live AI interview used to be reachable only from the
                       list page's row menu. */}
-                  <Button
+                  <IconButton label="Archive AI interview" tooltip={canArchiveAIInterviews ? 'Archive this AI interview' : 'You do not have permission to archive AI interviews'}
                     type="button"
                     variant="secondary"
                     size="sm"
                     onClick={canArchiveAIInterviews ? () => setShowArchiveConfirm(true) : undefined}
                     disabled={actionLoading}
                     aria-disabled={!canArchiveAIInterviews}
-                    aria-label="Archive AI interview"
-                    title={canArchiveAIInterviews ? 'Archive this AI interview' : 'You do not have permission to archive AI interviews'}
                     className={`h-8 w-8 px-0 flex-shrink-0 ${canArchiveAIInterviews ? '' : 'opacity-50 cursor-not-allowed'}`}
                   >
                     <Archive className="w-4 h-4 text-menu-icon-archive" />
-                  </Button>
+                  </IconButton>
                   {/* Duplicate, icon-only — no label, same icon-only shape as
                       Archive and Edit either side of it. */}
-                  <Button
+                  <IconButton label="Duplicate as a new version" tooltip={duplicateBlockedReason || 'Duplicate as a new version'}
                     type="button"
                     variant="secondary"
                     size="sm"
                     onClick={duplicateBlockedReason ? undefined : handleDuplicate}
                     disabled={(!!duplicateBlockedReason && canCreateAIInterviews) || actionLoading}
                     aria-disabled={!!duplicateBlockedReason}
-                    aria-label="Duplicate as a new version"
-                    title={duplicateBlockedReason || 'Duplicate as a new version'}
                     className={`h-8 w-8 px-0 flex-shrink-0 ${!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <Copy className="w-4 h-4 text-menu-icon-download" />
-                  </Button>
-                  <Button
+                  </IconButton>
+                  <IconButton label="Edit AI interview" tooltip={editBlockedReason || 'Edit this version'}
                     type="button"
                     variant="secondary"
                     size="sm"
                     onClick={editBlockedReason ? undefined : () => router.push(withOrigin(aiInterviewConfigureHref(config.id, config.jd_id || '')))}
                     disabled={!!editBlockedReason && canUpdateAIInterviews}
                     aria-disabled={!!editBlockedReason}
-                    aria-label="Edit AI interview"
-                    title={editBlockedReason || 'Edit this version'}
                     className={`h-8 w-8 px-0 flex-shrink-0 ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <Pencil className="w-4 h-4 text-menu-icon-edit" />
-                  </Button>
+                  </IconButton>
                 </>
               )}
               {config.status === 'draft' && config.jd_id && (
@@ -1861,7 +1857,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       {/* A DRAFT: no tabs — just a short, greyed-out note in their place. */}
       {draftLocked && (
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/30 px-6 py-12 text-center opacity-70 select-none">
-          <FileText className="w-8 h-8 text-gray-300 dark:text-slate-600 mx-auto mb-3" aria-hidden="true" />
+          <FileText className="w-8 h-8 text-muted-foreground dark:text-slate-600 mx-auto mb-3" aria-hidden="true" />
           <p className="tf-label">This AI interview is still a draft</p>
           <p className="tf-hint mt-1">Details, invitations and results appear here once it&apos;s published.</p>
         </div>
@@ -1968,17 +1964,15 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             <div className="space-y-5">
               <div className="flex items-start justify-between gap-3">
                 <TabHeading icon={FileText} title="Interview Details" />
-                <Button
+                <IconButton label="Export" tooltip={canExportAIInterviews ? 'Export clusters & HR questions' : 'You do not have permission to export AI interviews'}
                   variant="secondary"
                   size="sm"
                   onClick={() => { if (canExportAIInterviews) setShowExportModal(true); }}
-                  title={canExportAIInterviews ? 'Export clusters & HR questions' : 'You do not have permission to export AI interviews'}
-                  aria-label="Export"
                   aria-disabled={!canExportAIInterviews || undefined}
                   className={` min-w-[40px] min-h-[40px] flex-shrink-0 ${canExportAIInterviews ? '' : 'opacity-50 cursor-not-allowed'}`}
                 >
                   <Download className="w-4 h-4" />
-                </Button>
+                </IconButton>
                 <ExportFormatModal
                   open={showExportModal}
                   onClose={() => setShowExportModal(false)}
@@ -2329,27 +2323,25 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           {(safePage - 1) * ACTIVITY_PAGE_SIZE + 1}–{Math.min(safePage * ACTIVITY_PAGE_SIZE, events.length)} of {events.length}
                         </span>
                         <div className="flex items-center gap-1">
-                          <button
+                          <IconButton bare label="Previous activity page"
                             type="button"
                             onClick={() => setActivityPage(safePage - 1)}
                             disabled={safePage <= 1}
-                            aria-label="Previous activity page"
                             className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:pointer-events-none transition-colors"
                           >
                             <ChevronLeft className="w-3.5 h-3.5" />
-                          </button>
+                          </IconButton>
                           <span className="px-1.5 tabular-nums text-gray-700">
                             <span className="font-semibold text-brand-blue">{safePage}</span> / {totalPages}
                           </span>
-                          <button
+                          <IconButton bare label="Next activity page"
                             type="button"
                             onClick={() => setActivityPage(safePage + 1)}
                             disabled={safePage >= totalPages}
-                            aria-label="Next activity page"
                             className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:pointer-events-none transition-colors"
                           >
                             <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
+                          </IconButton>
                         </div>
                       </div>
                     )}
@@ -2486,17 +2478,15 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           </div>
 
                           {/* Preview this version's configuration, read-only. */}
-                          <Button
+                          <IconButton label={`Preview configure settings for Version ${versionNumber}`} tooltip="Preview configure settings"
                             type="button"
                             variant="secondary"
                             size="sm"
                             onClick={() => setPreviewVersionId(version.id)}
-                            title="Preview configure settings"
-                            aria-label={`Preview configure settings for Version ${versionNumber}`}
                             className="h-8 w-8 flex-shrink-0"
                           >
                             <Eye className="w-4 h-4" />
-                          </Button>
+                          </IconButton>
                         </div>
                       </div>
                     );
@@ -2517,7 +2507,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               <TabHeading icon={Briefcase} title="View JD" />
               {!config.jd_id ? (
                 <div className="tf-card-soft px-3 sm:px-4 lg:px-6 py-8 text-center">
-                  <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <FileText className="w-8 h-8 text-muted-foreground dark:text-gray-300 mx-auto mb-2" />
                   <p className="tf-body-muted">No linked job description found</p>
                 </div>
               ) : jdFullError ? (
@@ -2603,7 +2593,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
       {/* Confirmation Dialog */}
       {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-blue/30 backdrop-blur-sm p-4 sm:p-6">
+        <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-blue/30 backdrop-blur-sm p-4 sm:p-6">
           <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <h3 className="tf-section-title mb-2 tracking-tight">{confirmAction.title}</h3>
             <p className="tf-body-secondary mb-6">{confirmAction.message}</p>
@@ -2621,7 +2611,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Archive confirm — the same dedicated component the AI Interviews

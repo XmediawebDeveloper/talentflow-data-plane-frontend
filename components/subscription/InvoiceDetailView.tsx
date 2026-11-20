@@ -13,6 +13,7 @@ import {
   BILLING_HISTORY_URL, formatInvoiceAmount, getInvoiceStatusVariant, type BillingInvoice,
 } from '@/lib/utils/billingInvoices';
 import { SELLER, amountInWords, type InvoiceParty } from '@/lib/utils/pdfInvoice';
+import { IconButton } from '@/components/ui/icon-button';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -30,7 +31,7 @@ const capitalize = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.sli
 /** Copy-to-clipboard for ids. */
 function CopyButton({ value, label }: { value: string; label: string }) {
   return (
-    <button
+    <IconButton bare label={`Copy ${label}`}
       type="button"
       onClick={async () => {
         try {
@@ -40,12 +41,10 @@ function CopyButton({ value, label }: { value: string; label: string }) {
           showErrorToast(err, `Couldn't copy the ${label}`);
         }
       }}
-      aria-label={`Copy ${label}`}
-      title={`Copy ${label}`}
-      className="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+      className="shrink-0 rounded p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
     >
       <Copy className="h-3.5 w-3.5" />
-    </button>
+    </IconButton>
   );
 }
 
@@ -228,7 +227,7 @@ export default function InvoiceDetailView({
                 {billAddress.length > 0
                   ? billAddress.map((line) => <p key={line} className="[overflow-wrap:anywhere]">{line}</p>)
                   : (
-                    <p className="text-xs italic text-gray-400 dark:text-slate-500">
+                    <p className="text-xs italic text-gray-500 dark:text-slate-500">
                       No address yet — add it in{' '}
                       <Link href="/organization/company-profile" className="not-italic text-brand-blue hover:underline">Company Profile</Link>.
                     </p>
@@ -380,7 +379,7 @@ export default function InvoiceDetailView({
             <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900 sm:p-5">
               {invoice.plan_name && (
                 <div className="flex items-start gap-3">
-                  <Package className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                  <Package className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-slate-500" />
                   <div className="min-w-0">
                     <p className="text-xs text-gray-500 dark:text-slate-400">Plan</p>
                     <p className="flex flex-wrap items-center gap-1.5 text-sm text-gray-900 dark:text-slate-50">
@@ -394,7 +393,7 @@ export default function InvoiceDetailView({
               )}
               {invoice.billing_interval && (
                 <div className="flex items-start gap-3">
-                  <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                  <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-slate-500" />
                   <div>
                     <p className="text-xs text-gray-500 dark:text-slate-400">Billing interval</p>
                     <p className="text-sm text-gray-900 dark:text-slate-50">{capitalize(invoice.billing_interval)}</p>

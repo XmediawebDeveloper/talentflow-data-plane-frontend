@@ -3,8 +3,9 @@
 import { Eye, Shield, Sliders, X } from 'lucide-react';
 import { useRef, type ComponentProps } from 'react';
 import AssessmentCreation, { type AssessmentCreationHandle } from './AssessmentCreation';
-import { Button } from '@/components/ui/button';
 import AssessmentJobBinding from '@/components/assessments/AssessmentJobBinding';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface AssessmentConfigureModalProps {
   isOpen: boolean;
@@ -81,7 +82,7 @@ export default function AssessmentConfigureModal({
   if (!isOpen || (!create && !assessment?.id) || !assessment?.jd_id) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
       {/* Wider than this app's other dialogs because the Configure step is a
           two-column layout at `lg`; below that it stacks as it does on the
           page. The panel owns the scrolling, which is why the step renders
@@ -150,16 +151,15 @@ export default function AssessmentConfigureModal({
               </p>
             </div>
           </div>
-          <Button
+          <IconButton label={readOnly ? 'Close assessment preview' : 'Close assessment configuration'}
             variant="secondary"
             size="sm"
             type="button"
             onClick={() => assessmentCreationRef.current?.requestClose()}
-            aria-label={readOnly ? 'Close assessment preview' : 'Close assessment configuration'}
             className="flex-shrink-0 max-sm:absolute max-sm:top-2.5 max-sm:right-3"
           >
             <X className="w-5 h-5" />
-          </Button>
+          </IconButton>
         </div>
 
         {/* Content — the Configure step itself. The panel is the white card
@@ -187,6 +187,6 @@ export default function AssessmentConfigureModal({
           />
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

@@ -78,7 +78,7 @@ const COUNT_TONES = {
 
 /* A count chip's icon: grey, or the chip's own colour when coloured. */
 const countIcon = (colored: boolean) =>
-  `w-4 h-4 flex-shrink-0 ${colored ? '' : 'text-gray-400 dark:text-slate-500'}`;
+  `w-4 h-4 flex-shrink-0 ${colored ? '' : 'text-gray-500 dark:text-slate-500'}`;
 
 function JobOpeningMetaItems({ job, showIcons = true, showCounts = true, coloredCounts = false, applicantsLabel }: { job: Job; showIcons?: boolean; showCounts?: boolean; coloredCounts?: boolean; applicantsLabel?: string }) {
   /* Grey by default; `coloredCounts` takes the Job Openings badges' tones —
@@ -104,7 +104,7 @@ function JobOpeningMetaItems({ job, showIcons = true, showCounts = true, colored
       {job.postedBy && (
         showIcons ? (
           <span className="flex items-center gap-1.5">
-            <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+            <User className="w-4 h-4 text-gray-500 dark:text-slate-500" />
             By {job.postedBy}
           </span>
         ) : (
@@ -113,14 +113,14 @@ function JobOpeningMetaItems({ job, showIcons = true, showCounts = true, colored
       )}
       {showIcons && job.postedDate && (
         <span className="flex items-center gap-1.5">
-          <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <Calendar className="w-4 h-4 text-gray-500 dark:text-slate-500" />
           Posted {formatISTDate(job.postedDate)}
         </span>
       )}
       {job.updated_at && (
         showIcons ? (
           <span className="flex items-center gap-1.5">
-            <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+            <Clock className="w-4 h-4 text-gray-500 dark:text-slate-500" />
             Last Updated: {formatLastUpdated(job.updated_at)}
           </span>
         ) : (

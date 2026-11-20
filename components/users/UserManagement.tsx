@@ -63,6 +63,8 @@ import RoleAccessSummary from '@/components/roles/access/RoleAccessSummary';
 import RoleEditorModal, { roleCodes } from '@/components/roles/access/RoleEditorModal';
 import { AccessInline, AccessLegend } from '@/components/roles/access/AccessDots';
 import { copyBlockedReason } from '@/lib/permissions/moduleLevels';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Access is ROLE-ONLY: a user has exactly one role and everything they can do
 // comes from it. There is no per-user permission editing on this page; to give
@@ -820,28 +822,28 @@ export default function UserManagement() {
   const renderUserDetails = (user: (typeof users)[number]) => (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
       <div className="min-w-0">
-        <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Access (from role)</div>
+        <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Access (from role)</div>
         {renderUserAccess(user, 99)}
       </div>
       <div className="min-w-0">
-        <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Created</div>
+        <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Created</div>
         <div className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300">
-          <Calendar className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
+          <Calendar className="h-3.5 w-3.5 shrink-0 text-gray-500 dark:text-slate-500" />
           {formatIST(user.created_at)}
         </div>
       </div>
       <div className="min-w-0">
-        <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Last Login</div>
+        <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Last Login</div>
         {user.last_login ? (
           <div className="text-sm text-gray-700 dark:text-slate-300">
             <div className="flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
+              <Clock className="h-3.5 w-3.5 shrink-0 text-gray-500 dark:text-slate-500" />
               {formatIST(user.last_login)}
             </div>
             <div className="ml-5 text-xs text-gray-500 dark:text-slate-400">{relativeTimeFromNow(user.last_login) ?? ''}</div>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 text-sm italic text-gray-400 dark:text-slate-500">
+          <div className="flex items-center gap-1.5 text-sm italic text-gray-500 dark:text-slate-500">
             <Clock className="h-3.5 w-3.5 shrink-0" />
             Not logged in yet
           </div>
@@ -1677,7 +1679,7 @@ export default function UserManagement() {
             <RoleAccessSummary codes={codesOfRole(role)} roleName={role.name} description={role.description} auto={role.auto_enabled_areas} />
           ) : (
             <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 text-center">
-              <Shield className="h-6 w-6 text-gray-300 dark:text-slate-600" />
+              <Shield className="h-6 w-6 text-muted-foreground dark:text-slate-600" />
               <p className="text-sm font-medium text-gray-700 dark:text-slate-300">Choose a role</p>
               <p className="max-w-xs text-xs text-gray-500 dark:text-slate-400">The role&apos;s access shows here. What a person can do comes only from their role.</p>
             </div>
@@ -1781,7 +1783,7 @@ export default function UserManagement() {
                     }`}
                   >
                     {userCountsFailed ? '—' : count}
-                    {of !== null && <span className={active ? 'text-white/70' : 'text-gray-400 dark:text-slate-500'}> / {of}</span>}
+                    {of !== null && <span className={active ? 'text-white/70' : 'text-gray-500 dark:text-slate-500'}> / {of}</span>}
                   </span>
                 </button>
               );
@@ -1823,7 +1825,7 @@ export default function UserManagement() {
                     {quotaData?.quotas?.max_seats?.addon?.total_purchased}
                   </span>
                 ) : (
-                  <span className="italic text-gray-400 dark:text-slate-500">none</span>
+                  <span className="italic text-gray-500 dark:text-slate-500">none</span>
                 )}
               </span>
             </div>
@@ -1835,7 +1837,7 @@ export default function UserManagement() {
             {/* Left: search + role filter */}
             <div className={`flex min-w-0 flex-1 items-center gap-2 sm:max-w-xl ${hasRoleFilter ? 'basis-full sm:basis-auto' : ''}`}>
               <div className="relative min-w-0 flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
                 <Input
                   type="text"
                   placeholder="Search users..."
@@ -1867,15 +1869,13 @@ export default function UserManagement() {
               {isUserListNarrowed ? (
                 <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-brand-blue/5 py-1 pl-2.5 pr-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10 dark:bg-brand-blue/15 dark:text-blue-200">
                   <span className="tabular-nums">{filteredUsers.length} of {users.length}</span>
-                  <button
+                  <IconButton bare label="Clear search and filters"
                     type="button"
                     onClick={clearUserFilters}
-                    aria-label="Clear search and filters"
-                    title="Clear search and filters"
                     className="inline-flex h-4 w-4 items-center justify-center rounded text-brand-blue/70 transition-colors hover:bg-brand-blue/15 hover:text-brand-blue"
                   >
                     <X className="h-3 w-3" />
-                  </button>
+                  </IconButton>
                 </span>
               ) : (
                 <span className="shrink-0 rounded-lg bg-brand-blue/5 px-2.5 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10 dark:bg-brand-blue/15 dark:text-blue-200">
@@ -1984,7 +1984,7 @@ export default function UserManagement() {
                   const open = expandedUserId === user.id;
                   return (
                   <React.Fragment key={user.id}>
-                  <tr
+                  <tr {...clickableRowProps}
                     onClick={(e) => { if (!isRowControl(e.target)) toggleUserDetails(user.id); }}
                     // Same tints globals.css repaints on the pinned Actions cell
                     // (hover: #fafbfc; open = selected: brand 8%, 12% on hover),
@@ -1994,17 +1994,15 @@ export default function UserManagement() {
                   >
                     <td className={`px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 ${user.is_active ? '' : 'opacity-60'}`}>
                       <div className="flex items-center gap-2">
-                      <button
+                      <IconButton bare label={open ? 'Hide details' : 'Show details'} tooltip={open ? 'Hide details' : 'Show access, created and last login'}
                         type="button"
                         onClick={() => toggleUserDetails(user.id)}
                         aria-expanded={open}
                         aria-controls={`user-details-${user.id}`}
-                        aria-label={open ? 'Hide details' : 'Show details'}
-                        title={open ? 'Hide details' : 'Show access, created and last login'}
-                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-gray-400 transition-colors hover:bg-brand-blue/10 hover:text-brand-blue"
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-gray-500 transition-colors hover:bg-brand-blue/10 hover:text-brand-blue"
                       >
                         <ChevronRight className={`h-4 w-4 transition-transform ${open ? 'rotate-90 text-brand-blue' : ''}`} />
-                      </button>
+                      </IconButton>
                       {user.user_display_id ? (
                         <button
                           type="button"
@@ -2135,7 +2133,7 @@ export default function UserManagement() {
                           title={`Copy ${user.email}`}
                           className={`flex max-w-full items-center gap-1 text-left transition-colors hover:text-brand-blue ${fade}`}
                         >
-                          <Mail className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+                          <Mail className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
                           <span className="min-w-0 break-all">{user.email}</span>
                         </button>
                       ) : null,
@@ -2325,7 +2323,7 @@ export default function UserManagement() {
                 <div>
                   <div className="mb-1.5 flex items-baseline justify-between gap-2">
                     <Label>Full Name</Label>
-                    <span className={`text-xs tabular-nums ${editingUser.name.length >= 50 ? 'text-brand-orange' : 'text-gray-400 dark:text-slate-500'}`}>
+                    <span className={`text-xs tabular-nums ${editingUser.name.length >= 50 ? 'text-brand-orange' : 'text-gray-500 dark:text-slate-500'}`}>
                       {editingUser.name.length}/50
                     </span>
                   </div>
@@ -2475,9 +2473,9 @@ export default function UserManagement() {
                         className="pr-10"
                         placeholder="Min 8 chars, upper, lower, number, special"
                       />
-                      <button type="button" onClick={() => setDirectPwShow(s => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600" aria-label="Toggle visibility">
+                      <IconButton bare label="Toggle visibility" type="button" onClick={() => setDirectPwShow(s => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-600">
                         <Eye className="w-4 h-4" />
-                      </button>
+                      </IconButton>
                     </div>
                   </div>
                   <div>
@@ -2608,8 +2606,8 @@ export default function UserManagement() {
                   <div key={c.field} className="grid grid-cols-[3.5rem_1fr] gap-2 text-sm">
                     <span className="font-medium text-gray-500 dark:text-slate-400">{c.field}</span>
                     <span className="min-w-0 break-words">
-                      <span className="text-gray-400 line-through dark:text-slate-500">{c.from}</span>
-                      <span className="mx-1.5 text-gray-400">→</span>
+                      <span className="text-gray-500 line-through dark:text-slate-500">{c.from}</span>
+                      <span className="mx-1.5 text-gray-500">→</span>
                       <span className="font-semibold text-gray-900 dark:text-slate-50">{c.to}</span>
                     </span>
                   </div>

@@ -85,7 +85,7 @@ const TONES = {
     // The dashboard Quick Access "liquid glass" chip, brand blue.
     icon:
       'bg-gradient-to-br from-brand-blue/35 via-brand-blue/15 to-brand-blue/[0.04] text-brand-blue ring-brand-blue/25 shadow-brand-blue/25 dark:text-blue-300',
-    sparkText: 'text-gray-400',
+    sparkText: 'text-gray-500',
     sparkId: 'spark-neutral',
   },
 } as const;

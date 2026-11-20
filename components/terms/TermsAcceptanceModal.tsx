@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { showErrorToast } from '@/lib/utils/errorToast';
 import type { DocumentType } from '@/lib/services/termsService';
 import { sanitizeHtml } from '@/lib/utils/sanitizeHtml';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 const DOC_META: Record<DocumentType, { label: string; checkboxText: string; Icon: IconComponent }> = {
   TERMS_AND_CONDITIONS: {
@@ -105,7 +107,7 @@ export default function TermsAcceptanceModal() {
   const showStepIndicator = totalDocsRequired > 1;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <ModalA11y><div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex items-center justify-between shrink-0">
@@ -119,13 +121,12 @@ export default function TermsAcceptanceModal() {
             </div>
           </div>
           {isInGracePeriod && (
-            <button
+            <IconButton bare label="Close"
               onClick={closeAcceptanceModal}
               className="p-2 rounded-lg hover:bg-white/20 transition-colors"
-              aria-label="Close"
             >
               <X className="w-5 h-5 text-white" />
-            </button>
+            </IconButton>
           )}
         </div>
 
@@ -227,6 +228,6 @@ export default function TermsAcceptanceModal() {
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

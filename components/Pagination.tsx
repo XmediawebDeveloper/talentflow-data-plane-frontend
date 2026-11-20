@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import FilterSelect from '@/components/ui/filter-select';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface PaginationProps {
   currentPage: number;
@@ -95,14 +96,13 @@ export default function Pagination({
         </div>
 
         {/* Previous page */}
-        <button
+        <IconButton bare label="Previous page"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
           className={navBtnClass}
-          aria-label="Previous page" title="Previous page"
         >
           <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-        </button>
+        </IconButton>
 
         {/* Current / total */}
         <span className="tf-label px-1 whitespace-nowrap">
@@ -110,14 +110,13 @@ export default function Pagination({
         </span>
 
         {/* Next page */}
-        <button
+        <IconButton bare label="Next page"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
           className={navBtnClass}
-          aria-label="Next page" title="Next page"
         >
           <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-        </button>
+        </IconButton>
       </div>
     </div>
   );

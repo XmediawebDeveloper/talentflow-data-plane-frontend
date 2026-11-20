@@ -54,7 +54,7 @@ function coverageStats(cluster: Cluster) {
  *    !asked                → muted gray (disabled look) "Not Covered" */
 function skillTone(s: Cluster['skills'][number]) {
   if (!isAsked(s)) {
-    return { dot: 'bg-gray-300', icon: <X className="w-2.5 h-2.5 text-white" strokeWidth={3} />, text: 'text-gray-400', tagBg: 'bg-gray-100', tagText: 'text-gray-400', label: 'Not Covered' };
+    return { dot: 'bg-gray-300', icon: <X className="w-2.5 h-2.5 text-white" strokeWidth={3} />, text: 'text-gray-500', tagBg: 'bg-gray-100', tagText: 'text-gray-500', label: 'Not Covered' };
   }
   return isDemonstrated(s)
     ? { dot: 'bg-emerald-500', icon: <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />, text: 'text-gray-900', tagBg: 'bg-emerald-100', tagText: 'text-emerald-700', label: 'Covered · Demonstrated' }

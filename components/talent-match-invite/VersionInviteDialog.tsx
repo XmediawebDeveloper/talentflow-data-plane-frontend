@@ -64,6 +64,8 @@ import {
   type VersionActionItem,
   type VersionPermissions,
 } from './inviteVersions';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface PendingConfirm {
   title: string;
@@ -1232,7 +1234,7 @@ export default function VersionInviteDialog({
         className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 ${minimizing ? 'opacity-0 transition-opacity duration-200' : 'animate-in fade-in duration-200'}`}
         onClick={minimizing ? undefined : requestClose}
       />
-      <div className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 ${minimizing ? 'pointer-events-none' : ''}`}>
+      <ModalA11y innerDialog closeOnEscape={false}><div className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 ${minimizing ? 'pointer-events-none' : ''}`}>
         <div
           ref={dialogRef}
           role="dialog"
@@ -1313,7 +1315,7 @@ export default function VersionInviteDialog({
                             aria-current={here ? 'step' : undefined}
                             title={stepLabel(s, label.singular)}
                             className={`flex max-w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-sm whitespace-nowrap disabled:cursor-default ${
-                              here ? 'font-semibold text-gray-900 dark:text-slate-50' : open ? 'font-medium text-brand-blue hover:underline underline-offset-2' : 'font-medium text-gray-400 dark:text-slate-500'
+                              here ? 'font-semibold text-gray-900 dark:text-slate-50' : open ? 'font-medium text-brand-blue hover:underline underline-offset-2' : 'font-medium text-gray-500 dark:text-slate-500'
                             }`}
                           >
                             <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
@@ -1375,9 +1377,9 @@ export default function VersionInviteDialog({
                     </span>
                     {al.action && <span className="pl-6 sm:pl-0">{al.action}</span>}
                     {al.onDismiss && (
-                      <button type="button" onClick={al.onDismiss} aria-label="Dismiss" className="shrink-0 inline-flex items-center justify-center w-6 h-6 -mr-1 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
+                      <IconButton bare label="Dismiss" type="button" onClick={al.onDismiss} className="shrink-0 inline-flex items-center justify-center w-6 h-6 -mr-1 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
                         <X className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
+                      </IconButton>
                     )}
                   </div>
                 ))}
@@ -1793,7 +1795,7 @@ export default function VersionInviteDialog({
             </div>
           )}
         </div>
-      </div>
+      </div></ModalA11y>
 
       {viewing && (
         <AssessmentPreviewModal

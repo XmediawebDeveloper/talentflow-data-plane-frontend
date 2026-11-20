@@ -212,7 +212,7 @@ function Calendar({
         month_caption: 'flex items-center min-h-[49px] pl-1 pr-9',
         month_grid: 'w-full border-collapse table-fixed',
         weekdays: '',
-        weekday: 'w-8 h-8 text-center text-2xs font-medium text-gray-400 dark:text-slate-500',
+        weekday: 'w-8 h-8 text-center text-2xs font-medium text-gray-500 dark:text-slate-500',
         week: '',
         day: 'p-0 text-center',
         day_button: cn(
