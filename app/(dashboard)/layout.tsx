@@ -70,6 +70,10 @@ function BackgroundTaskWidgets() {
   const [mounted, setMounted] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (needed) setMounted(true); }, [needed]);
+  // TEMP diagnostics (cross-device icon): why the corner is / is not mounted.
+  useEffect(() => {
+    console.log('[ActivityDock] mount check', { needed, mounted, scoring: activeScoringJobs.length, invites: invite?.jobs.length ?? 0, feedRows, inPage: externalTasks.length });
+  }, [needed, mounted, activeScoringJobs.length, invite?.jobs.length, feedRows, externalTasks.length]);
   if (!mounted && !needed) return null;
   return (
     <>

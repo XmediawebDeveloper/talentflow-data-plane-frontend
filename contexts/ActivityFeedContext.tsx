@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { getTokens } from '@/lib/services/api';
+import { ACCESS_TOKEN_CHANGED_EVENT, getTokens } from '@/lib/services/api';
 import { activityService, isActivityRunning, type ActivityItem, type ActivityRef } from '@/lib/services/activityService';
 
 /**
@@ -126,6 +126,8 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
       if (identityRef.current !== who || mine !== seq.current) return; // signed out / switched meanwhile
       setState(prev => ({ for: who, items, generation: prev.generation + 1, fetchedAt: sentAt, synced: true }));
       writeCache(who, items);
+      // TEMP diagnostics (cross-device icon)
+      console.log('[ActivityFeed] server', { total: items.length, shown: items.filter(a => !a.dismissed).length, running: items.filter(a => !a.dismissed && isActivityRunning(a)).length, types: items.filter(a => !a.dismissed).map(a => `${a.type}:${a.status}`) });
       setOverrides(prev => {
         if (!prev.size) return prev;
         const next = new Map([...prev].filter(([, o]) => o.at > sentAt));
@@ -162,9 +164,13 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
     };
     window.addEventListener('focus', onVisible);
     document.addEventListener('visibilitychange', onVisible);
+    // The token arrives a moment after a fresh page load (session restore):
+    // read the user then, not only on the next page change / tab focus.
+    window.addEventListener(ACCESS_TOKEN_CHANGED_EVENT, checkIdentity);
     return () => {
       window.removeEventListener('focus', onVisible);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener(ACCESS_TOKEN_CHANGED_EVENT, checkIdentity);
     };
   }, [checkIdentity, pull]);
 

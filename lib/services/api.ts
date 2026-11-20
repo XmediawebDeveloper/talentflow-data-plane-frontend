@@ -193,8 +193,19 @@ if (typeof window !== 'undefined') {
   window.addEventListener('focus', renewIfStale);
 }
 
+/** Fired on window whenever the in-memory access token is set or cleared —
+ *  e.g. when the session is restored after a page load. Providers that key
+ *  their state on the signed-in user re-read it on this (the token is null
+ *  for a moment on every fresh page). */
+export const ACCESS_TOKEN_CHANGED_EVENT = 'tf:access-token-changed';
+const announceAccessToken = () => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(ACCESS_TOKEN_CHANGED_EVENT));
+};
+
 const applyAccessToken = (access: string) => {
   accessToken = access;
+  // After this function finishes (listeners read the new token).
+  queueMicrotask(announceAccessToken);
   accessTokenExpiresAt = 0;
   try {
     // JWT segments are base64url.
@@ -308,6 +319,7 @@ export const clearPermissionVersion = (): void => {
 
 export const clearTokens = () => {
   accessToken = null;
+  announceAccessToken();
   hasSession = false;
   accessTokenExpiresAt = 0;
   scheduleRenewal();  // cancels a pending renewal
