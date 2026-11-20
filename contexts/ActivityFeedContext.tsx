@@ -15,22 +15,21 @@ import { activityService, isActivityRunning, type ActivityItem, type ActivityRef
  * resume upload rows from it. Each run's own detail (per-resume / per-candidate
  * rows) is still polled by its own popup or context while it runs.
  *
- * When it asks:
- *   - on sign-in / user switch (at once),
- *   - when the tab comes back into view (at most every FOCUS_MIN_MS),
- *   - every ACTIVE_POLL_MS while something is running,
- *   - every IDLE_POLL_MS otherwise, while the tab is visible — so a run started
- *     on another device shows up without the recruiter clicking anything.
+ * When it asks — no timer, the server says when something changed:
+ *   - on sign-in / user switch / page load (at once),
+ *   - when the server pushes `activity_changed` over the notifications
+ *     WebSocket (an activity started, progressed, finished or was cleared —
+ *     on any device), and when that WebSocket (re)connects, to catch up on
+ *     anything sent while it was down,
+ *   - when the tab comes back into view (at most every FOCUS_MIN_MS).
  *
  * Removing a row (`dismiss`) is saved on the server, so every device drops it;
  * it shows here at once and is confirmed by the next read.
  */
 
-const ACTIVE_POLL_MS = 10_000;
-/* Same as while running: most activities finish in seconds (a match in under
-   2s, a small scoring run in ~15s), so a slower idle read meant another device
-   often showed a run only long after it had finished. */
-const IDLE_POLL_MS = 10_000;
+/** Fired on window by useNotificationWebSocket on `activity_changed` and on
+ *  every (re)connect. */
+export const ACTIVITY_CHANGED_EVENT = 'tf:activity-changed';
 const FOCUS_MIN_MS = 5_000;
 const WINDOW_HOURS = 24;
 
@@ -114,9 +113,14 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
   const busy = useRef(false);
   const lastSent = useRef(0);
 
+  /* A change announced while a read is in flight: read once more after it,
+     so the latest state is never missed. */
+  const again = useRef(false);
+  const pullRef = useRef<() => Promise<void>>(async () => {});
   const pull = useCallback(async () => {
     const who = identityRef.current;
-    if (!who || busy.current || !getTokens().accessToken) return;
+    if (!who || !getTokens().accessToken) return;
+    if (busy.current) { again.current = true; return; }
     busy.current = true;
     const mine = ++seq.current;
     const sentAt = Date.now();
@@ -140,8 +144,13 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
       if (identityRef.current === who) setState(prev => (prev.for === who && prev.synced ? prev : { ...prev, for: who, synced: true }));
     } finally {
       busy.current = false;
+      if (again.current) {
+        again.current = false;
+        setTimeout(() => { void pullRef.current(); }, 0);
+      }
     }
   }, []);
+  useEffect(() => { pullRef.current = pull; }, [pull]);
 
   // A new user: drop the old list and read theirs at once.
   useEffect(() => {
@@ -174,18 +183,17 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
     };
   }, [checkIdentity, pull]);
 
-  // Steady reads: fast while something runs, slow otherwise; never while hidden.
-  const anyRunning = state.items.some(a => !a.dismissed && isActivityRunning(a));
+  // The server announced a change (or the WebSocket reconnected): read now.
+  // A hidden tab reads when it is shown again (the focus read is not throttled then).
   useEffect(() => {
     if (!identity) return;
-    const every = anyRunning ? ACTIVE_POLL_MS : IDLE_POLL_MS;
-    const t = setInterval(() => {
-      if (document.visibilityState === 'hidden') return;
-      if (Date.now() - lastSent.current < every - 500) return; // a focus read just went
+    const onChanged = () => {
+      if (document.visibilityState === 'hidden') { lastSent.current = 0; return; }
       void pull();
-    }, every);
-    return () => clearInterval(t);
-  }, [identity, anyRunning, pull]);
+    };
+    window.addEventListener(ACTIVITY_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(ACTIVITY_CHANGED_EVENT, onChanged);
+  }, [identity, pull]);
 
   const setLocal = useCallback((refs: ActivityRef[], dismissed: boolean) => {
     const at = Date.now();
