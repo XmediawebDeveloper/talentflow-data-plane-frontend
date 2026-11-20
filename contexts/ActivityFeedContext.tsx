@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { getTokens } from '@/lib/services/api';
+import { ACCESS_TOKEN_CHANGED_EVENT, getTokens } from '@/lib/services/api';
 import { activityService, isActivityRunning, type ActivityItem, type ActivityRef } from '@/lib/services/activityService';
 
 /**
@@ -164,9 +164,13 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
     };
     window.addEventListener('focus', onVisible);
     document.addEventListener('visibilitychange', onVisible);
+    // The token arrives a moment after a fresh page load (session restore):
+    // read the user then, not only on the next page change / tab focus.
+    window.addEventListener(ACCESS_TOKEN_CHANGED_EVENT, checkIdentity);
     return () => {
       window.removeEventListener('focus', onVisible);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener(ACCESS_TOKEN_CHANGED_EVENT, checkIdentity);
     };
   }, [checkIdentity, pull]);
 
