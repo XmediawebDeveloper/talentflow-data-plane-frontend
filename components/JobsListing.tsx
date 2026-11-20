@@ -590,12 +590,10 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
         total: res.total ?? 0,
       };
     },
-    // Each card is a tab, so the tab is not a stats filter.
-    fetchStats: (f) => {
-      const { status_tab: _tab, ...filters } = f as typeof f & { status_tab?: string };
-      void _tab;
-      return jdService.getJobStats(filters as JobOpeningsFilters);
-    },
+    // Each card is a tab, so the tab is not a stats filter: switching tabs
+    // re-reads the list only (it used to re-ask /jd/stats with the same filters).
+    statsIgnore: ['status_tab'],
+    fetchStats: (f) => jdService.getJobStats(f as JobOpeningsFilters),
   });
   refreshListRef.current = paged.refresh;
   const serverStats = paged.stats;

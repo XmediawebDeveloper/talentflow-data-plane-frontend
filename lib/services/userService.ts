@@ -3,7 +3,7 @@
  */
 
 import api, { handleApiError } from './api';
-import { cachedList, listCacheKey, listReadOptions, type ListReadOptions } from '@/lib/utils/listCache';
+import { cachedList, invalidateListCache, listCacheKey, listReadOptions, type ListReadOptions } from '@/lib/utils/listCache';
 
 // ✅ GRANULAR PERMISSIONS: Removed all "manage" permissions, using only granular CRUD
 export interface UserPermissions {
@@ -290,7 +290,14 @@ export const userService = {
    */
   async syncUsers(): Promise<SyncResult> {
     try {
-      const response = await api.post<SyncResult>('/users/sync');
+      // Pushes our count to the Admin API — no listed data changes, so it keeps
+      // the 30 s list cache (it used to make the Usage tab and the Dashboard
+      // re-read everything). Only the seat limits can move, and only when the
+      // two counts disagreed.
+      const response = await api.post<SyncResult>('/users/sync', undefined, { invalidatesLists: false });
+      if (response.data?.synced || response.data?.local_count !== response.data?.admin_count) {
+        invalidateListCache('users|limits-status');
+      }
       return response.data;
     } catch (error) {
       console.error('Error syncing users with Admin API:', error);

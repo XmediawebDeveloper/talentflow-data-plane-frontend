@@ -132,7 +132,8 @@ export default function ResumeDatabasePage() {
     let cancelled = false;
     const load = () => {
       resumeService
-        .stats({ include_archived: false, include_folders: false })
+        // Switching tabs re-reads at most every 30 s; any write clears that cache.
+        .stats({ include_archived: false, include_folders: false }, { reuseRecent: true })
         .then((res) => {
           if (cancelled) return;
           setTabCounts((prev) => {

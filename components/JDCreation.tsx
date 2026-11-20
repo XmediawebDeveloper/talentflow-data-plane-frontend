@@ -5678,15 +5678,29 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     };
 
+    /* Chunks are ~1 token each: appending every one re-rendered the growing
+       markdown ~1000 times. Collect them and paint once per frame instead;
+       every terminal callback (and an error) flushes what is still pending first. */
+    let pendingChunks = '';
+    let chunkFrame = 0;
+    const flushChunks = () => {
+      if (chunkFrame) cancelAnimationFrame(chunkFrame);
+      chunkFrame = 0;
+      if (!pendingChunks) return;
+      const content = pendingChunks;
+      pendingChunks = '';
+      // Accumulate markdown chunks progressively and display them
+      setStreamedContent((prev) => prev + content);
+      // Update the displayed JD content progressively (like ChatGPT)
+      setGeneratedJD((prev) => prev + content);
+    };
+
     try {
       // Try streaming first
       await jdService.generateStream(generationInput, {
         onChunk: (content: string) => {
-          // Accumulate markdown chunks progressively and display them
-          setStreamedContent((prev) => prev + content);
-
-          // Update the displayed JD content progressively (like ChatGPT)
-          setGeneratedJD((prev) => prev + content);
+          pendingChunks += content;
+          if (!chunkFrame) chunkFrame = requestAnimationFrame(flushChunks);
         },
         onTitle: (title: string) => {
           // Update title if provided (never over a locked title)
@@ -5695,12 +5709,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           }
         },
         onTextComplete: () => {
+          flushChunks();
           // Text streaming is done, update button immediately
           console.log('[TalentFlow] Text generation complete');
           setIsStreaming(false);
           setIsGenerating(false);
         },
         onComplete: (response) => {
+          flushChunks();
           // IMPORTANT: Set both isStreaming and isGenerating to false immediately
           // This ensures the button changes from "Generating..." to "Regenerate" right away
           setIsStreaming(false);
@@ -5757,6 +5773,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           }
         },
         onError: (message: string, errorCode?: string) => {
+          flushChunks();
           console.error('[TalentFlow] Stream error:', message, 'Code:', errorCode);
           setStreamError(message);
           setIsStreaming(false);
@@ -5786,7 +5803,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           });
         }
       });
+      flushChunks(); // a stream that ended without a complete event
     } catch (streamErr) {
+      flushChunks();
       console.error('[TalentFlow] Streaming failed, falling back:', streamErr);
       setIsStreaming(false);
 
