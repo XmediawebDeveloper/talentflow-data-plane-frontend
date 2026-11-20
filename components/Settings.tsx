@@ -338,8 +338,8 @@ export default function Settings() {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 6) {
-      toast.error('New password must be at least 6 characters');
+    if (newPassword.length < 8) {
+      toast.error('New password must be at least 8 characters');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -1317,8 +1317,8 @@ export default function Settings() {
                         {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </IconButton>
                     </div>
-                    {newPassword.length > 0 && newPassword.length < 6 && (
-                      <p className="tf-error mt-1">Password must be at least 6 characters</p>
+                    {newPassword.length > 0 && newPassword.length < 8 && (
+                      <p className="tf-error mt-1">Password must be at least 8 characters</p>
                     )}
                   </div>
 
@@ -1346,7 +1346,7 @@ export default function Settings() {
                     {confirmPassword.length > 0 && newPassword !== confirmPassword && (
                       <p className="tf-error mt-1">Passwords do not match</p>
                     )}
-                    {confirmPassword.length > 0 && newPassword === confirmPassword && newPassword.length >= 6 && (
+                    {confirmPassword.length > 0 && newPassword === confirmPassword && newPassword.length >= 8 && (
                       <p className="text-xs text-brand-cyan mt-1 flex items-center gap-1 font-semibold">
                         <Check className="w-3 h-3" /> Passwords match
                       </p>
@@ -1359,7 +1359,7 @@ export default function Settings() {
                     disabled={
                       isChangingPassword ||
                       !currentPassword ||
-                      newPassword.length < 6 ||
+                      newPassword.length < 8 ||
                       newPassword !== confirmPassword
                     }
                     className="w-full sm:w-auto"

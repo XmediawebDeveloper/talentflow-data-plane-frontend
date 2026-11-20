@@ -77,6 +77,9 @@ export default function GlobalScoringProgressIndicator() {
     })),
   [feedItems, localMatchJds, router, feedDismiss]);
   const dockTasks = useMemo(() => [...externalTasks, ...feedTasks], [externalTasks, feedTasks]);
+  /* TEMP diagnostics (cross-device icon): what the corner has, on every change. */
+  const diag = `scoring=${activeScoringJobs.length} invites=${invite?.jobs.length ?? 0}(widget=${invite?.widget}, dismissed=${invite?.jobs.filter(j => j.dismissed).length ?? 0}) feed=${feedItems?.length ?? 0}(synced=${!!feed?.syncedFor}, rows=${feedTasks.length}) inPage=${externalTasks.length} panelOpen=${isMainPanelOpen}`;
+  useEffect(() => { console.log('[ActivityDock]', diag); }, [diag]);
 
   /* Invite sends in the background: not removed, not open in their own popup —
      unless the recruiter closed them all (widget 'hidden'). */

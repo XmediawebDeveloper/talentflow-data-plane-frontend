@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Building2,
   Check,
@@ -11,6 +11,7 @@ import {
   LifeBuoy,
   Mail,
   MessageSquareText,
+  Phone,
   Presentation,
   Send,
   User,
@@ -23,6 +24,7 @@ import { RevealGroup } from "@/components/marketing/motion";
 import { SECTION, SHELL } from "@/components/marketing/layout";
 import { MarketingPage, PageHero } from "@/components/marketing/PageShell";
 import { IconButton } from '@/components/ui/icon-button';
+import { isValidEmailFormat } from "@/lib/utils/email";
 
 /* ------------------------------------------------------------------ */
 
@@ -40,8 +42,15 @@ const EMAILS = [
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 const MAX_MESSAGE = 1000;
-const EMPTY = { name: "", email: "", company: "", message: "" };
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMPTY = { name: "", email: "", company: "", phone: "", message: "" };
+const PHONE_MAX_DIGITS = 10;
+
+// Phone is optional and numbers only (the input drops anything else). It may not
+// have more than 10 digits; a leading +91 country code is not counted.
+function validatePhone(value: string): string | null {
+  const digits = value.trim().replace(/^\+91/, "").replace(/\D/g, "");
+  return digits.length > PHONE_MAX_DIGITS ? `Phone number cannot be more than ${PHONE_MAX_DIGITS} digits.` : null;
+}
 
 /* ------------------------------------------------------------------ */
 
@@ -146,10 +155,28 @@ export default function ContactPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const set = (key: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setFormData({ ...formData, [key]: e.target.value });
+    setFormData({
+      ...formData,
+      // Phone accepts numbers only; a "+" is allowed only at the start (for +91)
+      [key]: key === "phone" ? e.target.value.replace(/[^0-9+]/g, "").replace(/(?!^)\+/g, "") : e.target.value,
+    });
 
-  const emailValid = EMAIL_RE.test(formData.email);
-  const emailError = emailTouched && formData.email && !emailValid ? "Enter a valid email address." : null;
+  // Checked on every keystroke, so the "more than 10 digits" error shows at once
+  const phoneError = validatePhone(formData.phone);
+
+  // Same check as the Book a Demo page: one @, no spaces or stray dots, a real
+  // domain ending, and no misspelt provider such as "gmail.om" or "gmial.com".
+  const email = formData.email.trim();
+  const emailValid = email.length <= 254 && isValidEmailFormat(email);
+  const emailError = emailTouched && email && !emailValid ? "Enter a valid email address, like john@company.com." : null;
+
+  // Show the red error shortly after the visitor stops typing an invalid address
+  // (not on every keystroke). It is also checked on leaving the field and on submit.
+  useEffect(() => {
+    if (!email) return;
+    const id = window.setTimeout(() => setEmailTouched(true), 600);
+    return () => window.clearTimeout(id);
+  }, [email]);
   const activeTopic = TOPICS.find((t) => t.id === topic) ?? TOPICS[0];
 
   // Glide down to the form (instant for reduced motion), then put the
@@ -168,6 +195,10 @@ export default function ContactPage() {
       setEmailTouched(true);
       return;
     }
+    if (phoneError) {
+      document.getElementById("phone")?.focus();
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -178,6 +209,7 @@ export default function ContactPage() {
           full_name: formData.name.trim(),
           email: formData.email.trim(),
           company: formData.company.trim() || null,
+          phone: formData.phone.trim() || null,
           topic,
           message: formData.message.trim(),
         }),
@@ -352,17 +384,33 @@ export default function ContactPage() {
                       />
                     </div>
 
-                    <Field
-                      id="company"
-                      label="Company"
-                      icon={Building2}
-                      optional
-                      placeholder="Your company"
-                      autoComplete="organization"
-                      value={formData.company}
-                      onChange={set("company")}
-                      valid={formData.company.trim().length > 1}
-                    />
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                      <Field
+                        id="company"
+                        label="Company"
+                        icon={Building2}
+                        optional
+                        placeholder="Your company"
+                        autoComplete="organization"
+                        value={formData.company}
+                        onChange={set("company")}
+                        valid={formData.company.trim().length > 1}
+                      />
+                      <Field
+                        id="phone"
+                        label="Phone"
+                        icon={Phone}
+                        optional
+                        type="tel"
+                        inputMode="tel"
+                        placeholder="+91"
+                        autoComplete="tel"
+                        value={formData.phone}
+                        onChange={set("phone")}
+                        valid={!phoneError && formData.phone.replace(/^\+91/, "").replace(/\D/g, "").length === PHONE_MAX_DIGITS}
+                        error={phoneError}
+                      />
+                    </div>
 
                     <div>
                       <div className="mb-1.5 flex items-baseline justify-between gap-3">
@@ -408,7 +456,7 @@ export default function ContactPage() {
                       </p>
                       <button
                         type="submit"
-                        disabled={submitting || !formData.name.trim() || !formData.message.trim() || !formData.email}
+                        disabled={submitting || !formData.name.trim() || !formData.message.trim() || !formData.email || !!phoneError}
                         className="group relative isolate inline-flex h-12 items-center justify-center gap-2 overflow-hidden rounded-full bg-mkt-ink px-7 text-[15px] font-semibold text-mkt-canvas transition-[box-shadow,opacity] duration-300 hover:shadow-[0_14px_32px_-12px_rgba(15,60,153,0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-surface active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none"
                       >
                         <span

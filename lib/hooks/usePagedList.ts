@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { cachedList, listCacheKey, onListCacheInvalidate, LIST_CACHE_TTL_MS } from '@/lib/utils/listCache';
+import { cachedList, listCacheKey, onListCacheInvalidate, listWriteInFlight, LIST_CACHE_TTL_MS } from '@/lib/utils/listCache';
 import { showErrorToast } from '@/lib/utils/errorToast';
 
 /**
@@ -165,12 +165,18 @@ export function usePagedList<T, S = unknown, Q extends PagedListQuery = PagedLis
   }, [name, queryKey, statsKey, enabled, prefetchNext, reloadTick]);
 
   // A write anywhere cleared the cache: re-read what is on screen. A write
-  // clears it when it starts AND when it ends, so coalesce into one re-read.
+  // clears it when it starts AND when it ends, so coalesce into one re-read —
+  // and none while a write is still in flight: its end clears again and
+  // schedules the read that can actually see the change (a slow save used to
+  // re-read the list twice, the first time before anything had changed).
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const off = onListCacheInvalidate(() => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => setReloadTick((t) => t + 1), 250);
+      timer = setTimeout(() => {
+        timer = null;
+        if (!listWriteInFlight()) setReloadTick((t) => t + 1);
+      }, 250);
     });
     return () => { off(); if (timer) clearTimeout(timer); };
   }, []);

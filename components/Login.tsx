@@ -4,6 +4,7 @@ import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, 
 import { User, Tenant } from '@/lib/types/tenant';
 import { authService, type LoginResponse } from '@/lib/services/authService';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
 import { IconButton } from '@/components/ui/icon-button';
 
 interface LoginProps {
@@ -89,8 +90,8 @@ export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: Log
         } catch {
           // Fallback to raw URL if parsing fails
         }
-        console.log('[LOGIN] Tenant has pending payment, redirecting to:', response.pending_payment_redirect);
-        router.push(response.pending_payment_redirect);
+        // Backend-supplied: same-site paths only (security sheet N4).
+        router.push(safeReturnUrl(response.pending_payment_redirect, '/complete-payment'));
         return;
       }
 

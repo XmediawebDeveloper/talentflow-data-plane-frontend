@@ -170,23 +170,13 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       }
     };
 
-    // Debounce rapid consecutive events (e.g. scoring 7 resumes fires 7 events).
-    // Coalesce into a single quota refresh 1.5s after the last event.
-    const debounceRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
-    const handleUnitsConsumed = () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        console.log('[Header] Units consumed (debounced), refreshing quota...');
-        fetchQuotaStatus();
-      }, 1500);
-    };
-
+    // No units-consumed listener here: QuotaContext (whose data this header
+    // shows) already refreshes on that event, at once, and queues one more
+    // fetch for events that land mid-fetch. A second, debounced refresh from
+    // here was a duplicate /usage/quota-status 1.5 s after every write.
     window.addEventListener('planChanged', handlePlanChange);
-    window.addEventListener('unitsConsumed', handleUnitsConsumed);
     return () => {
       window.removeEventListener('planChanged', handlePlanChange);
-      window.removeEventListener('unitsConsumed', handleUnitsConsumed);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [user]);
 

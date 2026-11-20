@@ -10,6 +10,7 @@ import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/ser
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 import { forceNavigate } from '@/lib/utils/forcedNavigation';
 import { focusRefreshDue, markRefreshed } from '@/lib/utils/focusRefresh';
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
 
 // Helper to store/retrieve user from localStorage
 const USER_STORAGE_KEY = 'talentflow_user';
@@ -517,7 +518,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   return;
                 }
               } catch {
-                window.location.href = apiUserData.pending_payment_redirect;
+                // Backend-supplied: same-site paths only (security sheet N4).
+                window.location.href = safeReturnUrl(apiUserData.pending_payment_redirect, '/complete-payment');
                 return;
               }
             }
@@ -613,7 +615,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   return;
                 }
               } catch {
-                window.location.href = apiUserData.pending_payment_redirect;
+                // Backend-supplied: same-site paths only (security sheet N4).
+                window.location.href = safeReturnUrl(apiUserData.pending_payment_redirect, '/complete-payment');
                 setIsLoading(false);
                 return;
               }

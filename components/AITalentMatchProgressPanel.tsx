@@ -130,9 +130,8 @@ export default function AITalentMatchProgressPanel({
         setIsLoading(false);
 
         if (viewRef.current === 'popup') {
-          setTimeout(() => {
-            handOver(candidates);
-          }, 500);
+          // Straight to the results — no 0.5 s hold on the 100% bar.
+          handOver(candidates);
         } else {
           setHeldResults(candidates);
           toast.success(`AI matching finished — ${jobTitle}`, {

@@ -1,4 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react';
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
 
 /**
  * Resume Scoring / AI Talent Match → "create the assessment / AI interview
@@ -95,7 +96,8 @@ const EXTRA_RETURN_PATHS: Record<InviteHandoffSource, string[]> = {
  *  of the in-app pages it opens a candidate on). */
 export function safeInviteReturnUrl(url: string | null | undefined, source: InviteHandoffSource): string {
   const allowed = [SOURCES[source].path, ...EXTRA_RETURN_PATHS[source]];
-  return url && allowed.some(p => url.startsWith(p)) ? url : inviteHandoffReturnUrl(source);
+  const safe = safeReturnUrl(url);
+  return safe && allowed.some(p => safe.startsWith(p)) ? safe : inviteHandoffReturnUrl(source);
 }
 
 export interface InviteHandoffOrigin {

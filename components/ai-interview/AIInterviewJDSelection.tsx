@@ -21,15 +21,65 @@ import { lineageKey, isSelectableVersion, mapJDToJob, jobSearchMatcher, sortJobs
 import type { Job } from '@/lib/types/types';
 import { publishedJdToJob } from '@/lib/utils/publishedJdToJob';
 import { jdService } from '@/lib/services';
-import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
+import { seedJobCandidateCounts, useJobCandidateCountsFor, type JobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
 import JobEligibilityNote from '@/components/jobs/JobEligibilityNote';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { cachedList, listCacheKey, listReadOptions, type ListReadOptions } from '@/lib/utils/listCache';
 import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 import { clickableProps } from '@/lib/a11y/clickableProps';
 import { IconButton } from '@/components/ui/icon-button';
 
 const JD_RADIO_GROUP = 'ai-interview-jd-version-selection';
+
+type FullJobRowsRead = {
+  items: Parameters<typeof mapJDToJob>[0][];
+  /** "N assessed" / "N interviewed" per JD id, as GET /jd returned them with
+   *  its pages (`include_candidate_counts`) — kept with the rows so a reused
+   *  read re-seeds the chips without asking again. */
+  counts: JobCandidateCounts;
+};
+
+/* The full Job Openings rows, with the chips' candidate counts folded into the
+   same pages — instead of paging every assessment and every AI interview config
+   tenant-wide for them (the Assessments / Score Resume pickers' pattern). One
+   read per open; an arrival within the list cache's TTL reuses it. Any write
+   clears it (lib/utils/listCache). */
+const FULL_JOB_ROWS_KEY = listCacheKey('ai-interview-picker|jd-rows', { source: 'my-jds', counts: 1 });
+async function loadFullJobRows(opts: ListReadOptions): Promise<FullJobRowsRead> {
+  const read = await cachedList<FullJobRowsRead>(
+    FULL_JOB_ROWS_KEY,
+    async () => {
+      const counts: JobCandidateCounts = {};
+      const full = await fetchAllRows((page_size, page) =>
+        jdService.list({ source: 'my-jds', page_size, page, include_candidate_counts: true }).then((res) => {
+          Object.assign(counts, res.candidate_counts ?? {});
+          return res;
+        }),
+      );
+      return { items: (full?.items ?? []) as FullJobRowsRead['items'], counts };
+    },
+    listReadOptions(opts),
+  );
+  seedJobCandidateCounts(read.counts);
+  return read;
+}
+
+/* Which JD versions already carry an AI interview, from GET /configs' default
+   list (every status but archived) — only for an older backend whose
+   jds-for-interview rows lack `has_config`. */
+async function loadVersionsWithInterviewFromConfigs(): Promise<Set<string>> {
+  const PAGE_SIZE = 20;
+  const first = await aiInterviewService.listConfigs({ page: 1, page_size: PAGE_SIZE, compact: true });
+  const totalPages = Math.max(1, first.total_pages || Math.ceil(first.total / PAGE_SIZE));
+  const rest = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, i) =>
+      aiInterviewService.listConfigs({ page: i + 2, page_size: PAGE_SIZE, compact: true }),
+    ),
+  );
+  const items = [...first.items, ...rest.flatMap((page) => page.items)];
+  return new Set(items.map((c) => c.jd_id).filter((id): id is string => !!id));
+}
 const ADD_BUTTON_DISABLED = 'bg-slate-200 text-slate-400 ring-slate-300/60 shadow-none cursor-not-allowed';
 
 /** Created / Not Created — the Assessments picker's per-version label. */
@@ -79,60 +129,63 @@ export default function AIInterviewJDSelection() {
   const [fullJobsById, setFullJobsById] = useState<Map<string, Job>>(new Map());
   const [loadError, setLoadError] = useState<'jobs' | 'eligibility' | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
-  const candidateCounts = useJobCandidateCounts();
+  /* The full rows' read has settled (either way) — the chips' counts came with
+     it, so the per-page counts hook waits for it rather than asking itself. */
+  const [fullRowsSettled, setFullRowsSettled] = useState(false);
   const jdListRef = useRef<HTMLDivElement | null>(null);
 
   /* Loading is raised by whoever asks for the read (initial state, Retry), not
      here — setState only lands once the requests settle. */
   useEffect(() => {
     let cancelled = false;
-    const jdParams = { source: 'my-jds' as const };
+    /* Arrival reuses a read made moments ago (e.g. the Configure step and
+       back); Retry always asks the server. */
+    const readOpts: ListReadOptions = reloadToken > 0 ? { fresh: true } : { reuseRecent: true };
+    /* "Already has an AI interview" per version. jds-for-interview answers it
+       (`has_config`); an older backend without that field — or a failed JD
+       read — falls back to paging the config list, as before. */
+    const loadEligibilityFromConfigs = () => {
+      loadVersionsWithInterviewFromConfigs()
+        .then((ids) => {
+          if (cancelled) return;
+          setJdsWithInterview(ids);
+          setEligibilityLoaded(true);
+          setLoadError(prev => (prev === 'eligibility' ? null : prev));
+        })
+        .catch(() => { if (!cancelled) setLoadError(prev => prev ?? 'eligibility'); });
+    };
     /* Two independent reads. The picker draws as soon as the interview JD
        list lands; the full Job Openings rows (salary, work mode, applicants…)
        fill the cards in when they arrive. Waiting on both used to hold the
        skeleton until every page of the full list was in. */
-    aiInterviewService.getPublishedJDs()
+    aiInterviewService.getPublishedJDs(readOpts)
       .then((published) => {
         if (cancelled) return;
         setJds(published.items);
         setLoadError(prev => (prev === 'jobs' ? null : prev));
+        const answered = published.items.length === 0 || published.items.every(jd => typeof jd.has_config === 'boolean');
+        if (answered) {
+          setJdsWithInterview(new Set(published.items.filter(jd => jd.has_config).map(jd => jd.id)));
+          setEligibilityLoaded(true);
+          setLoadError(prev => (prev === 'eligibility' ? null : prev));
+        } else {
+          loadEligibilityFromConfigs();
+        }
       })
       .catch((error) => {
         if (cancelled) return;
         console.error('Failed to load JDs:', error);
         setLoadError('jobs');
+        loadEligibilityFromConfigs();
       })
       .finally(() => { if (!cancelled) setLoadingJds(false); });
-    fetchAllRows((page_size, page) => jdService.list({ ...jdParams, page_size, page }))
+    loadFullJobRows(readOpts)
       .then((full) => {
-        if (cancelled || !full?.items) return;
-        setFullJobsById(new Map(full.items.map((row: Parameters<typeof mapJDToJob>[0]) => [row.id, mapJDToJob(row)] as const)));
-      })
-      .catch((error) => console.error('Failed to load full job rows:', error));
-    return () => { cancelled = true; };
-  }, [reloadToken]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const PAGE_SIZE = 20;
-        const first = await aiInterviewService.listConfigs({ page: 1, page_size: PAGE_SIZE, compact: true });
-        const totalPages = Math.max(1, first.total_pages || Math.ceil(first.total / PAGE_SIZE));
-        const rest = await Promise.all(
-          Array.from({ length: totalPages - 1 }, (_, i) =>
-            aiInterviewService.listConfigs({ page: i + 2, page_size: PAGE_SIZE, compact: true }),
-          ),
-        );
         if (cancelled) return;
-        const items = [...first.items, ...rest.flatMap((page) => page.items)];
-        setJdsWithInterview(new Set(items.map((c) => c.jd_id).filter((id): id is string => !!id)));
-        setEligibilityLoaded(true);
-        setLoadError(prev => (prev === 'eligibility' ? null : prev));
-      } catch {
-        if (!cancelled) setLoadError(prev => prev ?? 'eligibility');
-      }
-    })();
+        setFullJobsById(new Map(full.items.map((row) => [row.id, mapJDToJob(row)] as const)));
+      })
+      .catch((error) => console.error('Failed to load full job rows:', error))
+      .finally(() => { if (!cancelled) setFullRowsSettled(true); });
     return () => { cancelled = true; };
   }, [reloadToken]);
 
@@ -206,6 +259,10 @@ export default function AIInterviewJDSelection() {
   const pagedJobs = lineageJobs.slice((jdSafePage - 1) * jdItemsPerPage, jdSafePage * jdItemsPerPage);
 
   const jdPickOnThisPage = !!jdPick && pagedJobs.some(job => lineageKey(job) === jdPick.lineage);
+  /* "N assessed" / "N interviewed" for the cards on screen — seeded by the
+     full rows' read (GET /jd `include_candidate_counts`); a page whose ids it
+     did not answer asks GET /jd/candidate-counts for just those. */
+  const candidateCounts = useJobCandidateCountsFor(pagedJobs.map(job => job.id), fullRowsSettled);
   /* Every version we hold, for the View Versions test below. */
   const allVersions = [...fullJobsById.values()];
 
@@ -248,16 +305,21 @@ export default function AIInterviewJDSelection() {
                   variant="primary"
                   size="md"
                   onClick={() => {
-                    if (!canCreateJD) return;
+                    /* A job is already picked: Create New Job is off until the
+                       selection is cleared. */
+                    if (!canCreateJD || jdPick) return;
                     router.push('/recruitment/jd-creation?from=ai-interview');
                   }}
-                  aria-disabled={!canCreateJD}
-                  title={!canCreateJD ? 'You do not have permission to create job descriptions' : ''}
-                  icon={<Plus className="w-4 h-4" />}
-                  className={`flex-shrink-0 ${!canCreateJD ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  aria-disabled={!canCreateJD || !!jdPick}
+                  title={!canCreateJD
+                    ? 'You do not have permission to create job descriptions'
+                    : jdPick ? 'Clear the selected job to create a new one' : ''}
+                  className={`flex-shrink-0 ${!canCreateJD || jdPick ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
+                  {/* Text then a chevron, like the cards' Create Config — no "+". */}
                   <span className="hidden sm:inline">Create New Job</span>
                   <span className="sm:hidden">New Job</span>
+                  <ChevronRight className="w-4 h-4" />
                 </Button>
               }
             />

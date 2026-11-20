@@ -733,7 +733,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
       }
 
       const orderData = await orderRes.json();
-      console.log('[Signup] Razorpay order created:', orderData);
+      // order details are not logged
 
       // Step 2: Open Razorpay checkout modal
       let paymentResponse;
@@ -877,7 +877,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
       });
 
       const data = await response.json();
-      console.log('API Response:', response.status, data);
+      // response body is not logged (account data)
 
       if (!response.ok) {
         // Handle different error formats from backend

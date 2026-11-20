@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { emitBackgroundWork } from '@/lib/backgroundWorkEvents';
-import { getTokens } from '@/lib/services/api';
+import { ACCESS_TOKEN_CHANGED_EVENT, getTokens } from '@/lib/services/api';
 import { scoringService, normalizeScoringStatus, type BatchScoringStatus, type MyScoringBatch } from '@/lib/services/scoringService';
 import { useActivityFeed } from '@/contexts/ActivityFeedContext';
 import type { ActivityRef } from '@/lib/services/activityService';
@@ -306,9 +306,12 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     const onFocus = () => checkIdentity();
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);
+    // Session restored after a fresh page load: the user is known now.
+    window.addEventListener(ACCESS_TOKEN_CHANGED_EVENT, onFocus);
     return () => {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
+      window.removeEventListener(ACCESS_TOKEN_CHANGED_EVENT, onFocus);
     };
   }, [checkIdentity]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -555,12 +558,19 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
      past this browser's copy) — are brought up to date here until done.
      Rows removed on another device are dropped here too. */
   const syncBusy = useRef(false);
+  /* A server update that arrived while a sync was running. It used to be
+     dropped — fine while a timer polled again, but with WebSocket pushes the
+     "finished" update can be the LAST one, so a device stayed at e.g. 50%
+     until refreshed. Now it is applied right after the running sync. */
+  const syncAgain = useRef(false);
+  const pullRef = useRef<() => Promise<void>>(async () => {});
   const feedRef = useRef(feed);
   useEffect(() => { feedRef.current = feed; });
   const pullServerJobs = useCallback(async () => {
     const who = identityRef.current;
     const f = feedRef.current;
-    if (!who || loadedFor !== who || f.syncedFor !== who || syncBusy.current || !getTokens().accessToken) return;
+    if (!who || loadedFor !== who || f.syncedFor !== who || !getTokens().accessToken) return;
+    if (syncBusy.current) { syncAgain.current = true; return; }
     syncBusy.current = true;
     try {
       const scoring = f.items.filter(a => a.type === 'scoring');
@@ -666,8 +676,13 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
       syncBusy.current = false;
       // Same render as the updates above: the first finished-state seen is the baseline.
       if (identityRef.current === who) setServerSyncedFor(who);
+      if (syncAgain.current) {
+        syncAgain.current = false;
+        setTimeout(() => { void pullRef.current(); }, 0);
+      }
     }
   }, [loadedFor, syncScoringJob]);
+  useEffect(() => { pullRef.current = pullServerJobs; }, [pullServerJobs]);
 
   // Every server read (sign-in, tab focus, the feed's steady poll) is applied here.
   useEffect(() => {
