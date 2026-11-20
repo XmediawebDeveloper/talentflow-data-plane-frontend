@@ -1003,7 +1003,7 @@ export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitl
   // rendering the description markdown — same treatment here.
   const jdDescriptionMarkdown: string = (jdDetails?.description || '')
     .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match: string) =>
-      match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
+      match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/i) ? '' : match
     )
     .replace(/\*\*Certifications\*\*[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
     .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '');

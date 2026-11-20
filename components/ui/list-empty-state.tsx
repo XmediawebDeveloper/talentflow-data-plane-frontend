@@ -2,8 +2,32 @@
 
 import * as React from 'react';
 import Image from 'next/image';
-import type { LucideIcon } from 'lucide-react';
+import { Search, type LucideIcon } from 'lucide-react';
 import { cn } from './utils';
+import EmptySearchIllustration from './empty-search-illustration';
+
+/**
+ * A candidate list that a search or filter narrowed to nothing. Every Job
+ * Details results tab (AI Talent Match, Scored Resumes, Assessment, AI
+ * Interview) shows this one, so "no matches" looks the same whichever tab
+ * you're on.
+ */
+export function NoMatchingCandidates({ query, className }: { query?: string; className?: string }) {
+  return (
+    <ListEmptyState
+      icon={Search}
+      isNarrowed
+      query={query}
+      entityLabel="candidate"
+      emptyTitle=""
+      narrowedIllustration={NO_MATCHES_ILLUSTRATION}
+      className={className}
+    />
+  );
+}
+
+/** The magnifier art, sized for a results-tab empty state. */
+export const NO_MATCHES_ILLUSTRATION = <EmptySearchIllustration className="w-52 sm:w-60" />;
 
 /**
  * The empty state for a list, in its two genuinely different flavours.

@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, useId, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
-import { Copy, GitBranch, Loader2, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronDown, FileText, Info, RefreshCw, Ban, Lightbulb, HelpCircle } from 'lucide-react';
+import { Copy, GitBranch, Loader2, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronDown, FileText, Info, RefreshCw, Ban, Lightbulb, HelpCircle, Minus, Upload } from 'lucide-react';
+import AppModal, { AppModalFooterButtons } from '@/components/ui/app-modal';
+import { Button } from '@/components/ui/button';
 import UploadModal from '@/components/UploadModal';
 import UploadHistoryEmptyState from '@/components/resumes/UploadHistoryEmptyState';
 import type { DuplicateFile } from '@/components/DuplicateResumeModal';
@@ -1141,50 +1143,78 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
       {/* Minimized Upload History: a row in My Activities (see uploadTaskId above). */}
 
       {isUploadHistoryModalOpen && !isUploadHistoryMinimized && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-300"
-            onClick={() => {
-              setIsUploadHistoryMinimized(true);
-              setIsUploadHistoryModalOpen(false);
-            }}
-          />
-          {/* Centered Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-4xl max-h-[85dvh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-              {/* Header — plain, one hairline under it */}
-              <div className="bg-white border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0">
-                    <h2 className="tf-section-title sm:text-xl tracking-tight">Upload History</h2>
-                    <p className="tf-body-secondary mt-0.5">View all past bulk upload reports</p>
+        /* The same frame as the AI Assessment / AI Interview invitation
+           progress popup (BulkInviteResultsDialog): icon + title top-left,
+           "− Minimize" top-right, Close in the footer bottom-right.
+           z-50 (not AppModal's z-[60]) so the cancel confirmations, also
+           z-50 and rendered after it, still open on top. */
+        <AppModal
+          open
+          onCancel={handleCloseUploadHistory}
+          cancelLabel="Close"
+          size="xl"
+          widthClassName="sm:max-w-4xl"
+          tone="plain"
+          zIndexClass="z-50"
+          icon={<Upload className="w-4 h-4 text-brand-blue" />}
+          title="Upload History"
+          subtitle="View all past bulk upload reports"
+          headerExtra={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setIsUploadHistoryMinimized(true);
+                setIsUploadHistoryModalOpen(false);
+              }}
+              className="px-2 sm:px-3"
+              aria-label="Minimize"
+              title="Minimize — uploads carry on; find them in My Activities"
+            >
+              <Minus className="w-4 h-4" />
+              <span className="hidden sm:inline">Minimize</span>
+            </Button>
+          }
+          bodyClassName="bg-gray-50/70"
+          footer={
+            <>
+              {/* Floating Resolve Selected Bar */}
+              {selectedVersionedItems.size > 0 && (
+                <div className="shrink-0 border-t border-brand-blue-2/20 px-3 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-brand-blue-2/[0.07] to-brand-blue/[0.04] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10">
+                      <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-sm font-semibold text-brand-blue-2">
+                        {selectedVersionedItems.size} versioned resume{selectedVersionedItems.size !== 1 ? 's' : ''} selected
+                      </span>
+                      <p className="text-xs text-brand-blue-2/80">Choose how to resolve these version conflicts</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => {
-                        setIsUploadHistoryMinimized(true);
-                        setIsUploadHistoryModalOpen(false);
-                      }}
-                      className="h-8 min-w-8 px-2 sm:px-3 flex items-center justify-center gap-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                      aria-label="Minimize" title="Minimize"
+                      onClick={() => setSelectedVersionedItems(new Map())}
+                      className="px-2.5 sm:px-3 py-1.5 sm:py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors"
                     >
-                      <span className="text-xl font-medium leading-none">−</span>
-                      <span className="hidden sm:inline text-sm font-medium">Minimize</span>
+                      Clear
                     </button>
                     <button
-                      onClick={handleCloseUploadHistory}
-                      className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                      aria-label="Close"
+                      onClick={() => setIsBulkResolveModalOpen(true)}
+                      className="tf-btn tf-btn-primary flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex gap-1.5 sm:gap-2 whitespace-normal"
                     >
-                      <X className="w-5 h-5" />
+                      <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      Resolve ({selectedVersionedItems.size})
                     </button>
                   </div>
                 </div>
+              )}
+              <div className="flex shrink-0 flex-col gap-3 border-t border-gray-100 bg-slate-50/50 px-4 py-3 dark:border-slate-700/60 dark:bg-slate-800/50 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
+                <AppModalFooterButtons onCancel={handleCloseUploadHistory} cancelLabel="Close" tone="plain" />
               </div>
-
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 bg-gray-50/70">
+            </>
+          }
+        >
                 {(() => {
                   const myResumesHistory = uploadHistory.filter(r => r.source === 'my-resumes');
                   const isActive = (r: any) => r.status === 'processing' || r.pending > 0;
@@ -2024,43 +2054,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                     </>
                   );
                 })()}
-              </div>
-
-              {/* Floating Resolve Selected Bar */}
-              {selectedVersionedItems.size > 0 && (
-                <div className="border-t border-brand-blue-2/20 px-3 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-brand-blue-2/[0.07] to-brand-blue/[0.04] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10">
-                      <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-sm font-semibold text-brand-blue-2">
-                        {selectedVersionedItems.size} versioned resume{selectedVersionedItems.size !== 1 ? 's' : ''} selected
-                      </span>
-                      <p className="text-xs text-brand-blue-2/80">Choose how to resolve these version conflicts</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setSelectedVersionedItems(new Map())}
-                      className="px-2.5 sm:px-3 py-1.5 sm:py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors"
-                    >
-                      Clear
-                    </button>
-                    <button
-                      onClick={() => setIsBulkResolveModalOpen(true)}
-                      className="tf-btn tf-btn-primary flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex gap-1.5 sm:gap-2 whitespace-normal"
-                    >
-                      <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      Resolve ({selectedVersionedItems.size})
-                    </button>
-                  </div>
-                </div>
-              )}
-
-            </div>
-          </div>
-        </>
+        </AppModal>
       )}
 
       {/* Upload History Item Detail Modal */}

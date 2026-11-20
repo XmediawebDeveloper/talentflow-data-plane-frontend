@@ -28,6 +28,7 @@ import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import { SortByControl } from '@/components/ui/select-all-menu';
 import ListPagination from '@/components/ListPagination';
 import TabEmptyState from '@/components/ui/tab-empty-state';
+import { NoMatchingCandidates } from '@/components/ui/list-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
@@ -3617,7 +3618,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <div className="markdown-content prose prose-sm max-w-none text-gray-700 dark:text-slate-300">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{job.description
                         .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
-                          match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
+                          match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/i) ? '' : match
                         )
                         .replace(/\*\*Certifications\*\*[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
                         .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
@@ -4556,6 +4557,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 toolbarActions={resultsInviteAction('assessment', 'toolbar')}
                 emptyStateAction={resultsInviteAction('assessment', 'empty')}
                 emptyStateText={resultsEmptyText('assessment')}
+                emptyStateIllustration={<AssessmentIllustration />}
                 /* Actions ▸ Create / Send Assessment | AI Interview: the AI
                    Talent Match tab's version popups, with the ticked candidates. */
                 onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'assessment-result')}
@@ -4655,6 +4657,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               toolbarActions={resultsInviteAction('interview', 'toolbar')}
               emptyStateAction={resultsInviteAction('interview', 'empty')}
               emptyStateText={resultsEmptyText('interview')}
+              emptyStateIllustration={<InterviewIllustration />}
               readOnly={jobInactive}
               configId={aiInterviewConfig.id}
               configTitle={aiInterviewConfig.position || aiInterviewConfig.jd_title || 'AI Interview'}
@@ -5706,7 +5709,7 @@ function AIMatchTabContent({
         bordered
         icon={Brain}
         illustration={<TalentMatchIllustration />}
-        title="No AI Talent Match Results"
+        title="No AI Talent Match Results Yet"
         description="Run an AI Talent Match session to find the best candidates for this role."
         action={(
           <Button
@@ -6062,9 +6065,7 @@ function AIMatchTabContent({
         {effectiveDisplayMode === 'grid' ? (
           <div className="max-h-[calc(100dvh-20rem)] overflow-auto p-4">
             {filteredCandidates.length === 0 ? (
-              <div className="px-4 py-12 text-center tf-body-muted">
-                No candidates match the current filters.
-              </div>
+              <NoMatchingCandidates query={searchQuery} />
             ) : (
               <div className="tf-grid-4">
                 {paginatedCandidates.map((candidate) => {
@@ -6212,8 +6213,8 @@ function AIMatchTabContent({
               {filteredCandidates.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-0">
-                    <div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 dark:text-slate-500`}>
-                      No candidates match the current filters.
+                    <div className={TABLE_EMPTY_PANEL_CLASS}>
+                      <NoMatchingCandidates query={searchQuery} className="py-0" />
                     </div>
                   </td>
                 </tr>
@@ -6488,8 +6489,8 @@ function AIMatchTabContent({
         {/* Mobile: candidates render as cards instead of a 1450px-wide horizontal-scroll table (§10). */}
         <div className="lg:hidden space-y-3">
           {filteredCandidates.length === 0 ? (
-            <div className="tf-panel p-8 text-center tf-body-muted">
-              No candidates match the current filters.
+            <div className="tf-panel">
+              <NoMatchingCandidates query={searchQuery} />
             </div>
           ) : (
             paginatedCandidates.map((candidate) => {

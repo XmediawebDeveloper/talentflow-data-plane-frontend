@@ -1,4 +1,4 @@
-import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, MoreVertical, X } from 'lucide-react';
+import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Download, Play, Eye, MoreVertical, X } from 'lucide-react';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -41,6 +41,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import AssessmentResultsSkeleton from '@/components/AssessmentResultsSkeleton';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import EmptySearchIllustration from '@/components/ui/empty-search-illustration';
+import { NoMatchingCandidates } from '@/components/ui/list-empty-state';
 import { Button } from '@/components/ui/button';
 import { currentResultReturnTo, rememberResultReturn, resultReturnQuery } from '@/lib/utils/resultReturnContext';
 import InviteStatusChip, { type InviteStatusKind } from '@/components/ui/invite-status-chip';
@@ -168,6 +169,9 @@ interface AssessmentResultsProps {
    *  its supporting line. Unset = the standalone page's wording, no action. */
   emptyStateAction?: React.ReactNode;
   emptyStateText?: string;
+  /** Job Details: the tab's own illustration, so the no-results state looks
+   *  the same before and after an assessment exists. Unset = the generic one. */
+  emptyStateIllustration?: React.ReactNode;
   /** Job Details: open a candidate's result in the host's own in-page view
    *  (whose trail keeps the job) instead of routing to the Assessments
    *  module's Result Details page. Unset = route, as before. */
@@ -271,7 +275,7 @@ interface QuestionResult {
 const resultOrderTime = (c: { completed_at?: string; created_at?: string }) =>
   new Date(c.completed_at || c.created_at || 0).getTime();
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange, onViewCandidate, toolbarActions, emptyStateAction, emptyStateText }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange, onViewCandidate, toolbarActions, emptyStateAction, emptyStateText, emptyStateIllustration }: AssessmentResultsProps) {
   /* Export (a server export — the endpoint enforces `assessments:export` and
      writes the audit row) is greyed with this reason when the permission is
      missing: listed, never hidden. */
@@ -2780,17 +2784,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             {paginatedCandidates.length === 0 ? (
               <div className="col-span-full px-6 py-12 text-center">
                 <div className="flex flex-col items-center">
-                  <Users className="w-12 h-12 text-gray-300 mb-3" />
                   {searchQuery || Object.keys(roundFilters).length > 0 || statusFilter !== 'all' || passFailFilter !== 'all' ? (
-                    <>
-                      <p className="text-gray-600 mb-1">No candidates match your search criteria</p>
-                      <p className="tf-body-muted">Try adjusting your filters or search query</p>
-                    </>
+                    <NoMatchingCandidates query={searchQuery} className="py-0" />
                   ) : (
+                    /* Card view: the same empty state as the table view. */
                     <>
-                      <p className="text-gray-600 mb-1">No assessment results yet</p>
-                      <p className="tf-body-muted">{emptyStateText ?? 'Share the assessment link to invite candidates'}</p>
-                      {emptyStateAction && <div className="mt-4">{emptyStateAction}</div>}
+                      {emptyStateIllustration
+                        ? <div className="mb-4 flex w-full justify-center">{emptyStateIllustration}</div>
+                        : <EmptySearchIllustration className="mb-5 w-52 sm:w-60" />}
+                      <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">No Assessment Results Yet</h3>
+                      <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">{emptyStateText ?? 'Share the assessment link to invite candidates'}</p>
+                      {emptyStateAction && <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{emptyStateAction}</div>}
                     </>
                   )}
                 </div>
@@ -3141,25 +3145,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           nothing needs "change what you searched", an assessment
                           nobody has sat needs "go invite someone". */}
                       <div className={TABLE_EMPTY_PANEL_CLASS}>
-                        <EmptySearchIllustration className="mb-5 w-52 sm:w-60" />
                         {searchQuery || Object.keys(roundFilters).length > 0 || statusFilter !== 'all' || passFailFilter !== 'all' ? (
-                          <>
-                            <h3 className="text-lg sm:text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100">
-                              No candidates match your search criteria
-                            </h3>
-                            <p className="mt-1.5 text-sm sm:text-base text-slate-500 dark:text-slate-400">
-                              Try adjusting your filters or search query
-                            </p>
-                          </>
+                          <NoMatchingCandidates query={searchQuery} className="py-0" />
                         ) : (
+                          /* Same illustration, heading and type as the tab's
+                             no-assessment-yet state (TabEmptyState), so the
+                             empty tab doesn't change look once one exists. */
                           <>
-                            <h3 className="text-lg sm:text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100">
-                              No assessment results yet
+                            {emptyStateIllustration
+                              ? <div className="mb-4 flex w-full justify-center">{emptyStateIllustration}</div>
+                              : <EmptySearchIllustration className="mb-5 w-52 sm:w-60" />}
+                            <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">
+                              No Assessment Results Yet
                             </h3>
-                            <p className="mt-1.5 text-sm sm:text-base text-slate-500 dark:text-slate-400">
+                            <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">
                               {emptyStateText ?? 'Share the assessment link to invite candidates'}
                             </p>
-                            {emptyStateAction && <div className="mt-5">{emptyStateAction}</div>}
+                            {emptyStateAction && <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{emptyStateAction}</div>}
                           </>
                         )}
                       </div>

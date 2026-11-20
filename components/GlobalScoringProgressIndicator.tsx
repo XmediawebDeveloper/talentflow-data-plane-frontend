@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useScoringProgress, ScoringJob, toMatchResult } from '@/contexts/ScoringProgressContext';
-import { CheckCircle2, Loader2, Layers, ChevronDown, ChevronRight, Maximize2, Search, Trash2, Sparkles, Play, FileText, ClipboardList, Video, Upload, X } from 'lucide-react';
+import { Check, CheckCircle2, Loader2, Layers, ChevronDown, ChevronRight, Maximize2, Search, Trash2, Sparkles, Play, FileText, ClipboardList, Video, Upload, X } from 'lucide-react';
 import ActivitiesOverviewModal, { ACTIVITY_MODULE, type ActivityKind, type ActivityRow } from '@/components/activities/ActivitiesOverviewModal';
 import AppModal from '@/components/ui/app-modal';
 import { bulkInviteService } from '@/lib/services/bulkInviteService';
@@ -14,7 +14,6 @@ import type { TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
 import { useExternalBackgroundTasks, type ExternalBackgroundTask } from '@/lib/backgroundTasks';
 import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import SuccessAnimation from '@/components/ui/success-animation';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { jdService } from '@/lib/services/jdService';
 import { isResumeDatabaseRun, resumeDatabaseCandidateScoreUrl, runResultsUrl } from '@/lib/utils/scoringLinks';
@@ -42,7 +41,9 @@ export default function GlobalScoringProgressIndicator() {
     setMinimized,
     clearJob,
     updateItemStatus,
-    onRestorePanel
+    onRestorePanel,
+    restoredFor,
+    markAnnounced
   } = useScoringProgress();
   /* ONE dock for every background task: scoring runs (this context), bulk
      invite sends (BulkInviteProgressContext) and AI Talent Match runs that
@@ -181,25 +182,32 @@ export default function GlobalScoringProgressIndicator() {
      recruiter is: "<JD ID> <job title> v<version> — <n> resumes scored
      successfully" with View. Each run once; runs already finished when this mounts (a
      reload) are not announced again. The JD ID / version come from the run,
-     else from the JD itself (fetched once). */
-  const announcedRef = useRef<Set<string> | null>(null);
+     else from the JD itself (fetched once).
+
+     "Announced" is saved WITH the run (`announcedAt`), not only in this
+     component's memory: an in-memory "finished at mount" snapshot depended on
+     this widget mounting after the saved runs were read back, and when it
+     didn't, every refresh announced every finished run again (2026-11-19).
+     Nothing is looked at until the saved runs are back (`restoredFor`); runs
+     already finished then, saved by a build without `announcedAt`, are marked
+     announced without a toast. Starting the job again clears the mark. */
+  const restoredSeenRef = useRef<string | null>(null);
+  /* Toasted but `announcedAt` not saved yet (the next render has it) —
+     stops a second toast from an effect re-run in between. */
+  const announcingRef = useRef<Set<string>>(new Set());
   /* Runs seen at least once. A run that is ALREADY finished the first time it
      shows up (a reload, or a finished run picked up from the server in another
      browser) is not announced — the recruiter saw that toast where it ran. */
   const seenJobsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
+    if (!restoredFor) return;
     const isDone = (job: ScoringJob) => job.total > 0 && job.queued === 0 && job.processing === 0;
-    const seen = seenJobsRef.current;
     if (!announcedRef.current) {
       announcedRef.current = new Set(activeScoringJobs.filter(isDone).map(job => job.jobId));
-      activeScoringJobs.forEach(job => seen.add(job.jobId));
       return;
     }
     const announced = announcedRef.current;
     activeScoringJobs.forEach(job => {
-      const firstSighting = !seen.has(job.jobId);
-      seen.add(job.jobId);
-      if (firstSighting && isDone(job)) { announced.add(job.jobId); return; }
       if (!isDone(job) || announced.has(job.jobId)) return;
       announced.add(job.jobId);
       /* A Job Details run is keyed by its batch id; the JD id is on its rows. */
@@ -239,7 +247,7 @@ export default function GlobalScoringProgressIndicator() {
       });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeScoringJobs]);
+  }, [activeScoringJobs, restoredFor]);
 
   /** Context's own `ScoringProgressItem` -> the shape `BulkScoringProgressModal`
    *  renders. The two are almost identical (same run, same fields); only
@@ -799,26 +807,28 @@ export default function GlobalScoringProgressIndicator() {
           ? `My Activities: ${runningCount} running, ${overallProgress}%. ${expanded ? 'Hide' : 'Show'} list.`
           : `My Activities: all finished. ${expanded ? 'Hide' : 'Show'} list.`}
         title={runningCount ? `${runningCount} running · ${overallProgress}%` : 'My Activities — all finished'}
-        className={`fixed bottom-6 ${rightCls} z-40 h-10 w-10 rounded-full p-0.5 shadow-lg transition-[scale,box-shadow,background] duration-200 ease-out hover:scale-105 active:scale-95 animate-in zoom-in ${runningCount ? 'shadow-brand-blue/30' : 'shadow-success/30'} ${expanded ? '' : runningCount ? 'tf-call-ring' : 'tf-call-ring tf-call-ring-success'}`}
+        /* 2026-11-19: a 3px progress ring around a WHITE centre (it was a 2px
+           ring around a blue disc of the same colour, so the progress could
+           not be read), the % in the middle while running and one crisp
+           check when done (the Lottie drew a third circle inside the ring,
+           tiny and soft at 1x). The pulse only while something runs. The
+           count badge sits on the button's corner, off the ring. */
+        className={`fixed bottom-6 ${rightCls} z-40 h-10 w-10 rounded-full p-[3px] shadow-lg transition-[scale,box-shadow,background] duration-200 ease-out hover:scale-105 active:scale-95 animate-in zoom-in ${runningCount ? 'shadow-brand-blue/30' : 'shadow-success/30'} ${!expanded && runningCount ? 'tf-call-ring' : ''}`}
         style={{ background: runningCount
           ? `conic-gradient(var(--brand-blue) ${overallProgress * 3.6}deg, var(--border-dark) 0deg)`
           : 'var(--success)' }}
       >
-        <span className={`relative flex h-full w-full items-center justify-center rounded-full ${runningCount ? 'bg-brand-blue text-[var(--accent-foreground)]' : 'bg-[var(--card)] text-success'}`}>
+        <span className="flex h-full w-full items-center justify-center rounded-full bg-[var(--card)]">
           {runningCount
-            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            : <SuccessAnimation
-                key={items.length}
-                className="h-8 w-8"
-                fallback={<CheckCircle2 className="h-4 w-4" />}
-              />}
-          <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[var(--background)] px-0.5 text-[8px] font-bold tabular-nums text-brand-blue ring-1 ring-brand-blue/20">
-            {items.length}
-          </span>
-          {lookCount > 0 && (
-            <span aria-hidden className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-warning-strong ring-2 ring-[var(--background)]" />
-          )}
+            ? <span className="text-[10px] font-bold leading-none tabular-nums text-brand-blue">{overallProgress}%</span>
+            : <Check className="h-[18px] w-[18px] text-success" strokeWidth={3} />}
         </span>
+        <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-blue px-1 text-[9px] font-bold leading-none tabular-nums text-white ring-2 ring-[var(--background)]">
+          {items.length}
+        </span>
+        {lookCount > 0 && (
+          <span aria-hidden className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-warning-strong ring-2 ring-[var(--background)]" />
+        )}
       </button>
 
       <ActivitiesOverviewModal
