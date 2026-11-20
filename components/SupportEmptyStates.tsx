@@ -18,8 +18,8 @@ function TicketShape({ ids }: { ids: IllustrationIds }) {
         d="M70 36h92a8 8 0 018 8v16a9 9 0 000 18v16a8 8 0 01-8 8H70a8 8 0 01-8-8V78a9 9 0 000-18V44a8 8 0 018-8z"
         fill={`url(#${ids.blue})`}
       />
-      <rect x="82" y="48" width="66" height="42" rx="4" fill="#fff" opacity="0.92" />
-      <path d="M92 61h40M92 72h24" stroke="#7FB0FF" strokeWidth="3.5" strokeLinecap="round" />
+      <rect x="82" y="48" width="66" height="42" rx="4" fill="var(--raw-ffffff)" opacity="0.92" />
+      <path d="M92 61h40M92 72h24" stroke="var(--raw-7fb0ff)" strokeWidth="3.5" strokeLinecap="round" />
     </>
   );
 }
@@ -29,8 +29,8 @@ function InboxShape({ ids }: { ids: IllustrationIds }) {
   return (
     <>
       <path d="M86 60h68l18 34H68z" fill={`url(#${ids.light})`} />
-      <path d="M94 26h52v62H94z" fill="#fff" stroke="#A9CBFF" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M103 40h34M103 50h34M103 60h22" stroke="#7FB0FF" strokeWidth="3" strokeLinecap="round" />
+      <path d="M94 26h52v62H94z" fill="var(--raw-ffffff)" stroke="var(--raw-a9cbff)" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M103 40h34M103 50h34M103 60h22" stroke="var(--raw-7fb0ff)" strokeWidth="3" strokeLinecap="round" />
       <path
         d="M66 92h32a4 4 0 014 4 8 8 0 008 8h20a8 8 0 008-8 4 4 0 014-4h32v24a6 6 0 01-6 6H72a6 6 0 01-6-6z"
         fill={`url(#${ids.blue})`}
@@ -43,7 +43,7 @@ function InboxShape({ ids }: { ids: IllustrationIds }) {
 function Badge({ cx, cy, children }: { cx: number; cy: number; children: ReactNode }) {
   return (
     <g>
-      <circle cx={cx} cy={cy} r="18" fill="#fff" stroke={ACCENT} strokeWidth="4" />
+      <circle cx={cx} cy={cy} r="18" fill="var(--raw-ffffff)" stroke={ACCENT} strokeWidth="4" />
       {children}
     </g>
   );
@@ -73,7 +73,7 @@ function TicketSearchIllustration() {
           <Sparkles />
           <TicketShape ids={ids} />
           <path d="M174 108l14 14" stroke={DEEP} strokeWidth="7" strokeLinecap="round" />
-          <circle cx="162" cy="96" r="16" fill="#fff" stroke={ACCENT} strokeWidth="5" />
+          <circle cx="162" cy="96" r="16" fill="var(--raw-ffffff)" stroke={ACCENT} strokeWidth="5" />
         </>
       )}
     </Illustration>
@@ -117,7 +117,7 @@ function InboxTeamIllustration() {
           <Badge cx={172} cy={112}>
             {/* Two people side by side: the right one a lighter blue so they
                 read as two figures, not a face. */}
-            <g fill="#7FB0FF">
+            <g fill="var(--raw-7fb0ff)">
               <circle cx="178" cy="105" r="4.5" />
               <path d="M170 122c0-6 3.6-10 8-10s8 4 8 10z" />
             </g>

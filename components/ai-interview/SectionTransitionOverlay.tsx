@@ -36,7 +36,7 @@ export default function SectionTransitionOverlay({
           </div>
         </div>
         <h2 className="text-2xl font-semibold mb-2">Great work, keep going!</h2>
-        <p className="text-gray-300 text-sm">Get ready for the next set of questions.</p>
+        <p className="text-muted-foreground dark:text-gray-300 text-sm">Get ready for the next set of questions.</p>
         <div className="mt-6 text-4xl font-bold text-blue-400">{countdown}</div>
       </div>
     </div>

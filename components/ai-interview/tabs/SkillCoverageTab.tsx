@@ -8,6 +8,7 @@ import {
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from '../ResultRowActions';
 import { toast } from 'sonner';
+import { clickableProps } from '@/lib/a11y/clickableProps';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,13 +72,13 @@ const LEVEL_CONFIG: Record<string, { icon: typeof CheckCircle2; color: string; b
   'High':          { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-200', label: 'High',        dot: 'bg-emerald-500' },
   'Medium':        { icon: AlertCircle,  color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-200',   label: 'Medium',      dot: 'bg-amber-400' },
   'Low':           { icon: MinusCircle,  color: 'text-orange-600',  bg: 'bg-orange-50',   border: 'border-orange-200',  label: 'Low',         dot: 'bg-orange-400' },
-  'Not Covered':   { icon: HelpCircle,   color: 'text-gray-400',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Covered', dot: 'bg-gray-300' },
+  'Not Covered':   { icon: HelpCircle,   color: 'text-gray-500',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Covered', dot: 'bg-gray-300' },
   // Legacy internal levels (backward compat with older saved data)
   covered:     { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-200', label: 'High',        dot: 'bg-emerald-500' },
   medium:      { icon: AlertCircle,  color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-200',   label: 'Medium',      dot: 'bg-amber-400' },
   low:         { icon: MinusCircle,  color: 'text-orange-600',  bg: 'bg-orange-50',   border: 'border-orange-200',  label: 'Low',         dot: 'bg-orange-400' },
   skipped:     { icon: HelpCircle,   color: 'text-red-500',     bg: 'bg-red-50',      border: 'border-red-200',     label: 'Not Covered', dot: 'bg-red-400' },
-  not_started: { icon: HelpCircle,   color: 'text-gray-400',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Covered', dot: 'bg-gray-300' },
+  not_started: { icon: HelpCircle,   color: 'text-gray-500',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Covered', dot: 'bg-gray-300' },
   asked:       { icon: Clock,        color: 'text-blue-500',    bg: 'bg-blue-50',     border: 'border-blue-200',    label: 'Asked',       dot: 'bg-blue-400' },
 };
 
@@ -126,7 +127,7 @@ function CoverageTrail({ entries }: { entries: TrailEntry[] }) {
                 return null;
               })()}
               {entry.score != null && <ScorePill score={entry.score} />}
-              {entry.state === 'asked' && <ArrowRight className="w-3 h-3 text-gray-300" />}
+              {entry.state === 'asked' && <ArrowRight className="w-3 h-3 text-muted-foreground dark:text-gray-300" />}
             </div>
           </div>
         );
@@ -361,12 +362,12 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
   return (
     <div className={`border rounded-lg overflow-hidden ${cfg.border}`}>
       {/* Main question header */}
-      <div
+      <div {...clickableProps}
         className={`flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50/50 transition-colors ${cfg.bg}`}
         onClick={() => setShowAnswer(!showAnswer)}
       >
         <div className="flex-shrink-0 mt-0.5">
-          {showAnswer ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+          {showAnswer ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -404,7 +405,7 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
           {/* Main answer */}
           {group.answer && (
             <div className="px-4 py-3 bg-white">
-              <p className="text-2xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Candidate Answer</p>
+              <p className="text-2xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Candidate Answer</p>
               <p className="tf-body-secondary leading-relaxed whitespace-pre-wrap">{group.answer}</p>
             </div>
           )}
@@ -579,7 +580,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
 
   if (!isCompleted) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+      <div className="flex flex-col items-center justify-center py-20 text-gray-500">
         <Layers className="w-10 h-10 mb-3 opacity-40" />
         <p className="text-sm">Skill coverage will be available after the interview completes.</p>
       </div>
@@ -588,7 +589,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
 
   if (allSkills.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+      <div className="flex flex-col items-center justify-center py-20 text-gray-500">
         <Layers className="w-10 h-10 mb-3 opacity-40" />
         <p className="text-sm">No skill coverage data available.</p>
       </div>
@@ -805,12 +806,12 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
                       return (
                         <div key={skill}>
                           {/* Skill accordion header */}
-                          <div
+                          <div {...clickableProps}
                             className={`flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50/50 transition-colors ${isExpanded ? cfg.bg : ''}`}
                             onClick={() => toggleSkill(skill)}
                           >
                             <div className="flex-shrink-0">
-                              {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                              {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">

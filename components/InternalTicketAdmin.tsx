@@ -25,6 +25,7 @@ import FilterSelect from '@/components/ui/filter-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { NoTeamTicketsState, NoTicketsFoundState } from '@/components/SupportEmptyStates';
+import { IconButton } from '@/components/ui/icon-button';
 
 type ViewType = 'overview' | 'tickets' | 'detail';
 
@@ -822,19 +823,17 @@ export default function InternalTicketAdmin() {
                           { label: 'Updated', value: formatISTDate(ticket.updated_at) },
                         ]}
                         actions={
-                          <button
+                          <IconButton bare label={`View ticket ${ticket.ticket_number}`} tooltip="View"
                             type="button"
                             onClick={() => {
                               setSelectedTicket(ticket);
                               fetchTicketDetail(ticket.id);
                               setView('detail');
                             }}
-                            title="View"
-                            aria-label={`View ticket ${ticket.ticket_number}`}
                             className="tf-icon-btn-outline"
                           >
                             <Eye />
-                          </button>
+                          </IconButton>
                         }
                       />
                     );
@@ -900,7 +899,7 @@ export default function InternalTicketAdmin() {
                       <User className="w-4 h-4" />
                       <span>Submitted by <strong>{selectedTicket.created_by?.name}</strong></span>
                       {selectedTicket.created_by?.email && (
-                        <span className="text-gray-400">({selectedTicket.created_by.email})</span>
+                        <span className="text-gray-500">({selectedTicket.created_by.email})</span>
                       )}
                     </div>
                   </div>

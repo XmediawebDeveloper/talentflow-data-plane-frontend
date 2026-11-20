@@ -105,7 +105,7 @@ export function EnvironmentVerificationOverlay({
   return (
     <div
       className="fixed inset-0 z-[300] flex items-center justify-center transition-colors duration-300"
-      style={{ backgroundColor: displayColor || 'rgba(0,0,0,0.9)' }}
+      style={{ backgroundColor: displayColor || 'var(--raw-rgba-0-0-0-0p9)' }}
     >
       {hasChallenge ? (
         // Once the phone has opened the link, the QR/card's job is done —

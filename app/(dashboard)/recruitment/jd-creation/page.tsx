@@ -12,6 +12,7 @@ import { getJDUsageModules } from '@/lib/utils/jdUsageModules';
 import { isFreshDraftVersion } from '@/lib/utils/jdDraftVersion';
 import { toast } from '@/components/ui/enhanced-toast';
 import { showErrorToast } from '@/lib/utils/errorToast';
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
 
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 
@@ -50,8 +51,7 @@ function resolveJDFlowOrigin(fromParam: string | null): JDFlowOrigin | null {
  * turn a breadcrumb into an off-site link.
  */
 function resolveJDFlowReturnUrl(raw: string | null): string | null {
-  if (!raw) return null;
-  return raw.startsWith('/') && !raw.startsWith('//') ? raw : null;
+  return safeReturnUrl(raw);
 }
 
 // Error display component for pre-condition failures

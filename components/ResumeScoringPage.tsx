@@ -75,6 +75,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { clickableLinkProps, clickableProps, clickableRowProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** Search/Scored By/Version/Status for the Scoring History modal's filter
  *  row — same shape as AITalentMatchPage's MatchHistoryModalFilters, so the
@@ -585,6 +588,7 @@ export default function ResumeScoringPage({
     clearJob,
     activeScoringJobs,
     syncScoringJob,
+    attachBatch,
   } = useScoringProgress();
   // Stable per-instance id for the ref-counted panel-visibility registry —
   // see `setPanelVisibility` on ScoringProgressContext.
@@ -714,6 +718,9 @@ export default function ResumeScoringPage({
   /* The job picker's reload trigger, and whether a run finished in the
      current "Select Applicants to Score" popup. */
   const [pickerReloadSignal, setPickerReloadSignal] = useState(0);
+  /* The JD version(s) the run scored: the picker re-reads only those rows on
+     the reload (a run changes nothing else in the job list). */
+  const [pickerReloadIds, setPickerReloadIds] = useState<string[]>([]);
   const scoredInPopupRef = useRef(false);
   const [resumeSource, setResumeSource] = useState<'my-resumes' | 'internal-database' | null>(null);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -2122,6 +2129,8 @@ export default function ResumeScoringPage({
         const batch = await scoringService.startBulkScoringAsync(jobId, resumeIds);
         const batchId = batch.batch_id;
         setProgressBatchId(batchId);
+        // The corner run keeps following this batch after the page closes.
+        attachBatch(jobId, batchId);
         console.log(`[ResumeScoringPage] Batch created: ${batchId}`);
 
         // Map resumeId → array index for O(1) status updates
@@ -2215,7 +2224,7 @@ export default function ResumeScoringPage({
     };
 
     scoreResumes();
-  }, [pendingScoringData, startScoringJob, updateItemStatus, onRefreshHistory, router]);
+  }, [pendingScoringData, startScoringJob, updateItemStatus, onRefreshHistory, router, attachBatch]);
 
   // Track completed job IDs to prevent flickering from stale polling data
   const completedJobsRef = useRef<Set<string>>(new Set());
@@ -2641,6 +2650,8 @@ export default function ResumeScoringPage({
      stays where it is. */
   const clearPickAfterScoring = () => {
     scoredInPopupRef.current = false;
+    const scoredJdId = modalJobData?.id || pickerSelection?.job.id || selectedJob;
+    setPickerReloadIds(scoredJdId ? [scoredJdId] : []);
     handleJobPicked(null);
     setPickerReloadSignal(n => n + 1);
   };
@@ -3804,15 +3815,13 @@ export default function ResumeScoringPage({
               {/* Phones / tablets: units left and Score Resumes on ONE line — the badge at its
                   own width, the button taking the rest. */}
               {onBack && (
-                <Button
+                <IconButton label="Back to Dashboard"
                   variant="secondary"
                   size="sm"
                   onClick={onBack}
-                 
-                  aria-label="Back to Dashboard" title="Back to Dashboard"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                </Button>
+                </IconButton>
               )}
               {/* Available Units Display */}
               {availableUnits !== null && (
@@ -4166,7 +4175,8 @@ export default function ResumeScoringPage({
               {/* Sort by, then List / Grid — where Export used to be (Export
                   is now in the Actions menu, shown once jobs are ticked). */}
               {/* Phones sort from the Sort menu in the row below (PhoneSortMenu). */}
-              {displayHistory.length > 0 && (
+              {/* Always shown, an empty list included. */}
+              {(
                 <div className="tf-jobs-sort contents">
                 <SortByControl
                   value={jobSortBy}
@@ -4289,7 +4299,7 @@ export default function ResumeScoringPage({
           )}
           {viewPills}
           {/* Phones: the Job Openings list's Sort menu (the inline Sort by above hides). */}
-          {displayHistory.length > 0 && (
+          {(
             <PhoneSortMenu<JobSortKey>
               value={jobSortBy}
               order={jobSortOrder}
@@ -4603,16 +4613,14 @@ export default function ResumeScoringPage({
               const renderJobActionsMenu = (sizeClass: string) => (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
+                    <IconButton label={`More actions for ${item.jobTitle}`} tooltip="More actions"
                       variant="secondary"
                       size="sm"
                       onClick={(e) => e.stopPropagation()}
-                      aria-label={`More actions for ${item.jobTitle}`}
-                      title="More actions"
                       className={`${sizeClass} p-0`}
                     >
                       {isLoadingProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
-                    </Button>
+                    </IconButton>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenuItem className="group" onSelect={openJobDetails}>
@@ -4756,7 +4764,7 @@ export default function ResumeScoringPage({
               ) : null;
 
                 return { key: item.id, card: (
-                  <div
+                  <div {...clickableProps}
                     key={item.id}
                     /* No lift on hover: the card grows when opened inline, and
                        a translating card under the pointer reads as jumpy. */
@@ -4790,12 +4798,10 @@ export default function ResumeScoringPage({
                           {/* Tick the job for Export. Stops the click so it
                               doesn't also open / close the row. */}
                           {jobListDisplayMode !== 'grid' && !item.isProcessing && (
-                            <button
+                            <IconButton bare label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'} tooltip={isPartlySelected ? 'Some candidates of this job are selected' : undefined}
                               type="button"
                               onClick={(e) => { e.stopPropagation(); handleSelectHistoryItem(jobKey); }}
                               aria-pressed={isSelected ? true : isPartlySelected ? 'mixed' : false}
-                              aria-label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'}
-                              title={isPartlySelected ? 'Some candidates of this job are selected' : undefined}
                               className="inline-flex p-1.5 -ml-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
                             >
                               {isSelected ? (
@@ -4803,16 +4809,16 @@ export default function ResumeScoringPage({
                               ) : isPartlySelected ? (
                                 <MinusSquare className="w-4 h-4 text-brand-blue" />
                               ) : (
-                                <Square className="w-4 h-4 text-gray-400" />
+                                <Square className="w-4 h-4 text-gray-500" />
                               )}
-                            </button>
+                            </IconButton>
                           )}
                           {/* The scoring record's own JD code, else the full JD
                               record's — some scores come back without it. */}
                           {jdCodeOf(item) && (
                             <JobIdBadge className={JOB_ID_BADGE_FIT} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge>
                           )}
-                          <h3
+                          <h3 {...clickableLinkProps}
                             className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
                             title={item.jobTitle}
                             onClick={(e) => {
@@ -4898,7 +4904,7 @@ export default function ResumeScoringPage({
                               Interviewed. */}
                           {jobListDisplayMode !== 'grid' ? null : !tallyReady ? (
                             <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-                              <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                              <FileText className="w-4 h-4 text-gray-500 dark:text-slate-500" />
                               {scoredCountValue(item.totalScored, verdictTally)} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored
                             </span>
                           ) : (
@@ -5021,12 +5027,10 @@ export default function ResumeScoringPage({
                     select={!item.isProcessing ? (
                       /* Tick the job for Export. Stops the click so it doesn't
                          also open / close the row. */
-                      <button
+                      <IconButton bare label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'} tooltip={isPartlySelected ? 'Some candidates of this job are selected' : undefined}
                         type="button"
                         onClick={(e) => { e.stopPropagation(); handleSelectHistoryItem(jobKey); }}
                         aria-pressed={isSelected ? true : isPartlySelected ? 'mixed' : false}
-                        aria-label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'}
-                        title={isPartlySelected ? 'Some candidates of this job are selected' : undefined}
                         className="inline-flex p-1.5 -m-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
                       >
                         {isSelected ? (
@@ -5034,9 +5038,9 @@ export default function ResumeScoringPage({
                         ) : isPartlySelected ? (
                           <MinusSquare className="w-4 h-4 text-brand-blue" />
                         ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
+                          <Square className="w-4 h-4 text-gray-500" />
                         )}
-                      </button>
+                      </IconButton>
                     ) : undefined}
                     /* The scoring record's own JD code, else the full JD
                        record's — some scores come back without it. */
@@ -5044,7 +5048,7 @@ export default function ResumeScoringPage({
                       <JobIdBadge className={JOB_ID_BADGE_FIT} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge>
                     ) : undefined}
                     title={
-                      <span
+                      <span {...clickableLinkProps}
                         className="cursor-pointer hover:text-brand-blue transition-colors"
                         title={item.jobTitle}
                         onClick={(e) => {
@@ -5118,16 +5122,15 @@ export default function ResumeScoringPage({
                     )}
                     actions={
                       <>
-                        <Button
+                        <IconButton label="Scoring History"
                           variant="secondary"
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
                           className="w-7 flex-shrink-0"
-                          aria-label="Scoring History" title="Scoring History"
                         >
                           <History className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
+                        </IconButton>
+                        <IconButton label="View Details"
                           variant="secondary"
                           size="sm"
                           onClick={(e) => {
@@ -5141,25 +5144,21 @@ export default function ResumeScoringPage({
                             } catch (e) {}
                             router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
-                          aria-label="View Details"
-                          title="View Details"
                           className="w-7 flex-shrink-0"
                         >
                           <FileText className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
+                        </IconButton>
+                        <IconButton label="View Progress" tooltip="View Progress (every version of this job)"
                           variant="secondary"
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
                           disabled={loadingProgressJobId === item.jobId}
-                          aria-label="View Progress"
-                          title="View Progress (every version of this job)"
                           className="w-7 flex-shrink-0"
                         >
                           {loadingProgressJobId === item.jobId
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             : <WorkInProgressIcon className="w-3.5 h-3.5" />}
-                        </Button>
+                        </IconButton>
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleJobExpanded(jobKey); }}
                           aria-expanded={isJobExpanded}
@@ -5181,22 +5180,21 @@ export default function ResumeScoringPage({
                   /* List mode — User-Management-uniform table row (+ an
                      expandable full-width row holding this job's candidates). */
                   <Fragment key={item.id}>
-                    <tr
+                    <tr {...clickableRowProps}
                       className={`cursor-pointer transition-colors ${isSelected ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/15' : isJobExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : 'hover:bg-brand-blue/5'}`}
                       onClick={() => toggleJobExpanded(jobKey)}
                       aria-expanded={isJobExpanded}
                     >
                       <td className="tf-td">
                         {!item.isProcessing && (
-                          <button
+                          <IconButton bare label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'}
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleSelectHistoryItem(jobKey); }}
                             aria-pressed={isSelected ? true : isPartlySelected ? 'mixed' : false}
-                            aria-label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'}
                             className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
                           >
-                            {isSelected ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : isPartlySelected ? <MinusSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
-                          </button>
+                            {isSelected ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : isPartlySelected ? <MinusSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                          </IconButton>
                         )}
                       </td>
                       <td className="tf-td hidden sm:table-cell">
@@ -5283,16 +5281,14 @@ export default function ResumeScoringPage({
                       )}
                       <td className="tf-td tf-sticky-col">
                         <div className="flex items-center justify-center gap-1">
-                          <Button
+                          <IconButton label={isJobExpanded ? 'Hide candidates' : 'View candidates'} tooltip={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"}
                             variant="secondary"
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); toggleJobExpanded(jobKey); }}
-                            aria-label={isJobExpanded ? 'Hide candidates' : 'View candidates'}
-                            title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"}
                             className="h-8 w-8"
                           >
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
-                          </Button>
+                          </IconButton>
                           {renderJobActionsMenu('h-8 w-8')}
                         </div>
                       </td>
@@ -5750,7 +5746,7 @@ export default function ResumeScoringPage({
         const historyLabelClass = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1';
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/50">
+          <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/50">
             <div
               /* Width comes from the breakpoint ladder and no state touches
                  it; height is what moved, so only height is pinned, and only
@@ -5790,9 +5786,9 @@ export default function ResumeScoringPage({
                       {isRefreshingHistoryModal ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setHistoryModalItem(null)} className="" aria-label="Close">
+                  <IconButton label="Close" variant="secondary" size="sm" onClick={() => setHistoryModalItem(null)} className="">
                     <X className="w-5 h-5" />
-                  </Button>
+                  </IconButton>
                 </div>
               </div>
 
@@ -5861,7 +5857,7 @@ export default function ResumeScoringPage({
                     <div className="min-w-0 lg:flex-1 lg:min-w-[11rem]">
                       <label className={historyLabelClass}>Search</label>
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500 pointer-events-none" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500 pointer-events-none" />
                         <input
                           type="text"
                           value={historyModalFilter.search}
@@ -5981,16 +5977,14 @@ export default function ResumeScoringPage({
                             </>
                           }
                           actions={
-                            <Button
+                            <IconButton label="View job scores"
                               variant="secondary"
                               size="sm"
                               onClick={() => goToHistoryResume(g.resumes[0])}
                               className="flex-shrink-0"
-                              aria-label="View job scores"
-                              title="View job scores"
                             >
                               <Eye className="w-4 h-4" />
-                            </Button>
+                            </IconButton>
                           }
                         />
                       ))}
@@ -6032,7 +6026,7 @@ export default function ResumeScoringPage({
                                 <td className="tf-td whitespace-nowrap">
                                   <div className="font-semibold text-gray-900 dark:text-slate-100 truncate max-w-[160px]">{g.scoredBy}</div>
                                   {g.scoredByEmail && (
-                                    <div className="text-gray-400 dark:text-slate-600 truncate max-w-[160px]">{g.scoredByEmail}</div>
+                                    <div className="text-gray-500 dark:text-slate-600 truncate max-w-[160px]">{g.scoredByEmail}</div>
                                   )}
                                 </td>
                                 <td className="tf-td whitespace-nowrap text-gray-600 dark:text-slate-400">
@@ -6050,16 +6044,14 @@ export default function ResumeScoringPage({
                                   {/* Always a direct link to this session's JD scoring page
                                       (filtered to this day) — never an inline expand/collapse,
                                       regardless of how many resumes the session scored. */}
-                                  <Button
+                                  <IconButton label="View job scores"
                                     variant="secondary"
                                     size="sm"
                                     onClick={() => goToHistoryResume(g.resumes[0])}
                                     className=""
-                                    aria-label="View job scores"
-                                    title="View job scores"
                                   >
                                     <Eye className="w-4 h-4" />
-                                  </Button>
+                                  </IconButton>
                                 </td>
                             </tr>
                           );
@@ -6196,7 +6188,7 @@ export default function ResumeScoringPage({
               </div>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         );
       })()}
 
@@ -6267,6 +6259,7 @@ export default function ResumeScoringPage({
         <JobOpeningPickerList
           listAnchorRef={jobPickerListRef}
           reloadSignal={pickerReloadSignal}
+          reloadJobIds={pickerReloadIds}
           layout="page"
           selection={pickerSelection}
           onSelectionChange={handleJobPicked}

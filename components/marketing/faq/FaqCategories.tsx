@@ -97,7 +97,7 @@ export function FaqCategories() {
                   {category.title}
                   <span
                     className={`hidden text-xs tabular-nums lg:ml-auto lg:inline ${
-                      current ? "text-slate-500 dark:text-slate-400" : "text-slate-400 dark:text-slate-500"
+                      current ? "text-slate-500 dark:text-slate-400" : "text-slate-500 dark:text-slate-500"
                     }`}
                   >
                     <span className="sr-only">, </span>

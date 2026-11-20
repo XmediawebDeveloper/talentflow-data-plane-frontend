@@ -3,6 +3,8 @@ import { FileDown, FileText, Users, Briefcase, ClipboardList, Calendar, Filter, 
 import { toast } from 'sonner';
 import { DateField } from '@/components/ui/date-field';
 import FilterSelect from '@/components/ui/filter-select';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 export default function ReportsExports() {
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
@@ -370,7 +372,7 @@ export default function ReportsExports() {
                     const isSelected = selectedReports.includes(report.id);
 
                     return (
-                      <div
+                      <div {...clickableProps}
                         key={report.id}
                         className={`p-6 hover:bg-gray-50 transition-colors cursor-pointer ${
                           isSelected ? 'bg-gray-50' : ''
@@ -379,7 +381,7 @@ export default function ReportsExports() {
                       >
                         <div className="flex items-start gap-4">
                           {/* Checkbox */}
-                          <button
+                          <IconButton bare label="Select report"
                             className="mt-1"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -389,9 +391,9 @@ export default function ReportsExports() {
                             {isSelected ? (
                               <CheckSquare className="w-5 h-5 text-gray-800" />
                             ) : (
-                              <Square className="w-5 h-5 text-gray-400" />
+                              <Square className="w-5 h-5 text-gray-500" />
                             )}
-                          </button>
+                          </IconButton>
 
                           {/* Icon */}
                           <div className={`w-12 h-12 rounded-lg ${isSelected ? 'bg-gray-100' : 'bg-gray-100'} flex items-center justify-center flex-shrink-0`}>

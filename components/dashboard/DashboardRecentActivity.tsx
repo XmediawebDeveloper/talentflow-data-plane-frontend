@@ -40,7 +40,7 @@ function visualFor(action: string): ActivityVisual {
   if (action.includes('scoring')) return { Icon: Star, accent: 'bg-brand-orange/10 ring-brand-orange-deep/15', iconColor: 'text-brand-orange-deep' };
   if (action.includes('assessment')) return { Icon: CheckCircle, accent: 'bg-brand-teal/10 ring-brand-teal/15', iconColor: 'text-brand-teal' };
   if (action.includes('ai_match')) return { Icon: Sparkles, accent: 'bg-brand-blue-2/10 ring-brand-blue-2/15', iconColor: 'text-brand-blue-2' };
-  return { Icon: Activity, accent: 'bg-gray-50 ring-gray-100', iconColor: 'text-gray-400' };
+  return { Icon: Activity, accent: 'bg-gray-50 ring-gray-100', iconColor: 'text-gray-500' };
 }
 
 /**

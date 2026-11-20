@@ -94,6 +94,26 @@ export function invalidateListCache(prefix = ''): void {
   });
 }
 
+/* Writes (non-GET requests / wrapped service calls) started but not settled.
+   A write clears the cache when it starts AND when it ends; a list that
+   re-reads on the first clear reads data the write has not changed yet, then
+   reads again on the second. `listWriteInFlight()` lets it wait for the end.
+   A write that has not settled within WRITE_STALE_MS no longer holds lists back. */
+const WRITE_STALE_MS = 60_000;
+let writesInFlight = 0;
+let lastWriteStartedAt = 0;
+function writeStarted(): void {
+  writesInFlight += 1;
+  lastWriteStartedAt = Date.now();
+}
+function writeSettled(): void {
+  writesInFlight = Math.max(0, writesInFlight - 1);
+}
+/** True while a write that will clear the cache again on settling is in flight. */
+export function listWriteInFlight(): boolean {
+  return writesInFlight > 0 && Date.now() - lastWriteStartedAt < WRITE_STALE_MS;
+}
+
 /** Called after every invalidation, for small sibling caches that must clear with this one. */
 export function onListCacheInvalidate(listener: () => void): () => void {
   invalidateListeners.add(listener);
@@ -157,17 +177,20 @@ export function withListCacheInvalidation<S extends object>(service: S, methods:
     if (typeof original !== 'function') continue;
     const fn = original as unknown as (...args: unknown[]) => unknown;
     (service as Record<keyof S, unknown>)[name] = function (this: unknown, ...args: unknown[]) {
+      writeStarted();
       invalidateListCache();
       let result: unknown;
       try {
         result = fn.apply(this, args);
       } catch (error) {
+        writeSettled();
         invalidateListCache();
         throw error;
       }
       if (result && typeof (result as Promise<unknown>).finally === 'function') {
-        return (result as Promise<unknown>).finally(() => invalidateListCache());
+        return (result as Promise<unknown>).finally(() => { writeSettled(); invalidateListCache(); });
       }
+      writeSettled();
       invalidateListCache();
       return result;
     };
@@ -181,16 +204,31 @@ const writes = (config?: { method?: string; invalidatesCache?: boolean; invalida
   !!config && (config.method || 'get').toLowerCase() !== 'get'
     && config.invalidatesCache !== false && config.invalidatesLists !== false;
 if (typeof window !== 'undefined') {
+  // Counted on the config object itself, so a write is settled exactly once
+  // whichever path (response / error) it ends on.
+  type Counted = { __listWriteCounted?: boolean };
+  const settle = (config?: Counted) => {
+    if (config?.__listWriteCounted) {
+      config.__listWriteCounted = false;
+      writeSettled();
+    }
+  };
   api.interceptors.request.use((config) => {
-    if (writes(config)) invalidateListCache();
+    if (writes(config)) {
+      (config as Counted).__listWriteCounted = true;
+      writeStarted();
+      invalidateListCache();
+    }
     return config;
   });
   api.interceptors.response.use(
     (response) => {
+      settle(response.config as Counted);
       if (writes(response.config)) invalidateListCache();
       return response;
     },
     (error) => {
+      settle(error?.config as Counted | undefined);
       if (writes(error?.config)) invalidateListCache();
       return Promise.reject(error);
     },

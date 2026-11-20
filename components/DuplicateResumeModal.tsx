@@ -8,6 +8,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { extractLocalResumeText } from '@/lib/utils/localResumeText';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 // Maximum number of versions allowed per resume
 const MAX_VERSIONS_PER_RESUME = 5;
@@ -304,7 +305,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
     value: string;
   }) => (
     <div className="flex items-start gap-2 py-2.5 text-sm">
-      {Icon && <Icon className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />}
+      {Icon && <Icon className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />}
       <span className="w-20 sm:w-28 flex-shrink-0 text-gray-500">{label}</span>
       <span className="flex-shrink-0 text-gray-400">:</span>
       <span className="min-w-0 flex-1 text-gray-900 break-words">{value || '-'}</span>
@@ -323,7 +324,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
 
     return (
       <>
-      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
+      <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-2rem)] flex flex-col">
           {/* Header */}
           <div className="flex items-start justify-between gap-4 p-4 sm:p-6 flex-shrink-0">
@@ -438,7 +439,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
             </button>
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
       {previewOverlay}
       {compareOverlay}
       </>
@@ -452,7 +453,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
 
   return (
     <>
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
         {/* Header */}
         <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
@@ -773,7 +774,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
 
     {/* Inline Preview Modal */}
     {previewOverlay}

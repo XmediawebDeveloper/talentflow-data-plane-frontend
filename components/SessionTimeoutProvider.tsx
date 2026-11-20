@@ -9,6 +9,8 @@ import { userSettingsApi } from '@/lib/services/settingsService';
 import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 import { toast } from 'sonner';
 import { forceNavigate } from '@/lib/utils/forcedNavigation';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -36,6 +38,16 @@ interface SessionTimeoutProviderProps {
 
 const WARNING_SECONDS = 60; // Show warning 60 seconds before logout
 
+// Activity is shared across this browser's tabs. They share one login session,
+// so an idle background tab's auto-logout used to end the session for the tab
+// the user was working in. Every tab now counts activity in ANY tab.
+const SHARED_ACTIVITY_KEY = 'tf_last_activity';
+const SHARED_WRITE_EVERY_MS = 15_000;
+
+const readSharedActivity = (): number => {
+  try { return Number(localStorage.getItem(SHARED_ACTIVITY_KEY)) || 0; } catch { return 0; }
+};
+
 export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: SessionTimeoutProviderProps) {
   const router = useRouter();
   const [timeoutMinutes, setTimeoutMinutes] = useState(1440); // Default 24 hours
@@ -47,6 +59,9 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const loggingOutRef = useRef(false);
   const lastActivityRef = useRef<number>(Date.now());
+  const lastSharedWriteRef = useRef<number>(0);
+  // showWarning / handleLogout are created before resetTimer; they reach it here.
+  const resetTimerRef = useRef<(fromOtherTab?: boolean) => void>(() => {});
 
   // FIX: Use a ref for warning visibility so resetTimer doesn't need it as a dependency.
   // Without this, isWarningVisible in resetTimer's deps caused resetTimer to get a new
@@ -96,6 +111,11 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
     // re-attempted the redirect — re-raising a page's "Leave site?" prompt over
     // and over. Stop both timers and ignore any repeat.
     if (loggingOutRef.current) return;
+    // Another tab was used within the timeout: the user is not idle.
+    if (Date.now() - readSharedActivity() < timeoutMinutesRef.current * 60 * 1000) {
+      resetTimerRef.current(true);
+      return;
+    }
     loggingOutRef.current = true;
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
     if (warningTimeoutRef.current) { clearTimeout(warningTimeoutRef.current); warningTimeoutRef.current = null; }
@@ -137,6 +157,10 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
 
   // Show warning before logout
   const showWarning = useCallback(() => {
+    if (Date.now() - readSharedActivity() < timeoutMinutesRef.current * 60 * 1000 - WARNING_SECONDS * 1000) {
+      resetTimerRef.current(true);   // active in another tab - start over
+      return;
+    }
     isWarningVisibleRef.current = true;
     setIsWarningVisible(true);
     setRemainingSeconds(WARNING_SECONDS);
@@ -164,8 +188,15 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
   // Previously, having isWarningVisible as a dep caused this callback to be recreated
   // every time the warning appeared, which re-triggered the activity useEffect and
   // immediately dismissed the warning.
-  const resetTimer = useCallback(() => {
-    lastActivityRef.current = Date.now();
+  const resetTimer = useCallback((fromOtherTab = false) => {
+    const now = Date.now();
+    lastActivityRef.current = now;
+    // Tell the other tabs (throttled). A reset caused by another tab never
+    // writes back, so tabs can't ping-pong.
+    if (!fromOtherTab && now - lastSharedWriteRef.current > SHARED_WRITE_EVERY_MS) {
+      lastSharedWriteRef.current = now;
+      try { localStorage.setItem(SHARED_ACTIVITY_KEY, String(now)); } catch { /* storage unavailable */ }
+    }
 
     // Clear existing timers
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -190,17 +221,27 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
       }, timeoutMs);
     }
   }, [timeoutMinutes, showWarning]); // isWarningVisible intentionally removed
+  resetTimerRef.current = resetTimer;
 
   // Continue session (dismiss warning)
   const continueSession = useCallback(() => {
     resetTimer();
   }, [resetTimer]);
 
+  // Activity in another tab of this browser keeps this tab alive too.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === SHARED_ACTIVITY_KEY && e.newValue) resetTimer(true);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [resetTimer]);
+
   // Set up activity listeners
   useEffect(() => {
-    const { accessToken } = getTokens();
-    if (!accessToken) return;
-
+    // No token check: this provider only mounts inside the signed-in dashboard,
+    // and since tokens moved to memory (#5) the token may still be restoring at
+    // mount - returning here left the timer running with no activity listeners.
     const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
 
     // Throttle activity updates to avoid too many timer resets
@@ -253,7 +294,7 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
 
       {/* Inactivity Warning Modal */}
       {isWarningVisible && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+        <ModalA11y><div className="fixed inset-0 z-[100] flex items-center justify-center">
           {/* Backdrop — no onClick handler, cannot be dismissed by clicking outside */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
@@ -267,13 +308,12 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
           >
             {/* Close — treated the same as Continue Session: dismissing it is the
                 user proving they're present, not an escape hatch from the timer. */}
-            <button
+            <IconButton bare label="Continue session"
               onClick={continueSession}
-              aria-label="Continue session"
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
             >
               <X className="w-5 h-5" strokeWidth={2} />
-            </button>
+            </IconButton>
 
             <div className="px-6 sm:px-8 pt-8 pb-6 text-center">
               <div className="relative w-20 h-20 mx-auto mb-5">
@@ -319,7 +359,7 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
               </p>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </SessionTimeoutContext.Provider>
   );

@@ -26,6 +26,8 @@ import dynamic from 'next/dynamic';
 const ConfigurePreviewDialog = dynamic(() => import('./ConfigurePreviewDialog'), { ssr: false, loading: () => null });
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableProps, clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The "pick one active AI interview" list shared by the AI Interview page's
@@ -388,7 +390,7 @@ export default function AIInterviewPicker({
             </div>
           )}
           <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
             <input
               type="text"
               autoFocus
@@ -468,7 +470,7 @@ export default function AIInterviewPicker({
                     const pick = () => toggle(config);
                     const lockReason = lockReasonOf(config);
                     return (
-                      <tr
+                      <tr {...clickableRowProps}
                         key={config.id}
                         onClick={pick}
                         aria-selected={isSelected}
@@ -524,7 +526,7 @@ export default function AIInterviewPicker({
                           {config.duration_minutes ? (
                             <>
                               <span className="tabular-nums text-gray-600 dark:text-slate-400">{config.duration_minutes}</span>
-                              <span className="text-xs text-gray-400 ml-1">min</span>
+                              <span className="text-xs text-gray-500 ml-1">min</span>
                             </>
                           ) : <span className="text-xs text-gray-400">—</span>}
                         </td>
@@ -539,15 +541,13 @@ export default function AIInterviewPicker({
                           {config.created_by_name || 'System'}
                         </td>
                         <td className="tf-td text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
-                          <button
+                          <IconButton bare label="Preview interview configuration" tooltip="Preview"
                             type="button"
                             onClick={() => setConfigurePreviewId(config.id)}
                             className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-brand-blue/10 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
-                            aria-label="Preview interview configuration"
-                            title="Preview"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                          </button>
+                          </IconButton>
                         </td>
                       </tr>
                     );
@@ -585,15 +585,13 @@ export default function AIInterviewPicker({
                   }
                   title={config.jd_title || config.position || 'Untitled'}
                   actions={
-                    <button
+                    <IconButton bare label="Preview interview configuration" tooltip="Preview"
                       type="button"
                       onClick={() => setConfigurePreviewId(config.id)}
                       className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-brand-blue/10 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
-                      aria-label="Preview interview configuration"
-                      title="Preview"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                    </button>
+                    </IconButton>
                   }
                   fields={[
                     {
@@ -663,7 +661,7 @@ export default function AIInterviewPicker({
               if (opening) jdLineage.ensureLoaded(jdId, jdId);
             };
             return (
-              <div
+              <div {...clickableProps}
                 key={jobKey}
                 /* Clicking the card opens its versions. */
                 onClick={toggleExpanded}

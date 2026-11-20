@@ -4,6 +4,7 @@ import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Trash2, AlertCircle, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 /** What is being deleted — read straight off the assessment / AI interview record. */
 export interface DeleteRecordTarget {
@@ -60,7 +61,7 @@ export default function DeleteRecordModal({
   ].filter((part): part is string => !!part);
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
       <div
         role="alertdialog"
         aria-modal="true"
@@ -131,7 +132,7 @@ export default function DeleteRecordModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }
 

@@ -39,7 +39,7 @@ export default function NoResumesEmptyState({
     <div className={`flex flex-col items-center justify-center px-4 py-14 text-center sm:py-20 ${className}`}>
       <FolderIconIllustration icon={FileText} />
 
-      <h3 className="mt-4 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">
+      <h3 className="mt-4 text-base sm:text-lg font-bold tracking-tight text-[var(--raw-0f1e3d)] dark:text-slate-50">
         {title}
       </h3>
 
@@ -48,7 +48,7 @@ export default function NoResumesEmptyState({
           empty string (the Archived Resumes folder) drops the paragraph
           entirely rather than leaving a blank line. */}
       {description && (
-        <p className="mt-1.5 max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">
+        <p className="mt-1.5 max-w-md text-sm sm:text-base leading-relaxed text-[var(--raw-0f1e3d)]/80 dark:text-slate-300">
           {description}
         </p>
       )}

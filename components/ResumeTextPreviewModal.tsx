@@ -11,6 +11,7 @@ import { extractLocalResumeText } from '@/lib/utils/localResumeText';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { canDownloadSomeResumes, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ResumeTextPreviewModalProps {
   /** Resume (or version) id — a version is a resume record in its own right.
@@ -442,9 +443,9 @@ export default function ResumeTextPreviewModal({
               <span className="hidden sm:inline">Download</span>
             </button>
           )}
-          <button type="button" onClick={onClose} className="tf-preview-btn" aria-label="Close" title="Close">
+          <IconButton bare label="Close" type="button" onClick={onClose} className="tf-preview-btn">
             <X className="w-4 h-4" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Document */}

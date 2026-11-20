@@ -48,7 +48,7 @@ const DESCRIPTION_MAX = 1000;
 const COUNTER_FROM = 0.8;
 
 const fieldClassName =
-  'w-full rounded-lg border bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:ring-4';
+  'w-full rounded-lg border bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-500 dark:placeholder:text-slate-500 focus:ring-4';
 const fieldOk = 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10';
 const fieldError = 'border-destructive/60 focus:border-destructive focus:ring-destructive/10';
 
@@ -270,7 +270,7 @@ export default function TeamFormModal({
                           ? 'bg-brand-blue text-white'
                           : active
                             ? 'bg-brand-blue/10 text-brand-blue ring-2 ring-brand-blue dark:bg-brand-blue/20 dark:text-blue-300'
-                            : 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500'
+                            : 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-500'
                       }`}
                     >
                       {done ? <Check className="h-3.5 w-3.5" /> : s.step}
@@ -278,7 +278,7 @@ export default function TeamFormModal({
                     <span className="min-w-0">
                       <span
                         className={`block truncate text-sm font-semibold ${
-                          active || done ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'
+                          active || done ? 'text-gray-900 dark:text-slate-50' : 'text-gray-500 dark:text-slate-500'
                         } ${reachable && !active ? 'group-hover:text-brand-blue' : ''}`}
                       >
                         {s.label}
@@ -303,7 +303,7 @@ export default function TeamFormModal({
                 <span
                   aria-hidden
                   className={`pointer-events-none absolute left-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-xs font-bold tracking-wide transition-colors ${
-                    initials ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500'
+                    initials ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-500'
                   }`}
                 >
                   {initials || <Users className="h-4 w-4" />}
@@ -334,7 +334,7 @@ export default function TeamFormModal({
                 {showNameError ? (
                   <p id="team-name-error" className="font-medium text-destructive">{nameError}</p>
                 ) : (
-                  <span className="text-gray-400 dark:text-slate-500">Team names must be unique.</span>
+                  <span className="text-gray-500 dark:text-slate-500">Team names must be unique.</span>
                 )}
                 {teamName.length >= NAME_MAX * COUNTER_FROM && (
                   <span className="shrink-0 tabular-nums text-gray-500 dark:text-slate-500">{teamName.length}/{NAME_MAX}</span>
@@ -344,7 +344,7 @@ export default function TeamFormModal({
 
             <div>
               <label htmlFor="team-description" className="mb-2 block text-base font-semibold text-gray-900 dark:text-slate-50">
-                What does it do? <span className="text-sm font-normal text-gray-400 dark:text-slate-500">(optional)</span>
+                What does it do? <span className="text-sm font-normal text-gray-500 dark:text-slate-500">(optional)</span>
               </label>
               <textarea
                 id="team-description"

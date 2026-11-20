@@ -9,6 +9,7 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from '../ResultRowActions';
 import { toast } from 'sonner';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -145,10 +146,10 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
   const hasAnyData = !!(formula || eval_?.capability_score || eval_?.section_scores || eval_?.cluster_insights?.length || eval_?.evaluations?.length || eval_?.skill_score_cards?.length);
 
   if (!isCompleted) {
-    return (<div className="flex flex-col items-center justify-center py-20 text-gray-400"><Target className="w-10 h-10 mb-3 opacity-40" /><p className="text-sm">Evaluation will be available after the interview completes.</p></div>);
+    return (<div className="flex flex-col items-center justify-center py-20 text-gray-500"><Target className="w-10 h-10 mb-3 opacity-40" /><p className="text-sm">Evaluation will be available after the interview completes.</p></div>);
   }
   if (!hasAnyData) {
-    return (<div className="flex flex-col items-center justify-center py-20 text-gray-400"><Award className="w-10 h-10 mb-3 opacity-40" /><p className="text-sm">Evaluation data not yet available.</p><p className="text-xs mt-1">The AI evaluator may still be processing this interview.</p></div>);
+    return (<div className="flex flex-col items-center justify-center py-20 text-gray-500"><Award className="w-10 h-10 mb-3 opacity-40" /><p className="text-sm">Evaluation data not yet available.</p><p className="text-xs mt-1">The AI evaluator may still be processing this interview.</p></div>);
   }
 
   const toggleCluster = (k: string) => setExpandedClusters(p => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
@@ -314,7 +315,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
               const s = BAND_STYLES[band] || BAND_STYLES.NO;
               const isActive = band === recommendation;
               return (
-                <span key={band} className={`text-2xs font-medium px-2 py-0.5 rounded ${isActive ? `${s.bg} ${s.text} ring-1 ring-current` : 'text-gray-400'}`}>
+                <span key={band} className={`text-2xs font-medium px-2 py-0.5 rounded ${isActive ? `${s.bg} ${s.text} ring-1 ring-current` : 'text-gray-500'}`}>
                   {band.replace(/_/g, ' ')} ({threshold})
                 </span>
               );
@@ -381,8 +382,8 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                               <span className="tf-micro-hint">{clSkills.length} skill{clSkills.length !== 1 ? 's' : ''}</span>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className={`text-sm font-bold ${scoreColor(clPct, 100)}`}>{Math.round(clScore010)}<span className="text-2xs text-gray-400 font-normal">/10</span></span>
-                              {cOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                              <span className={`text-sm font-bold ${scoreColor(clPct, 100)}`}>{Math.round(clScore010)}<span className="text-2xs text-gray-500 font-normal">/10</span></span>
+                              {cOpen ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
                             </div>
                           </button>
 
@@ -416,7 +417,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                                         const pctColor = card.final_pct >= 80 ? 'text-emerald-600' : card.final_pct >= 60 ? 'text-blue-600' : card.final_pct >= 40 ? 'text-amber-600' : 'text-red-600';
 
                                         return (
-                                          <tr key={card.skill} className="cursor-pointer hover:bg-gray-50/50" onClick={() => toggleSkill(card.skill)}>
+                                          <tr {...clickableRowProps} key={card.skill} className="cursor-pointer hover:bg-gray-50/50" onClick={() => toggleSkill(card.skill)}>
                                             <td className="tf-td align-top">
                                               <div className="flex items-center gap-2">
                                                 <span className="tf-row-name">{card.skill}</span>
@@ -508,7 +509,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                               const pctColor = card.final_pct >= 80 ? 'text-emerald-600' : card.final_pct >= 60 ? 'text-blue-600' : card.final_pct >= 40 ? 'text-amber-600' : 'text-red-600';
 
                               return (
-                                <tr key={card.skill} className="cursor-pointer hover:bg-gray-50/50" onClick={() => toggleSkill(card.skill)}>
+                                <tr {...clickableRowProps} key={card.skill} className="cursor-pointer hover:bg-gray-50/50" onClick={() => toggleSkill(card.skill)}>
                                   <td className="tf-td align-top">
                                     <div className="flex items-center gap-2">
                                       <span className="tf-row-name">{card.skill}</span>

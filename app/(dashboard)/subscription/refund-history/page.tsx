@@ -19,6 +19,8 @@ import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import FilterSelect from '@/components/ui/filter-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -467,7 +469,7 @@ export default function RefundHistoryPage() {
           <div className="tf-grid-4">
             {/* Search */}
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-slate-500" />
               <input
                 type="text"
                 placeholder="Search refunds"
@@ -708,7 +710,7 @@ export default function RefundHistoryPage() {
 
         {/* Refund Detail Modal */}
         {selectedRefund && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
             <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-2xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
               <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
                 <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
@@ -722,13 +724,12 @@ export default function RefundHistoryPage() {
                       <p className="mt-0.5 break-all font-mono text-sm text-white/75">{selectedRefund.invoice_number}</p>
                     </div>
                   </div>
-                  <button
+                  <IconButton bare label="Close"
                     onClick={() => setSelectedRefund(null)}
                     className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-                    aria-label="Close"
                   >
                     <X className="h-5 w-5" />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
               <div className="flex-1 min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
@@ -833,7 +834,7 @@ export default function RefundHistoryPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
       </div>
       </div>

@@ -11,6 +11,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toExternalUrl } from '@/lib/utils/externalUrl';
 import { RESUME_DELETE_OWNER_ONLY_REASON } from '@/lib/permissions/resumeDelete';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ResumeDetailViewProps {
   resume: Resume;
@@ -137,16 +138,15 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             </Button>
             {/* Embedded view is reached via the breadcrumb, so no back control */}
             {!embedded && (
-              <Button
+              <IconButton label="Close"
                 tone="onColor"
                 variant="secondary"
                 size="sm"
                 onClick={onClose}
-                aria-label="Close"
                
               >
                 <X className="w-5 h-5" />
-              </Button>
+              </IconButton>
             )}
           </div>
         </div>
@@ -512,16 +512,15 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                             </div>
                           </div>
                         </div>
-                        <button
+                        <IconButton bare label="Download this version"
                           className={`p-2 rounded-md transition-colors ${
                             index === 0
                               ? 'text-blue-600 hover:bg-blue-100'
                               : 'text-gray-600 hover:bg-gray-200'
                           }`}
-                          aria-label="Download this version" title="Download this version"
                         >
                           <Download className="w-4 h-4" />
-                        </button>
+                        </IconButton>
                       </div>
                     </div>
                   ))}

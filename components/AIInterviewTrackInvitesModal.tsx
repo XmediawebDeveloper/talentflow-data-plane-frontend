@@ -46,6 +46,8 @@ import AIInterviewInviteTable, {
   inviteSourceLabel,
   inviteStatusLabel,
 } from '@/components/AIInterviewInviteTable';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 const exportDate = (value: string | null | undefined): string => {
   if (!value) return '';
@@ -884,7 +886,7 @@ export default function AIInterviewTrackInvitesModal({
                   <span className="truncate">{jdTitle}</span>
                   {jobLock && <JobLockBadge kind={jobLock} title={jobLockMessage} />}
                   {jobScope && (
-                    <span className="text-gray-400 dark:text-slate-400 whitespace-nowrap">
+                    <span className="text-gray-500 dark:text-slate-400 whitespace-nowrap">
                       - all job versions ({jobScope.length} interview{jobScope.length === 1 ? '' : 's'})
                     </span>
                   )}
@@ -1438,13 +1440,13 @@ export default function AIInterviewTrackInvitesModal({
   /* Edit invitation — only offered on REVOKED rows by the table. Same modal
      as the AI Interviews page's tracker. */
   const editModal = editTarget && (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md">
         <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
           <h3 className="tf-section-title sm:text-lg tracking-tight">Edit Invitation</h3>
-          <Button variant="secondary" size="sm" onClick={() => { if (!savingEdit) setEditTarget(null); }} aria-label="Close" className="">
+          <IconButton label="Close" variant="secondary" size="sm" onClick={() => { if (!savingEdit) setEditTarget(null); }} className="">
             <X className="w-5 h-5" />
-          </Button>
+          </IconButton>
         </div>
         <div className="px-5 sm:px-6 py-4 space-y-4">
           <p className="tf-body-muted">
@@ -1496,13 +1498,13 @@ export default function AIInterviewTrackInvitesModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 
   if (embedded) return <>{panel}{editModal}</>;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
       {/* Height is content-driven with a viewport cap, not a fixed dvh: a
           three-invite list on a large monitor used to stretch the dialog the full
           screen with empty space under the rows. The list absorbs the overflow
@@ -1510,6 +1512,6 @@ export default function AIInterviewTrackInvitesModal({
           a 320px phone. */}
       {panel}
       {editModal}
-    </div>
+    </div></ModalA11y>
   );
 }

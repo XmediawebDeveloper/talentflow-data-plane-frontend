@@ -193,8 +193,19 @@ if (typeof window !== 'undefined') {
   window.addEventListener('focus', renewIfStale);
 }
 
+/** Fired on window whenever the in-memory access token is set or cleared —
+ *  e.g. when the session is restored after a page load. Providers that key
+ *  their state on the signed-in user re-read it on this (the token is null
+ *  for a moment on every fresh page). */
+export const ACCESS_TOKEN_CHANGED_EVENT = 'tf:access-token-changed';
+const announceAccessToken = () => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(ACCESS_TOKEN_CHANGED_EVENT));
+};
+
 const applyAccessToken = (access: string) => {
   accessToken = access;
+  // After this function finishes (listeners read the new token).
+  queueMicrotask(announceAccessToken);
   accessTokenExpiresAt = 0;
   try {
     // JWT segments are base64url.
@@ -235,6 +246,36 @@ export const setTokens = (access: string, refresh?: string | null): Promise<void
   }).catch((err) => {
     console.warn('[AUTH] Could not save the session cookie:', err);
   });
+};
+
+/**
+ * Start a session from tokens this page did not get from its own sign-in
+ * (the cross-subdomain /auth/handoff link). The refresh token is checked by
+ * the backend through /api/session before any cookie is set; the access token
+ * that came with the link is never used. Resolves false when it is refused.
+ */
+export const exchangeHandoffSession = async (refresh: string): Promise<boolean> => {
+  if (typeof window === 'undefined' || !refresh) return false;
+  try {
+    const res = await fetch('/api/session', {
+      method: 'POST',
+      headers: SESSION_HEADERS,
+      body: JSON.stringify({ refresh_token: refresh, validate: true }),
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || typeof data?.access_token !== 'string' || !data.access_token) return false;
+    takeLegacyRefreshToken();
+    applyAccessToken(data.access_token);
+    hasSession = true;
+    writeFlag(SIGNED_IN_FLAG, '1');
+    pageSessionEpoch = `${Date.now()}`;
+    writeFlag(SESSION_EPOCH_KEY, pageSessionEpoch);
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 export const getTokens = () => {
@@ -308,6 +349,7 @@ export const clearPermissionVersion = (): void => {
 
 export const clearTokens = () => {
   accessToken = null;
+  announceAccessToken();
   hasSession = false;
   accessTokenExpiresAt = 0;
   scheduleRenewal();  // cancels a pending renewal
@@ -397,7 +439,9 @@ export const handleUnauthorized = () => {
     showSessionExpired();
     return;
   }
-  refreshAccessToken(currentRefreshToken).catch(showSessionExpired);
+  refreshAccessToken(currentRefreshToken).catch((err) => {
+    if (isSessionGone(err)) showSessionExpired();
+  });
 };
 
 // Called by the SessionExpiredModal when the user clicks "OK".
@@ -461,8 +505,10 @@ export const authFetch = async (
         ...options,
         headers: { ...headers, Authorization: `Bearer ${fresh}` },
       });
-    } catch {
-      // Refresh refused — fall through to the session-expired modal.
+    } catch (err) {
+      // A refresh that failed for a passing reason (server busy, network) is
+      // not a logout: fail this request and keep the session.
+      if (!isSessionGone(err)) throw new Error('Could not reach the server. Please try again.');
     }
   }
 
@@ -665,6 +711,12 @@ export const dispatchPlanChangePendingEvent = (detail: PlanChangePendingDetail) 
     window.dispatchEvent(new CustomEvent(PLAN_CHANGE_PENDING_EVENT, { detail }));
   }
 };
+
+// True when a refresh failed because the session really ended (the refresh
+// route answers 401 for a revoked / expired / logged-out session). Anything
+// else - 429, 5xx, network - is temporary and must not log the user out.
+const isSessionGone = (err: unknown): boolean =>
+  (err as { status?: number } | null)?.status === 401;
 
 // Single in-flight token refresh. Every caller that needs a refresh (parallel
 // 401s, the permission-version check below) awaits the same POST /auth/refresh
@@ -930,8 +982,10 @@ api.interceptors.response.use(
           showSessionExpired();
         }
       } catch (refreshError) {
-        // Token refresh failed - logout immediately
-        showSessionExpired();
+        // Log out only when the server says the session is over (401). A busy
+        // server (429), a 5xx or a network blip during refresh used to log the
+        // user out mid-work.
+        if (isSessionGone(refreshError)) showSessionExpired();
       }
     }
 

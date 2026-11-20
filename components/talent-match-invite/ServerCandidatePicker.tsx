@@ -47,6 +47,7 @@ import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 import UploadHistoryButton from '@/components/resumes/UploadHistoryButton';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
+import { IconButton } from '@/components/ui/icon-button';
 
 const PAGE_SIZE = 50;
 
@@ -310,7 +311,7 @@ const ratingTone = (rank: number) =>
   rank >= 7 ? 'bg-success-subtle text-success-strong border-success-line'
     : rank >= 4 ? 'bg-warning-subtle text-warning-strong border-warning-line'
     : rank >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700'
-    : 'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border-gray-200 dark:border-slate-700';
+    : 'bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-500 border-gray-200 dark:border-slate-700';
 
 const matchTone = (status: ServerMatchStatus) =>
   status === 'exact_match' ? 'bg-success-subtle text-success-strong border-success-line'
@@ -1254,7 +1255,7 @@ export default function ServerCandidatePicker({
             {/* A hairline between the groups, from the label down to just above the tab underline. */}
             {i > 0 && <span aria-hidden="true" className="shrink-0 self-stretch w-px my-1.5 mb-2.5 bg-gray-200 dark:bg-slate-700" />}
             <div role="group" aria-label={g.label} className="flex shrink-0 flex-col gap-0.5">
-              <span className="pl-2 text-2xs font-semibold text-gray-400 dark:text-slate-500 whitespace-nowrap">{g.label}</span>
+              <span className="pl-2 text-2xs font-semibold text-gray-500 dark:text-slate-500 whitespace-nowrap">{g.label}</span>
               <div className="flex gap-0.5">{g.tabs.map(tabButton)}</div>
             </div>
           </Fragment>
@@ -1356,7 +1357,7 @@ export default function ServerCandidatePicker({
       {/* Search + filters */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[12rem]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" aria-hidden="true" />
           <input
             type="search"
             value={searchInput}
@@ -1536,15 +1537,13 @@ export default function ServerCandidatePicker({
                     <Archive className="w-3 h-3" aria-hidden="true" />Archived
                   </span>
                   {busy && <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-brand-blue" aria-label="Unarchiving" />}
-                  <button
+                  <IconButton bare label={`View resume of ${r.name}`} tooltip="View resume"
                     type="button"
                     onClick={() => openPreview({ resume_id: r.id, name: r.name, email: r.email, phone: '', source: 'my-resumes', rating: null, match_score: null, score: null, already_invited: false })}
-                    aria-label={`View resume of ${r.name}`}
-                    title="View resume"
-                    className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10"
+                    className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10"
                   >
                     <Eye className="w-4 h-4" aria-hidden="true" />
-                  </button>
+                  </IconButton>
                   <ResumeRowMenu name={r.name} actions={rowActions(r.id, r.name, 'archived')} onOverlayChange={onOverlayChange} />
                 </li>
               );
@@ -1659,15 +1658,13 @@ export default function ServerCandidatePicker({
                       {r.rating || '-'}
                     </span>
                   )}
-                  <button
+                  <IconButton bare label={isDbTab(source) ? `View resume versions of ${r.name}` : `View resume of ${r.name}`} tooltip={isDbTab(source) ? 'View resume versions' : 'View resume'}
                     type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (isDbTab(source)) openVersions(r); else openPreview(r); }}
-                    aria-label={isDbTab(source) ? `View resume versions of ${r.name}` : `View resume of ${r.name}`}
-                    title={isDbTab(source) ? 'View resume versions' : 'View resume'}
-                    className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10"
+                    className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10"
                   >
                     <Eye className="w-4 h-4" aria-hidden="true" />
-                  </button>
+                  </IconButton>
                   {isDbTab(source) && (
                     <ResumeRowMenu name={r.name} actions={rowActions(r.resume_id, r.name, source as 'my-resumes' | 'internal-db')} onOverlayChange={onOverlayChange} />
                   )}

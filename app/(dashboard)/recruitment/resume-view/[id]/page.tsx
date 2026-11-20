@@ -244,6 +244,8 @@ import {
   type ResumeTab,
 } from '@/lib/constants/resumePools';
 import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** Create / Send button when the user lacks the permission: shown, greyed, hover explains. */
 const PERMISSION_LOCKED_BUTTON_CLASS =
@@ -2434,19 +2436,18 @@ Best regards`);
                                 <span className="px-3 py-1.5 tf-hint italic">First version</span>
                               )}
                               {/* View (preview) button */}
-                              <button
+                              <IconButton bare label="View resume"
                                 onClick={() => handleVersionPreview(version.id, `Version ${versionNumber}`)}
                                 className={`p-2 rounded-md transition-colors ${
                                   isLatest
                                     ? 'text-brand-blue hover:bg-brand-blue/10'
                                     : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                                 }`}
-                                aria-label="View resume" title="View resume"
                               >
                                 <Eye className="w-4 h-4" />
-                              </button>
+                              </IconButton>
                               {/* Download button */}
-                              <button
+                              <IconButton bare label={canDownloadThisResume ? 'Download this version' : DOWNLOAD_BLOCKED_MESSAGE}
                                 onClick={async () => {
                                   if (!canDownloadThisResume) return;
                                   try {
@@ -2469,10 +2470,9 @@ Best regards`);
                                     : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                                 } ${!canDownloadThisResume ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 aria-disabled={!canDownloadThisResume}
-                                title={canDownloadThisResume ? 'Download this version' : DOWNLOAD_BLOCKED_MESSAGE}
                               >
                                 <Download className="w-4 h-4" />
-                              </button>
+                              </IconButton>
                             </div>
                           </div>
                         </div>
@@ -2507,16 +2507,14 @@ Best regards`);
             ]}
             /* File Properties — the icon that opens its drawer. */
             headerAction={
-              <button
+              <IconButton bare label="File Properties"
                 type="button"
                 onClick={() => setShowFileProperties(true)}
-                aria-label="File Properties"
-                title="File Properties"
                 aria-expanded={showFileProperties}
                 className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 hover:bg-brand-blue/20 hover:ring-brand-blue/30 transition-colors"
               >
                 <File className="w-4 h-4" />
-              </button>
+              </IconButton>
             }
           />
           </div>
@@ -2529,7 +2527,7 @@ Best regards`);
       {/* File Properties drawer — enters from the right edge and leaves the
           same way; the backdrop fades with it. Closes on the backdrop, Escape
           or Close. */}
-      <div
+      <ModalA11y innerDialog closeOnEscape={false}><div
         className={`fixed inset-0 z-50 ${showFileProperties ? '' : 'pointer-events-none'}`}
         aria-hidden={!showFileProperties}
       >
@@ -2656,7 +2654,7 @@ Best regards`);
             </Button>
           </div>
         </aside>
-      </div>
+      </div></ModalA11y>
 
       {/* Version Compare Modal — shared with the version-history popup on the
           resume lists, so a diff reads the same wherever it is opened from. */}
@@ -2697,7 +2695,7 @@ Best regards`);
 
       {/* Version Selection Modal for Apply to Job */}
       {showVersionSelectModal && resume && resume.versions && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-scale-in">
             {/* Header */}
             <div className="flex-shrink-0 flex items-center justify-between gap-3 p-4 sm:p-6 border-b border-gray-100 bg-gray-50">
@@ -2710,12 +2708,11 @@ Best regards`);
                   <p className="tf-body-secondary">Choose which version to apply for the job</p>
                 </div>
               </div>
-              <button
+              <IconButton bare label="Close"
                 onClick={() => setShowVersionSelectModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-               aria-label="Close">
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <X className="w-5 h-5 text-gray-500" />
-              </button>
+              </IconButton>
             </div>
 
             {/* Version List */}
@@ -2785,7 +2782,7 @@ Best regards`);
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          <File className="w-4 h-4 text-gray-400" />
+                          <File className="w-4 h-4 text-gray-500" />
                           <span className="whitespace-nowrap font-medium text-gray-700">Version {version.version || (resume.versions.length - index)}</span>
                           <span className="min-w-0 tf-meta [overflow-wrap:anywhere]">({version.name})</span>
                         </div>
@@ -2824,7 +2821,7 @@ Best regards`);
               </button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Apply to Job Modal */}
@@ -2930,7 +2927,7 @@ Best regards`);
 
       {/* Share via Email Modal */}
       {isShareModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -2943,15 +2940,14 @@ Best regards`);
                     <p className="tf-body-muted">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                   </div>
                 </div>
-                <button
+                <IconButton bare label="Close"
                   onClick={() => {
                     setIsShareModalOpen(false);
                     setShareEmail('');
                   }}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                 aria-label="Close">
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                   <X className="w-5 h-5 text-gray-500" />
-                </button>
+                </IconButton>
               </div>
 
               <div className="space-y-4">
@@ -2979,16 +2975,14 @@ Best regards`);
                             {sizeKb ? <> &middot; {Math.round(sizeKb)} KB</> : null}
                           </div>
                         </div>
-                        <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <button
+                        <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                        <IconButton bare label={`View ${resume?.name || 'the'} resume`} tooltip="View resume"
                           type="button"
                           onClick={() => setIsSharePreviewOpen(true)}
-                          className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors"
-                          aria-label={`View ${resume?.name || 'the'} resume`}
-                          title="View resume"
+                          className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors"
                         >
                           <Eye className="w-4 h-4" />
-                        </button>
+                        </IconButton>
                       </div>
                     );
                   })()}
@@ -3059,7 +3053,7 @@ Best regards`);
               </div>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* The attachment, read in place. Rendered after the share dialog so it

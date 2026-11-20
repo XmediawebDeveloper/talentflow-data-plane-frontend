@@ -174,7 +174,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
               ) : textResponse.length > 0 ? (
                 <span className="text-green-600">✓ Answer provided</span>
               ) : (
-                <span className="text-gray-400">No answer yet</span>
+                <span className="text-gray-500">No answer yet</span>
               )}
             </span>
             <span>{isLocked ? 'Locked' : `${3000 - textResponse.length} characters remaining`}</span>
@@ -242,7 +242,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
             >
               {/* Selection Indicator */}
               <div className={`flex-shrink-0 ${
-                state === 'submitted' ? 'text-success' : state === 'selected' ? 'text-brand-blue' : 'text-gray-400'
+                state === 'submitted' ? 'text-success' : state === 'selected' ? 'text-brand-blue' : 'text-gray-500'
               }`}>
                 {isMultipleChoice ? (
                   // Checkbox style for multiple choice

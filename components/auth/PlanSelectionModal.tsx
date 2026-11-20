@@ -5,6 +5,7 @@
 // so this picker and the pricing page always show the same plans and numbers.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useModalA11y } from '@/components/ui/modal-a11y';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -33,6 +34,7 @@ import {
   planQuotaRows,
   type MarketingPlan,
 } from '@/components/marketing/plans';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface PlanSelectionModalProps {
   isOpen: boolean;
@@ -272,7 +274,7 @@ function SelectablePlanCard({
     return cardRoot(
       <div className="grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.55fr)]">
         {/* Identity + price, on a soft brand wash */}
-        <div className="flex flex-col border-b border-slate-900/[0.07] bg-[linear-gradient(160deg,rgba(15,60,153,0.07),transparent_75%)] p-6 dark:border-white/10 dark:bg-[linear-gradient(160deg,rgba(123,164,255,0.12),transparent_75%)] sm:p-8 lg:border-b-0 lg:border-r">
+        <div className="flex flex-col border-b border-slate-900/[0.07] bg-[linear-gradient(160deg,var(--raw-rgba-15-60-153-0p07),transparent_75%)] p-6 dark:border-white/10 dark:bg-[linear-gradient(160deg,var(--raw-rgba-123-164-255-0p12),transparent_75%)] sm:p-8 lg:border-b-0 lg:border-r">
           {topRow}
           <h4 className={`${DISPLAY} mt-4 text-xl font-extrabold tracking-[-0.025em] text-mkt-ink sm:text-2xl`}>{plan.name}</h4>
           {plan.description && (
@@ -405,6 +407,14 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
   const [pickedTab, setPickedTab] = useState<string | null>(null);
 
   const overlayRef = useRef<HTMLDivElement>(null);
+  // Tab trap + focus return (a11y §14). Escape and initial focus are this
+  // modal's own (see the effect below), so closeOnEscape is off here. The
+  // overlay keeps its own ref (GSAP animates it).
+  const overlayA11y = useModalA11y({ closeOnEscape: false });
+  useLayoutEffect(() => {
+    overlayA11y(overlayRef.current);
+    return () => overlayA11y(null);
+  }, [overlayA11y]);
   const panelRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -600,7 +610,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
         <div
           aria-hidden="true"
           data-glow
-          className="pointer-events-none absolute -right-40 -top-48 h-[420px] w-[420px] rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.16),transparent)] dark:bg-[radial-gradient(closest-side,rgba(76,123,232,0.22),transparent)]"
+          className="pointer-events-none absolute -right-40 -top-48 h-[420px] w-[420px] rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p16),transparent)] dark:bg-[radial-gradient(closest-side,var(--raw-rgba-76-123-232-0p22),transparent)]"
         />
 
         {/* ------------------------------------------------ Header */}
@@ -619,15 +629,13 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                 Compare on pricing page
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
-              <button
+              <IconButton bare label="Close and go to the pricing page" tooltip="Close"
                 type="button"
                 onClick={handleClose}
-                aria-label="Close and go to the pricing page"
-                title="Close"
                 className="grid h-10 w-10 place-items-center rounded-full border border-slate-900/[0.08] bg-mkt-surface text-slate-500 transition-[color,border-color,rotate] duration-300 hover:rotate-90 hover:border-slate-900/20 hover:text-mkt-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid dark:border-white/10 dark:text-slate-300"
               >
                 <X className="h-[18px] w-[18px]" />
-              </button>
+              </IconButton>
             </div>
           </div>
 

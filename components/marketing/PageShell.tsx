@@ -61,7 +61,7 @@ export function PageHero({
       <div
         data-glow
         aria-hidden="true"
-        className="pointer-events-none absolute -right-48 -top-48 h-[480px] w-[480px] rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.14),transparent)] dark:bg-[radial-gradient(closest-side,rgba(76,123,232,0.18),transparent)] sm:h-[620px] sm:w-[620px]"
+        className="pointer-events-none absolute -right-48 -top-48 h-[480px] w-[480px] rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p14),transparent)] dark:bg-[radial-gradient(closest-side,var(--raw-rgba-76-123-232-0p18),transparent)] sm:h-[620px] sm:w-[620px]"
       />
       <div
         className={`${SHELL} relative grid grid-cols-1 gap-8 ${

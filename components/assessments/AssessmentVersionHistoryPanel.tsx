@@ -13,6 +13,8 @@ import { isStandardExperienceLevel, formatJdExperience } from '@/lib/utils/jobEx
 import { toOneDecimalScore } from '@/lib/utils/score';
 import { ASSESSMENT_JOB_LOCK_MESSAGE } from '@/lib/utils/assessmentJobLock';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * Job Versions for an assessment row, expanded in place beneath it.
@@ -1110,17 +1112,15 @@ export default function AssessmentVersionHistoryPanel({
                  copies that can drift apart. */
               const viewJobVersionButton =
                 onViewJobVersion && group.jobVersionId ? (
-                  <Button
+                  <IconButton label={`View job V${group.jobVersion} details`}
                     type="button"
                     variant="secondary"
                     size="sm"
                     onClick={() => onViewJobVersion(group.jobVersionId!, group.jobVersion)}
-                    aria-label={`View job V${group.jobVersion} details`}
-                    title={`View job V${group.jobVersion} details`}
                     className="h-8 w-8 flex-shrink-0"
                   >
                     <Eye className="w-4 h-4" />
-                  </Button>
+                  </IconButton>
                 ) : null;
 
     return (
@@ -1313,7 +1313,7 @@ export default function AssessmentVersionHistoryPanel({
                        control. */
                     const assessmentDimmed = !!activeSelection && !isPicked;
                     return (
-                      <tr
+                      <tr {...((onRowClick) ? clickableRowProps : {})}
                         key={assessment.id}
                         /* The finest scroll anchor of
                            the three — see the job
@@ -1440,17 +1440,15 @@ export default function AssessmentVersionHistoryPanel({
                                   the host's own quick
                                   actions and menu. */}
                               {onViewAssessment && (
-                                <Button
+                                <IconButton label={`View assessment V${assessment.version ?? 1} details`}
                                   type="button"
                                   variant="secondary"
                                   size="sm"
                                   onClick={() => onViewAssessment(assessment)}
-                                  aria-label={`View assessment V${assessment.version ?? 1} details`}
-                                  title={`View assessment V${assessment.version ?? 1} details`}
                                   className="h-8 w-8 flex-shrink-0"
                                 >
                                   <Eye className="w-4 h-4" />
-                                </Button>
+                                </IconButton>
                               )}
                               {/* The host's own menu and
                                   quick actions, where a
@@ -1681,7 +1679,7 @@ export default function AssessmentVersionHistoryPanel({
                       {/* NO transform on the row: a transformed <tr> becomes
                           the containing block for its cells, which silently
                           kills position:sticky on the pinned Actions cell. */}
-                      <tr
+                      <tr {...((hasAssessments) ? clickableRowProps : {})}
                         /* Anchors for a host that scrolls the reader back to
                            where they were. Inert markers — no styling and no
                            behaviour hangs off them — carrying the two facts a

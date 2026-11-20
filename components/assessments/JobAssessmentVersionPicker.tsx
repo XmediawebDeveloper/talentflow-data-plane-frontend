@@ -7,6 +7,7 @@ import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { IconButton } from '@/components/ui/icon-button';
 
 // The API rows the host already holds; typed loosely, as the hosts hold them.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,7 +112,7 @@ export default function JobAssessmentVersionPicker({
 
       {versions.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 flex flex-col items-center gap-2 text-center px-4">
-          <ClipboardCheck className="w-8 h-8 text-gray-300" />
+          <ClipboardCheck className="w-8 h-8 text-muted-foreground dark:text-gray-300" />
           <div className="tf-label">No active assessment for this job</div>
           <div className="tf-meta">
             Create and publish an assessment for this job from Assessments, then invite candidates here.
@@ -222,15 +223,13 @@ export default function JobAssessmentVersionPicker({
                 <span className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 bg-success-subtle text-success-strong ring-success-line">
                   {a.status === 'published' ? 'Active' : a.status}
                 </span>
-                <button
+                <IconButton bare label="Preview assessment"
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setPreview(a); }}
-                  title="Preview assessment"
-                  aria-label="Preview assessment"
                   className="shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-500 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
                 >
                   <Eye className="w-4 h-4" />
-                </button>
+                </IconButton>
               </div>
             );
           })}

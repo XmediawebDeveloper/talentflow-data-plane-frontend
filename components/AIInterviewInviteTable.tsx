@@ -21,7 +21,6 @@ import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { type ListDisplayMode } from '@/components/ui/list-view-toggle';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +36,7 @@ import {
 } from '@/components/ui/dialog';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { invitedViaResume, useInviteResumePreview } from '@/components/ai-interview/useInviteResumePreview';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The candidate list for an AI interview's invite tracker.
@@ -249,8 +249,8 @@ export const InviteTimelineLines = ({ inv, duration, limit }: { inv: any; durati
       ))}
       {duration && (
         <div className="flex items-center gap-2 whitespace-nowrap">
-          <Timer className="w-3 h-3 flex-shrink-0 text-gray-400" />
-          <span><span className="text-gray-400 dark:text-slate-400">Duration:</span> {duration}</span>
+          <Timer className="w-3 h-3 flex-shrink-0 text-gray-500" />
+          <span><span className="text-gray-500 dark:text-slate-400">Duration:</span> {duration}</span>
         </div>
       )}
     </div>
@@ -928,11 +928,10 @@ export default function AIInterviewInviteTable({
     // Same round pill checkbox the Assessments tracker uses, so the select
     // column looks the same wherever it appears.
     return (
-      <button
+      <IconButton bare label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
         type="button"
         role="checkbox"
         aria-checked={checked}
-        aria-label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
         onClick={(e) => { e.stopPropagation(); onToggleSelect?.(inv.id); }}
         className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
           checked
@@ -941,7 +940,7 @@ export default function AIInterviewInviteTable({
         }`}
       >
         {checked && <Check className="w-3 h-3 text-white" />}
-      </button>
+      </IconButton>
     );
   };
 
@@ -1056,7 +1055,7 @@ export default function AIInterviewInviteTable({
                       <ResultBadge result={inviteResult(inv, score)} />
                     </>
                   ) : (
-                    <span className="text-gray-400 dark:text-slate-400">No score</span>
+                    <span className="text-gray-500 dark:text-slate-400">No score</span>
                   )}
                 </span>
                 {inviteSourceLabel(inv) && <InviteSourceValue inv={inv} iconClassName="w-3 h-3" />}
@@ -1263,12 +1262,10 @@ export default function AIInterviewInviteTable({
                     />
                   )}
                   {onToggleSelectAll && !trackerLook && (
-                    <button
+                    <IconButton bare label={allSelected ? 'Deselect all on this page' : 'Select all on this page'}
                       type="button"
                       role="checkbox"
                       aria-checked={allSelected}
-                      aria-label={allSelected ? 'Deselect all on this page' : 'Select all on this page'}
-                      title={allSelected ? 'Deselect all on this page' : 'Select all on this page'}
                       onClick={onToggleSelectAll}
                       className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
                         allSelected
@@ -1277,7 +1274,7 @@ export default function AIInterviewInviteTable({
                       }`}
                     >
                       {allSelected && <Check className="w-3 h-3 text-white" />}
-                    </button>
+                    </IconButton>
                   )}
                 </th>
               )}
@@ -1473,30 +1470,26 @@ export default function AIInterviewInviteTable({
                     <div className={`flex items-center gap-1.5 ${trackerLook ? 'justify-center' : ''}`}>
                     {/* The Resume Scoring list's expand control. */}
                     {expandableRows && (
-                      <Button
+                      <IconButton label={isExpanded ? 'Hide details' : 'Show details'}
                         variant="secondary"
                         size="sm"
                         onClick={() => toggleExpanded(inv.id)}
                         aria-expanded={isExpanded}
-                        aria-label={isExpanded ? 'Hide details' : 'Show details'}
-                        title={isExpanded ? 'Hide details' : 'Show details'}
                         className="h-8 w-8"
                       >
                         <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                      </Button>
+                      </IconButton>
                     )}
                     {actions.length === 0 ? (
                       <span className="tf-hint">—</span>
                     ) : (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button
-                            aria-label="Actions"
-                            title="Actions"
+                          <IconButton bare label="Actions"
                             className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
                           >
                             <MoreVertical className="w-4 h-4" />
-                          </button>
+                          </IconButton>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className={`w-44 ${MENU_PANEL_BORDER_CLASS}`}>
                           {actions.map(({ key, label, Icon, run, disabled, destructive, busy, iconClassName }) => (
@@ -1558,7 +1551,7 @@ export default function AIInterviewInviteTable({
             <DialogDescription className="break-words">
               {capitalizedCase(timelineTarget?.candidate_name) || timelineTarget?.candidate_email || 'Candidate'}
               {timelineTarget?.candidate_name && timelineTarget?.candidate_email && (
-                <span className="text-gray-400 dark:text-slate-400"> · {timelineTarget.candidate_email}</span>
+                <span className="text-gray-500 dark:text-slate-400"> · {timelineTarget.candidate_email}</span>
               )}
             </DialogDescription>
           </DialogHeader>

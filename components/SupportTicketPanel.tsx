@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import FilterSelect from '@/components/ui/filter-select';
 import { NoTicketsFoundState } from '@/components/SupportEmptyStates';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface SupportTicket {
   id: string;
@@ -257,12 +258,11 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
               <p className="tf-body-secondary">We're here to help</p>
             </div>
           </div>
-          <button
+          <IconButton bare label="Close"
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-           aria-label="Close">
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-gray-600" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Content */}
@@ -424,7 +424,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                       htmlFor="file-upload"
                       className="cursor-pointer flex flex-col items-center"
                     >
-                      <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                      <Upload className="w-8 h-8 text-gray-500 mb-2" />
                       <span className="tf-body-secondary">
                         Click to upload files
                       </span>
@@ -445,12 +445,12 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                               ({(file.size / 1024).toFixed(1)} KB)
                             </span>
                           </div>
-                          <button
+                          <IconButton bare label="Remove attachment"
                             onClick={() => removeAttachment(index)}
                             className="p-1 hover:bg-gray-200 rounded"
                           >
                             <Trash2 className="w-4 h-4 text-red-600" />
-                          </button>
+                          </IconButton>
                         </div>
                       ))}
                     </div>
@@ -488,7 +488,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
 
               {/* Search */}
               <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
                   type="text"
                   value={searchQuery}

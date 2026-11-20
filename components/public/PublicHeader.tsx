@@ -4,6 +4,7 @@ import { Menu, X, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useTheme } from 'next-themes';
+import { IconButton } from '@/components/ui/icon-button';
 
 const navItems = [
   { label: "Home", page: "home" },
@@ -161,9 +162,9 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
     borderRadius: '8px',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'var(--raw-ffffff)',
+    backgroundColor: isDark ? 'var(--raw-rgba-255-255-255-0p08)' : 'var(--raw-ffffff)',
     color: isDark ? 'var(--raw-e2e8f0)' : 'var(--raw-374151)',
-    border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'var(--raw-e5e7eb)'}`,
+    border: `1px solid ${isDark ? 'var(--raw-rgba-255-255-255-0p2)' : 'var(--raw-e5e7eb)'}`,
   };
 
   const startTrialButtonStyle: React.CSSProperties = {
@@ -180,8 +181,8 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
       ? 'linear-gradient(to right, var(--raw-2563eb), var(--raw-4338ca))'
       : 'linear-gradient(to right, var(--raw-3b82f6), var(--raw-6366f1))',
     color: 'var(--raw-ffffff)',
-    border: isDark ? '1px solid rgba(99, 130, 246, 0.5)' : 'none',
-    boxShadow: isDark ? '0 0 12px rgba(59, 130, 246, 0.4)' : '0 4px 14px rgba(59, 130, 246, 0.4)',
+    border: isDark ? '1px solid var(--raw-rgba-99-130-246-0p5)' : 'none',
+    boxShadow: isDark ? '0 0 12px var(--raw-rgba-59-130-246-0p4)' : '0 4px 14px var(--raw-rgba-59-130-246-0p4)',
   };
 
   const menuButtonStyle: React.CSSProperties = {
@@ -255,17 +256,16 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
 
           {/* Desktop Right Buttons */}
           <div style={rightButtonsStyle}>
-            <button
+            <IconButton bare label="Toggle dark mode"
               onClick={toggleDarkMode}
               style={darkModeButtonStyle}
-              aria-label="Toggle dark mode"
             >
               {isDark ? (
                 <Sun style={{ width: 20, height: 20, color: 'var(--raw-f59e0b)' }} />
               ) : (
                 <Moon style={{ width: 20, height: 20, color: 'var(--raw-6b7280)' }} />
               )}
-            </button>
+            </IconButton>
 
             <button onClick={onLogin} style={signInButtonStyle}>
               Sign In
@@ -277,17 +277,16 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
 
           {/* Mobile Buttons */}
           <div style={mobileButtonsStyle}>
-            <button
+            <IconButton bare label="Toggle dark mode"
               onClick={toggleDarkMode}
               style={darkModeButtonStyle}
-              aria-label="Toggle dark mode"
             >
               {isDark ? (
                 <Sun style={{ width: 20, height: 20, color: 'var(--raw-f59e0b)' }} />
               ) : (
                 <Moon style={{ width: 20, height: 20, color: 'var(--raw-6b7280)' }} />
               )}
-            </button>
+            </IconButton>
 
             <button
               style={menuButtonStyle}

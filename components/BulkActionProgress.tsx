@@ -1,5 +1,6 @@
 import { CheckCircle, XCircle, Loader2, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface BulkActionItem {
   id: string;
@@ -69,12 +70,11 @@ export default function BulkActionProgress({
             >
               Show
             </button>
-            <button
+            <IconButton bare label="Close"
               onClick={onClose}
-              className="p-1 text-gray-400 hover:text-gray-600 rounded"
-             aria-label="Close">
+              className="p-1 text-gray-500 hover:text-gray-600 rounded">
               <X className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
         </div>
       </div>
@@ -94,12 +94,11 @@ export default function BulkActionProgress({
             >
               Minimize
             </button>
-            <button
+            <IconButton bare label="Close"
               onClick={onClose}
-              className="p-1 text-gray-400 hover:text-gray-600 rounded"
-             aria-label="Close">
+              className="p-1 text-gray-500 hover:text-gray-600 rounded">
               <X className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
         </div>
 

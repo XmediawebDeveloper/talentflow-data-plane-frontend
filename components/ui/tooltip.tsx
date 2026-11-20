@@ -1,4 +1,4 @@
-import { ReactNode, useState, useRef, useLayoutEffect, useEffect, useCallback } from 'react';
+import { ReactNode, useState, useRef, useLayoutEffect, useEffect, useCallback, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 interface TooltipProps {
@@ -13,10 +13,12 @@ interface TooltipProps {
 const GAP = 8;
 const EDGE = 8;
 
-type Placement = { top: number; left: number; arrow: number; position: 'top' | 'bottom' | 'left' | 'right' };
+export type TooltipPosition = 'top' | 'bottom' | 'left' | 'right';
+type Placement = { top: number; left: number; arrow: number; position: TooltipPosition };
 
 /**
- * Contextual tooltip component for helpful hints.
+ * The tooltip bubble itself — shared by <Tooltip> and <IconButton> so every
+ * tooltip in the app looks and behaves the same.
  *
  * The bubble is portalled to <body> and positioned `fixed` from the trigger's
  * own rect, NOT absolutely inside the trigger's box. An absolute bubble is
@@ -25,38 +27,25 @@ type Placement = { top: number; left: number; arrow: number; position: 'top' | '
  * the modal's left edge. A portalled, viewport-clamped bubble escapes every
  * such ancestor and is nudged back inside the screen instead of overflowing it.
  */
-export function Tooltip({ content, children, position = 'top', delay = 200 }: TooltipProps) {
-  const [isVisible, setIsVisible] = useState(false);
+export function TooltipBubble({
+  anchorRef,
+  content,
+  position = 'top',
+  id,
+}: {
+  anchorRef: RefObject<HTMLElement | null>;
+  content: ReactNode;
+  position?: TooltipPosition;
+  id?: string;
+}) {
   const [placement, setPlacement] = useState<Placement | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const triggerRef = useRef<HTMLDivElement | null>(null);
   const bubbleRef = useRef<HTMLDivElement | null>(null);
-
-  const clearTimer = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-  };
-
-  const handleMouseEnter = () => {
-    clearTimer();
-    timeoutRef.current = setTimeout(() => setIsVisible(true), delay);
-  };
-
-  const handleMouseLeave = () => {
-    clearTimer();
-    setIsVisible(false);
-    setPlacement(null);
-  };
-
-  useEffect(() => () => clearTimer(), []);
 
   // Measure the trigger and the bubble, then place the bubble on the requested
   // side, flip it to the opposite side when that side has no room, and clamp it
   // to the viewport. Runs before paint so the bubble never flashes unplaced.
   const reposition = useCallback(() => {
-    const trigger = triggerRef.current;
+    const trigger = anchorRef.current;
     const bubble = bubbleRef.current;
     if (!trigger || !bubble) return;
 
@@ -97,17 +86,15 @@ export function Tooltip({ content, children, position = 'top', delay = 200 }: To
         : Math.min(Math.max(10, tCenterY - clampedTop), bh - 10);
 
     setPlacement({ top: clampedTop, left: clampedLeft, arrow, position: pos });
-  }, [position]);
+  }, [anchorRef, position]);
 
   // First pass measures with the bubble hidden (rendered but invisible), the
   // second paints it in place. Kept in sync with scroll/resize while open.
   useLayoutEffect(() => {
-    if (!isVisible) return;
     reposition();
-  }, [isVisible, content, reposition]);
+  }, [content, reposition]);
 
   useEffect(() => {
-    if (!isVisible) return;
     const onMove = () => reposition();
     window.addEventListener('scroll', onMove, true);
     window.addEventListener('resize', onMove);
@@ -115,7 +102,7 @@ export function Tooltip({ content, children, position = 'top', delay = 200 }: To
       window.removeEventListener('scroll', onMove, true);
       window.removeEventListener('resize', onMove);
     };
-  }, [isVisible, reposition]);
+  }, [reposition]);
 
   const arrowClasses = {
     top: 'top-full border-l-transparent border-r-transparent border-b-transparent border-t-gray-700',
@@ -129,38 +116,92 @@ export function Tooltip({ content, children, position = 'top', delay = 200 }: To
       ? { left: placement?.arrow, transform: 'translateX(-50%)' }
       : { top: placement?.arrow, transform: 'translateY(-50%)' };
 
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      ref={bubbleRef}
+      id={id}
+      // No entrance animation at all: the bubble appears in place. Any
+      // animation here read as the tooltip sliding in from the top of the
+      // page, because it is first mounted hidden at the viewport's
+      // top-left to be measured, then moved beside the trigger.
+      className="fixed z-[9999] w-max max-w-xs pointer-events-none"
+      role="tooltip"
+      style={{
+        top: placement?.top ?? 0,
+        left: placement?.left ?? 0,
+        visibility: placement ? 'visible' : 'hidden',
+        transition: 'none',
+        animation: 'none',
+      }}
+    >
+      <div className="relative bg-gray-700 text-white text-xs px-3 py-2 rounded-lg shadow-lg whitespace-normal">
+        {content}
+        <div className={`absolute w-0 h-0 border-4 ${arrowClasses[pos]}`} style={arrowStyle} />
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * Show/hide state for a tooltip trigger: on hover (after `delay`) and on
+ * KEYBOARD focus (:focus-visible — a mouse click doesn't pop it up), hidden on
+ * leave, blur, press and Escape. Accessibility §14: "tooltip shows on hover
+ * and on focus".
+ */
+export function useTooltipTrigger(delay = 200) {
+  const [isVisible, setIsVisible] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearTimer = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+  useEffect(() => () => clearTimer(), []);
+  useEffect(() => {
+    if (!isVisible) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsVisible(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isVisible]);
+  const show = () => { clearTimer(); timeoutRef.current = setTimeout(() => setIsVisible(true), delay); };
+  const hide = () => { clearTimer(); setIsVisible(false); };
+  return {
+    isVisible,
+    handlers: {
+      onMouseEnter: show,
+      onMouseLeave: hide,
+      onMouseDown: hide,
+      onFocus: (e: { target: EventTarget }) => {
+        const el = e.target as HTMLElement;
+        if (typeof el.matches === 'function' && el.matches(':focus-visible')) { clearTimer(); setIsVisible(true); }
+      },
+      onBlur: hide,
+    },
+  };
+}
+
+/**
+ * Contextual tooltip component for helpful hints. Wraps its trigger in an
+ * inline-block; for icon buttons use <IconButton>, which adds no wrapper.
+ */
+export function Tooltip({ content, children, position = 'top', delay = 200 }: TooltipProps) {
+  const triggerRef = useRef<HTMLDivElement | null>(null);
+  const { isVisible, handlers } = useTooltipTrigger(delay);
+
   return (
     <div
       ref={triggerRef}
       className="relative inline-block"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onMouseEnter={handlers.onMouseEnter}
+      onMouseLeave={handlers.onMouseLeave}
+      onFocus={handlers.onFocus}
+      onBlur={handlers.onBlur}
     >
       {children}
-      {isVisible && typeof document !== 'undefined' && createPortal(
-        <div
-          ref={bubbleRef}
-          // No entrance animation at all: the bubble appears in place. Any
-          // animation here read as the tooltip sliding in from the top of the
-          // page, because it is first mounted hidden at the viewport's
-          // top-left to be measured, then moved beside the trigger.
-          className="fixed z-[9999] w-max max-w-xs pointer-events-none"
-          role="tooltip"
-          style={{
-            top: placement?.top ?? 0,
-            left: placement?.left ?? 0,
-            visibility: placement ? 'visible' : 'hidden',
-            transition: 'none',
-            animation: 'none',
-          }}
-        >
-          <div className="relative bg-gray-700 text-white text-xs px-3 py-2 rounded-lg shadow-lg whitespace-normal">
-            {content}
-            <div className={`absolute w-0 h-0 border-4 ${arrowClasses[pos]}`} style={arrowStyle} />
-          </div>
-        </div>,
-        document.body,
-      )}
+      {isVisible && <TooltipBubble anchorRef={triggerRef} content={content} position={position} />}
     </div>
   );
 }

@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Help Center / User Guide.
@@ -125,7 +126,7 @@ const NavPath = ({ items, href }: { items: string[]; href?: string }) => (
       return (
         <span key={item} className="inline-flex items-center">
           {chip}
-          {!isLast && <ChevronRight className="w-4 h-4 mx-1.5 text-gray-400 dark:text-slate-500" />}
+          {!isLast && <ChevronRight className="w-4 h-4 mx-1.5 text-gray-500 dark:text-slate-500" />}
         </span>
       );
     })}
@@ -1020,7 +1021,7 @@ export default function HelpCenterPage() {
             </div>
           </div>
           <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
             <input
               type="text"
               placeholder="Search help, e.g. units, invite, version"
@@ -1030,14 +1031,13 @@ export default function HelpCenterPage() {
               className="tf-input pl-9 pr-9"
             />
             {searchQuery && (
-              <button
+              <IconButton bare label="Clear search"
                 type="button"
                 onClick={() => setSearchQuery('')}
-                aria-label="Clear search"
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-slate-300"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-gray-500 hover:text-gray-600 dark:hover:text-slate-300"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </IconButton>
             )}
           </div>
         </div>
@@ -1089,7 +1089,7 @@ export default function HelpCenterPage() {
         <div className="mb-5">
           <h2 className="tf-section-title sm:text-lg lg:text-xl mb-4 sm:mb-6">
             {searchQuery.trim() ? 'Search results' : categoryName(selectedCategory)}
-            <span className="text-gray-400 dark:text-slate-500 font-normal ml-2">({filteredArticles.length})</span>
+            <span className="text-gray-500 dark:text-slate-500 font-normal ml-2">({filteredArticles.length})</span>
           </h2>
 
           {filteredArticles.length === 0 ? (
@@ -1125,7 +1125,7 @@ export default function HelpCenterPage() {
                         {article.readTime}
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400 dark:text-slate-500 group-hover:text-brand-blue group-hover:translate-x-1 transition-all flex-shrink-0" />
+                    <ChevronRight className="w-5 h-5 text-gray-500 dark:text-slate-500 group-hover:text-brand-blue group-hover:translate-x-1 transition-all flex-shrink-0" />
                   </div>
                 </button>
               ))}

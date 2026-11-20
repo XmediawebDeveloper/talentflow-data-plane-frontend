@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { X, ChevronRight, ChevronLeft } from 'lucide-react';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface TourStep {
   title: string;
@@ -71,7 +73,7 @@ export default function FeatureTour({ isOpen, onClose }: FeatureTourProps) {
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
 
       {/* Tour Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 pointer-events-none">
+      <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 pointer-events-none">
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col pointer-events-auto animate-in zoom-in-95 duration-200">
           {/* Header */}
           <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 flex items-center justify-between rounded-t-xl sm:rounded-t-2xl flex-shrink-0">
@@ -81,12 +83,11 @@ export default function FeatureTour({ isOpen, onClose }: FeatureTourProps) {
                 Step {currentStep + 1} of {tourSteps.length}
               </p>
             </div>
-            <button
+            <IconButton bare label="Close"
               onClick={handleSkip}
-              className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"
-             aria-label="Close">
+              className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors">
               <X className="w-5 h-5 text-white" />
-            </button>
+            </IconButton>
           </div>
 
           {/* Content */}
@@ -146,7 +147,7 @@ export default function FeatureTour({ isOpen, onClose }: FeatureTourProps) {
             </div>
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
     </>
   );
 }

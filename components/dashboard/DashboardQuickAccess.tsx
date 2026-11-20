@@ -168,7 +168,7 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
         )}
       </div>
       {disabled ? (
-        <Lock aria-hidden="true" className="hidden h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500 sm:block" />
+        <Lock aria-hidden="true" className="hidden h-4 w-4 shrink-0 text-slate-500 dark:text-slate-500 sm:block" />
       ) : (
         <ArrowUpRight
           className={`hidden h-4 w-4 shrink-0 text-slate-300 dark:text-slate-500 transition-all sm:block group-hover:-translate-y-0.5 group-hover:translate-x-0.5 ${tone.hoverText}`}
@@ -187,8 +187,8 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
       >
         <span className="h-10 w-10 shrink-0 animate-pulse rounded-[14px] bg-slate-200 dark:bg-slate-700 sm:h-11 sm:w-11" />
         <div className="min-w-0 flex-1">
-          <p className="tf-wrap text-sm font-semibold text-slate-400 dark:text-slate-500">{item.label}</p>
-          {subtitle && <p className="tf-wrap mt-0.5 text-xs text-slate-400 dark:text-slate-600">{subtitle}</p>}
+          <p className="tf-wrap text-sm font-semibold text-slate-500 dark:text-slate-500">{item.label}</p>
+          {subtitle && <p className="tf-wrap mt-0.5 text-xs text-slate-500 dark:text-slate-600">{subtitle}</p>}
         </div>
       </div>
     );
@@ -298,7 +298,7 @@ export default function DashboardQuickAccess() {
       {totalItems === 0 && (
         <div className="px-3 pb-4 sm:px-4 sm:pb-5 md:px-8 md:pb-6">
           <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center dark:border-slate-700 dark:bg-slate-800/40">
-            <Lock className="mx-auto h-6 w-6 text-slate-400 dark:text-slate-500" />
+            <Lock className="mx-auto h-6 w-6 text-slate-500 dark:text-slate-500" />
             <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-300">No tools are enabled for your role</p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Contact your workspace admin to get access.</p>
           </div>

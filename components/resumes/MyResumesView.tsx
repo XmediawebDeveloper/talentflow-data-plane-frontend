@@ -62,6 +62,9 @@ import { useInPageScoringProgress } from '@/components/resumes/useInPageScoringP
 import ScoringStartSummary, { type ScoringStartRequest } from '@/components/resumes/ScoringStartSummary';
 import { NoFoldersState, NoFoldersMatchState, NoMatchingResumesState } from '@/components/resumes/ResumeEmptyStates';
 import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 const formatDateIST = formatISTDate;
 
@@ -85,7 +88,11 @@ type CardFolderFilter = 'all' | 'with-resumes' | 'empty' | 'with-subfolders';
 /* fetchData options. `dedupe`: the call came from the params effect and may be
    skipped if it ends up replayed behind a running fetch that loaded the same
    params. `replay`: set internally when the guard replays a queued call. */
-type FetchDataOptions = { dedupe?: boolean; replay?: boolean };
+type FetchDataOptions = { dedupe?: boolean; replay?: boolean; reuse?: boolean };
+/* `reuse` (the mount fetch only): switching back to this tab within 30 s shows
+   the list / folders / counts it just read instead of re-asking all of them.
+   Any write clears that cache, so it never hides a change made in this tab. */
+const MOUNT_REUSE_WINDOW_MS = 5_000;
 
 const CARD_FOLDER_FILTER_OPTIONS: { value: CardFolderFilter; label: string }[] = [
   { value: 'all', label: 'All folders' },
@@ -198,7 +205,7 @@ function UnifiedFolderResumeSearch({
   return (
     <div ref={containerRef} className="relative">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
         <input
           ref={inputRef}
           type="search"
@@ -211,22 +218,21 @@ function UnifiedFolderResumeSearch({
             if (query.trim()) setIsOpen(true);
           }}
           placeholder="Search folders and resumes..."
-          className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-400 [&::-webkit-search-cancel-button]:hidden"
+          className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-500 [&::-webkit-search-cancel-button]:hidden"
           role="searchbox"
           aria-label="Search folders and resumes"
           aria-autocomplete="list"
         />
         {isLoading && query.trim() ? (
-          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 animate-spin" />
         ) : query ? (
-          <button
+          <IconButton bare label="Clear global search"
             type="button"
             onClick={clear}
             className="absolute right-2 top-1/2 -translate-y-1/2 hover:bg-gray-200 rounded-full p-1 transition-colors"
-            aria-label="Clear global search"
           >
-            <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-          </button>
+            <X className="w-4 h-4 text-gray-500 hover:text-gray-600" />
+          </IconButton>
         ) : null}
       </div>
 
@@ -328,7 +334,7 @@ function ToolbarFilterSelect<T extends string>({
   return (
     <label title={label} className="relative min-w-0 flex-1 sm:min-w-[180px] sm:flex-none">
       <span className="sr-only">{label}</span>
-      <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-400">
+      <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500">
         {icon}
       </span>
       <FilterSelect
@@ -539,7 +545,7 @@ function DroppableFolderCard({
   };
 
   return (
-    <div
+    <div {...clickableProps}
       ref={attachRefs}
       className={`group/card relative bg-white border rounded-xl shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 transition-all ${
         stretch ? 'h-full' : ''
@@ -592,7 +598,7 @@ function DroppableFolderCard({
             navigate — the whole point is to look without leaving. */}
         <div className="relative flex-shrink-0">
           {!hideActions && (
-          <button
+          <IconButton bare label={`Folder actions for ${folder.name}`} tooltip="Folder actions"
             type="button"
             onClick={(e) => {
               e.preventDefault();
@@ -606,11 +612,9 @@ function DroppableFolderCard({
             }`}
             aria-haspopup="menu"
             aria-expanded={showActions}
-            aria-label={`Folder actions for ${folder.name}`}
-            title="Folder actions"
           >
             <Plus className="w-4 h-4" />
-          </button>
+          </IconButton>
           )}
 
           {!hideActions && showActions && (
@@ -679,15 +683,13 @@ function DroppableFolderCard({
         </div>
 
         {hasSubfolders && (
-          <button
+          <IconButton bare label={showSubfolders ? `Hide subfolders of ${folder.name}` : `Show subfolders of ${folder.name}`} tooltip={showSubfolders ? 'Hide subfolders' : 'Show subfolders'}
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               toggleSubfolders();
             }}
             aria-expanded={showSubfolders}
-            aria-label={showSubfolders ? `Hide subfolders of ${folder.name}` : `Show subfolders of ${folder.name}`}
-            title={showSubfolders ? 'Hide subfolders' : 'Show subfolders'}
             className={`p-1 rounded-md transition-colors flex-shrink-0 cursor-pointer ${
               showSubfolders
                 ? 'bg-brand-blue/10 text-brand-blue'
@@ -695,12 +697,12 @@ function DroppableFolderCard({
             }`}
           >
             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ease-in-out ${showSubfolders ? 'rotate-180' : ''}`} />
-          </button>
+          </IconButton>
         )}
         {/* One chevron per card: a folder with subfolders shows the peek
             toggle, everything else keeps the plain navigate arrow. Showing
             both read as two competing affordances. */}
-        {!hasSubfolders && <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+        {!hasSubfolders && <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0" />}
       </div>
 
       {hasSubfolders && showSubfolders && (
@@ -739,7 +741,7 @@ function DroppableFolderCard({
                     : 'border-l-transparent hover:bg-brand-blue/10 hover:border-l-brand-blue/40'
                 }`}
               >
-                <span aria-hidden="true" className="text-gray-300 text-xs leading-none">└</span>
+                <span aria-hidden="true" className="text-muted-foreground dark:text-gray-300 text-xs leading-none">└</span>
                 <Folder className={`w-3.5 h-3.5 flex-shrink-0 ${
                   peekChild?.id === child.id ? 'text-brand-blue' : 'text-brand-orange'
                 }`} />
@@ -751,7 +753,7 @@ function DroppableFolderCard({
                   {child.count || 0}
                 </span>
                 <ChevronRight className={`w-3.5 h-3.5 flex-shrink-0 ${
-                  childSubfolders > 0 ? 'text-brand-blue' : 'text-gray-400'
+                  childSubfolders > 0 ? 'text-brand-blue' : 'text-gray-500'
                 }`} />
               </button>
             );
@@ -790,7 +792,7 @@ function DroppableFolderCard({
               <Folder className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
               <span className="flex-1 min-w-0 truncate tf-meta">{grandChild.name}</span>
               <span className="tf-micro-hint flex-shrink-0">{grandChild.count || 0}</span>
-              <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
             </button>
           ))}
         </div>
@@ -1062,6 +1064,8 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
   // successfully. Cleared when a fetch starts, so it never describes data that
   // a later fetch may have replaced. Read by the guard replay below.
   const lastCompletedFetchKeyRef = useRef<string>('');
+  // Until when the landing's stats reads may reuse a 30 s-old answer.
+  const mountReuseUntilRef = useRef(0);
   // Always the newest fetchData. The replay has to go through this rather than
   // calling itself: page/sort live in the closure, not the arguments, so a
   // self-call would refetch with the page the *outgoing* render had.
@@ -1108,7 +1112,8 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
   );
 
   useEffect(() => {
-    fetchData();
+    mountReuseUntilRef.current = Date.now() + MOUNT_REUSE_WINDOW_MS;
+    fetchData(undefined, undefined, undefined, false, { reuse: true });
     // Upload history is fetched by the `user?.id` effect below, which also
     // runs on mount whenever the user is already known — calling it here too
     // sent `upload/batches` twice on every visit.
@@ -1223,7 +1228,12 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
      and every folder's listing total (archived rows included, as a folder
      listing includes them). Unfiltered — the badges describe the library. */
   const fetchMyResumeStats = () =>
-    resumeService.stats({ source: 'my-resumes', include_archived: false });
+    resumeService.stats(
+      { source: 'my-resumes', include_archived: false },
+      // The landing's own reads (prefetch + first folder reconcile) may reuse;
+      // later ones (after uploads finish processing) always ask the server.
+      { reuseRecent: Date.now() < mountReuseUntilRef.current },
+    );
 
   const refreshAllResumesTotal = async () => {
     try {
@@ -1493,7 +1503,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
       /* Versions filter: every matching row, filtered on `version_count`, then
          this page sliced out — totals describe the filtered set. */
       const listResumes = async () => {
-        if (versionFilter === 'all') return resumeService.list(searchParams);
+        if (versionFilter === 'all') return resumeService.list(searchParams, { reuseRecent: !!opts?.reuse });
         const all = await fetchAllRows((page_size, page) => resumeService.list({ ...searchParams, page, page_size }));
         const kept = keepByVersion(all.items || [], versionFilter);
         const start = (currentPage - 1) * itemsPerPage;
@@ -1530,7 +1540,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
         // of re-reading /folders on every click. Writes always re-read.
         folderService.list(
           searchParams.uploaded_by_name ? { uploaded_by_name: searchParams.uploaded_by_name } : undefined,
-          opts?.dedupe ? { reuseMs: 30_000 } : undefined,
+          opts?.dedupe || opts?.reuse ? { reuseMs: 30_000 } : undefined,
         ).catch(() => []),
       ]);
 
@@ -3152,6 +3162,16 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per arrival with the param
   }, [searchParams]);
 
+  /* `?upload_history=1` — an upload row in "My Activities" (the dock) opened
+     from a page with no Upload History of its own: open it here. The param
+     is dropped right after, like `?upload=1`. */
+  useEffect(() => {
+    if (searchParams.get('upload_history') !== '1') return;
+    router.replace('/recruitment/resume-database?tab=my-resumes', { scroll: false });
+    openUploadHistoryModal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per arrival with the param
+  }, [searchParams]);
+
   if (loading) {
     // Structure-matched skeleton mirroring the real My Resumes page: same
     // outer wrapper / white card, the same header block (icon box, title +
@@ -3443,7 +3463,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
                 {/* No "View" label: the two icons carry their own tooltips and
                     the picked one is already lit. */}
                 <div className="flex h-10 items-center justify-center gap-1 rounded-lg bg-brand-blue/5 px-1.5 ring-1 ring-brand-blue/10">
-                  <button
+                  <IconButton bare label="List View"
                     type="button"
                     onClick={() => setViewMode('list')}
                     className={`rounded p-2 transition-all ${
@@ -3451,11 +3471,10 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
                         ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
                         : 'text-gray-600 hover:text-brand-blue'
                     }`}
-                    aria-label="List View" title="List View"
                   >
                     <List className="h-4 w-4" />
-                  </button>
-                  <button
+                  </IconButton>
+                  <IconButton bare label="Grid View"
                     type="button"
                     onClick={() => setViewMode('card')}
                     className={`rounded p-2 transition-all ${
@@ -3463,10 +3482,9 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
                         ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
                         : 'text-gray-600 hover:text-brand-blue'
                     }`}
-                    aria-label="Grid View" title="Grid View"
                   >
                     <LayoutGrid className="h-4 w-4" />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
             </div>
@@ -3541,7 +3559,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
                   </button>
                   {buildBreadcrumbPath(selectedFolder).map((item, index, arr) => (
                     <div key={item.id} className="flex min-w-0 items-center gap-2 [overflow-wrap:anywhere]">
-                      <ChevronRight className="w-4 h-4 shrink-0 text-gray-400" />
+                      <ChevronRight className="w-4 h-4 shrink-0 text-gray-500" />
                       {index === arr.length - 1 ? (
                         <span className="text-gray-900 font-medium">{item.name}</span>
                       ) : (
@@ -3805,7 +3823,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
                       </button>
                       {breadcrumbPath.map((item, index) => (
                         <div key={item.id} className="flex items-center gap-2">
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                          <ChevronRight className="w-4 h-4 text-gray-500" />
                           {index === breadcrumbPath.length - 1 ? (
                             <span className="text-gray-900 font-medium">{item.name}</span>
                           ) : (
@@ -3820,7 +3838,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
                       ))}
                       {cardViewFolder === 'all' && (
                         <>
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                          <ChevronRight className="w-4 h-4 text-gray-500" />
                           <span className="text-gray-900 font-medium">All Resumes</span>
                         </>
                       )}
@@ -3939,7 +3957,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
                               {/* 2-up below lg: three across a tablet truncated "Root (Default)" / "Archived Resumes" to a few letters. */}
                               <div className="tf-grid-3 mb-4 sm:mb-6 items-stretch">
                                 {showAllResumesCard && (
-                                  <div
+                                  <div {...clickableProps}
                                     className="h-full bg-white border border-brand-blue/20 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all duration-150"
                                     onClick={() => {
                                       setCardViewFolder('all');
@@ -3954,7 +3972,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
                                         <h3 className="tf-row-title truncate">All Resumes</h3>
                                         <p className="tf-meta">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
                                       </div>
-                                      <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                      <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0" />
                                     </div>
                                   </div>
                                 )}
@@ -4265,7 +4283,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
             onClick={() => !isDownloadingZip && setIsZipDownloadModalOpen(false)}
           />
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="flex items-start justify-between gap-4 p-6 border-b border-gray-200">
@@ -4334,7 +4352,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
                 </button>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         </>
       )}
 
@@ -4347,7 +4365,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
             onClick={() => !isArchivingResumes && setIsArchiveModalOpen(false)}
           />
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="flex items-start justify-between gap-4 p-6 border-b border-gray-200">
@@ -4416,7 +4434,7 @@ export default function MyResumesView({ header }: { header?: (titleRow: ReactNod
                 </button>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         </>
       )}
 

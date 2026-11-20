@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from './utils';
 import FilterSelect from './filter-select';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* Toolbar size (h-9) — the same as More Filters / Export beside it. */
 const TRIGGER_CLASS =
@@ -174,17 +175,15 @@ export function SortByControl<T extends string>({
             className="w-full sm:w-full py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 data-[size=default]:h-7 sm:data-[size=default]:h-7 rounded-md sm:rounded-md border-0 bg-transparent dark:bg-transparent shadow-none tf-body focus-visible:!outline-none focus-visible:ring-0"
           />
         </div>
-        <button
+        <IconButton bare label={order === 'asc' ? 'Sort descending' : 'Sort ascending'} tooltip={order === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
           type="button"
           onClick={onToggleOrder}
           className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/10 hover:text-brand-blue dark:hover:bg-brand-blue/20 transition-colors cursor-pointer cursor-pointer"
-          title={order === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
-          aria-label={order === 'asc' ? 'Sort descending' : 'Sort ascending'}
         >
           {/* The Job Descriptions list's icon: the up/down pair, flipped for
               descending (JobsListing.tsx). */}
           <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${order === 'asc' ? '' : 'rotate-180'}`} />
-        </button>
+        </IconButton>
       </div>
     </div>
   );
@@ -223,7 +222,7 @@ export function PhoneSortMenu<T extends string>({
         >
           <ArrowUpDown className="w-4 h-4 text-brand-blue" />
           Sort
-          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+          <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-slate-900">

@@ -40,6 +40,9 @@ import { ResumeHeadline, ResumeLine } from '@/components/resumes/ResumeDocLine';
 import { formatLocationGroups } from '@/lib/utils/jobOpeningDisplay';
 import { Skeleton } from '@/components/ui/skeleton';
 import { canDownloadSomeResumes, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ScoredResume {
   id: string;  // This is the SCORE ID, not resume ID!
@@ -1110,18 +1113,16 @@ export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitl
      resume version badge, its name in the tooltip and accessible label.
      `joined` draws the divider from the "Version N" text beside it. */
   const renderViewResumeEye = (joined: boolean) => (
-    <button
+    <IconButton bare label="View Resume"
       type="button"
       onClick={handleViewResume}
       disabled={loadingResumeDetail}
-      title="View Resume"
-      aria-label="View Resume"
       className={`inline-flex items-center justify-center px-1.5 ${joined ? 'border-l border-blue-200' : 'py-1'} hover:bg-blue-100 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40 disabled:cursor-not-allowed disabled:opacity-60`}
     >
       {loadingResumeDetail
         ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
         : <Eye className="w-3.5 h-3.5" />}
-    </button>
+    </IconButton>
   );
 
   /* Share Resume — the dialog the resume table and the resume page open, so a
@@ -1306,10 +1307,10 @@ Best regards`);
           className="w-full flex items-start gap-3 px-3 py-2.5 text-left cursor-not-allowed"
         >
           <span className="mt-0.5 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-            <Icon className="w-4 h-4 text-gray-400" />
+            <Icon className="w-4 h-4 text-gray-500" />
           </span>
           <span className="min-w-0">
-            <span className="block text-sm font-medium text-gray-400">{kind === 'assessment' ? 'Assessment' : 'AI Interview'}</span>
+            <span className="block text-sm font-medium text-gray-500">{kind === 'assessment' ? 'Assessment' : 'AI Interview'}</span>
             <span className="block tf-hint">{inviteJobName} has no {what} yet</span>
           </span>
         </button>
@@ -1640,7 +1641,7 @@ Best regards`);
                                   {index === 0 ? (
                                     <span className="tf-badge text-2xs bg-success-subtle text-success">Latest</span>
                                   ) : null}
-                                  {versionPreviewLoadingId === version.id && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+                                  {versionPreviewLoadingId === version.id && <Loader2 className="w-3 h-3 animate-spin text-gray-500" />}
                                 </div>
                               </div>
                               <div className="tf-micro-hint truncate">
@@ -1687,11 +1688,11 @@ Best regards`);
                 (resume-view/[id]), not button-sized boxes. */}
             <span className={`${CONTACT_BADGE} min-w-0 max-w-full`}>
               <Mail className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
-              <span className={`truncate ${resume.email ? '' : 'text-gray-400'}`}>{resume.email || '-'}</span>
+              <span className={`truncate ${resume.email ? '' : 'text-gray-500'}`}>{resume.email || '-'}</span>
             </span>
             <span className={CONTACT_BADGE}>
               <Phone className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
-              <span className={`whitespace-nowrap ${resume.phone ? '' : 'text-gray-400'}`}>{resume.phone || '-'}</span>
+              <span className={`whitespace-nowrap ${resume.phone ? '' : 'text-gray-500'}`}>{resume.phone || '-'}</span>
             </span>
             {resume.location && (
               <span className={`${CONTACT_BADGE} min-w-0`}>
@@ -2835,11 +2836,9 @@ Best regards`);
                                 ) : (
                                   <span className="px-3 py-1.5 tf-hint italic">First version</span>
                                 )}
-                                <button
+                                <IconButton bare label="View resume"
                                   onClick={() => handleVersionPreview(version, versionNumber)}
                                   disabled={versionPreviewLoadingId === version.id}
-                                  aria-label="View resume"
-                                  title="View resume"
                                   className={`p-2 rounded-md transition-colors cursor-pointer disabled:cursor-wait ${
                                     isLatest
                                       ? 'text-brand-blue hover:bg-brand-blue/10'
@@ -2849,12 +2848,10 @@ Best regards`);
                                   {versionPreviewLoadingId === version.id
                                     ? <Loader2 className="w-4 h-4 animate-spin" />
                                     : <Eye className="w-4 h-4" />}
-                                </button>
-                                <button
+                                </IconButton>
+                                <IconButton bare label="Download this version" tooltip={canDownloadResumes ? 'Download this version' : DOWNLOAD_BLOCKED_MESSAGE}
                                   onClick={() => handleVersionDownload(version, versionNumber)}
-                                  aria-label="Download this version"
                                   aria-disabled={!canDownloadResumes}
-                                  title={canDownloadResumes ? 'Download this version' : DOWNLOAD_BLOCKED_MESSAGE}
                                   className={`p-2 rounded-md transition-colors ${canDownloadResumes ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'} ${
                                     isLatest
                                       ? 'text-brand-blue hover:bg-brand-blue/10'
@@ -2862,7 +2859,7 @@ Best regards`);
                                   }`}
                                 >
                                   <Download className="w-4 h-4" />
-                                </button>
+                                </IconButton>
                               </div>
                             </div>
                           </div>
@@ -3037,7 +3034,7 @@ Best regards`);
                           {jdDetails.job_id}
                         </button>
                       )}
-                      <h3
+                      <h3 {...clickableProps}
                         onClick={() => setShowJdNavConfirm(true)}
                         className="tf-section-title hover:text-brand-blue transition-colors cursor-pointer"
                       >
@@ -3209,7 +3206,7 @@ Best regards`);
               page open. The eye reuses View Resume, whose preview sits at
               z-[60], so it opens above this. */}
           {showShareResumeModal && (
-            <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+            <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
               <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] overflow-y-auto">
                 <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-5">
                   <div className="flex items-start justify-between gap-3 mb-6">
@@ -3222,15 +3219,13 @@ Best regards`);
                         <p className="tf-body-muted">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                       </div>
                     </div>
-                    <Button
+                    <IconButton label="Close"
                       variant="secondary"
                       size="sm"
                       onClick={closeShareModal}
-                     
-                      aria-label="Close"
                     >
                       <X className="w-5 h-5 text-gray-500" />
-                    </Button>
+                    </IconButton>
                   </div>
 
                   <div className="space-y-4">
@@ -3256,17 +3251,15 @@ Best regards`);
                               {fullResumeData.fileSizeKb ? <> &middot; {Math.round(fullResumeData.fileSizeKb)} KB</> : null}
                             </div>
                           </div>
-                          <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <button
+                          <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                          <IconButton bare label={`View ${fullResumeData.candidateName}'s resume`} tooltip="View resume"
                             type="button"
                             onClick={handleViewResume}
                             disabled={loadingResumeDetail}
-                            className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
-                            aria-label={`View ${fullResumeData.candidateName}'s resume`}
-                            title="View resume"
+                            className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
                           >
                             {loadingResumeDetail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                          </button>
+                          </IconButton>
                         </div>
 
                         {/* The scorecard PDF, built on demand — the download
@@ -3287,17 +3280,15 @@ Best regards`);
                               {fullResumeData.scorePercentage != null && <> &middot; {formatOverallScore(fullResumeData.overallRating10, fullResumeData.scorePercentage)}</>}
                             </div>
                           </div>
-                          <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <button
+                          <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                          <IconButton bare label={`View ${fullResumeData.candidateName}'s scorecard`} tooltip="View scorecard"
                             type="button"
                             onClick={handlePreviewScorecard}
                             disabled={loadingScorecardPreview}
-                            className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
-                            aria-label={`View ${fullResumeData.candidateName}'s scorecard`}
-                            title="View scorecard"
+                            className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
                           >
                             {loadingScorecardPreview ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                          </button>
+                          </IconButton>
                         </div>
                       </div>
                     </div>
@@ -3359,13 +3350,13 @@ Best regards`);
                   </div>
                 </div>
               </div>
-            </div>
+            </div></ModalA11y>
           )}
 
           {/* The scorecard, read in place. z-[60] puts it over the share
               dialog, the same level the resume preview uses. */}
           {scorecardPreviewUrl && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
+            <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[calc(100dvh-1.5rem)] sm:h-[90dvh] flex flex-col overflow-hidden">
                 {/* Header — the resume preview's, with the scorecard's own
                     subtitle. */}
@@ -3391,15 +3382,13 @@ Best regards`);
                     >
                       <span className="hidden sm:inline">Download</span>
                     </Button>
-                    <Button
+                    <IconButton label="Close"
                       variant="secondary"
                       size="sm"
                       onClick={closeScorecardPreview}
-                     
-                      aria-label="Close"
                     >
                       <X className="w-5 h-5 text-gray-500" />
-                    </Button>
+                    </IconButton>
                   </div>
                 </div>
 
@@ -3412,7 +3401,7 @@ Best regards`);
                   </div>
                 </div>
               </div>
-            </div>
+            </div></ModalA11y>
           )}
 
           {/* View JD tab: confirm before leaving the candidate scorecard for
@@ -3502,7 +3491,7 @@ Best regards`);
             };
 
             return (
-              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
+              <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
                 <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] ${compareViewMode === 'side-by-side' ? 'sm:max-w-7xl' : 'sm:max-w-4xl'} h-[calc(100dvh-1.5rem)] sm:h-[85dvh] flex flex-col overflow-hidden transition-all duration-300`}>
                   {/* Header */}
                   <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
@@ -3552,15 +3541,13 @@ Best regards`);
                           −{diff.removedCount}
                         </span>
                       </div>
-                      <Button
+                      <IconButton label="Close"
                         variant="secondary"
                         size="sm"
                         onClick={closeCompare}
-                       
-                        aria-label="Close"
                       >
                         <X className="w-5 h-5 text-gray-500" />
-                      </Button>
+                      </IconButton>
                     </div>
                   </div>
 
@@ -3660,7 +3647,7 @@ Best regards`);
                     )}
                   </div>
                 </div>
-              </div>
+              </div></ModalA11y>
             );
           })()}
 
@@ -3724,15 +3711,13 @@ Best regards`);
                       <Download className="w-4 h-4" />
                       <span className="hidden sm:inline">Download</span>
                     </button>
-                    <button
+                    <IconButton bare label="Close"
                       type="button"
                       className="tf-preview-btn"
                       onClick={() => setVersionPreview(null)}
-                      aria-label="Close"
-                      title="Close"
                     >
                       <X className="w-4 h-4" />
-                    </button>
+                    </IconButton>
                   </div>
 
                   {/* Resume content — a paper page on a light mat */}

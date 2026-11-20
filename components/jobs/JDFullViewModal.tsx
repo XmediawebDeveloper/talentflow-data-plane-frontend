@@ -13,6 +13,8 @@ import { jdService, type JDResponse } from '@/lib/services/jdService';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import JDHeaderCard from '@/components/jobs/JDHeaderCard';
 import { Button } from '@/components/ui/button';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * ONE JD, in full, in a dialog.
@@ -112,7 +114,7 @@ export default function JDFullViewModal({
   }, [onClose]);
 
   return (
-    <div
+    <ModalA11y innerDialog closeOnEscape={false}><div
       className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6"
       onClick={onClose}
     >
@@ -140,14 +142,13 @@ export default function JDFullViewModal({
             </div>
           </div>
           {!cancelInFooter && (
-            <button
+            <IconButton bare label="Close"
               type="button"
               onClick={onClose}
               className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
-              aria-label="Close"
             >
               <X className="w-5 h-5" />
-            </button>
+            </IconButton>
           )}
         </div>
 
@@ -165,7 +166,7 @@ export default function JDFullViewModal({
             </div>
           ) : !jd ? (
             <div className="py-10 text-center">
-              <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <FileText className="w-8 h-8 text-muted-foreground dark:text-gray-300 mx-auto mb-2" />
               <p className="tf-body-muted">
                 This job description could not be found.
               </p>
@@ -209,6 +210,6 @@ export default function JDFullViewModal({
           )}
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

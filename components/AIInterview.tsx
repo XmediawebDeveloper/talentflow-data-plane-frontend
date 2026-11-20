@@ -108,6 +108,9 @@ import type { AIConfigListQuery, AIConfigListFilters, AllInvitationsQuery, AllIn
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
 import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* The version panel's 3-dot menu trigger — the 32px bordered square matched to
    the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx, and to the
@@ -791,7 +794,7 @@ export default function AIInterview() {
          the paged list; nothing here downloads every config. A change re-reads
          the jobs on screen (their versions feed the row menus). */
       try {
-        const value = await aiInterviewService.getConfigStats();
+        const value = await aiInterviewService.getConfigStats({ reuseRecent: firstLoad });
         if (isStale()) return;
         setStats(value);
         setInterviewedCount(typeof value.interview_sessions === 'number' ? value.interview_sessions : null);
@@ -817,7 +820,7 @@ export default function AIInterview() {
       /* The stats and the interviewed count do not depend on the config list,
          so they are asked for NOW, beside it, instead of one after another
          behind it (three serial round trips before the page could settle). */
-      const statsRequest = aiInterviewService.getConfigStats().then(
+      const statsRequest = aiInterviewService.getConfigStats({ reuseRecent: firstLoad }).then(
         (value) => ({ ok: true as const, value }),
         (error) => ({ ok: false as const, error }),
       );
@@ -2590,7 +2593,7 @@ export default function AIInterview() {
         {/* Compact 3-dot menu, portalled to <body> so the panel table's
             overflow box cannot clip it (see `menuAnchor`). */}
         <div className="relative">
-          <button
+          <IconButton bare label="More actions"
             type="button"
             data-ai-version-menu-trigger
             onClick={(e) => {
@@ -2603,12 +2606,10 @@ export default function AIInterview() {
               }
               setOpenMenuId(willOpen ? menuKey : null);
             }}
-            aria-label="More actions"
-            title="More actions"
             className={`${QUICK_ACTION_BASE} text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-400`}
           >
             <MoreVertical className="w-3.5 h-3.5" />
-          </button>
+          </IconButton>
 
           {openMenuId === menuKey && menuAnchor && typeof document !== 'undefined' && createPortal(
             <div
@@ -3333,13 +3334,12 @@ export default function AIInterview() {
           <span className="tf-badge gap-1.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
             <Users className="w-3 h-3" />
             Showing only configs with invitations
-            <button
+            <IconButton bare label="Clear invited filter"
               onClick={() => setInvitedOnly(false)}
               className="ml-1 hover:text-brand-cyan/80"
-              aria-label="Clear invited filter"
             >
               <X className="w-3 h-3" />
-            </button>
+            </IconButton>
           </span>
         </div>
         )}
@@ -3624,7 +3624,7 @@ export default function AIInterview() {
                     <span className={`h-2 w-2 rounded-full flex-shrink-0 ${current.dot}`} aria-hidden="true" />
                     {current.label}
                     <span className="font-medium text-gray-500 dark:text-slate-400 tabular-nums">{current.count.toLocaleString()}</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52 bg-white dark:bg-slate-900">
@@ -3879,7 +3879,7 @@ export default function AIInterview() {
                           : 'Share the interview to view results';
 
                     return (
-                      <div
+                      <div {...clickableProps}
                         key={config.id}
                         /* One row = one JOB, as on the Assessments Job List:
                            clicking it opens the job's version history in place,
@@ -4069,7 +4069,7 @@ export default function AIInterview() {
                                  version list, per-row eye for one version. */
                               headerAction={
                                 config.jd_id ? (
-                                  <button
+                                  <IconButton bare label="View job version details"
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -4079,11 +4079,9 @@ export default function AIInterview() {
                                       );
                                     }}
                                     className="h-8 w-8 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                                    aria-label="View job version details"
-                                    title="View job version details"
                                   >
                                     <Eye className="w-4 h-4" />
-                                  </button>
+                                  </IconButton>
                                 ) : undefined
                               }
                               onViewJobVersion={(jobVersionId, jobVersion) =>
@@ -4509,7 +4507,7 @@ export default function AIInterview() {
                               reason ? 'text-gray-400 cursor-not-allowed opacity-60' : destructive ? 'cursor-pointer text-destructive' : 'cursor-pointer'
                             }`}
                           >
-                            <Icon className={`w-4 h-4 ${reason ? 'text-gray-300' : iconClass}`} />
+                            <Icon className={`w-4 h-4 ${reason ? 'text-muted-foreground dark:text-gray-300' : iconClass}`} />
                             <span>{label}</span>
                           </DropdownMenuItem>
                         ))}
@@ -5490,13 +5488,13 @@ export default function AIInterview() {
             ? NAME_FORMAT_ERROR
             : null;
         return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
+        <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto flex flex-col">
             <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
               <h3 className="tf-section-title sm:text-lg tracking-tight">Edit Invitation</h3>
-              <Button variant="secondary" size="sm" onClick={() => { if (!savingEditInvite) setEditInviteTarget(null); }} aria-label="Close" className="">
+              <IconButton label="Close" variant="secondary" size="sm" onClick={() => { if (!savingEditInvite) setEditInviteTarget(null); }} className="">
                 <X className="w-5 h-5" />
-              </Button>
+              </IconButton>
             </div>
             <div className="px-5 sm:px-6 py-4 space-y-4">
               <p className="tf-body-muted">
@@ -5585,7 +5583,7 @@ export default function AIInterview() {
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
         );
       })()}
     </main>

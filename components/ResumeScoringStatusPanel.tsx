@@ -8,6 +8,7 @@ import { scoringService } from '@/lib/services';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 // Helper function to convert backend match_status to frontend format
 const convertMatchStatus = (status: string | undefined): 'Exact Match' | 'Partial Match' | 'No Match' => {
@@ -598,7 +599,7 @@ export default function ResumeScoringStatusPanel({
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
 
       {/* Status Panel */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-4xl w-full max-h-[90dvh] overflow-hidden pointer-events-auto animate-in zoom-in-95 duration-200 flex flex-col">
           {/* Header */}
           <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-900 px-6 py-5">
@@ -966,7 +967,7 @@ export default function ResumeScoringStatusPanel({
             </div>
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
     </>
   );
 }

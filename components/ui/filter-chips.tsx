@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { cn } from './utils';
 import { Button } from './button';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from './hover-card';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The row of "what is currently narrowing this list" chips, each removable on
@@ -70,15 +71,13 @@ export default function FilterChips({
           <span className="truncate max-w-[14rem]" title={`${chip.label}: ${chip.value}`}>
             {chip.value}
           </span>
-          <button
+          <IconButton bare label={`Remove ${chip.label} filter`}
             type="button"
             onClick={chip.onRemove}
             className="p-0.5 rounded-full hover:bg-brand-blue/20 transition-colors flex-shrink-0"
-            aria-label={`Remove ${chip.label} filter`}
-            title={`Remove ${chip.label} filter`}
           >
             <X className="w-3 h-3" />
-          </button>
+          </IconButton>
         </span>
       ))}
 

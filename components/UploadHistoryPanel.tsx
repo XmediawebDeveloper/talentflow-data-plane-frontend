@@ -4,6 +4,9 @@ import { Clock, CheckCircle, RefreshCw, Copy, AlertCircle, ChevronRight, FileTex
 import { useState } from 'react';
 import UploadStatusDashboard from './UploadStatusDashboard';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface UploadRecord {
   id: string;
@@ -64,7 +67,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+    <ModalA11y><div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-6xl max-h-[90dvh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 sm:py-6 border-b border-gray-200 bg-gradient-to-r from-brand-blue/5 to-white">
@@ -74,12 +77,11 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
               View all past bulk upload reports for {currentSource === 'my-resumes' ? 'My Resumes' : 'Shared Database'}
             </p>
           </div>
-          <button
+          <IconButton bare label="Close"
             onClick={onClose}
-            className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-           aria-label="Close">
+            className="p-1.5 sm:p-2 text-gray-500 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0">
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Content */}
@@ -101,7 +103,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                 const hasIssues = record.duplicated > 0 || record.versioned > 0 || record.errors > 0;
 
                 return (
-                  <div
+                  <div {...clickableProps}
                     key={record.id}
                     onClick={() => setSelectedRecord(record)}
                     className="tf-panel p-4 sm:p-6 hover:border-brand-blue/30 hover:shadow-lg transition-all cursor-pointer"
@@ -139,7 +141,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           </div>
                           <div className="tf-meta">Success Rate</div>
                         </div>
-                        <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                        <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
                       </div>
                     </div>
 
@@ -252,6 +254,6 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

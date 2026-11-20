@@ -101,7 +101,7 @@ export default function ResumeScoringJDSelection() {
 
         {/* Search — shared Input (User Management uniform) */}
         <div className="mb-5 relative w-full sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 dark:text-slate-500" />
           <Input
             type="text"
             placeholder="Search job descriptions..."

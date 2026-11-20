@@ -2,6 +2,8 @@ import { X, AlertCircle, Eye, Upload, FileText, Mail, Phone, Briefcase, MapPin, 
 import { Resume } from '@/lib/types/types';
 import React from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface DuplicateCheckModalProps {
   onClose: () => void;
@@ -57,7 +59,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between flex-shrink-0">
@@ -70,12 +72,11 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
               <p className="tf-body-muted truncate">Upload a resume to check if it already exists</p>
             </div>
           </div>
-          <button
+          <IconButton bare label="Close"
             onClick={onClose}
-            className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors flex-shrink-0"
-           aria-label="Close">
+            className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors flex-shrink-0">
             <X className="w-5 h-5" />
-          </button>
+          </IconButton>
         </div>
 
         <div className="flex-1 min-h-0 p-6 overflow-y-auto">
@@ -266,6 +267,6 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
           )}
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

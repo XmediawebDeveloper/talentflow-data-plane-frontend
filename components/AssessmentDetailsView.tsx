@@ -49,6 +49,8 @@ import { tabPill } from '@/components/ui/filter-pills';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
 import { formatScore } from '@/lib/utils/score';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -155,27 +157,25 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
         />
       </div>
 
-      <button
+      <IconButton bare label="Previous page"
         onClick={() => onPageChange(page - 1)}
         disabled={page === 1}
         className={navBtnClass}
-        aria-label="Previous page" title="Previous page"
       >
         <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-      </button>
+      </IconButton>
 
       <span className="tf-label px-1 whitespace-nowrap">
         <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
       </span>
 
-      <button
+      <IconButton bare label="Next page"
         onClick={() => onPageChange(page + 1)}
         disabled={page === totalPages}
         className={navBtnClass}
-        aria-label="Next page" title="Next page"
       >
         <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-      </button>
+      </IconButton>
     </div>
   );
 }
@@ -1709,7 +1709,7 @@ export default function AssessmentDetailsView({
                     <Fragment key={fact.key}>
                       {/* Between items only. After the filter, so a dropped
                           fact takes its bullet with it. */}
-                      {i > 0 && <span aria-hidden className="text-gray-300">&bull;</span>}
+                      {i > 0 && <span aria-hidden className="text-muted-foreground dark:text-gray-300">&bull;</span>}
                       <div className="flex items-center gap-1.5 min-w-0">
                         <fact.icon className="w-4 h-4 flex-shrink-0" />
                         <span className="truncate" title={fact.label ?? undefined}>{fact.label}</span>
@@ -1903,7 +1903,7 @@ export default function AssessmentDetailsView({
                                         <span className="truncate" title={author}>Created by {author}</span>
                                       )}
                                       {author && versionDate && (
-                                        <span aria-hidden className="text-gray-300">&bull;</span>
+                                        <span aria-hidden className="text-muted-foreground dark:text-gray-300">&bull;</span>
                                       )}
                                       {versionDate && <span className="flex-shrink-0">{formatIST(versionDate)}</span>}
                                     </div>
@@ -2137,34 +2137,30 @@ export default function AssessmentDetailsView({
                   Active offers Archive; Archived offers Unarchive (and has no
                   pencil - an archived assessment is restored, not edited). */}
               {assessment.status === 'Active' && (
-                <Button
+                <IconButton label="Archive assessment" tooltip={canUnarchiveAssessments ? 'Archive assessment' : 'You do not have permission to archive assessments'}
                   type="button"
                   variant="secondary"
                   size="sm"
                   onClick={canUnarchiveAssessments ? handleArchive : undefined}
                   disabled={isArchiving}
                   aria-disabled={!canUnarchiveAssessments}
-                  aria-label="Archive assessment"
-                  title={canUnarchiveAssessments ? 'Archive assessment' : 'You do not have permission to archive assessments'}
                   className={`h-8 w-8 flex-shrink-0 ${canUnarchiveAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
                 >
                   {isArchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4 text-menu-icon-archive" />}
-                </Button>
+                </IconButton>
               )}
               {isArchivedAssessment && (
-                <Button
+                <IconButton label="Unarchive assessment" tooltip={canUnarchiveAssessments ? 'Unarchive assessment' : 'You do not have permission to unarchive assessments'}
                   type="button"
                   variant="secondary"
                   size="sm"
                   onClick={canUnarchiveAssessments ? handleUnarchive : undefined}
                   disabled={isUnarchiving}
                   aria-disabled={!canUnarchiveAssessments}
-                  aria-label="Unarchive assessment"
-                  title={canUnarchiveAssessments ? 'Unarchive assessment' : 'You do not have permission to unarchive assessments'}
                   className={`h-8 w-8 flex-shrink-0 ${canUnarchiveAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
                 >
                   {isUnarchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArchiveRestore className="w-4 h-4 text-menu-icon-archive" />}
-                </Button>
+                </IconButton>
               )}
               {/* Duplicate, icon-only — the AI Interview Details header's own
                   action (there a labelled button; here the icon-only shape
@@ -2179,15 +2175,7 @@ export default function AssessmentDetailsView({
                 const jdLockMessage = assessmentJobLockMessage(jdStatus);
                 const duplicateDisabled = !canCreateAssessments || notInvited || !!jdLockMessage;
                 return (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={duplicateDisabled ? undefined : handleDuplicate}
-                  disabled={isDuplicating || duplicateDisabled}
-                  aria-disabled={duplicateDisabled}
-                  aria-label="Duplicate assessment"
-                  title={
+                <IconButton label="Duplicate assessment" tooltip={
                     !canCreateAssessments
                       ? 'You do not have permission to duplicate assessments'
                       : jdLockMessage
@@ -2196,10 +2184,16 @@ export default function AssessmentDetailsView({
                       ? 'No candidates invited yet — edit this version instead.'
                       : 'Duplicate as a new version'
                   }
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={duplicateDisabled ? undefined : handleDuplicate}
+                  disabled={isDuplicating || duplicateDisabled}
+                  aria-disabled={duplicateDisabled}
                   className={`h-8 w-8 flex-shrink-0 ${duplicateDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {isDuplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4 text-menu-icon-download" />}
-                </Button>
+                </IconButton>
                 );
               })()}
               {onEdit && !isArchivedAssessment && (() => {
@@ -2214,23 +2208,21 @@ export default function AssessmentDetailsView({
                 /* A draft gets "Continue Editing" ahead of Share instead. */
                 if (draftLocked) return null;
                 return (
-                <Button
+                <IconButton label="Edit assessment" tooltip={!canEditAssessment
+                    ? 'You do not have permission to edit assessments'
+                    : editLocked
+                    ? 'Cannot edit — this assessment has already been sent to candidates'
+                    : 'Edit assessment'}
                   type="button"
                   variant="secondary"
                   size="sm"
                   onClick={editLocked || !canEditAssessment ? undefined : onEdit}
                   disabled={editLocked}
                   aria-disabled={editLocked || !canEditAssessment}
-                  aria-label="Edit assessment"
-                  title={!canEditAssessment
-                    ? 'You do not have permission to edit assessments'
-                    : editLocked
-                    ? 'Cannot edit — this assessment has already been sent to candidates'
-                    : 'Edit assessment'}
                   className={`h-8 w-8 flex-shrink-0 ${!canEditAssessment && !editLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Edit2 className="w-4 h-4 text-menu-icon-edit" />
-                </Button>
+                </IconButton>
                 );
               })()}
             </div>
@@ -2639,7 +2631,7 @@ export default function AssessmentDetailsView({
 
                       {!hasData ? (
                         <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
-                          <Info className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
+                          <Info className="w-8 h-8 sm:w-12 sm:h-12 text-muted-foreground dark:text-gray-300 mx-auto mb-2 sm:mb-3" />
                           <p className="text-gray-600 mb-1">No metadata available</p>
                           <p className="tf-body-muted">Assessment info will appear once the JD analysis is complete</p>
                         </div>
@@ -3210,7 +3202,7 @@ export default function AssessmentDetailsView({
                       const isClickable = showScores && !!activity.attempt_id;
 
                       return (
-                        <div
+                        <div {...((isClickable) ? clickableProps : {})}
                           key={`${activity.id}-${activity._eventType}-${idx}`}
                           onClick={isClickable ? () => openCompletedResult(activity) : undefined}
                           title={isClickable ? 'View candidate results' : undefined}
@@ -3584,17 +3576,15 @@ export default function AssessmentDetailsView({
                             in this list is found BY a job, so this is a guard,
                             not a case the tab shows. */}
                         {sibling.jd_id && (
-                          <Button
+                          <IconButton label={`Preview configure settings for Version ${sibling.version || 1}`} tooltip="Preview configure settings"
                             type="button"
                             variant="secondary"
                             size="sm"
                             onClick={() => setPreviewVersion(sibling)}
-                            title="Preview configure settings"
-                            aria-label={`Preview configure settings for Version ${sibling.version || 1}`}
                             className="h-8 w-8 flex-shrink-0"
                           >
                             <Eye className="w-4 h-4" />
-                          </Button>
+                          </IconButton>
                         )}
                       </div>
                     </div>
@@ -3635,7 +3625,7 @@ export default function AssessmentDetailsView({
               reads as loading, which is what it is. */}
           {!assessment.jd_id ? (
             <div className="tf-card-soft px-3 sm:px-4 lg:px-6 py-8 text-center">
-              <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <FileText className="w-8 h-8 text-muted-foreground dark:text-gray-300 mx-auto mb-2" />
               <p className="tf-body-muted">No linked job description found</p>
             </div>
           ) : jdError ? (

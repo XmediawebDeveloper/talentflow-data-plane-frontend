@@ -6,6 +6,7 @@ import { Clock, History, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MobileRecordList, MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 /** How many timeline events a results row shows before "View History" —
  *  the Job Details Assessment Result and AI Interview Result tabs. */
@@ -99,7 +100,7 @@ export function TimelineHistoryDialog({
   );
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6" onClick={onClose}>
+    <ModalA11y innerDialog closeOnEscape={false}><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6" onClick={onClose}>
       <div
         className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -115,7 +116,7 @@ export function TimelineHistoryDialog({
             <h3 id="timeline-history-title" className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 tracking-tight">Timeline History</h3>
             <p className="tf-body-muted mt-0.5 truncate" title={[candidateName, candidateEmail].filter(Boolean).join(' · ')}>
               {candidateName || 'Candidate'}
-              {candidateEmail && <span className="text-gray-400 dark:text-slate-500"> · {candidateEmail}</span>}
+              {candidateEmail && <span className="text-gray-500 dark:text-slate-500"> · {candidateEmail}</span>}
             </p>
           </div>
         </div>
@@ -186,6 +187,6 @@ export function TimelineHistoryDialog({
           <Button variant="secondary" size="md" onClick={onClose}>Close</Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

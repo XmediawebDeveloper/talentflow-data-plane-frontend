@@ -235,7 +235,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
         </div>
         <ChevronRight
           aria-hidden
-          className="mt-0.5 h-4 w-4 shrink-0 text-gray-300 transition-[color,transform] group-hover:translate-x-0.5 group-hover:text-brand-blue dark:text-slate-600"
+          className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-[color,transform] group-hover:translate-x-0.5 group-hover:text-brand-blue dark:text-slate-600"
         />
       </div>
 
@@ -246,7 +246,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
       <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 tf-body-muted">
         {metrics.map(({ icon: Icon, value, label }) => (
           <li key={label} className="inline-flex items-center gap-1.5">
-            <Icon className="h-4 w-4 text-gray-400 dark:text-slate-500" />
+            <Icon className="h-4 w-4 text-gray-500 dark:text-slate-500" />
             <span className="font-semibold tabular-nums text-gray-900 dark:text-slate-100">{value.toLocaleString()}</span>
             {label}
           </li>

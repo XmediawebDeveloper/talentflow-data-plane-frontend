@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { downloadSessionReport, downloadSessionReports, canTryReport, NoReportError } from './evaluation-dashboard/downloadSessionReport';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** `ai_interview:download_report` — every AI interview report download
  *  (row icon, bulk PDFs, result page, coverage/evaluation tabs) is gated on
@@ -127,31 +128,27 @@ export default function ResultRowActions({ session, onView, hideView = false }: 
   return (
     <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
       {!hideView && (
-      <Button
+      <IconButton label="View Details"
         variant="secondary"
         size="sm"
         onClick={onView}
-        title="View Details"
-        aria-label="View Details"
         className="!w-8 !h-8 !px-0"
       >
         <Eye className="w-4 h-4" />
-      </Button>
+      </IconButton>
       )}
       {/* Wrapper carries the tooltip — a disabled button shows none. */}
       <span title={downloadBlockedReason} className="inline-flex">
-      <Button
+      <IconButton label="Download Report" tooltip={canDownload ? 'Download Report (PDF)' : undefined}
         variant="secondary"
         size="sm"
         onClick={handleDownload}
         disabled={!canDownload || downloading}
         aria-disabled={!canDownloadReports || undefined}
-        title={canDownload ? 'Download Report (PDF)' : undefined}
-        aria-label="Download Report"
         className="!w-8 !h-8 !px-0"
       >
         {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-      </Button>
+      </IconButton>
       </span>
     </div>
   );

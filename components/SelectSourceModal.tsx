@@ -22,7 +22,7 @@ import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import ApplyToJobModal from './ApplyToJobModal';
 import type { Job as SharedJob, Resume as SharedResume } from '@/lib/types/types';
 import { convertApiResumeToRow, convertApiFolderToTree } from '@/lib/utils/resumeMappers';
-import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
+import { scoringService, normalizeScoringStatus, type BatchScoringStatus } from '@/lib/services/scoringService';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -37,6 +37,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import ResumeBulkConfirmModal, { type ResumeBulkConfirmKind } from '@/components/resumes/ResumeBulkConfirmModal';
 import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Folder-tree pane sizing. Kept in step with FolderTree's own clamp
 // (200–400px) so a width restored from storage is one the tree will honour.
@@ -338,8 +340,20 @@ export default function SelectSourceModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasInternalDBAccess]);
 
+  type FolderListResult = { data?: Awaited<ReturnType<typeof folderService.list>>; error?: unknown; failed: boolean };
   const fetchData = async () => {
     setLoading(true);
+    /* Folders (My Resumes tab only) start WITH the resume list rather than
+       after it — they don't depend on it, and the serial wait added a full
+       round trip to opening the popup. Applied at the same point as before
+       (after the resumes land, skipped if they fail), so the result is the
+       same; only the wait is gone. Settles to a tagged result, never throws. */
+    const foldersPromise = activeTab === 'my-resumes'
+      ? folderService.list().then<FolderListResult, FolderListResult>(
+          (data) => ({ data, failed: false }),
+          (error: unknown) => ({ error, failed: true }),
+        )
+      : null;
     try {
       // Fetch resumes based on active tab (include archived so they show as disabled)
       const resumeResponse = await resumeService.list({
@@ -357,9 +371,11 @@ export default function SelectSourceModal({
       else setTabCounts(prev => ({ ...prev, internalDb: loadedTotal }));
 
       // Fetch folders only for my-resumes tab
-      if (activeTab === 'my-resumes') {
+      if (foldersPromise) {
         try {
-          const folderData = await folderService.list();
+          const folderResult = await foldersPromise;
+          if (folderResult.failed) throw folderResult.error;
+          const folderData = folderResult.data;
           console.log('[SelectSourceModal] Fetched folders:', folderData);
           console.log('[SelectSourceModal] Folders count:', folderData?.length || 0);
 
@@ -868,50 +884,125 @@ export default function SelectSourceModal({
     setSelectedFolder('all');
   };
 
+  /* Each snapshot of the run's batch. The progress popup (BulkScoringProgressModal,
+     mounted for the whole run, minimised or not) is the ONE poller of the batch
+     — every second while it runs, and it stops once the batch is settled. This
+     popup used to run a second, 3-second loop of its own on the same batch. */
+  const settledBatchRef = useRef<string | null>(null);
+  const handleRunBatchStatus = (batchStatus: BatchScoringStatus) => {
+    // Update progress items from batch status. `items` is guarded — an
+    // undefined `items` used to throw before ever reaching the `allDone`
+    // check, leaving the popup stuck on "Queued".
+    setProgressItems(prev => prev.map(item => {
+      const batchItem = (batchStatus.items || []).find((b: any) => b.resume_id === item.resumeId);
+      if (!batchItem) return item;
+      const status = normalizeScoringStatus(batchItem.status) as ProgressItem['status'];
+      return {
+        ...item,
+        status,
+        score: batchItem.overall_score,
+        overallRating10: batchItem.overall_rating_10,
+        matchStatus: batchItem.match_status,
+        // Never copied here before — only the context-sync loop below set
+        // it (for GlobalScoringProgressIndicator), so the modal rendered
+        // from THIS state always showed a bare "Failed" badge with no reason.
+        errorMessage: batchItem.error_message || item.errorMessage,
+      };
+    }));
+    setScoringStats({
+      queued: batchStatus.queued,
+      processing: batchStatus.processing,
+      completed: batchStatus.completed,
+      failed: batchStatus.failed,
+    });
+
+    // Sync status updates into the persistent context (drives GlobalScoringProgressIndicator)
+    for (const batchItem of (batchStatus.items || [])) {
+      const itemId = `${jobId}-${batchItem.resume_id}`;
+      const itemStatus = normalizeScoringStatus(batchItem.status);
+      if (itemStatus === 'completed') {
+        updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10, matchResult: toMatchResult(batchItem.match_status) });
+      } else if (itemStatus === 'failed') {
+        updateItemStatus(jobId, itemId, 'Failed', { errorReason: batchItem.error_message || 'Scoring failed' });
+      } else if (itemStatus === 'processing') {
+        updateItemStatus(jobId, itemId, 'Scoring in progress');
+      }
+    }
+
+    const aggregateStatus = normalizeScoringStatus(batchStatus.status);
+    const allDone = aggregateStatus === 'completed' || aggregateStatus === 'failed' ||
+      (batchStatus.queued === 0 && batchStatus.processing === 0);
+
+    if (!allDone) {
+      // Running again (e.g. Retry from the popup): its finish is reported again.
+      settledBatchRef.current = null;
+      return;
+    }
+    if (settledBatchRef.current === batchStatus.batch_id) return; // reported already
+    settledBatchRef.current = batchStatus.batch_id;
+    setSubmitting(false);
+    // Refresh header quota dropdown — RS deductions landed on CP
+    dispatchUnitsConsumed();
+    /* The popup stays up, finished, until the recruiter closes it; the
+       page brings the results in behind it meanwhile. It used to close
+       ITSELF here after 1.5s and only then hand off to the page. On the
+       Resume Scoring page that hand-off awaits a history refresh before
+       unmounting this modal, so the whole fetch showed this modal's own
+       resume-selection tabs. And a popup closing on its own reads to
+       the corner widget as "minimised" — with the run already older
+       than its 3s card, it dropped straight to the round button nobody
+       had asked for. */
+    onScoringFinished?.();
+  };
+
   // Submit for scoring with progress tracking
   const handleSubmitForScoring = async (reviewedIds?: string[], reviewedVersions?: (number | undefined)[]) => {
     // From the review step: the resumes still ticked, each on its chosen version.
     const idsToScore = reviewedIds ?? selectedResumes;
     if (idsToScore.length === 0) return;
 
-    // Check for already-scored resumes before proceeding
     let resumesToScore = [...idsToScore];
+    setSubmitting(true);
+
     try {
-      const checkResult = await scoringService.checkExistingScores(jobId, resumesToScore);
-      if (checkResult.existing_count > 0) {
-        const alreadyScoredNames = checkResult.existing_scores
-          .map((s: any) => `${s.candidate_name} (${formatOverallScore(s.overall_rating_10, s.overall_score)})`)
+      /* One request (2026-11-20): the server leaves out the resumes already
+         scored for this job (POST /scoring/check-existing's rule), runs the
+         unit check on the ones left (POST /unit-pool/validate-before-action's
+         rule) and starts the batch — it used to be three serial round trips. */
+      const response = await scoringService.startBulkScoringAsync(jobId, resumesToScore, { skipExisting: true, validateUnits: true });
+
+      // Already-scored resumes: the same toasts the separate check showed.
+      if ((response.existing_count ?? 0) > 0 && response.existing_scores) {
+        const alreadyScoredNames = response.existing_scores
+          .map(s => `${s.candidate_name} (${formatOverallScore(s.overall_rating_10, s.overall_score)})`)
           .join(', ');
 
-        if (checkResult.new_count === 0) {
+        if (response.new_count === 0) {
           // ALL resumes already scored - block entirely
           toast.error(
-            `All ${checkResult.existing_count} resume(s) already scored for "${checkResult.jd_title}": ${alreadyScoredNames}`,
+            `All ${response.existing_count} resume(s) already scored for "${response.jd_title}": ${alreadyScoredNames}`,
             { duration: 6000 }
           );
+          setSubmitting(false);
           return;
         }
 
         // SOME already scored - warn and filter them out
         toast.warning(
-          `${checkResult.existing_count} resume(s) already scored and will be skipped: ${alreadyScoredNames}`,
+          `${response.existing_count} resume(s) already scored and will be skipped: ${alreadyScoredNames}`,
           { duration: 5000 }
         );
-        const existingIds = new Set(checkResult.existing_scores.map((s: any) => s.resume_id));
+        const existingIds = new Set(response.existing_scores.map(s => s.resume_id));
         resumesToScore = resumesToScore.filter(id => !existingIds.has(id));
-
-        if (resumesToScore.length === 0) return;
       }
-    } catch (error) {
-      console.error('Error checking existing scores:', error);
-      // Continue with scoring even if check fails
-    }
 
-    setSubmitting(true);
-
-    try {
-      // Use async Celery-based bulk scoring (same as Resume Scoring module)
-      const response = await scoringService.startBulkScoringAsync(jobId, resumesToScore);
+      // Not enough units for the ones left: the message the client check showed.
+      const unitRefusal = scoringService.bulkUnitRefusal(response);
+      if (unitRefusal) throw unitRefusal;
+      if (!response.batch_id || resumesToScore.length === 0) {
+        setSubmitting(false);
+        return;
+      }
 
       // Build resume items for progress display. The version is the one picked
       // in the review step (parallel to `reviewedIds`), else the row's own.
@@ -950,83 +1041,7 @@ export default function SelectSourceModal({
       setProgressBatchId(batchId);
       startScoringJob(jobId, jobTitle, contextItems, typeof window !== 'undefined' ? window.location.pathname + window.location.search : undefined, { batchId });
 
-      // Poll batch status until all items are done
-      const poll = async () => {
-        try {
-          const batchStatus = await scoringService.getBatchStatus(batchId);
-
-          // Update progress items from batch status. `items` guarded the same
-          // way the context-sync loop below already does — an undefined
-          // `items` here used to throw before ever reaching that loop or the
-          // `allDone` check, so every poll tick silently failed into the
-          // catch block below and retried forever: the popup stayed stuck on
-          // "Queued" indefinitely with no visible error.
-          setProgressItems(prev => prev.map(item => {
-            const batchItem = (batchStatus.items || []).find((b: any) => b.resume_id === item.resumeId);
-            if (!batchItem) return item;
-            const status = normalizeScoringStatus(batchItem.status) as ProgressItem['status'];
-            return {
-              ...item,
-              status,
-              score: batchItem.overall_score,
-              overallRating10: batchItem.overall_rating_10,
-              matchStatus: batchItem.match_status,
-              // Never copied here before — only the context-sync loop below set
-              // it (for GlobalScoringProgressIndicator), so the modal rendered
-              // from THIS state always showed a bare "Failed" badge with no reason.
-              errorMessage: batchItem.error_message || item.errorMessage,
-            };
-          }));
-          setScoringStats({
-            queued: batchStatus.queued,
-            processing: batchStatus.processing,
-            completed: batchStatus.completed,
-            failed: batchStatus.failed,
-          });
-
-          // Sync status updates into the persistent context (drives GlobalScoringProgressIndicator)
-          for (const batchItem of (batchStatus.items || [])) {
-            const itemId = `${jobId}-${batchItem.resume_id}`;
-            const itemStatus = normalizeScoringStatus(batchItem.status);
-            if (itemStatus === 'completed') {
-              updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10, matchResult: toMatchResult(batchItem.match_status) });
-            } else if (itemStatus === 'failed') {
-              updateItemStatus(jobId, itemId, 'Failed', { errorReason: batchItem.error_message || 'Scoring failed' });
-            } else if (itemStatus === 'processing') {
-              updateItemStatus(jobId, itemId, 'Scoring in progress');
-            }
-          }
-
-          const aggregateStatus = normalizeScoringStatus(batchStatus.status);
-          const allDone = aggregateStatus === 'completed' || aggregateStatus === 'failed' ||
-            (batchStatus.queued === 0 && batchStatus.processing === 0);
-
-          if (allDone) {
-            setSubmitting(false);
-            // Refresh header quota dropdown — RS deductions landed on CP
-            dispatchUnitsConsumed();
-            /* The popup stays up, finished, until the recruiter closes it; the
-               page brings the results in behind it meanwhile. It used to close
-               ITSELF here after 1.5s and only then hand off to the page. On the
-               Resume Scoring page that hand-off awaits a history refresh before
-               unmounting this modal, so the whole fetch showed this modal's own
-               resume-selection tabs. And a popup closing on its own reads to
-               the corner widget as "minimised" — with the run already older
-               than its 3s card, it dropped straight to the round button nobody
-               had asked for. */
-            onScoringFinished?.();
-          } else {
-            setTimeout(poll, 3000);
-          }
-        } catch (pollError) {
-          // Was silently swallowed — a poll tick that keeps throwing (like the
-          // undefined-`items` case above used to) retried forever with no
-          // trace of why, which is exactly what made this bug invisible.
-          console.error('[SelectSourceModal] Error polling batch status:', pollError);
-          setTimeout(poll, 5000);
-        }
-      };
-      setTimeout(poll, 3000);
+      // Batch progress arrives through handleRunBatchStatus (the popup polls it).
 
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
@@ -1166,7 +1181,7 @@ export default function SelectSourceModal({
     // While the progress popup is minimized this component stays mounted (it owns
     // progressItems and the restore callback) but its overlay must not block the
     // page — hide it rather than unmounting, so "expand" can bring it straight back.
-    <div className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm ${isBulkProgressMinimized ? 'hidden' : 'flex'} items-center justify-center z-50 p-3 sm:p-6`}>
+    <ModalA11y><div className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm ${isBulkProgressMinimized ? 'hidden' : 'flex'} items-center justify-center z-50 p-3 sm:p-6`}>
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-[94vw] 2xl:max-w-[1680px] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] [@media(max-height:820px)]:sm:h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between px-4 sm:px-6 py-3 sm:py-4 [@media(max-height:820px)]:sm:py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
@@ -1190,12 +1205,11 @@ export default function SelectSourceModal({
             </div>
           </div>
           {!cancelInFooter && (
-            <button
+            <IconButton bare label="Close"
               onClick={onClose}
-              className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0"
-             aria-label="Close">
+              className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0">
               <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-            </button>
+            </IconButton>
           )}
         </div>
 
@@ -1299,7 +1313,7 @@ export default function SelectSourceModal({
                       : 'font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
-                <Icon className={`hidden sm:block h-4 w-4 shrink-0 ${allowed ? iconColor : 'text-gray-400'}`} />
+                <Icon className={`hidden sm:block h-4 w-4 shrink-0 ${allowed ? iconColor : 'text-gray-500'}`} />
                 {RESUME_TAB_LABEL[tab]}
                 {count !== undefined && count !== null && (
                   <span
@@ -1378,11 +1392,15 @@ export default function SelectSourceModal({
                 list's row checkboxes (measured): the phone/tablet cards sit 16px
                 further in, the md+ table runs edge to edge, so the toolbar's
                 left inset follows each. */}
-            <div className="pl-[17px] pr-3 sm:pl-[20px] sm:pr-6 md:pl-0.5 py-3 sm:py-4 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
-                {/* Select All ▾ sits before the search box, on the same row
-                    (phones included); Upload stays on the right. */}
-                <div className="flex flex-1 min-w-0 flex-wrap items-center gap-2 sm:gap-x-4">
+            <div className="pl-[17px] pr-3 sm:pl-[20px] sm:pr-6 md:pl-0.5 py-2.5 sm:py-4 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
+              {/* sm+: Select All ▾ · search · Upload on one row.
+                  Phones, two rows: the search with an icon-only Upload beside
+                  it, then Select All ▾ with Actions ▾ and an icon-only Clear
+                  once something is ticked. The inner group is `contents`
+                  there so all of these wrap as one set of items; the search's
+                  basis (100% − the 36px Upload − the gap) closes row one. */}
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-4">
+                <div className="flex flex-1 min-w-0 flex-wrap items-center gap-2 sm:gap-x-4 max-sm:contents">
                 <div className="shrink-0">
                   {(() => {
                     /* Inside Archived Resumes the same menu ticks resumes to
@@ -1465,7 +1483,7 @@ export default function SelectSourceModal({
                           <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
                         </span>
                         {bulkBusy || unarchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                        Actions ({actionIds.length})
+                        Actions<span className="max-sm:hidden"> ({actionIds.length})</span>
                         <ChevronDown className="w-4 h-4" />
                       </button>
 
@@ -1582,30 +1600,31 @@ export default function SelectSourceModal({
                       type="button"
                       onClick={clearActionSelection}
                       title="Clear the selection"
-                      className="h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm"
+                      aria-label="Clear the selection"
+                      className="h-9 px-3 max-sm:w-9 max-sm:px-0 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm"
                     >
                       <X className="w-4 h-4" />
-                      Clear
+                      <span className="max-sm:sr-only">Clear</span>
                     </button>
                   </div>
                 )}
                 {/* min width so, beside Actions + Clear on a phone, the search
                     wraps to its own line instead of squeezing to nothing. */}
-                <div className="flex-1 min-w-[12rem] relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                <div className={`flex-1 min-w-[12rem] relative max-sm:order-first max-sm:min-w-0 ${activeTab === 'my-resumes' && !viewingArchivedFolder ? 'max-sm:basis-[calc(100%-2.75rem)]' : 'max-sm:basis-full'}`}>
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search by name, email, skills..."
-                    className="w-full h-9 pl-9 pr-4 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-gray-50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-800 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-colors"
+                    className="w-full h-9 pl-9 pr-4 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-gray-50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-800 placeholder:text-gray-500 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-colors"
                   />
                 </div>
                 </div>
                 {/* Upload Resume button - only for My Resumes tab + canUploadResumes RBAC.
                     Not inside Archived Resumes — nothing is uploaded there. */}
                 {activeTab === 'my-resumes' && !viewingArchivedFolder && (
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-center justify-end gap-2 max-sm:order-first">
                     {/* The same Upload History popup My Resumes opens — every
                         upload made here lands in it. */}
                     <UploadHistoryButton
@@ -1616,8 +1635,9 @@ export default function SelectSourceModal({
                     <button
                       onClick={() => { if (!canUploadResumes) return; openUploadToFolder(); }}
                       aria-disabled={!canUploadResumes}
-                      title={!canUploadResumes ? 'You do not have permission to upload resumes' : undefined}
-                      className={`h-9 px-3 sm:px-4 text-sm whitespace-nowrap rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
+                      aria-label="Upload Resume"
+                      title={!canUploadResumes ? 'You do not have permission to upload resumes' : 'Upload Resume'}
+                      className={`h-9 max-sm:w-9 max-sm:justify-center max-sm:px-0 px-3 sm:px-4 text-sm whitespace-nowrap rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
                         canUploadResumes
                           ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                           : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
@@ -1625,7 +1645,7 @@ export default function SelectSourceModal({
                     >
                       <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span className="hidden sm:inline">Upload Resume</span>
-                      <span className="sm:hidden">Upload</span>
+                      <span className="sr-only">Upload</span>
                     </button>
                   </div>
                 )}
@@ -1853,6 +1873,8 @@ export default function SelectSourceModal({
         <BulkScoringProgressModal
           headerJobVersion={jobVersion}
           batchId={progressBatchId}
+          onBatchStatus={handleRunBatchStatus}
+          activePollMs={1000}
           onClose={handleCloseProgress}
           progressData={progressItems.map((item): ScoringProgressItem => ({
             id: item.resumeId,
@@ -1967,6 +1989,6 @@ export default function SelectSourceModal({
           onClose={() => setPreviewResume(null)}
         />
       )}
-    </div>
+    </div></ModalA11y>
   );
 }

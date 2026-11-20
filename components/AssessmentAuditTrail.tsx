@@ -28,6 +28,9 @@ import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { formatScore } from '@/lib/utils/score';
 import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 
@@ -723,19 +726,17 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
               {/* Select All — this page's entries, as on the AI Interviews
                   Activity Logs tab. */}
               <div className="flex items-center gap-2">
-                <button
+                <IconButton bare label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
                   type="button"
                   onClick={toggleAllOnPage}
                   className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
-                  aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
-                  title={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
                 >
                   {allOnPageSelected ? (
                     <CheckSquare className="w-4 h-4 text-brand-blue" />
                   ) : (
-                    <Square className="w-4 h-4 text-gray-400" />
+                    <Square className="w-4 h-4 text-gray-500" />
                   )}
-                </button>
+                </IconButton>
                 <span className="tf-meta">
                   {selectedKeys.size > 0 ? `${selectedKeys.size} selected` : 'Select all'}
                 </span>
@@ -837,7 +838,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
 
                         <div className="mt-auto flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-slate-800 text-xs">
                           <span className="text-gray-500">{formatTimestamp(activity.timestamp)}</span>
-                          <span className="text-gray-400 group-hover:text-brand-blue">
+                          <span className="text-gray-500 group-hover:text-brand-blue">
                             <Eye className="w-3 h-3 inline mr-1" />
                             {isExpanded ? 'Hide' : 'Details'}
                           </span>
@@ -855,7 +856,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
 
                 return (
                   <Fragment key={key}>
-                    <div
+                    <div {...clickableProps}
                       className={`relative flex items-start gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-lg border ${colors.border} ${colors.bg} hover:shadow-sm transition-shadow cursor-pointer`}
                       onClick={() => setSelectedActivity(isExpanded ? null : activity.id)}
                     >
@@ -864,18 +865,17 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                         <div className="hidden sm:block absolute left-[54px] top-[52px] w-0.5 h-[calc(100%+16px)] bg-gray-200" />
                       )}
 
-                      <button
+                      <IconButton bare label={isSelected ? 'Deselect activity' : 'Select activity'}
                         type="button"
                         onClick={(e) => { e.stopPropagation(); toggleSelected(key); }}
                         className="mt-2 sm:mt-2.5 p-1 -m-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700 flex-shrink-0 relative z-10"
-                        aria-label={isSelected ? 'Deselect activity' : 'Select activity'}
                       >
                         {isSelected ? (
                           <CheckSquare className="w-4 h-4 text-brand-blue" />
                         ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
+                          <Square className="w-4 h-4 text-gray-500" />
                         )}
-                      </button>
+                      </IconButton>
 
                       {/* Icon */}
                       <div className={`flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full ${colors.bg} border-2 ${colors.border} flex items-center justify-center ${colors.icon} relative z-10 bg-white`}>
@@ -929,7 +929,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                           </div>
                           <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 mt-1 sm:mt-0">
                             <p className="tf-body-muted">{formatTimestamp(activity.timestamp)}</p>
-                            <button className="sm:mt-1 text-xs text-gray-400 hover:text-brand-blue">
+                            <button className="sm:mt-1 text-xs text-gray-500 hover:text-brand-blue">
                               <Eye className="w-3 h-3 inline mr-0.5 sm:mr-1" />
                               {isExpanded ? 'Hide' : 'Details'}
                             </button>
@@ -1012,25 +1012,23 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                   className="tf-input w-14 h-8 px-2 text-center"
                 />
               </div>
-              <button
+              <IconButton bare label="Previous page"
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
                 className="tf-btn tf-btn-secondary w-8 h-8 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                aria-label="Previous page" title="Previous page"
               >
                 <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
+              </IconButton>
               <span className="tf-label px-1 whitespace-nowrap">
                 <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
               </span>
-              <button
+              <IconButton bare label="Next page"
                 onClick={() => setPage(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
                 className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                aria-label="Next page" title="Next page"
               >
                 <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
+              </IconButton>
             </div>
           )}
         </div>
@@ -1041,7 +1039,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
           own filters already decide what goes in the file, so there is no
           scope question to ask after the format. */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+        <ModalA11y><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
           <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
             <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
               <div className="flex items-center gap-3 min-w-0">
@@ -1053,13 +1051,12 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                   <p className="tf-body-muted mt-1">Choose format</p>
                 </div>
               </div>
-              <button
+              <IconButton bare label="Close"
                 onClick={() => setShowExportModal(false)}
-                className="p-1.5 shrink-0 text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
-                aria-label="Close"
+                className="p-1.5 shrink-0 text-gray-500 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </IconButton>
             </div>
 
             <div className="p-4 sm:p-5">
@@ -1094,7 +1091,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
               </div>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </div>
   );

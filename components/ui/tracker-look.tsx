@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { tabPill } from '@/components/ui/filter-pills';
 import { STATUS_HELP } from '@/components/ui/guided-tracker';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The Invite Status Tracking popups' look (Assessment and AI Interview, the
@@ -80,10 +81,10 @@ export function TrackerSelectAll({ selected, groups, onChange, allPages }: {
             onChange={() => (sel.toggle ? sel.toggle() : setOpen(true))} aria-label="Select all on this page" />
           <span className="whitespace-nowrap">{selected.size > 0 ? `${selected.size} Selected` : 'Select All'}</span>
         </label>
-        <button type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="Selection options"
+        <IconButton bare label="Selection options" type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}
           className="h-full px-1.5 border-l border-brand-blue/10 rounded-r-lg hover:text-brand-blue">
           <ChevronDown className="w-4 h-4" />
-        </button>
+        </IconButton>
       </div>
       {open && (
         <>
@@ -159,10 +160,10 @@ export function TrackerBulkBar({ count, revokeCount, resendCount, onRevoke, onRe
             {resending ? 'Sending…' : `Resend (${resendCount})`}
           </Button>
         )}
-        <button type="button" onClick={onClear} aria-label="Clear selection" title="Clear selection"
+        <IconButton bare label="Clear selection" type="button" onClick={onClear}
           className="h-9 w-9 inline-flex items-center justify-center rounded-lg text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800">
           <X className="w-4 h-4" />
-        </button>
+        </IconButton>
         <span className="hidden lg:block h-6 w-px bg-gray-200 dark:bg-slate-700 ml-0.5" aria-hidden="true" />
       </div>
     );

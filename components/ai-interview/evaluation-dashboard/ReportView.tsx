@@ -303,7 +303,7 @@ export function ReportView({ data }: { data: DashboardData }) {
           </div>
           <div className="flex flex-col items-center justify-center">
             <div className="text-sm text-gray-500 mb-4 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Final Score</div>
-            <div className="relative w-48 h-48 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${recColor} 0%, ${recColor}dd 100%)`, boxShadow: `0 8px 24px ${recColor}40` }}>
+            <div className="relative w-48 h-48 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${recColor} 0%, color-mix(in srgb, ${recColor} 86.667%, transparent) 100%)`, boxShadow: `0 8px 24px color-mix(in srgb, ${recColor} 25.098%, transparent)` }}>
               <div className="absolute inset-2 bg-white dark:bg-gray-800 rounded-full flex flex-col items-center justify-center">
                 <div className="text-5xl font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(data.scores.final)}</div>
                 <div className="tf-body-muted">/ 100</div>

@@ -289,8 +289,8 @@ export default function RoleManagement() {
             return (
               <div key={field} className="tf-meta">
                 <span className="font-medium capitalize text-gray-900 dark:text-slate-50">{field.replace(/_/g, ' ')}:</span>{' '}
-                <span className="text-gray-400 dark:text-slate-500">{String(change.from || '-')}</span>
-                <span className="mx-1 text-gray-400 dark:text-slate-500">to</span>
+                <span className="text-gray-500 dark:text-slate-500">{String(change.from || '-')}</span>
+                <span className="mx-1 text-gray-500 dark:text-slate-500">to</span>
                 <span className="text-gray-700 dark:text-slate-300">{String(change.to || '-')}</span>
               </div>
             );
@@ -396,7 +396,7 @@ export default function RoleManagement() {
             {/* Toolbar: search, how many of the role limit are used, dot legend. */}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="relative w-full sm:w-72">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-slate-500" />
                 <input
                   aria-label="Search roles"
                   type="text"
