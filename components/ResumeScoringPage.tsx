@@ -584,6 +584,7 @@ export default function ResumeScoringPage({
     clearJob,
     activeScoringJobs,
     syncScoringJob,
+    attachBatch,
   } = useScoringProgress();
   // Stable per-instance id for the ref-counted panel-visibility registry —
   // see `setPanelVisibility` on ScoringProgressContext.
@@ -2121,6 +2122,8 @@ export default function ResumeScoringPage({
         const batch = await scoringService.startBulkScoringAsync(jobId, resumeIds);
         const batchId = batch.batch_id;
         setProgressBatchId(batchId);
+        // The corner run keeps following this batch after the page closes.
+        attachBatch(jobId, batchId);
         console.log(`[ResumeScoringPage] Batch created: ${batchId}`);
 
         // Map resumeId → array index for O(1) status updates
@@ -2214,7 +2217,7 @@ export default function ResumeScoringPage({
     };
 
     scoreResumes();
-  }, [pendingScoringData, startScoringJob, updateItemStatus, onRefreshHistory, router]);
+  }, [pendingScoringData, startScoringJob, updateItemStatus, onRefreshHistory, router, attachBatch]);
 
   // Track completed job IDs to prevent flickering from stale polling data
   const completedJobsRef = useRef<Set<string>>(new Set());
