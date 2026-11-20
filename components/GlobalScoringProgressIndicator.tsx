@@ -183,14 +183,23 @@ export default function GlobalScoringProgressIndicator() {
      reload) are not announced again. The JD ID / version come from the run,
      else from the JD itself (fetched once). */
   const announcedRef = useRef<Set<string> | null>(null);
+  /* Runs seen at least once. A run that is ALREADY finished the first time it
+     shows up (a reload, or a finished run picked up from the server in another
+     browser) is not announced — the recruiter saw that toast where it ran. */
+  const seenJobsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const isDone = (job: ScoringJob) => job.total > 0 && job.queued === 0 && job.processing === 0;
+    const seen = seenJobsRef.current;
     if (!announcedRef.current) {
       announcedRef.current = new Set(activeScoringJobs.filter(isDone).map(job => job.jobId));
+      activeScoringJobs.forEach(job => seen.add(job.jobId));
       return;
     }
     const announced = announcedRef.current;
     activeScoringJobs.forEach(job => {
+      const firstSighting = !seen.has(job.jobId);
+      seen.add(job.jobId);
+      if (firstSighting && isDone(job)) { announced.add(job.jobId); return; }
       if (!isDone(job) || announced.has(job.jobId)) return;
       announced.add(job.jobId);
       /* A Job Details run is keyed by its batch id; the JD id is on its rows. */
