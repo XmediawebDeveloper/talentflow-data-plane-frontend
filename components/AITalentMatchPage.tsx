@@ -4353,7 +4353,7 @@ export default function AITalentMatchPage({
                 )}
                 {viewPills}
                 {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
-                {candKeys.length > 0 && (
+                {(
                   <PhoneSortMenu<CandidateSortKey>
                     value={candidateSortBy}
                     order={candidateSortOrder}
@@ -5880,7 +5880,8 @@ export default function AITalentMatchPage({
             className="mb-0"
           >
             {/* Phones sort from the Sort menu in row 2 (PhoneSortMenu). */}
-            {sortedHistory.length > 0 && (
+            {/* Always shown, an empty list included. */}
+            {(
               <div className="tf-jobs-sort contents">
               <SortByControl
                 value={historySortBy}
@@ -6051,7 +6052,7 @@ export default function AITalentMatchPage({
             )}
             {viewPills}
             {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
-            {sortedHistory.length > 0 && (
+            {(
               <PhoneSortMenu<JobSortKey>
                 value={historySortBy}
                 order={historySortOrder}

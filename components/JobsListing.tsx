@@ -28,6 +28,7 @@ import {
 } from '@/lib/utils/jobOpeningDisplay';
 import { jdService, type JDLineageVersion, type JobOpeningsFilters, type JobOpeningsStats, type JobOpeningsTab } from '@/lib/services/jdService';
 import { usePagedList } from '@/lib/hooks/usePagedList';
+import { cachedList, listCacheKey, LIST_CACHE_TTL_MS } from '@/lib/utils/listCache';
 import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
@@ -598,6 +599,24 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   refreshListRef.current = paged.refresh;
   const serverStats = paged.stats;
 
+  /* The four overview cards are the tenant's standing totals: they never move
+     with search, the dropdowns, More Filters, AI / Manual or the status tab.
+     So they read GET /jd/stats with NO filters, apart from `serverStats` above
+     (which follows the filters, for the tab badges). Re-read whenever the
+     filtered stats are (`serverStats` is a new object after every read); the
+     list cache answers it unless a write has cleared it, so changing a filter
+     costs no extra request, and a publish / archive / delete still updates the
+     cards. The last totals stay on screen while a re-read is in flight. */
+  const [cardStats, setCardStats] = useState<JobOpeningsStats | null>(null);
+  useEffect(() => {
+    if (!listStateRestored) return;
+    let cancelled = false;
+    cachedList(listCacheKey('job-openings:card-stats'), () => jdService.getJobStats({}), { ttlMs: LIST_CACHE_TTL_MS })
+      .then((s) => { if (!cancelled) setCardStats(s); })
+      .catch((err) => { if (!cancelled) console.warn('[JobsListing] card stats failed', err); });
+    return () => { cancelled = true; };
+  }, [listStateRestored, serverStats]);
+
   useEffect(() => {
     if (paged.error) showErrorToast(paged.error, "Couldn't load job openings", { id: 'jobs-list-load', retry: () => refreshListRef.current?.() });
   }, [paged.error]);
@@ -1048,12 +1067,11 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   const uniqueCreators = serverStats?.facets?.creators ?? [];
   const uniqueWorkModes = serverStats?.facets?.work_modes ?? [];
 
-  /* Each status card IS its tab — clicking it opens that tab — so its number
-     is exactly the row count that tab lists for the current search/filters
-     (GET /jd/stats builds it from the same server-side filter as the list).
-     The versions pill counts the versions that HAVE the card's status.
-     With no search/filter these are the same numbers the page showed when it
-     computed them from every JD version in the browser. */
+  /* The tab badges follow the current search/filters (GET /jd/stats builds
+     them from the same server-side filter as the list), so a badge is the row
+     count its tab lists. The four cards above do NOT: they are the unfiltered
+     totals (`cardStats`), and their versions pill counts the versions that
+     HAVE the card's status. */
   const statusPillCount = (pill: string): number | null =>
     serverStats ? serverStats.jobs?.[pill.toLowerCase() as JobOpeningsTab] ?? 0 : null;
   const methodPillCount = (method: 'ai' | 'manual' | null): number | null => {
@@ -1069,20 +1087,20 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     </span>
   );
   const stats = {
-    total: serverStats?.total ?? 0,
-    published: serverStats?.published ?? 0,
-    draft: serverStats?.draft ?? 0,
-    archived: serverStats?.archived ?? 0,
-    totalVersions: serverStats?.versions?.all ?? 0,
-    publishedVersions: serverStats?.versions?.published ?? 0,
-    draftVersions: serverStats?.versions?.draft ?? 0,
-    archivedVersions: serverStats?.versions?.archived ?? 0,
+    total: cardStats?.total ?? 0,
+    published: cardStats?.published ?? 0,
+    draft: cardStats?.draft ?? 0,
+    archived: cardStats?.archived ?? 0,
+    totalVersions: cardStats?.versions?.all ?? 0,
+    publishedVersions: cardStats?.versions?.published ?? 0,
+    draftVersions: cardStats?.versions?.draft ?? 0,
+    archivedVersions: cardStats?.versions?.archived ?? 0,
   };
 
   /* The stat cards show a placeholder until the counts land — never a
    * partial tally that would then jump. */
-  const statValue = (count: number) => (serverStats ? count : <StatValuePlaceholder />);
-  const statVersions = (count: number) => (serverStats ? <StatVersions count={count} /> : <StatVersionsPlaceholder />);
+  const statValue = (count: number) => (cardStats ? count : <StatValuePlaceholder />);
+  const statVersions = (count: number) => (cardStats ? <StatVersions count={count} /> : <StatVersionsPlaceholder />);
 
   const activeFiltersCount = search.activeFilterCount;
   const filtersActive = search.filtersApplied;
@@ -1457,9 +1475,10 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
             activeFilterCount={activeFiltersCount}
             filtersApplied={filtersActive}
             onClearFilters={clearAllFilters}
-            // Sort by sits right after More Filters, in the search row.
+            // Sort by sits after More Filters (and its Reset), in the search row.
+            // Always shown — an empty or filtered-to-nothing list keeps it.
             afterFiltersActions={
-            totalMatching > 0 ? (
+            (
               <div className="tf-jobs-sort flex items-center gap-2">
                 <span className="tf-body">Sort by</span>
                 {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
@@ -1489,7 +1508,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                   </button>
                 </div>
               </div>
-            ) : null
+            )
             }
           />
 
@@ -1912,7 +1931,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
 
             {/* Phones: one "Sort" button that opens a menu — the fields, then the order
                 (worded for the field). From sm the inline Sort control above is used. */}
-            {pageRows.length > 0 && (
+            {/* Always shown, an empty list included. */}
+            {(
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
