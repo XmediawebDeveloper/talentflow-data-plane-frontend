@@ -48,6 +48,10 @@ const AdminAssignedPlanModal = dynamic(() => import('@/components/admin-assigned
 import { useOptionalActivityFeed } from '@/contexts/ActivityFeedContext';
 const GlobalScoringProgressIndicator = dynamic(() => import('@/components/GlobalScoringProgressIndicator'), { ssr: false });
 const BulkInviteProgressIndicator = dynamic(() => import('@/components/bulk-invite/BulkInviteProgressIndicator'), { ssr: false });
+/* Keeps resume uploads in the Background tasks dock after the screen that
+   started them closes (lib/uploadTracker). Renders nothing; idle until an
+   upload is handed over. */
+const GlobalUploadTracker = dynamic(() => import('@/components/resumes/GlobalUploadTracker'), { ssr: false });
 
 /* The two progress widgets render nothing until a task is tracked (scoring
    run, invite send, minimized AI Talent Match run), yet mounting them fetched
@@ -527,6 +531,7 @@ export default function DashboardLayout({
             <AdminAssignedPlanModal />
 
             <BackgroundTaskWidgets />
+            <GlobalUploadTracker />
 
             {/* Plan change suspended overlay - z-[98], above terms z-[95], below generic suspension z-[100] */}
             <PlanChangeSuspendedOverlay />

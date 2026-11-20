@@ -31,6 +31,7 @@ import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import { useResumeUploadFlow } from './resumes/useResumeUploadFlow';
+import UploadHistoryButton from './resumes/UploadHistoryButton';
 import { useScoringProgress, toMatchResult } from '@/contexts/ScoringProgressContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
@@ -467,7 +468,7 @@ export default function SelectSourceModal({
      stores is ticked for scoring. */
   const selectUploadedResumes = (ids: string[]) =>
     setSelectedResumes(prev => [...prev, ...ids.filter(id => !prev.includes(id))]);
-  const { openUploadToFolder, uploadFlowElements } = useResumeUploadFlow({
+  const { openUploadToFolder, openUploadHistoryModal, activeUploads, uploadHistory, uploadStartedThisSession, uploadFlowElements } = useResumeUploadFlow({
     /* resumeService.Folder (resume_count) vs types.Folder (count) - two shapes,
        same name. Cast only; the same array is passed. */
     folders: tableFolders as any,
@@ -1623,7 +1624,14 @@ export default function SelectSourceModal({
                 {/* Upload Resume button - only for My Resumes tab + canUploadResumes RBAC.
                     Not inside Archived Resumes — nothing is uploaded there. */}
                 {activeTab === 'my-resumes' && !viewingArchivedFolder && (
-                  <div className="flex items-center justify-end max-sm:order-first">
+                  <div className="flex items-center justify-end gap-2 max-sm:order-first">
+                    {/* The same Upload History popup My Resumes opens — every
+                        upload made here lands in it. */}
+                    <UploadHistoryButton
+                      onOpen={openUploadHistoryModal}
+                      activeCount={activeUploads}
+                      hasHistory={uploadStartedThisSession || uploadHistory.some(r => r.source === 'my-resumes')}
+                    />
                     <button
                       onClick={() => { if (!canUploadResumes) return; openUploadToFolder(); }}
                       aria-disabled={!canUploadResumes}

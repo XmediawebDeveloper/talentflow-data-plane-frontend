@@ -2,7 +2,7 @@
 
 import { formatJdExperience } from '@/lib/utils/jobExperience';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { ArrowLeft, Briefcase, Plus, Building2, MapPin, Clock, TrendingUp, Calendar, User, Sparkles, ClipboardList, Search } from 'lucide-react';
+import { Briefcase, Plus, Building2, MapPin, Clock, TrendingUp, Calendar, User, Sparkles, ClipboardList, Search } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -82,15 +82,6 @@ export default function ResumeScoringJDSelection() {
           }
           actions={
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-              <Button
-                variant="secondary"
-                onClick={() => router.push('/dashboard')}
-                className="w-full sm:w-auto"
-                icon={<ArrowLeft className="w-4 h-4" />}
-                aria-label="Back to Dashboard" title="Back to Dashboard"
-              >
-                Back
-              </Button>
               <Button
                 variant="primary"
                 onClick={() => {

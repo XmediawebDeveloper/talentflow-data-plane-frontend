@@ -172,7 +172,7 @@ export default function ActivitiesOverviewModal({
   const segments = [
     { key: 'done', label: m.verb, v: sum.done, bar: 'bg-success', dot: 'bg-success' },
     { key: 'failed', label: 'Failed', v: sum.failed, bar: 'bg-destructive', dot: 'bg-destructive' },
-    { key: 'skipped', label: 'Skipped', v: sum.skipped, bar: 'bg-brand-cyan', dot: 'bg-brand-cyan' },
+    { key: 'skipped', label: 'Skipped', v: sum.skipped, bar: 'bg-brand-orange', dot: 'bg-brand-orange' },
     { key: 'cancelled', label: 'Cancelled', v: sum.cancelled, bar: 'bg-warning-strong', dot: 'bg-warning-strong' },
     { key: 'queue', label: 'Queue', v: sum.queue, bar: '', dot: 'bg-[var(--border-dark)]' },
   ];

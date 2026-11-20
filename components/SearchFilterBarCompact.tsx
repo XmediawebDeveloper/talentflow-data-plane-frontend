@@ -93,6 +93,8 @@ interface SearchFilterBarProps {
   filterChips?: FilterChip[];
   /** Rendered right after the search box (e.g. the Resume Database's Versions dropdown). */
   afterSearch?: React.ReactNode;
+  /** Rendered right before the search box (e.g. the Resume Database's Select All menu). */
+  beforeSearch?: React.ReactNode;
 }
 
 export default function SearchFilterBarCompact({
@@ -104,6 +106,7 @@ export default function SearchFilterBarCompact({
   onSortChange,
   hideSearch = false,
   afterSearch,
+  beforeSearch,
   inline = false,
   showClearAllFilters = true,
   filterChips,
@@ -258,6 +261,7 @@ export default function SearchFilterBarCompact({
     <div className={inline ? "relative" : "bg-white border-b border-gray-200"}>
       {/* Main Search Bar */}
       <div className={inline ? "flex gap-2 items-center" : "py-3 flex gap-2 items-center"}>
+        {beforeSearch}
         {/* Global Search Bar */}
         {!hideSearch ? (
           <div className="flex-1 relative">

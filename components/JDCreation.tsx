@@ -9428,6 +9428,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     ['/recruitment/ai-interviews', 'ai-interview'],
     ['/recruitment/assessments', 'assessment'],
     ['/recruitment/resume-scoring', 'resume-scoring'],
+    ['/recruitment/ai-talent-match', 'ai-talent-match'],
   ];
   const flowOrigin = flowOriginByCrumb.find(([href]) =>
     breadcrumbItems?.some(item => item.href === href)

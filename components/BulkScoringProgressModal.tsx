@@ -741,11 +741,11 @@ export default function BulkScoringProgressModal({
       case 'Scored successfully':
         return <CheckCircle2 className="w-4 h-4 text-success" />;
       case 'Already Scored - Skipped':
-        return <CheckCircle2 className="w-4 h-4 text-brand-cyan" />;
+        return <CheckCircle2 className="w-4 h-4 text-brand-orange-deep" />;
       case 'Failed':
         return <XCircle className="w-4 h-4 text-destructive" />;
       case 'Cancelled':
-        return <Ban className="w-4 h-4 text-gray-500 dark:text-slate-400" />;
+        return <Ban className="w-4 h-4 text-warning-strong" />;
       default:
         return <Clock className="w-4 h-4 text-gray-500 dark:text-slate-500" />;
     }
@@ -764,11 +764,11 @@ export default function BulkScoringProgressModal({
       case 'Scored successfully':
         return 'bg-success-subtle text-success border-success-line';
       case 'Already Scored - Skipped':
-        return 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20';
+        return 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/25';
       case 'Failed':
         return 'bg-destructive-subtle text-destructive border-destructive-line';
       case 'Cancelled':
-        return 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600';
+        return 'bg-warning-subtle text-warning-strong border-warning-line';
       default:
         return 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
     }
@@ -985,14 +985,29 @@ export default function BulkScoringProgressModal({
                 <span className={`text-sm font-semibold tabular-nums ${runState.pct}`} aria-live="polite">{progressPct}%</span>
               </div>
               <div
-                className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+                className="flex h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
                 role="progressbar"
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={progressPct}
                 aria-label="Scoring progress"
               >
-                <div className={`h-full rounded-full transition-[width] duration-500 ease-out ${runState.bar}`} style={{ width: `${progressPct}%` }} />
+                {/* One segment per outcome — the same colours as the pills and
+                    the AI Assessment / AI Interview send bar; the resumes being
+                    scored right now pulse blue. */}
+                {[
+                  { key: 'done', n: completedCount, bar: 'bg-success' },
+                  { key: 'skipped', n: skippedCount, bar: 'bg-brand-orange' },
+                  { key: 'cancelled', n: cancelledCount, bar: 'bg-warning-strong' },
+                  { key: 'failed', n: failedCount, bar: 'bg-destructive' },
+                  { key: 'running', n: isAllComplete ? 0 : inProgressCount, bar: 'bg-brand-blue animate-pulse' },
+                ].filter(seg => seg.n > 0).map(seg => (
+                  <div
+                    key={seg.key}
+                    className={`h-full transition-[width] duration-500 ease-out ${seg.bar}`}
+                    style={{ width: `${totalResumes > 0 ? Math.min(100, (seg.n / totalResumes) * 100) : 0}%` }}
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -1026,13 +1041,13 @@ export default function BulkScoringProgressModal({
                 shifts as counts change. All clears the status filter. */}
             {[
               { key: 'all', label: 'All', count: totalResumes, icon: <Layers className="w-4 h-4" />, tone: 'text-gray-500 dark:text-slate-400' },
-              { key: 'queued', label: 'Queue', count: queuedCount, icon: <Clock className="w-4 h-4" />, tone: 'text-blue-600 dark:text-blue-300' },
+              { key: 'queued', label: 'Queue', count: queuedCount, icon: <Clock className="w-4 h-4" />, tone: 'text-gray-600 dark:text-slate-300' },
               { key: 'in-progress', label: 'Processing', count: inProgressCount, icon: <Loader2 className={`w-4 h-4 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />, tone: 'text-brand-blue' },
               { key: 'completed', label: 'Done', count: completedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-success' },
-              /* brand-cyan: the same colour as the Skipped row badge */
-              { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-brand-cyan' },
+              /* Orange: the same colour as the Skipped row badge and bar segment */
+              { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-brand-orange-deep' },
               { key: 'failed', label: 'Failed', count: failedCount, icon: <XCircle className="w-4 h-4" />, tone: 'text-destructive' },
-              { key: 'cancelled', label: 'Cancelled', count: cancelledCount, icon: <Ban className="w-4 h-4" />, tone: 'text-gray-500 dark:text-slate-400' },
+              { key: 'cancelled', label: 'Cancelled', count: cancelledCount, icon: <Ban className="w-4 h-4" />, tone: 'text-warning-strong' },
             ].map(stat => {
               const isActive = statusFilter === stat.key;
               return (

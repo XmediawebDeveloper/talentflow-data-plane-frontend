@@ -44,8 +44,8 @@ export function SelectAllMenu({
   selectedCount: number;
   /** How many are on the current page. */
   pageCount: number;
-  /** How many are listed across every page (filters applied). */
-  totalCount: number;
+  /** How many are listed across every page (filters applied). Required with `onSelectAll`. */
+  totalCount?: number;
   /** Plural, e.g. "jobs", "candidates". */
   noun: string;
   allSelected: boolean;
@@ -54,7 +54,9 @@ export function SelectAllMenu({
   onSelectPage: () => void;
   /** Unticks the current page's rows; without it the "this page" item only selects. */
   onDeselectPage?: () => void;
-  onSelectAll: () => void;
+  /** Omit to hide the "Select all {noun}" item (a server-paginated list that
+   *  can't select beyond the current page). */
+  onSelectAll?: () => void;
   onClear: () => void;
 }) {
   const active = selectedCount > 0;
@@ -102,19 +104,21 @@ export function SelectAllMenu({
           )}
           Select all on this page ({pageCount})
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className="!rounded-none !px-3 !py-2 text-sm text-gray-700"
-          role="menuitemcheckbox"
-          aria-checked={allChecked}
-          onSelect={() => (allChecked ? onClear() : onSelectAll())}
-        >
-          {allChecked ? (
-            <CheckSquare className="w-4 h-4 text-brand-blue" />
-          ) : (
-            <Square className="w-4 h-4 text-gray-500" />
-          )}
-          Select all {noun} ({totalCount})
-        </DropdownMenuItem>
+        {onSelectAll && (
+          <DropdownMenuItem
+            className="!rounded-none !px-3 !py-2 text-sm text-gray-700"
+            role="menuitemcheckbox"
+            aria-checked={allChecked}
+            onSelect={() => (allChecked ? onClear() : onSelectAll())}
+          >
+            {allChecked ? (
+              <CheckSquare className="w-4 h-4 text-brand-blue" />
+            ) : (
+              <Square className="w-4 h-4 text-gray-500" />
+            )}
+            Select all {noun} ({totalCount ?? 0})
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="!rounded-none !px-3 !py-2 text-sm text-gray-700"

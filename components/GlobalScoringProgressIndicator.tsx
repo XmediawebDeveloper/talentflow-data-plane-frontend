@@ -579,6 +579,8 @@ export default function GlobalScoringProgressIndicator() {
   const finishedScoring = activeScoringJobs.filter(isRunDone);
   const finishedInvites = inviteJobs.filter(j => !inviteRunning(j));
   const finishedFeedTasks = feedTasks.filter(t => (t.done || t.failed) && t.onRemove);
+  /* Page tasks (e.g. a finished resume upload) that can be cleared. */
+  const finishedExternal = externalTasks.filter(t => t.done && t.onDismiss);
 
   /* ── Overview popup ── */
   const overviewRows = items.flatMap(i => (i.row ? [i.row] : []));
@@ -856,7 +858,7 @@ export default function GlobalScoringProgressIndicator() {
           </ul>
           <footer className="flex items-center justify-between border-t border-[var(--border-dark)] bg-[var(--surface)] px-2.5 py-1">
             <span className="text-[9px] text-[var(--text-muted)]">Keeps running even if you change pages.</span>
-            {(finishedScoring.length > 0 || finishedInvites.length > 0 || finishedFeedTasks.length > 0) && (
+            {(finishedScoring.length > 0 || finishedInvites.length > 0 || finishedFeedTasks.length > 0 || finishedExternal.length > 0) && (
               <button
                 type="button"
                 onClick={() => {
@@ -867,6 +869,7 @@ export default function GlobalScoringProgressIndicator() {
                     .filter(a => finishedFeedTasks.some(t => t.id === `feed:${a.type}:${a.id}`))
                     .map(a => ({ type: a.type, id: a.id }));
                   if (refs.length) feedDismiss?.(refs);
+                  finishedExternal.forEach(t => t.onDismiss?.());
                 }}
                 className="text-[10px] text-[var(--muted-foreground)] hover:text-brand-blue hover:underline"
               >

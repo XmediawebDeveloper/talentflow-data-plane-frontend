@@ -44,6 +44,7 @@ import {
   type ServerMatchStatus,
 } from '@/lib/services/bulkInviteService';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
+import UploadHistoryButton from '@/components/resumes/UploadHistoryButton';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
 import { IconButton } from '@/components/ui/icon-button';
@@ -777,6 +778,10 @@ export default function ServerCandidatePicker({
     openUploadToFolder,
     isUploadModalOpen,
     closeUploadModal,
+    openUploadHistoryModal,
+    activeUploads,
+    uploadHistory,
+    uploadStartedThisSession,
     uploadFlowElements,
   } = useResumeUploadFlow({
     folders: flatFolders.map(convertApiFolderToTree),
@@ -1319,6 +1324,13 @@ export default function ServerCandidatePicker({
         >
           <Upload className="w-3.5 h-3.5 text-brand-blue" aria-hidden="true" />Upload resumes
         </button>
+        {/* The same Upload History popup My Resumes opens — uploads made here land in it. */}
+        <UploadHistoryButton
+          size="sm"
+          onOpen={openUploadHistoryModal}
+          activeCount={activeUploads}
+          hasHistory={uploadStartedThisSession || uploadHistory.some((r) => r.source === 'my-resumes')}
+        />
         {pickControls}
         </div>
       </div>

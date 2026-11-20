@@ -1,5 +1,6 @@
-import { Sparkles, ArrowLeft, Info } from 'lucide-react';
+import { Sparkles, ArrowLeft, Info, Plus } from 'lucide-react';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Button } from '@/components/ui/button';
@@ -66,6 +67,8 @@ export default function AITalentMatchPageJobsList({
 }: AITalentMatchPageJobsListProps) {
   const { user, isTenantAdmin } = useAuth();
   const canRunAiMatch = isTenantAdmin || (user?.permissions?.canRunAiMatch ?? false);
+  const canCreateJD = isTenantAdmin || !!user?.permissions?.canCreateJD;
+  const router = useRouter();
 
   // One job version at a time — the card's latest, or an older Published one
   // picked from its View Versions.
@@ -89,17 +92,35 @@ export default function AITalentMatchPageJobsList({
         icon={<Sparkles className="h-5 w-5" />}
         title="AI Talent Match"
         description="Select a job and let AI find the best matching candidates."
-        actions={onBack ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onBack}
-            aria-label="Back to Dashboard" title="Back to Dashboard"
-            icon={<ArrowLeft className="w-4 h-4" />}
-          >
-            Back
-          </Button>
-        ) : undefined}
+        actions={
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+            {onBack && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onBack}
+                aria-label="Back to Dashboard" title="Back to Dashboard"
+                icon={<ArrowLeft className="w-4 h-4" />}
+              >
+                Back
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                if (!canCreateJD) return;
+                router.push('/recruitment/jd-creation?from=ai-talent-match');
+              }}
+              aria-disabled={!canCreateJD}
+              className={`w-full sm:w-auto${!canCreateJD ? ' opacity-60 cursor-not-allowed' : ''}`}
+              title={!canCreateJD ? 'You do not have permission to create job descriptions' : undefined}
+              icon={<Plus className="w-4 h-4" />}
+            >
+              Create New Job
+            </Button>
+          </div>
+        }
       />
 
       {/* Job list — Score Resumes' card: Job Eligibility (with the status

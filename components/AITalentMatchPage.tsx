@@ -2260,7 +2260,17 @@ export default function AITalentMatchPage({
 
     const preselectedJobId = urlJdId || sessionJobId;
 
-    if (!preselectedJobId) { handledUrlKeyRef.current = ''; return; }
+    if (!preselectedJobId) {
+      handledUrlKeyRef.current = '';
+      // `?view=new` opens the job picker directly (JD creation's "Select Job
+      // Description" crumb / back link). Strip it once applied, so later
+      // re-runs of this effect can't pull the recruiter back to the picker.
+      if (urlView === 'new') {
+        setViewMode('new');
+        router.replace('/recruitment/ai-talent-match', { scroll: false });
+      }
+      return;
+    }
     const urlKey = `${urlJdId ?? ''}|${urlView ?? ''}`;
     if (!sessionJobId && urlJdId && handledUrlKeyRef.current === urlKey) return;
     // Wait for the route's JD list (loaded on demand — the landing doesn't need it).
@@ -2429,6 +2439,20 @@ export default function AITalentMatchPage({
       }
       onSaveMatch?.(newMatchHistory);
       onMatchComplete?.();
+    }
+  };
+
+  /* "Clear finished" in the Background tasks dock, on a match that finished
+     while minimized: drop the panel without jumping to its results (the run
+     is saved, so the landing lists it). A `view=matching` URL is cleared too,
+     or a refresh would run the match again. */
+  const handleMatchDismissed = () => {
+    setShowMatchingPanel(false);
+    setMatchError(null);
+    isMatchingInProgress.current = false;
+    if (viewMode === 'matching') setViewMode('history');
+    if (new URL(window.location.href).searchParams.get('view') === 'matching') {
+      updateUrlParams({}, { replace: true });
     }
   };
 
@@ -3131,6 +3155,7 @@ export default function AITalentMatchPage({
             jobTitle={selectedJobData?.title || 'Job Description'}
             jobId={selectedJob}
             onComplete={handleMatchingComplete}
+            onDismiss={handleMatchDismissed}
             onError={(error) => {
               setMatchError(error);
               setShowMatchingPanel(false);
@@ -9204,6 +9229,7 @@ export default function AITalentMatchPage({
           jobId={selectedJob}
 
           onComplete={handleMatchingComplete}
+          onDismiss={handleMatchDismissed}
           onError={(error) => {
             setMatchError(error);
             setShowMatchingPanel(false);
