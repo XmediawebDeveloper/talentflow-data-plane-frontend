@@ -134,8 +134,8 @@ const storageKey = (identity: string) => `${LEGACY_STORAGE_KEY}:${identity}`;
 const JOB_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 /* When the server is asked: see ActivityFeedContext (one read of every
-   activity type — on sign-in, tab focus, every 10s while something runs,
-   every minute otherwise). This context applies each read it gets. */
+   activity type — on sign-in, tab focus, every 10s,
+   while the tab is visible). This context applies each read it gets. */
 /** Cap on remembered "removed from the corner" batch ids. */
 const MAX_DISMISSED = 200;
 /** Finished runs picked up from the server (started in another browser /
