@@ -44,6 +44,7 @@ const PlanChangeReviewBanner = dynamic(() => import('@/components/plan-change/Pl
 const PlanChangeReviewModal = dynamic(() => import('@/components/plan-change/PlanChangeReviewModal'), { ssr: false });
 const AdminAssignedPlanBanner = dynamic(() => import('@/components/admin-assigned-plan/AdminAssignedPlanBanner'), { ssr: false });
 const AdminAssignedPlanModal = dynamic(() => import('@/components/admin-assigned-plan/AdminAssignedPlanModal'), { ssr: false });
+import { useOptionalActivityFeed } from '@/contexts/ActivityFeedContext';
 const GlobalScoringProgressIndicator = dynamic(() => import('@/components/GlobalScoringProgressIndicator'), { ssr: false });
 const BulkInviteProgressIndicator = dynamic(() => import('@/components/bulk-invite/BulkInviteProgressIndicator'), { ssr: false });
 
@@ -56,7 +57,13 @@ function BackgroundTaskWidgets() {
   const { activeScoringJobs } = useScoringProgress();
   const invite = useOptionalBulkInviteProgress();
   const externalTasks = useExternalBackgroundTasks();
+  /* AI Talent Match runs / upload batches come from the server feed only —
+     without this the corner never mounted when they were the only activity
+     (and appeared late after a refresh). */
+  const feed = useOptionalActivityFeed();
+  const feedRows = (feed?.items ?? []).some(a => !a.dismissed && (a.type === 'talent_match' || a.type === 'resume_upload'));
   const needed = activeScoringJobs.length > 0
+    || feedRows
     || (invite?.jobs.length ?? 0) > 0
     || !!invite?.openResultsFor
     || externalTasks.length > 0;
