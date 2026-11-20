@@ -195,18 +195,27 @@ export default function GlobalScoringProgressIndicator() {
   /* Toasted but `announcedAt` not saved yet (the next render has it) —
      stops a second toast from an effect re-run in between. */
   const announcingRef = useRef<Set<string>>(new Set());
+  /* Runs seen at least once. A run that is ALREADY finished the first time it
+     shows up (a reload, or a finished run picked up from the server in another
+     browser) is not announced — the recruiter saw that toast where it ran. */
+  const seenJobsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!restoredFor) return;
     const isDone = (job: ScoringJob) => job.total > 0 && job.queued === 0 && job.processing === 0;
+    const seen = seenJobsRef.current;
     if (restoredSeenRef.current !== restoredFor) {
       restoredSeenRef.current = restoredFor;
       const finished = activeScoringJobs.filter(job => isDone(job) && !job.announcedAt).map(job => job.jobId);
       announcingRef.current = new Set(finished);
       markAnnounced(finished);
+      activeScoringJobs.forEach(job => seen.add(job.jobId));
       return;
     }
     const announcing = announcingRef.current;
     const toAnnounce = activeScoringJobs.filter(job => {
+      const firstSighting = !seen.has(job.jobId);
+      seen.add(job.jobId);
+      if (firstSighting && isDone(job)) { announced.add(job.jobId); return; }
       if (!isDone(job)) { announcing.delete(job.jobId); return false; }
       return !job.announcedAt && !announcing.has(job.jobId);
     });

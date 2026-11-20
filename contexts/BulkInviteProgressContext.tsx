@@ -100,19 +100,14 @@ const POLLER_LEASE_MS = 8000;
    STALE_POLL_MS instead, so stuck runs do not keep hitting the API. */
 const STALE_POLL_MS = 30 * 1000;
 
-/* When this page was opened / refreshed. The widget lists only the sends of
-   this visit: a batch that finished before it starts hidden ("Show removed"
-   brings it back). Batches still sending always show. */
-const PAGE_OPENED_AT = Date.now();
-const isEarlier = (j: TrackedBulkInvite) => {
-  if (isBulkInviteActive(j) || j.status === 'paused' || j.stalled) return false;
-  const t = new Date(j.created_at ?? j.trackedAt).getTime();
-  return Number.isFinite(t) && t < PAGE_OPENED_AT;
-};
-/* Hidden as "earlier", not removed by hand: dismissedAt 0 so another tab's
-   own choice for the same run still wins the merge. */
-const hideEarlier = (j: TrackedBulkInvite): TrackedBulkInvite =>
-  (!j.dismissed && isEarlier(j) ? { ...j, dismissed: true, dismissedAt: 0 } : j);
+/* Finished sends of the last day show in EVERY browser, same as scoring runs
+   (2026-11-19). They used to start hidden when they finished before the page
+   was opened ("this visit only"), so a fresh browser or a refresh showed no
+   icon for a send the starting browser still listed. Sends hidden that way
+   were stored with dismissedAt 0 (never a hand removal, which stamps the
+   time) — un-hide those. */
+const unhideEarlier = (j: TrackedBulkInvite): TrackedBulkInvite =>
+  (j.dismissed && j.dismissedAt === 0 ? { ...j, dismissed: false } : j);
 
 const TAB_ID = typeof window !== 'undefined' ? `${Date.now()}-${Math.random().toString(36).slice(2)}` : 'ssr';
 
@@ -227,7 +222,7 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
   useEffect(() => { checkIdentity(); }, [pathname, checkIdentity]);
 
   useEffect(() => {
-    const stored = readStored(identity).map(hideEarlier);
+    const stored = readStored(identity).map(unhideEarlier);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setJobs(stored);
     // Runs carried over from before a reload come back as the round icon.
@@ -319,12 +314,12 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
           if (!p) added = true;
           byId.set(f.job_id, p
             ? { ...p, ...f, ...withNames(f, p), syncedAt: now }
-            : hideEarlier({ ...f, ...withNames(f), trackedAt: f.created_at ?? new Date().toISOString(), syncedAt: now } as TrackedBulkInvite));
+            : ({ ...f, ...withNames(f), trackedAt: f.created_at ?? new Date().toISOString(), syncedAt: now } as TrackedBulkInvite));
         }
         return [...byId.values()].filter(keep)
           .sort((a, b) => (b.created_at ?? b.trackedAt).localeCompare(a.created_at ?? a.trackedAt));
       });
-      if (added && fresh.some((f) => !isEarlier({ ...f, trackedAt: f.created_at ?? new Date().toISOString() } as TrackedBulkInvite))) setWidget((w) => (w === 'hidden' ? 'icon' : w));
+      if (added) setWidget((w) => (w === 'hidden' ? 'icon' : w));
     } catch {
       /* offline / signed out: the next round retries */
     } finally {

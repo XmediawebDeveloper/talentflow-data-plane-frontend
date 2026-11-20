@@ -134,6 +134,15 @@ const SERVER_SYNC_MS = 15000;
 const FOCUS_SYNC_MIN_MS = 30000;
 /** Cap on remembered "removed from the corner" batch ids. */
 const MAX_DISMISSED = 200;
+/** Finished runs picked up from the server (started in another browser /
+    device) — at most this many, newest first, so a fresh browser does not
+    fetch dozens of batch details at once. */
+const MAX_ADOPT_FINISHED = 10;
+const RECENT_SYNC_HOURS = JOB_RETENTION_MS / (60 * 60 * 1000);
+
+/** A server batch that still has resumes waiting or being scored. */
+const isBatchActive = (b: MyScoringBatch) =>
+  b.status === 'pending' || b.status === 'processing' || (b.queued ?? 0) > 0 || (b.processing ?? 0) > 0;
 
 /** `tenant:user` from the access token, or null when signed out. */
 const readIdentity = (): string | null => {
@@ -258,10 +267,20 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
   /* Batches the user removed from the corner — never re-added by the server
      sync while they are still running. */
   const dismissedRef = useRef<string[]>([]);
+  /* JD id → when its run was removed from the corner. A JD-keyed run only
+     remembers its LATEST batch id, so an earlier finished batch of the same JD
+     would otherwise come back from the server sync after "Clear finished". */
+  const dismissedJdsRef = useRef<Record<string, number>>({});
   const dismiss = useCallback((jobs: ScoringJob[]) => {
     const ids = jobs.flatMap(j => [j.jobId, j.batchId].filter(Boolean) as string[]);
     if (!ids.length) return;
     dismissedRef.current = [...dismissedRef.current.filter(id => !ids.includes(id)), ...ids].slice(-MAX_DISMISSED);
+    const now = Date.now();
+    const cutoff = now - JOB_RETENTION_MS;
+    const jds: Record<string, number> = {};
+    Object.entries(dismissedJdsRef.current).forEach(([jd, at]) => { if (at > cutoff) jds[jd] = at; });
+    jobs.forEach(j => { jds[j.items[0]?.jobId || j.jobId] = now; });
+    dismissedJdsRef.current = jds;
   }, []);
 
   // Load this user's saved state whenever the signed-in user changes
@@ -269,6 +288,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     /* eslint-disable react-hooks/set-state-in-effect */
     setActiveScoringJobs([]);
     dismissedRef.current = [];
+    dismissedJdsRef.current = {};
     seenScoring.current = new Map();
     if (!identity) {
       setLoadedFor(null);
@@ -294,6 +314,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
         setActiveScoringJobs(activeJobs);
         setIsMinimized(parsed.isMinimized ?? true);
         if (Array.isArray(parsed.dismissed)) dismissedRef.current = parsed.dismissed.slice(-MAX_DISMISSED);
+        if (parsed.dismissedJds && typeof parsed.dismissedJds === 'object') dismissedJdsRef.current = parsed.dismissedJds;
       }
     } catch (error) {
       console.error('[ScoringProgressContext] Error loading from localStorage:', error);
@@ -311,6 +332,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
         activeScoringJobs,
         isMinimized,
         dismissed: dismissedRef.current,
+        dismissedJds: dismissedJdsRef.current,
       }));
     } catch (error) {
       console.error('[ScoringProgressContext] Error saving to localStorage:', error);
@@ -469,16 +491,38 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     syncBusy.current = true;
     lastPullAt.current = Date.now();
     try {
-      const running = await scoringService.getMyBatches({ status: 'active', page_size: 50 });
+      /* Running batches (any age) plus every batch started in the retention
+         window — so a run that already FINISHED in another browser still shows
+         its corner button here, same as in the browser that started it. */
+      const recent = await scoringService.getMyBatches({ hours: RECENT_SYNC_HOURS, page_size: 50 });
+      const running = recent.filter(isBatchActive);
       const current = jobsRef.current;
       const known = new Set<string>();
       current.forEach(j => { known.add(j.jobId); if (j.batchId) known.add(j.batchId); });
       // A run this browser tracks by its JD (the ?batch_id= handoff) — don't add it twice.
       const runningJds = new Set(current.filter(isJobActive).map(j => j.jobId));
       const dismissed = new Set(dismissedRef.current);
-      const summaries = new Map(running.map(b => [b.batch_id, b]));
+      const summaries = new Map(recent.map(b => [b.batch_id, b]));
 
       const adopt = running.filter(b => !known.has(b.batch_id) && !runningJds.has(b.jd_id) && !dismissed.has(b.batch_id));
+
+      /* Finished runs: only the newest batch per JD (a JD-keyed run in the
+         corner is one row per JD), skipped when that JD already has a row here
+         or was cleared from the corner after the batch started. */
+      const jdsInCorner = new Set(current.flatMap(j => [j.jobId, j.items[0]?.jobId].filter(Boolean) as string[]));
+      const cutoff = Date.now() - JOB_RETENTION_MS;
+      const newestPerJd = new Set<string>();
+      let finishedAdopted = 0;
+      for (const b of recent) { // newest first
+        if (newestPerJd.has(b.jd_id)) continue;
+        newestPerJd.add(b.jd_id);
+        if (finishedAdopted >= MAX_ADOPT_FINISHED) break;
+        if (isBatchActive(b) || known.has(b.batch_id) || dismissed.has(b.batch_id) || jdsInCorner.has(b.jd_id)) continue;
+        const startedAt = b.created_at ? new Date(b.created_at).getTime() : 0;
+        if (startedAt <= cutoff || startedAt <= (dismissedJdsRef.current[b.jd_id] ?? 0)) continue;
+        adopt.push(b);
+        finishedAdopted += 1;
+      }
       const follow = current.filter(j => j.serverTracked && j.batchId && isJobActive(j));
       const ids = [...new Set([...adopt.map(b => b.batch_id), ...follow.map(j => j.batchId as string)])];
       if (!ids.length) return;
