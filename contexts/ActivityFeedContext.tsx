@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { getTokens } from '@/lib/services/api';
+import { ACCESS_TOKEN_CHANGED_EVENT, getTokens } from '@/lib/services/api';
 import { activityService, isActivityRunning, type ActivityItem, type ActivityRef } from '@/lib/services/activityService';
 
 /**
@@ -48,6 +48,24 @@ export const readSessionIdentity = (): string | null => {
 };
 
 export const activityKey = (type: string, id: string) => `${type}:${id}`;
+
+/* The last server list, kept per user so the corner shows at once after a
+   refresh instead of waiting for the first read. Only a first-paint copy:
+   the first server read replaces it, and nothing (toasts, removals, adoption)
+   acts on it until that read is in (`syncedFor`). */
+const cacheKey = (identity: string) => `activity_feed_cache:${identity}`;
+const readCache = (identity: string): ActivityItem[] => {
+  try {
+    const raw = localStorage.getItem(cacheKey(identity));
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+const writeCache = (identity: string, items: ActivityItem[]) => {
+  try { localStorage.setItem(cacheKey(identity), JSON.stringify(items)); } catch { /* storage blocked */ }
+};
 
 interface ActivityFeedContextType {
   /** Latest server list for `identity` (rows removed by the user carry `dismissed`). */
@@ -107,6 +125,9 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
       const items = await activityService.mine(WINDOW_HOURS);
       if (identityRef.current !== who || mine !== seq.current) return; // signed out / switched meanwhile
       setState(prev => ({ for: who, items, generation: prev.generation + 1, fetchedAt: sentAt, synced: true }));
+      writeCache(who, items);
+      // TEMP diagnostics (cross-device icon)
+      console.log('[ActivityFeed] server', { total: items.length, shown: items.filter(a => !a.dismissed).length, running: items.filter(a => !a.dismissed && isActivityRunning(a)).length, types: items.filter(a => !a.dismissed).map(a => `${a.type}:${a.status}`) });
       setOverrides(prev => {
         if (!prev.size) return prev;
         const next = new Map([...prev].filter(([, o]) => o.at > sentAt));
@@ -126,7 +147,7 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     identityRef.current = identity;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setState({ for: identity, items: [], generation: 0, fetchedAt: 0, synced: false });
+    setState({ for: identity, items: identity ? readCache(identity) : [], generation: 0, fetchedAt: 0, synced: false });
     setOverrides(new Map());
     seq.current += 1; // a read for the previous user is now stale
     busy.current = false;
@@ -143,9 +164,13 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
     };
     window.addEventListener('focus', onVisible);
     document.addEventListener('visibilitychange', onVisible);
+    // The token arrives a moment after a fresh page load (session restore):
+    // read the user then, not only on the next page change / tab focus.
+    window.addEventListener(ACCESS_TOKEN_CHANGED_EVENT, checkIdentity);
     return () => {
       window.removeEventListener('focus', onVisible);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener(ACCESS_TOKEN_CHANGED_EVENT, checkIdentity);
     };
   }, [checkIdentity, pull]);
 

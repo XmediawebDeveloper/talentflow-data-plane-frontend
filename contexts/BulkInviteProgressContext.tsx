@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { bulkInviteService, isBulkInviteActive, type BulkInviteApiError, type BulkInviteJob } from '@/lib/services/bulkInviteService';
-import { getTokens } from '@/lib/services/api';
+import { ACCESS_TOKEN_CHANGED_EVENT, getTokens } from '@/lib/services/api';
 import { emitBackgroundWork } from '@/lib/backgroundWorkEvents';
 import { useActivityFeed } from '@/contexts/ActivityFeedContext';
 import type { ActivityRef } from '@/lib/services/activityService';
@@ -222,9 +222,12 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     const onFocus = () => checkIdentity();
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);
+    // Session restored after a fresh page load: the user is known now.
+    window.addEventListener(ACCESS_TOKEN_CHANGED_EVENT, onFocus);
     return () => {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
+      window.removeEventListener(ACCESS_TOKEN_CHANGED_EVENT, onFocus);
     };
   }, [checkIdentity]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
