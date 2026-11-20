@@ -87,7 +87,7 @@ type SortKey = 'date' | 'name' | 'versions' | 'exact' | 'partial' | 'none' | 'jo
 const GROUPED_SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'date', label: 'Latest Updated' },
   { value: 'name', label: 'Candidate Name' },
-  { value: 'versions', label: 'Job Versions' },
+  { value: 'versions', label: 'Job Count' },
   { value: 'exact', label: 'Exact Match' },
   { value: 'partial', label: 'Partial Match' },
   { value: 'none', label: 'No Match' },
@@ -3132,7 +3132,7 @@ Best regards`);
 
                         <div>
                           <span className="tf-badge bg-blue-50 text-blue-700 border border-blue-200">
-                            {groupRows.length} Job {groupRows.length === 1 ? 'Version' : 'Versions'}
+                            {groupRows.length} {groupRows.length === 1 ? 'Job' : 'Jobs'}
                           </span>
                         </div>
 
@@ -3403,7 +3403,7 @@ Best regards`);
                   {/* pl-[46px]: the cell's padding plus the checkbox in front of the
                       name, so the heading lines up with the names. */}
                   <th className="tf-th-cell text-left pr-4 pl-[46px] tf-th">Candidate</th>
-                  <th className="tf-th-cell text-center tf-th">Job Versions</th>
+                  <th className="tf-th-cell text-center tf-th">Job Count</th>
                   <th className="tf-th-cell text-left tf-th">Job Titles</th>
                   <th className="tf-th-cell text-center tf-th">Exact Match</th>
                   <th className="tf-th-cell text-center tf-th">Partial Match</th>
@@ -3483,11 +3483,11 @@ Best regards`);
                           </div>
                         </td>
                         {/* Just the count — the column header already says
-                            "Job Versions". Centred under it, like the other counts. */}
+                            "Job Count". Centred under it, like the other counts. */}
                         <td className="tf-td text-center">
                           <span
                             className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums bg-blue-50 text-blue-700 border border-blue-200"
-                            title={`${rows.length} job ${rows.length === 1 ? 'version' : 'versions'}`}
+                            title={`${rows.length} ${rows.length === 1 ? 'job' : 'jobs'}`}
                           >
                             {rows.length}
                           </span>
@@ -3777,7 +3777,7 @@ Best regards`);
                       <History className="w-4 h-4 flex-shrink-0" />
                       <span className="truncate">{isExpanded ? 'Hide job history' : 'View job history'}</span>
                       <span className="px-1.5 py-0.5 rounded-md text-xs font-semibold bg-brand-blue/10 text-brand-blue">
-                        {rows.length} {rows.length === 1 ? 'version' : 'versions'}
+                        {rows.length} {rows.length === 1 ? 'job' : 'jobs'}
                       </span>
                     </span>
                     <ChevronRight className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
