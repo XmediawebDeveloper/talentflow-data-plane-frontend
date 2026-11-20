@@ -12,8 +12,8 @@ export default function TeamChatIllustration() {
           {/* White typing bubble, behind */}
           <path
             d="M128 62h46a10 10 0 0110 10v24a10 10 0 01-10 10h-34l-12 9v-9a10 10 0 01-10-10V72a10 10 0 0110-10z"
-            fill="#fff"
-            stroke="#DCE6F7"
+            fill="var(--raw-ffffff)"
+            stroke="var(--raw-dce6f7)"
             strokeWidth="1.5"
           />
           <g fill={ACCENT}>
@@ -26,7 +26,7 @@ export default function TeamChatIllustration() {
             d="M70 30h62a10 10 0 0110 10v30a10 10 0 01-10 10H88l-14 12V80h-4a10 10 0 01-10-10V40a10 10 0 0110-10z"
             fill={`url(#${ids.blue})`}
           />
-          <path d="M78 48h44M78 62h30" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
+          <path d="M78 48h44M78 62h30" stroke="var(--raw-ffffff)" strokeWidth="4" strokeLinecap="round" />
         </>
       )}
     </Illustration>

@@ -186,7 +186,7 @@ export default function InvoiceDetailView({
       <div className="grid grid-cols-1 items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         {/* ── The invoice document (same layout as the PDF) ── */}
         <article className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
-          <div aria-hidden className="h-1.5 bg-gradient-to-r from-brand-blue via-brand-blue to-[#079CC4]" />
+          <div aria-hidden className="h-1.5 bg-gradient-to-r from-brand-blue via-brand-blue to-[var(--raw-079cc4)]" />
 
           <div className="space-y-5 px-4 py-5 sm:px-8 sm:py-7">
             {/* Logo | title, number, status */}
@@ -354,7 +354,7 @@ export default function InvoiceDetailView({
               Authorised signatory
             </p>
           </div>
-          <div aria-hidden className="h-1 bg-gradient-to-r from-[#079CC4] to-brand-blue" />
+          <div aria-hidden className="h-1 bg-gradient-to-r from-[var(--raw-079cc4)] to-brand-blue" />
         </article>
 
         {/* ── Side panel: amount, payment state, plan, timeline ── */}

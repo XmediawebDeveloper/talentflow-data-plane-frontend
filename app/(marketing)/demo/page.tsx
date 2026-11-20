@@ -142,7 +142,7 @@ export default function DemoPage() {
       <section className="relative overflow-hidden">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -left-48 -top-48 h-[520px] w-[520px] rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.14),transparent)] dark:bg-[radial-gradient(closest-side,rgba(76,123,232,0.18),transparent)]"
+          className="pointer-events-none absolute -left-48 -top-48 h-[520px] w-[520px] rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p14),transparent)] dark:bg-[radial-gradient(closest-side,var(--raw-rgba-76-123-232-0p18),transparent)]"
         />
         <div
           className={`${SHELL} relative grid grid-cols-1 items-center gap-10 pb-12 pt-9 sm:pb-24 sm:pt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16 lg:pb-28`}

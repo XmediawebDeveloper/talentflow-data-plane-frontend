@@ -580,7 +580,7 @@ export default function CompanyProfilePage() {
             aria-hidden
             className="pointer-events-none absolute inset-0 hidden opacity-40 sm:block dark:opacity-20"
             style={{
-              backgroundImage: 'radial-gradient(rgba(148, 163, 184, 0.18) 1px, transparent 1px)',
+              backgroundImage: 'radial-gradient(var(--raw-rgba-148-163-184-0p18) 1px, transparent 1px)',
               backgroundSize: '16px 16px',
             }}
           />

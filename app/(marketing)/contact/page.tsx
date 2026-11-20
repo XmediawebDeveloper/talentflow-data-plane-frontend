@@ -201,7 +201,7 @@ export default function ContactPage() {
               <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-mkt-accent-solid via-mkt-accent to-mkt-cyan max-sm:hidden" />
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.14),transparent)] max-sm:hidden"
+                className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p14),transparent)] max-sm:hidden"
               />
 
               {sentTo ? (

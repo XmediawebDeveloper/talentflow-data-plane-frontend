@@ -27,11 +27,11 @@ import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY 
    Revoked is violet, as on the invite cards. `fill` is a CSS class so it
    wins over the SVG attribute and follows dark mode. */
 const RESULT_SEGMENTS = [
-  { key: 'invited', label: 'Invited', swatch: 'bg-[#2563eb] dark:bg-[#3b82f6]', fill: 'fill-[#2563eb] dark:fill-[#3b82f6]' },
-  { key: 'completed', label: 'Completed', swatch: 'bg-[#16a34a] dark:bg-[#16a34a]', fill: 'fill-[#16a34a] dark:fill-[#16a34a]' },
-  { key: 'in_progress', label: 'In Progress', swatch: 'bg-[#079cc4] dark:bg-[#0891b2]', fill: 'fill-[#079cc4] dark:fill-[#0891b2]' },
-  { key: 'revoked', label: 'Revoked', swatch: 'bg-[#7c3aed] dark:bg-[#a855f7]', fill: 'fill-[#7c3aed] dark:fill-[#a855f7]' },
-  { key: 'expired', label: 'Expired', swatch: 'bg-[#ed881c] dark:bg-[#d97706]', fill: 'fill-[#ed881c] dark:fill-[#d97706]' },
+  { key: 'invited', label: 'Invited', swatch: 'bg-[var(--raw-2563eb)] dark:bg-[var(--raw-3b82f6)]', fill: 'fill-[var(--raw-2563eb)] dark:fill-[var(--raw-3b82f6)]' },
+  { key: 'completed', label: 'Completed', swatch: 'bg-[var(--raw-16a34a)] dark:bg-[var(--raw-16a34a)]', fill: 'fill-[var(--raw-16a34a)] dark:fill-[var(--raw-16a34a)]' },
+  { key: 'in_progress', label: 'In Progress', swatch: 'bg-[var(--raw-079cc4)] dark:bg-[var(--raw-0891b2)]', fill: 'fill-[var(--raw-079cc4)] dark:fill-[var(--raw-0891b2)]' },
+  { key: 'revoked', label: 'Revoked', swatch: 'bg-[var(--raw-7c3aed)] dark:bg-[var(--raw-a855f7)]', fill: 'fill-[var(--raw-7c3aed)] dark:fill-[var(--raw-a855f7)]' },
+  { key: 'expired', label: 'Expired', swatch: 'bg-[var(--raw-ed881c)] dark:bg-[var(--raw-d97706)]', fill: 'fill-[var(--raw-ed881c)] dark:fill-[var(--raw-d97706)]' },
 ] as const;
 type SortKey = 'created' | 'creator' | 'status';
 /** Version Wise Results value that sums every version. */
@@ -618,7 +618,7 @@ export default function AssessmentVersionHistoryModal({
                         { label: 'Fail Rate', hint: 'Failed ÷ scored completions (below the pass mark)', value: pct(sel.fail, sel.pass + sel.fail),
                           sub: `${sel.fail} of ${sel.pass + sel.fail} failed`, bar: 'bg-destructive', text: 'text-destructive' },
                         { label: 'Terminated Rate', hint: 'Terminated ÷ all candidates (revoked excluded)', value: pct(sel.terminated, sel.total),
-                          sub: `${sel.terminated} of ${sel.total} terminated`, bar: 'bg-[#b91c1c] dark:bg-[#e11d48]', text: 'text-[#b91c1c] dark:text-[#e11d48]' },
+                          sub: `${sel.terminated} of ${sel.total} terminated`, bar: 'bg-[var(--raw-b91c1c)] dark:bg-[var(--raw-e11d48)]', text: 'text-[var(--raw-b91c1c)] dark:text-[var(--raw-e11d48)]' },
                       ].map((r) => (
                         <div key={r.label}>
                           <div className="flex items-center justify-between">

@@ -228,7 +228,7 @@ export function LandingPageContent() {
         <div
           data-glow
           aria-hidden="true"
-          className="pointer-events-none absolute -right-48 -top-48 h-[520px] w-[520px] rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.16),transparent)] dark:bg-[radial-gradient(closest-side,rgba(76,123,232,0.2),transparent)] sm:h-[680px] sm:w-[680px]"
+          className="pointer-events-none absolute -right-48 -top-48 h-[520px] w-[520px] rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p16),transparent)] dark:bg-[radial-gradient(closest-side,var(--raw-rgba-76-123-232-0p2),transparent)] sm:h-[680px] sm:w-[680px]"
         />
         <div className={`${SHELL} relative grid grid-cols-1 items-center gap-10 pb-10 pt-7 sm:gap-14 sm:pb-24 sm:pt-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-16 lg:pb-28 lg:pt-20`}>
           <div className="max-w-2xl">
@@ -470,7 +470,7 @@ export function LandingPageContent() {
             <div data-reveal className="relative overflow-hidden rounded-[20px] bg-mkt-navy p-6 text-white dark:border dark:border-white/10 dark:bg-mkt-navy-surface sm:p-12 lg:p-16">
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.28),transparent)] sm:h-[28rem] sm:w-[28rem]"
+                className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p28),transparent)] sm:h-[28rem] sm:w-[28rem]"
               />
               <div className="relative max-w-2xl">
                 <h2

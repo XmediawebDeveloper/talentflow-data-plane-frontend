@@ -436,7 +436,7 @@ export function AssessmentMock({ onSurface }: { onSurface?: boolean }) {
         ))}
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-xl border border-slate-900/[0.08] bg-[#0b1530] dark:border-white/10">
+      <div className="mt-4 overflow-hidden rounded-xl border border-slate-900/[0.08] bg-[var(--raw-0b1530)] dark:border-white/10">
         <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
           <span className="inline-flex items-center gap-1 rounded-md bg-white/10 px-2 py-0.5 text-2xs font-semibold text-white">
             Python
@@ -448,15 +448,15 @@ export function AssessmentMock({ onSurface }: { onSurface?: boolean }) {
               <Play className="h-2.5 w-2.5" />
               Run
             </span>
-            <span className="inline-flex items-center gap-1 rounded-md bg-mkt-cyan px-2 py-0.5 text-2xs font-semibold text-[#08132e]">
+            <span className="inline-flex items-center gap-1 rounded-md bg-mkt-cyan px-2 py-0.5 text-2xs font-semibold text-[var(--raw-08132e)]">
               <Send className="h-2.5 w-2.5" />
               Submit
             </span>
           </span>
         </div>
         <pre className="overflow-hidden px-3 py-2.5 font-mono text-[11px] leading-relaxed text-slate-300">
-          <span className="text-[#7ba4ff]">def</span> top_k(nums, k):
-          {"\n"}    <span className="text-[#7ba4ff]">return</span> sorted(nums)[-k:]
+          <span className="text-[var(--raw-7ba4ff)]">def</span> top_k(nums, k):
+          {"\n"}    <span className="text-[var(--raw-7ba4ff)]">return</span> sorted(nums)[-k:]
         </pre>
       </div>
 

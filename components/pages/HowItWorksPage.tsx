@@ -59,7 +59,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : 'var(--raw-dcfce7)',
+    backgroundColor: isDark ? 'var(--raw-rgba-34-197-94-0p2)' : 'var(--raw-dcfce7)',
     color: isDark ? 'var(--raw-86efac)' : 'var(--raw-16a34a)',
     fontSize: '14px',
     fontWeight: 600,
@@ -157,7 +157,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+    boxShadow: '0 20px 60px var(--raw-rgba-0-0-0-0p15)',
   });
 
   const statsGridStyle: React.CSSProperties = {
@@ -205,7 +205,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
 
   const ctaSubtitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
-    color: 'rgba(255,255,255,0.9)',
+    color: 'var(--raw-rgba-255-255-255-0p9)',
     marginBottom: '32px',
     maxWidth: '600px',
     margin: '0 auto 32px',
@@ -223,7 +223,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
     color: 'var(--raw-7c3aed)',
     border: 'none',
     cursor: 'pointer',
-    boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+    boxShadow: '0 10px 40px var(--raw-rgba-0-0-0-0p2)',
   };
 
   const steps = [

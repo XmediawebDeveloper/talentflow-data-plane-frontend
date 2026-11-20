@@ -4273,7 +4273,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                                 {isAssistant ? (
                                   <>
-                                    <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-2xl text-[13px] sm:text-sm leading-relaxed bg-[#08132e]/5 text-[#08132e] rounded-tl-sm whitespace-pre-line">
+                                    <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-2xl text-[13px] sm:text-sm leading-relaxed bg-[var(--raw-08132e)]/5 text-[var(--raw-08132e)] rounded-tl-sm whitespace-pre-line">
                                       {content}
                                     </div>
                                     {skipNote && (
@@ -4659,7 +4659,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                   // Sticky cells need an opaque fill — the row tints are
                                   // translucent (brand-teal/5, brand-cyan/5), so these are
                                   // the same tints pre-blended over white.
-                                  const stickyBg = isDd ? 'bg-[#f3fafb]' : isFu ? 'bg-[#f3fafc]' : 'bg-white';
+                                  const stickyBg = isDd ? 'bg-[var(--raw-f3fafb)]' : isFu ? 'bg-[var(--raw-f3fafc)]' : 'bg-white';
                                   return (
                                     <tr key={idx} className={`align-top ${isDd ? 'bg-brand-teal/5' : isFu ? 'bg-brand-cyan/5' : 'bg-white'}`}>
                                       <td className={`px-3 py-3 align-top sticky left-0 z-10 ${stickyBg} shadow-[inset_-1px_0_0_#e5e7eb]`}>

@@ -341,7 +341,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                   cx="64"
                   cy="64"
                   r="56"
-                  stroke="rgba(255,255,255,0.2)"
+                  stroke="var(--raw-rgba-255-255-255-0p2)"
                   strokeWidth="12"
                   fill="none"
                 />

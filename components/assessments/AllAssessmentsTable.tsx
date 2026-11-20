@@ -1320,14 +1320,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           carried over verbatim from the empty state the
           Archived tab used before it moved into this table,
           so the tab reads exactly as it did. */}
-      <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">
+      <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[var(--raw-0f1e3d)] dark:text-slate-50">
         {isNarrowed
           ? 'No assessments found'
           : fixedStatus === 'archived'
             ? 'No archived assessments found.'
             : 'No assessments yet'}
       </h3>
-      <p className="mb-4 max-w-md mx-auto text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">
+      <p className="mb-4 max-w-md mx-auto text-sm sm:text-base leading-relaxed text-[var(--raw-0f1e3d)]/80 dark:text-slate-300">
         {isNarrowed
           ? 'No assessments match your current search or filter criteria.'
           : fixedStatus === 'archived'

@@ -36,7 +36,7 @@ function AtAGlance({ items }: { items: LegalGlance[] }) {
             >
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.14),transparent)] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p14),transparent)] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
               />
               {/* Phones: icon beside the heading. Wider: icon above it. */}
               <div className="flex items-center gap-2.5 sm:block">

@@ -96,7 +96,7 @@ export default function SetPassword() {
   if (success) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'linear-gradient(135deg, var(--raw-111827) 0%, var(--raw-1f2937) 50%, var(--raw-1e1b4b) 100%)' : 'linear-gradient(135deg, var(--raw-f8fafc) 0%, var(--raw-eef2ff) 50%, var(--raw-e0e7ff) 100%)' }}>
-        <div style={{ textAlign: 'center', padding: '48px', background: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)', borderRadius: '16px', boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.3)' : '0 4px 24px rgba(0,0,0,0.08)', maxWidth: '420px', width: '100%', border: isDark ? '1px solid var(--raw-374151)' : undefined }}>
+        <div style={{ textAlign: 'center', padding: '48px', background: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)', borderRadius: '16px', boxShadow: isDark ? '0 4px 24px var(--raw-rgba-0-0-0-0p3)' : '0 4px 24px var(--raw-rgba-0-0-0-0p08)', maxWidth: '420px', width: '100%', border: isDark ? '1px solid var(--raw-374151)' : undefined }}>
           <CheckCircle size={56} color="var(--raw-10b981)" style={{ marginBottom: '16px' }} />
           <h2 style={{ fontSize: '24px', fontWeight: 700, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)', marginBottom: '8px' }}>Password set!</h2>
           <p style={{ color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)', fontSize: '15px' }}>Redirecting you to the dashboard…</p>
@@ -118,7 +118,7 @@ export default function SetPassword() {
         </div>
 
         {/* Card */}
-        <div style={{ background: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)', borderRadius: '16px', boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.3)' : '0 4px 24px rgba(0,0,0,0.08)', padding: isMobile ? '24px' : '40px', border: isDark ? '1px solid var(--raw-374151)' : undefined }}>
+        <div style={{ background: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)', borderRadius: '16px', boxShadow: isDark ? '0 4px 24px var(--raw-rgba-0-0-0-0p3)' : '0 4px 24px var(--raw-rgba-0-0-0-0p08)', padding: isMobile ? '24px' : '40px', border: isDark ? '1px solid var(--raw-374151)' : undefined }}>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)', marginBottom: '8px' }}>Set your password</h1>
           <p style={{ color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)', fontSize: '14px', marginBottom: accountEmail ? '16px' : '28px', lineHeight: '1.5' }}>
             You were invited to TalentFlow. Please set a permanent password to activate your account.
@@ -135,7 +135,7 @@ export default function SetPassword() {
           )}
 
           {error && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: isDark ? 'rgba(239,68,68,0.15)' : 'var(--raw-fef2f2)', border: `1px solid ${isDark ? 'rgba(239,68,68,0.3)' : 'var(--raw-fecaca)'}`, borderRadius: '8px', padding: '12px 14px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: isDark ? 'var(--raw-rgba-239-68-68-0p15)' : 'var(--raw-fef2f2)', border: `1px solid ${isDark ? 'var(--raw-rgba-239-68-68-0p3)' : 'var(--raw-fecaca)'}`, borderRadius: '8px', padding: '12px 14px', marginBottom: '20px' }}>
               <AlertCircle size={16} color="var(--raw-ef4444)" />
               <span style={{ color: isDark ? 'var(--raw-fca5a5)' : 'var(--raw-dc2626)', fontSize: '14px' }}>{error}</span>
             </div>

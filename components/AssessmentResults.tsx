@@ -2792,8 +2792,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {emptyStateIllustration
                         ? <div className="mb-4 flex w-full justify-center">{emptyStateIllustration}</div>
                         : <EmptySearchIllustration className="mb-5 w-52 sm:w-60" />}
-                      <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">No Assessment Results Yet</h3>
-                      <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">{emptyStateText ?? 'Share the assessment link to invite candidates'}</p>
+                      <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[var(--raw-0f1e3d)] dark:text-slate-50">No Assessment Results Yet</h3>
+                      <p className="max-w-md text-sm sm:text-base leading-relaxed text-[var(--raw-0f1e3d)]/80 dark:text-slate-300">{emptyStateText ?? 'Share the assessment link to invite candidates'}</p>
                       {emptyStateAction && <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{emptyStateAction}</div>}
                     </>
                   )}
@@ -3155,10 +3155,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             {emptyStateIllustration
                               ? <div className="mb-4 flex w-full justify-center">{emptyStateIllustration}</div>
                               : <EmptySearchIllustration className="mb-5 w-52 sm:w-60" />}
-                            <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">
+                            <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[var(--raw-0f1e3d)] dark:text-slate-50">
                               No Assessment Results Yet
                             </h3>
-                            <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">
+                            <p className="max-w-md text-sm sm:text-base leading-relaxed text-[var(--raw-0f1e3d)]/80 dark:text-slate-300">
                               {emptyStateText ?? 'Share the assessment link to invite candidates'}
                             </p>
                             {emptyStateAction && <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{emptyStateAction}</div>}

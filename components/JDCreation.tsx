@@ -9940,8 +9940,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {/* Same illustrated empty state as the Job Details tabs. */}
                       <div className="flex flex-col items-center px-4 text-center">
                         <div className="mb-4 flex w-full justify-center"><GenerateJDIllustration /></div>
-                        <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">No Job Description Generated Yet</h3>
-                        <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">
+                        <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[var(--raw-0f1e3d)] dark:text-slate-50">No Job Description Generated Yet</h3>
+                        <p className="max-w-md text-sm sm:text-base leading-relaxed text-[var(--raw-0f1e3d)]/80 dark:text-slate-300">
                           Fill in the job details and click &quot;Generate Job Description&quot;
                         </p>
                       </div>
@@ -9962,8 +9962,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {/* Same illustrated empty state as AI-Generated JD's. */}
                       <div className="flex flex-col items-center px-4 text-center">
                         <div className="mb-4 flex w-full justify-center"><ManualJDIllustration /></div>
-                        <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">Start Typing Your Job Description</h3>
-                        <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">
+                        <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[var(--raw-0f1e3d)] dark:text-slate-50">Start Typing Your Job Description</h3>
+                        <p className="max-w-md text-sm sm:text-base leading-relaxed text-[var(--raw-0f1e3d)]/80 dark:text-slate-300">
                           Paste or write your JD in the left panel
                         </p>
                       </div>

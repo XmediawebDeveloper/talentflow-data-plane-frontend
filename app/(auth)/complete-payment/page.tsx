@@ -328,7 +328,7 @@ function CompletePaymentContent() {
   const formCardStyle: React.CSSProperties = {
     backgroundColor: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)',
     borderRadius: '24px',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+    boxShadow: '0 25px 50px -12px var(--raw-rgba-0-0-0-0p15)',
     padding: '40px',
     border: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-f3f4f6)'}`,
   };
@@ -347,7 +347,7 @@ function CompletePaymentContent() {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
+    boxShadow: '0 10px 40px var(--raw-rgba-37-99-235-0p3)',
     transition: 'all 0.2s',
   };
 
@@ -414,7 +414,7 @@ function CompletePaymentContent() {
         </div>
 
         {error && (
-          <div style={{ marginBottom: 24, padding: 16, backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : 'var(--raw-fef2f2)', border: `1px solid ${isDark ? 'rgba(239,68,68,0.3)' : 'var(--raw-fecaca)'}`, borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ marginBottom: 24, padding: 16, backgroundColor: isDark ? 'var(--raw-rgba-239-68-68-0p15)' : 'var(--raw-fef2f2)', border: `1px solid ${isDark ? 'var(--raw-rgba-239-68-68-0p3)' : 'var(--raw-fecaca)'}`, borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <AlertCircle style={{ width: 20, height: 20, color: 'var(--raw-dc2626)', flexShrink: 0 }} />
             <span style={{ fontSize: 14, color: isDark ? 'var(--raw-fca5a5)' : 'var(--raw-991b1b)' }}>{error}</span>
           </div>
@@ -426,7 +426,7 @@ function CompletePaymentContent() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 20, fontWeight: 600, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)' }}>{planDetails.plan_name}</span>
-                <span style={{ backgroundColor: isDark ? 'rgba(37,99,235,0.15)' : 'var(--raw-dbeafe)', color: isDark ? 'var(--raw-93c5fd)' : 'var(--raw-1d4ed8)', fontSize: 12, fontWeight: 500, padding: '2px 8px', borderRadius: 12 }}>
+                <span style={{ backgroundColor: isDark ? 'var(--raw-rgba-37-99-235-0p15)' : 'var(--raw-dbeafe)', color: isDark ? 'var(--raw-93c5fd)' : 'var(--raw-1d4ed8)', fontSize: 12, fontWeight: 500, padding: '2px 8px', borderRadius: 12 }}>
                   {planDetails.plan_tier}
                 </span>
               </div>
@@ -466,7 +466,7 @@ function CompletePaymentContent() {
                             padding: '2px 8px',
                             fontSize: 12,
                             fontWeight: 600,
-                            backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : 'var(--raw-dcfce7)',
+                            backgroundColor: isDark ? 'var(--raw-rgba-16-185-129-0p15)' : 'var(--raw-dcfce7)',
                             color: 'var(--raw-15803d)',
                             borderRadius: 12
                           }}>
@@ -499,7 +499,7 @@ function CompletePaymentContent() {
 
           {/* Included Seats */}
           {planDetails.included_seats && (
-            <div style={{ marginTop: 12, padding: 12, backgroundColor: isDark ? 'rgba(67,56,202,0.2)' : 'var(--raw-eef2ff)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ marginTop: 12, padding: 12, backgroundColor: isDark ? 'var(--raw-rgba-67-56-202-0p2)' : 'var(--raw-eef2ff)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 14, color: 'var(--raw-4338ca)', fontWeight: 500 }}>Included Team Seats</span>
               <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--raw-4338ca)' }}>{planDetails.included_seats}</span>
             </div>
@@ -545,7 +545,7 @@ function CompletePaymentContent() {
         )}
 
         {/* Account Status */}
-        <div style={{ backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : 'var(--raw-f0fdf4)', borderRadius: 12, padding: 16, marginBottom: 24, border: `1px solid ${isDark ? 'rgba(16,185,129,0.3)' : 'var(--raw-bbf7d0)'}` }}>
+        <div style={{ backgroundColor: isDark ? 'var(--raw-rgba-16-185-129-0p15)' : 'var(--raw-f0fdf4)', borderRadius: 12, padding: 16, marginBottom: 24, border: `1px solid ${isDark ? 'var(--raw-rgba-16-185-129-0p3)' : 'var(--raw-bbf7d0)'}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <CheckCircle style={{ width: 18, height: 18, color: 'var(--raw-16a34a)' }} />
             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--raw-166534)' }}>Account Created — Payment Pending</span>
@@ -640,7 +640,7 @@ function LoadingFallback() {
       <div style={{
         backgroundColor: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)',
         borderRadius: '24px',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+        boxShadow: '0 25px 50px -12px var(--raw-rgba-0-0-0-0p15)',
         padding: '40px',
         border: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-f3f4f6)'}`,
       }}>

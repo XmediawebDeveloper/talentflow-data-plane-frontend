@@ -1336,7 +1336,7 @@ export default function TeamChatPage() {
                 {groupHeader('Direct messages', openNewDMModal, true, 'New direct message')}
                 {filteredDMs.length === 0 ? (
                   <div className="px-3 py-4 text-center">
-                    {!searchQuery && <MessageCircleMore className="mx-auto mb-1.5 h-7 w-7 text-[#7FB0FF]" strokeWidth={1.75} />}
+                    {!searchQuery && <MessageCircleMore className="mx-auto mb-1.5 h-7 w-7 text-[var(--raw-7fb0ff)]" strokeWidth={1.75} />}
                     <p className="tf-hint">{searchQuery ? 'No conversations match your search' : 'No direct messages yet'}</p>
                   </div>
                 ) : (
@@ -1350,7 +1350,7 @@ export default function TeamChatPage() {
                 {groupHeader('Channels', openCreateModal, permissions.can_create_channel, 'Create channel', 'You do not have permission to create channels')}
                 {filteredChannels.length === 0 ? (
                   <div className="px-3 py-4 text-center">
-                    {!searchQuery && <MessageSquareText className="mx-auto mb-1.5 h-7 w-7 text-[#7FB0FF]" strokeWidth={1.75} />}
+                    {!searchQuery && <MessageSquareText className="mx-auto mb-1.5 h-7 w-7 text-[var(--raw-7fb0ff)]" strokeWidth={1.75} />}
                     <p className="tf-hint">{searchQuery ? 'No channels match your search' : 'No channels yet'}</p>
                   </div>
                 ) : (

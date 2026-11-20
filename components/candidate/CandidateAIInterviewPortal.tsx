@@ -2860,8 +2860,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   if (preInterviewBlocked && step !== 'interview' && step !== 'completed' && step !== 'terminated' && step !== 'error') {
     const laptop = (tone: 'blue' | 'red') => {
       const c = tone === 'blue'
-        ? { frame: 'border-[#1e3a6e]', screen: 'bg-[#eef4ff]', icon: 'text-[#2f6fe0]', glow: 'bg-[#3b82f6]/25' }
-        : { frame: 'border-[#f07a8c]', screen: 'bg-[#fff1f3]', icon: 'text-[#c2415a]', glow: 'bg-[#f43f5e]/25' };
+        ? { frame: 'border-[var(--raw-1e3a6e)]', screen: 'bg-[var(--raw-eef4ff)]', icon: 'text-[var(--raw-2f6fe0)]', glow: 'bg-[var(--raw-3b82f6)]/25' }
+        : { frame: 'border-[var(--raw-f07a8c)]', screen: 'bg-[var(--raw-fff1f3)]', icon: 'text-[var(--raw-c2415a)]', glow: 'bg-[var(--raw-f43f5e)]/25' };
       return (
         <div className="relative shrink-0 flex flex-col items-center">
           <div className={`absolute -inset-3 sm:-inset-6 rounded-full blur-xl sm:blur-2xl ${c.glow}`} aria-hidden />
@@ -2874,23 +2874,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     };
 
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-[#0f2347] via-[#1d3a6b] to-[#0f2347] flex items-center justify-center px-4 py-6 sm:p-6">
+      <div className="min-h-[100dvh] bg-gradient-to-br from-[var(--raw-0f2347)] via-[var(--raw-1d3a6b)] to-[var(--raw-0f2347)] flex items-center justify-center px-4 py-6 sm:p-6">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[720px] px-4 py-6 sm:px-8 sm:py-8 text-center">
           {/* Illustration: this device ←→ lock ←→ the other active device */}
           <div className="relative flex items-center justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 overflow-hidden py-3 sm:py-4" aria-hidden>
             {laptop('blue')}
-            <div className="hidden xs:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#1e3a6e] -mt-2 sm:-mt-4" />
+            <div className="hidden xs:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[var(--raw-1e3a6e)] -mt-2 sm:-mt-4" />
             <div className="relative shrink-0 w-[72px] h-[72px] sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full border border-amber-200 dark:border-amber-500/30 flex items-center justify-center">
               <div className="w-[54px] h-[54px] sm:w-[72px] sm:h-[72px] md:w-24 md:h-24 rounded-full bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center">
                 <Lock className="w-7 h-7 sm:w-9 sm:h-9 md:w-11 md:h-11 text-gray-900 fill-amber-400" strokeWidth={2} />
               </div>
               <span className="absolute bottom-0 sm:bottom-1 md:bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-500 text-white text-sm font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-700">!</span>
             </div>
-            <div className="hidden xs:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#f07a8c] -mt-2 sm:-mt-4" />
+            <div className="hidden xs:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[var(--raw-f07a8c)] -mt-2 sm:-mt-4" />
             {laptop('red')}
           </div>
 
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight text-[#0f1d40] mb-2 sm:mb-3">Already open on another device</h1>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight text-[var(--raw-0f1d40)] mb-2 sm:mb-3">Already open on another device</h1>
           <p className="text-gray-600 text-base leading-relaxed mb-5 sm:mb-6 max-w-xl mx-auto">
             This interview is currently active in another browser window or device.
             For security, only one device can access the interview at a time.
@@ -2906,7 +2906,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <Clock className="hidden md:block w-11 h-11 shrink-0 text-amber-500" strokeWidth={2.25} />
               <div className="hidden md:block self-stretch w-px bg-amber-300" />
               <div className="flex-1 min-w-0">
-                <p className="flex items-center justify-center sm:justify-start gap-1.5 text-base font-semibold text-[#0f1d40] mb-1">
+                <p className="flex items-center justify-center sm:justify-start gap-1.5 text-base font-semibold text-[var(--raw-0f1d40)] mb-1">
                   <Clock className="md:hidden w-4 h-4 shrink-0 text-amber-500" strokeWidth={2.5} />
                   Session releases automatically
                 </p>
@@ -2925,7 +2925,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
           <button
             onClick={() => window.location.reload()}
-            className="w-full flex items-center justify-center gap-2 sm:gap-3 bg-[#0f1d40] hover:bg-[#1a2b57] text-white font-semibold text-sm sm:text-base py-3 sm:py-3.5 rounded-xl transition-all"
+            className="w-full flex items-center justify-center gap-2 sm:gap-3 bg-[var(--raw-0f1d40)] hover:bg-[var(--raw-1a2b57)] text-white font-semibold text-sm sm:text-base py-3 sm:py-3.5 rounded-xl transition-all"
           >
             <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
             Check again now

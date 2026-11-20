@@ -272,7 +272,7 @@ function SelectablePlanCard({
     return cardRoot(
       <div className="grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.55fr)]">
         {/* Identity + price, on a soft brand wash */}
-        <div className="flex flex-col border-b border-slate-900/[0.07] bg-[linear-gradient(160deg,rgba(15,60,153,0.07),transparent_75%)] p-6 dark:border-white/10 dark:bg-[linear-gradient(160deg,rgba(123,164,255,0.12),transparent_75%)] sm:p-8 lg:border-b-0 lg:border-r">
+        <div className="flex flex-col border-b border-slate-900/[0.07] bg-[linear-gradient(160deg,var(--raw-rgba-15-60-153-0p07),transparent_75%)] p-6 dark:border-white/10 dark:bg-[linear-gradient(160deg,var(--raw-rgba-123-164-255-0p12),transparent_75%)] sm:p-8 lg:border-b-0 lg:border-r">
           {topRow}
           <h4 className={`${DISPLAY} mt-4 text-xl font-extrabold tracking-[-0.025em] text-mkt-ink sm:text-2xl`}>{plan.name}</h4>
           {plan.description && (
@@ -600,7 +600,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
         <div
           aria-hidden="true"
           data-glow
-          className="pointer-events-none absolute -right-40 -top-48 h-[420px] w-[420px] rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.16),transparent)] dark:bg-[radial-gradient(closest-side,rgba(76,123,232,0.22),transparent)]"
+          className="pointer-events-none absolute -right-40 -top-48 h-[420px] w-[420px] rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p16),transparent)] dark:bg-[radial-gradient(closest-side,var(--raw-rgba-76-123-232-0p22),transparent)]"
         />
 
         {/* ------------------------------------------------ Header */}

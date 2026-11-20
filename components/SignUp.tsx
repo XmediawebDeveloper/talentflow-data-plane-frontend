@@ -246,7 +246,7 @@ export default function SignUp({ onSignUp, onSwitchToLogin, onBackToPublic }: Si
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
+    boxShadow: '0 10px 40px var(--raw-rgba-37-99-235-0p3)',
   };
 
   const brandNameStyle: React.CSSProperties = {
@@ -308,7 +308,7 @@ export default function SignUp({ onSignUp, onSwitchToLogin, onBackToPublic }: Si
   const formCardStyle: React.CSSProperties = {
     backgroundColor: 'var(--raw-ffffff)',
     borderRadius: '24px',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+    boxShadow: '0 25px 50px -12px var(--raw-rgba-0-0-0-0p15)',
     padding: isMobile ? '32px' : '40px',
     border: '1px solid var(--raw-f3f4f6)',
   };
@@ -452,7 +452,7 @@ export default function SignUp({ onSignUp, onSwitchToLogin, onBackToPublic }: Si
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
+    boxShadow: '0 10px 40px var(--raw-rgba-37-99-235-0p3)',
     transition: 'all 0.2s',
   };
 

@@ -1558,7 +1558,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // an overlapping capture would otherwise save the hidden/white state and
     // restore to it, leaving the page stuck white until a refresh.
     if (card) card.style.visibility = 'hidden';
-    if (page) page.style.background = '#ffffff';
+    if (page) page.style.background = 'var(--raw-ffffff)';
     // WATCHDOG: puts the page back after 10s even if the capture never settles
     // and `finally` never runs — the blank must never outlive a few seconds.
     const watchdog = window.setTimeout(() => {

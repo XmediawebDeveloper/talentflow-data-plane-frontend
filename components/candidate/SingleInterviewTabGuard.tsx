@@ -88,12 +88,12 @@ function useSingleInterviewTab(token: string): TabRole {
 
 function AlreadyOpenInAnotherTab() {
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-[#0f2347] via-[#1d3a6b] to-[#0f2347] flex items-center justify-center px-4 py-6 sm:p-6">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-[var(--raw-0f2347)] via-[var(--raw-1d3a6b)] to-[var(--raw-0f2347)] flex items-center justify-center px-4 py-6 sm:p-6">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[560px] px-6 py-8 text-center">
         <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center" aria-hidden>
           <Copy className="w-8 h-8 text-amber-600" strokeWidth={2} />
         </div>
-        <h1 className="text-xl sm:text-2xl font-bold text-[#0f1d40] mb-3">
+        <h1 className="text-xl sm:text-2xl font-bold text-[var(--raw-0f1d40)] mb-3">
           This interview is already open in another tab
         </h1>
         <p className="tf-body-secondary sm:text-base leading-relaxed">

@@ -567,7 +567,7 @@ export default function PricingPage() {
       <section className="relative overflow-hidden">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -right-40 -top-48 h-[560px] w-[560px] rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.12),transparent)] dark:bg-[radial-gradient(closest-side,rgba(76,123,232,0.16),transparent)]"
+          className="pointer-events-none absolute -right-40 -top-48 h-[560px] w-[560px] rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p12),transparent)] dark:bg-[radial-gradient(closest-side,var(--raw-rgba-76-123-232-0p16),transparent)]"
         />
         <div className={`${SHELL} relative grid grid-cols-1 items-center gap-2 pb-4 pt-8 sm:pt-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-8 lg:pb-8`}>
           <div className="max-w-2xl">
@@ -645,7 +645,7 @@ export default function PricingPage() {
             <div data-reveal className="relative mt-4 grid grid-cols-1 gap-6 overflow-hidden rounded-[20px] bg-mkt-navy p-5 text-white sm:gap-8 sm:p-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:gap-14">
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.28),transparent)]"
+                className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p28),transparent)]"
               />
               <div className="relative">
                 <h2 className={`${DISPLAY} text-xl font-bold tracking-[-0.025em] sm:text-3xl`}>Custom</h2>

@@ -1990,7 +1990,7 @@ export default function UserManagement() {
                     // (hover: #fafbfc; open = selected: brand 8%, 12% on hover),
                     // so the whole row reads as one colour.
                     data-row-selected={open || undefined}
-                    className={`cursor-pointer transition-colors ${open ? 'bg-brand-blue/[0.08] hover:bg-brand-blue/[0.12]' : 'hover:bg-[#fafbfc] dark:hover:bg-brand-blue/5'}`}
+                    className={`cursor-pointer transition-colors ${open ? 'bg-brand-blue/[0.08] hover:bg-brand-blue/[0.12]' : 'hover:bg-[var(--raw-fafbfc)] dark:hover:bg-brand-blue/5'}`}
                   >
                     <td className={`px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 ${user.is_active ? '' : 'opacity-60'}`}>
                       <div className="flex items-center gap-2">

@@ -169,7 +169,7 @@ export function DashboardTilt() {
       onClick={onTap}
     >
       {/* Soft halo behind the object */}
-      <div className="pointer-events-none absolute inset-x-[8%] inset-y-[10%] -z-10 rounded-full bg-[radial-gradient(closest-side,rgba(15,60,153,0.22),transparent)] blur-2xl dark:bg-[radial-gradient(closest-side,rgba(76,123,232,0.3),transparent)]" />
+      <div className="pointer-events-none absolute inset-x-[8%] inset-y-[10%] -z-10 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-15-60-153-0p22),transparent)] blur-2xl dark:bg-[radial-gradient(closest-side,var(--raw-rgba-76-123-232-0p3),transparent)]" />
 
       <div ref={stage} className="relative [transform-style:preserve-3d]">
         {/* Base panel */}

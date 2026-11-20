@@ -2201,7 +2201,7 @@ export function FormulaView() {
         <div className="tf-section-title mb-4">Priority Weights</div>
         <div className="tf-grid-3">
           {priorityWeights.map(p => (
-            <div key={p.priority} className="p-4 rounded-xl border" style={{ borderColor: p.color, backgroundColor: `${p.color}0F` }}>
+            <div key={p.priority} className="p-4 rounded-xl border" style={{ borderColor: p.color, backgroundColor: `color-mix(in srgb, ${p.color} 5.882%, transparent)` }}>
               <div className="text-sm font-semibold mb-1" style={{ color: p.color }}>{p.priority}</div>
               <div className="text-3xl font-bold mb-1" style={{ color: p.color }}>{p.weight}</div>
               <div className="tf-meta">{p.description}</div>
@@ -2236,7 +2236,7 @@ export function FormulaView() {
           <div
             key={i}
             className="rounded-2xl p-6 border-2"
-            style={{ borderColor: sc.color, backgroundColor: `${sc.color}0A` }}
+            style={{ borderColor: sc.color, backgroundColor: `color-mix(in srgb, ${sc.color} 3.922%, transparent)` }}
           >
             <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
               <div>

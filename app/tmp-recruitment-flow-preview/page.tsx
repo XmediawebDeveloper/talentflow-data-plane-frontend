@@ -646,7 +646,7 @@ export default function RecruitmentFlowPreview() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#111827]">
+    <div className="min-h-screen bg-slate-50 dark:bg-[var(--raw-111827)]">
       <div className="sticky top-0 z-20 border-b border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
         <div className="mx-auto flex max-w-[1100px] flex-wrap items-center gap-3">
           <span className="tf-eyebrow">Preview · Hiring flow (mock data)</span>

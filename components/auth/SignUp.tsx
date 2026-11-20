@@ -2306,7 +2306,7 @@ const SIGNUP_FLOW_CSS = `
 /* Primary buttons on signup: solid brand blue instead of the blue→cyan gradient. */
 .tf-signup-page .tf-auth-btn:not(.tf-auth-btn--outline):not(:disabled),
 .tf-signup-page .tf-auth-btn--busy:disabled { background: var(--brand-blue); filter: none; }
-.tf-signup-page .tf-auth-btn:not(.tf-auth-btn--outline):hover:not(:disabled) { background: var(--tf-brand-active, #0a2f7a); filter: none; }
+.tf-signup-page .tf-auth-btn:not(.tf-auth-btn--outline):hover:not(:disabled) { background: var(--tf-brand-active, var(--raw-0a2f7a)); filter: none; }
 
 /* top bar */
 .tf-su-top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--tf-surface) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--tf-border); }
@@ -2329,7 +2329,7 @@ const SIGNUP_FLOW_CSS = `
 .tf-su-sec:has(.tf-su-sec-num.is-done)::before { background: var(--tf-success); }
 .tf-su-sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .tf-su-sec-num { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border-radius: 8px; font-size: 12px; font-weight: 800; background: var(--tf-brand-tint-solid); color: var(--tf-brand-ink); border: 1px solid var(--tf-brand-border); transition: background-color .3s ease, color .3s ease, border-color .3s ease; }
-.tf-su-sec-num.is-done { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; }
+.tf-su-sec-num.is-done { background: var(--brand-blue); border-color: var(--brand-blue); color: var(--raw-ffffff); }
 .tf-su-sec-titles { min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 10px; }
 .tf-su-sec-titles h3 { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--tf-ink); line-height: 1.25; }
 .tf-su-sec-titles p { margin: 0; font-size: 12.5px; color: var(--tf-ink-subtle); line-height: 1.35; }
@@ -2411,7 +2411,7 @@ const SIGNUP_FLOW_CSS = `
 }
 .tf-su-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .tf-su-cancel { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: auto; height: 46px; padding: 0 18px; border-radius: var(--tf-radius-md); border: 1px solid var(--tf-border-strong); background: transparent; color: var(--tf-ink-subtle); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: color .2s ease, background-color .2s ease, border-color .2s ease; }
-.tf-su-cancel:hover:not(:disabled) { color: #c2410c; background: rgba(234, 88, 12, .07); border-color: rgba(234, 88, 12, .22); }
+.tf-su-cancel:hover:not(:disabled) { color: var(--raw-c2410c); background: var(--raw-rgba-234-88-12-0p07); border-color: var(--raw-rgba-234-88-12-0p22); }
 .tf-su-cancel:disabled { opacity: .5; cursor: not-allowed; }
 @keyframes tf-signup-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
@@ -2421,7 +2421,7 @@ const SIGNUP_FLOW_CSS = `
 .tf-signup-page .tf-auth-input:focus:not(.is-invalid),
 .tf-signup-page .tf-auth-otp:focus {
   border-color: transparent;
-  box-shadow: 0 6px 18px -10px rgba(15, 60, 153, .35), 0 0 0 1px rgba(15, 60, 153, .06);
+  box-shadow: 0 6px 18px -10px var(--raw-rgba-15-60-153-0p35), 0 0 0 1px var(--raw-rgba-15-60-153-0p06);
   background: var(--tf-surface);
   outline: none;
 }
@@ -2436,19 +2436,19 @@ const SIGNUP_FLOW_CSS = `
 .tf-su-step { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .tf-su-step-pill { display: flex; align-items: center; gap: 10px; }
 .tf-su-step-dotwrap { position: relative; flex-shrink: 0; }
-.tf-su-step-dot { position: relative; z-index: 1; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; font-size: 14px; font-weight: 600; background: #f3f4f6; color: #9ca3af; box-shadow: 0 0 0 1px #e5e7eb; transition: background .3s ease, color .3s ease, box-shadow .3s ease; }
+.tf-su-step-dot { position: relative; z-index: 1; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; font-size: 14px; font-weight: 600; background: var(--raw-f3f4f6); color: var(--raw-9ca3af); box-shadow: 0 0 0 1px var(--raw-e5e7eb); transition: background .3s ease, color .3s ease, box-shadow .3s ease; }
 .tf-su-step-num { font-variant-numeric: tabular-nums; }
-.tf-su-step.is-done .tf-su-step-dot { background: var(--brand-blue); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-.tf-su-step.is-current .tf-su-step-dot { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-2)); color: #fff; box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-blue) 10%, transparent), 0 10px 18px -6px color-mix(in srgb, var(--brand-blue) 40%, transparent); }
+.tf-su-step.is-done .tf-su-step-dot { background: var(--brand-blue); color: var(--raw-ffffff); box-shadow: 0 1px 2px var(--raw-rgba-0-0-0-0p08); }
+.tf-su-step.is-current .tf-su-step-dot { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-2)); color: var(--raw-ffffff); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-blue) 10%, transparent), 0 10px 18px -6px color-mix(in srgb, var(--brand-blue) 40%, transparent); }
 .tf-su-step-pulse { position: absolute; inset: 0; border-radius: 50%; background: color-mix(in srgb, var(--brand-blue) 25%, transparent); pointer-events: none; }
-.tf-su-step-label { font-size: 14px; font-weight: 500; white-space: nowrap; color: #9ca3af; transition: color .3s ease; }
-.tf-su-step.is-done .tf-su-step-label { color: #374151; }
-.tf-su-step.is-current .tf-su-step-label { color: var(--tf-brand-active, #0a2f7a); }
-.dark .tf-su-step-dot { background: rgba(255,255,255,.06); color: #94a3b8; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
-.dark .tf-su-step.is-done .tf-su-step-label { color: #e2e8f0; }
-.dark .tf-su-step.is-current .tf-su-step-label { color: #93b4ff; }
-.tf-su-step-bar { width: clamp(20px, 6vw, 96px); height: 2px; border-radius: 999px; background: #e5e7eb; transition: background-color .5s ease; }
-.dark .tf-su-step-bar { background: rgba(255,255,255,.12); }
+.tf-su-step-label { font-size: 14px; font-weight: 500; white-space: nowrap; color: var(--raw-9ca3af); transition: color .3s ease; }
+.tf-su-step.is-done .tf-su-step-label { color: var(--raw-374151); }
+.tf-su-step.is-current .tf-su-step-label { color: var(--tf-brand-active, var(--raw-0a2f7a)); }
+.dark .tf-su-step-dot { background: var(--raw-rgba-255-255-255-0p06); color: var(--raw-94a3b8); box-shadow: 0 0 0 1px var(--raw-rgba-255-255-255-0p12); }
+.dark .tf-su-step.is-done .tf-su-step-label { color: var(--raw-e2e8f0); }
+.dark .tf-su-step.is-current .tf-su-step-label { color: var(--raw-93b4ff); }
+.tf-su-step-bar { width: clamp(20px, 6vw, 96px); height: 2px; border-radius: 999px; background: var(--raw-e5e7eb); transition: background-color .5s ease; }
+.dark .tf-su-step-bar { background: var(--raw-rgba-255-255-255-0p12); }
 .tf-su-step.is-done .tf-su-step-bar { background: var(--brand-blue); }
 
 /* order summary */
@@ -2463,7 +2463,7 @@ const SIGNUP_FLOW_CSS = `
 .tf-su-toggle-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 999px; background: var(--brand-blue); box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--brand-blue) 70%, transparent); transition: transform .35s cubic-bezier(.34,1.56,.64,1); }
 .tf-su-toggle[data-period="ANNUAL"] .tf-su-toggle-thumb { transform: translateX(100%); }
 .tf-su-toggle-opt { position: relative; z-index: 1; min-width: 64px; height: 28px; padding: 0 12px; border: 0; background: none; border-radius: 999px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--tf-ink-subtle); cursor: pointer; transition: color .25s ease; }
-.tf-su-toggle-opt[aria-checked="true"] { color: #fff; }
+.tf-su-toggle-opt[aria-checked="true"] { color: var(--raw-ffffff); }
 .tf-su-toggle-opt:focus-visible { outline: 2px solid var(--tf-brand); outline-offset: 2px; }
 .tf-su-save { margin: 8px 0 0; display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--tf-success-tint); color: var(--tf-success-ink); border: 1px solid var(--tf-success-border); }
 .tf-su-summary.is-loading .tf-su-lines, .tf-su-summary.is-loading .tf-su-total, .tf-su-summary.is-loading .tf-su-rows, .tf-su-summary.is-loading .tf-su-plan-sub { opacity: .45; transition: opacity .2s ease; }
@@ -2485,7 +2485,7 @@ const SIGNUP_FLOW_CSS = `
 .tf-su-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .tf-su-checks li { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 600; color: var(--tf-ink); }
 .tf-su-dot { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--tf-border); flex-shrink: 0; transition: background-color .3s ease, border-color .3s ease, transform .3s cubic-bezier(.34,1.56,.64,1); }
-.tf-su-dot--on { background: var(--tf-success); border-color: var(--tf-success); color: #fff; transform: scale(1.08); }
+.tf-su-dot--on { background: var(--tf-success); border-color: var(--tf-success); color: var(--raw-ffffff); transform: scale(1.08); }
 .tf-su-plan-name { font-size: 16.5px; font-weight: 700; color: var(--tf-ink); }
 .tf-su-plan-sub { margin-top: 2px; font-size: 13px; color: var(--tf-ink-subtle); }
 .tf-su-box { margin-top: 16px; padding: 14px 16px; border-radius: var(--tf-radius-sm); background: var(--tf-surface-subtle); border: 1px solid var(--tf-border); }
@@ -2522,10 +2522,10 @@ const SIGNUP_FLOW_CSS = `
 .tf-co-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
 .tf-co-badge { display: grid; place-items: center; width: 96px; height: 96px; margin-bottom: 2px; }
 .tf-co-lottie { width: 120px; height: 120px; }
-.tf-co-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; color: #fff;
+.tf-co-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; color: var(--raw-ffffff);
   background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-2)); box-shadow: 0 16px 30px -14px color-mix(in srgb, var(--brand-blue) 70%, transparent);
   animation: tf-co-pop .5s cubic-bezier(.34,1.56,.64,1) both; }
-.tf-co-icon--ok { background: linear-gradient(135deg, #16a34a, #22c55e); box-shadow: 0 16px 30px -14px rgba(22,163,74,.7); }
+.tf-co-icon--ok { background: linear-gradient(135deg, var(--raw-16a34a), var(--raw-22c55e)); box-shadow: 0 16px 30px -14px var(--raw-rgba-22-163-74-0p7); }
 .tf-co-icon--blank { background: transparent; box-shadow: none; }
 @keyframes tf-co-pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
 .tf-co-sub { margin: 0; font-size: 14.5px; color: var(--tf-ink-subtle); }
@@ -2539,16 +2539,16 @@ const SIGNUP_FLOW_CSS = `
 .tf-co-box dd { margin: 0; font-weight: 600; color: var(--tf-ink); text-align: right; min-width: 0; }
 .tf-co-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tf-co-status { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 700;
-  background: color-mix(in srgb, #f59e0b 16%, transparent); color: #b45309; }
+  background: color-mix(in srgb, var(--raw-f59e0b) 16%, transparent); color: var(--raw-b45309); }
 .tf-co-status.is-ok { background: var(--tf-success-tint); color: var(--tf-success-ink); }
 .tf-co-next { padding: 14px 18px; border-radius: var(--tf-radius-sm); border: 1px solid var(--tf-border); }
 .tf-co-next-title { margin: 0 0 12px; font-size: 13px; font-weight: 700; color: var(--tf-ink); }
 .tf-co-next ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .tf-co-next li { position: relative; display: flex; gap: 10px; align-items: flex-start; }
 .tf-co-next-dot { position: relative; z-index: 1; display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%; font-size: 12px; font-weight: 700;
-  background: #f3f4f6; color: #9ca3af; box-shadow: 0 0 0 1px #e5e7eb; transition: background .3s ease, color .3s ease; }
-.tf-co-next li.is-current .tf-co-next-dot { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-2)); color: #fff; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-blue) 14%, transparent); }
-.tf-co-next li.is-done .tf-co-next-dot { background: var(--brand-blue); color: #fff; box-shadow: none; }
+  background: var(--raw-f3f4f6); color: var(--raw-9ca3af); box-shadow: 0 0 0 1px var(--raw-e5e7eb); transition: background .3s ease, color .3s ease; }
+.tf-co-next li.is-current .tf-co-next-dot { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-2)); color: var(--raw-ffffff); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-blue) 14%, transparent); }
+.tf-co-next li.is-done .tf-co-next-dot { background: var(--brand-blue); color: var(--raw-ffffff); box-shadow: none; }
 .tf-co-next li > div { display: flex; flex-direction: column; gap: 2px; padding-top: 3px; min-width: 0; }
 .tf-co-next strong { font-size: 13px; color: var(--tf-ink); }
 .tf-co-next span { font-size: 12px; line-height: 1.45; color: var(--tf-ink-subtle); }
@@ -2560,7 +2560,7 @@ const SIGNUP_FLOW_CSS = `
 .tf-co-redirect-bar > i { display: block; height: 100%; background: var(--tf-grad); transform-origin: left; animation: tf-co-count 5s linear both; }
 @keyframes tf-co-count { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .tf-co.is-done .tf-co-hero h2, .tf-co.is-done .tf-co-sub { animation: tf-signup-rise .5s .15s cubic-bezier(.22,1,.36,1) both; }
-.dark .tf-co-next-dot { background: rgba(255,255,255,.06); color: #94a3b8; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+.dark .tf-co-next-dot { background: var(--raw-rgba-255-255-255-0p06); color: var(--raw-94a3b8); box-shadow: 0 0 0 1px var(--raw-rgba-255-255-255-0p12); }
 @media (max-width: 640px) {
   .tf-co-grid, .tf-co-actions, .tf-co-next ol { grid-template-columns: 1fr; }
 }

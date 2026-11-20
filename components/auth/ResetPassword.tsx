@@ -136,7 +136,7 @@ export default function ResetPassword() {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
+    boxShadow: '0 10px 40px var(--raw-rgba-37-99-235-0p3)',
   };
 
   const gradientTextStyle: React.CSSProperties = {
@@ -164,7 +164,7 @@ export default function ResetPassword() {
   const formCardStyle: React.CSSProperties = {
     backgroundColor: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)',
     borderRadius: '24px',
-    boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.4)' : '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+    boxShadow: isDark ? '0 25px 50px -12px var(--raw-rgba-0-0-0-0p4)' : '0 25px 50px -12px var(--raw-rgba-0-0-0-0p15)',
     padding: isMobile ? '32px' : '40px',
     border: isDark ? '1px solid var(--raw-374151)' : '1px solid var(--raw-f3f4f6)',
   };
@@ -226,7 +226,7 @@ export default function ResetPassword() {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
+    boxShadow: '0 10px 40px var(--raw-rgba-37-99-235-0p3)',
     transition: 'all 0.2s',
     opacity: canSubmit && !isLoading ? 1 : 0.5,
   };
@@ -258,7 +258,7 @@ export default function ResetPassword() {
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 20px',
-              boxShadow: '0 10px 40px rgba(16, 185, 129, 0.3)',
+              boxShadow: '0 10px 40px var(--raw-rgba-16-185-129-0p3)',
             }}>
               <CheckCircle style={{ width: 36, height: 36, color: 'var(--raw-ffffff)' }} />
             </div>
@@ -355,8 +355,8 @@ export default function ResetPassword() {
               <div style={{
                 marginBottom: '24px',
                 padding: '16px',
-                backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : 'var(--raw-fef2f2)',
-                border: `1px solid ${isDark ? 'rgba(239,68,68,0.3)' : 'var(--raw-fecaca)'}`,
+                backgroundColor: isDark ? 'var(--raw-rgba-239-68-68-0p15)' : 'var(--raw-fef2f2)',
+                border: `1px solid ${isDark ? 'var(--raw-rgba-239-68-68-0p3)' : 'var(--raw-fecaca)'}`,
                 borderRadius: '12px',
                 display: 'flex',
                 alignItems: 'flex-start',

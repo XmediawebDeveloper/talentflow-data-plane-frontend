@@ -412,11 +412,11 @@ const Row = ({ label, value, color = 'var(--raw-e2e8f0)' }: { label: string; val
 );
 
 const Section = ({ label }: { label: string }) => (
-  <div className="text-purple-300 font-semibold pt-1 pb-0.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>{label}</div>
+  <div className="text-purple-300 font-semibold pt-1 pb-0.5" style={{ borderBottom: '1px solid var(--raw-rgba-255-255-255-0p07)' }}>{label}</div>
 );
 
 const Bar = ({ pct, color = 'var(--raw-818cf8)' }: { pct: number; color?: string }) => (
-  <div className="mt-0.5 mb-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+  <div className="mt-0.5 mb-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--raw-rgba-255-255-255-0p08)' }}>
     <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: color }} />
   </div>
 );
@@ -11392,11 +11392,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         className="fixed z-[999] font-mono text-2xs select-none"
         style={{ left: debugPos.x, top: debugPos.y, minWidth: 230, maxWidth: 260 }}
       >
-        <div className="rounded-xl overflow-hidden shadow-2xl" style={{ background: 'rgba(8,8,20,0.93)', border: '1px solid rgba(99,102,241,0.55)', backdropFilter: 'blur(8px)' }}>
+        <div className="rounded-xl overflow-hidden shadow-2xl" style={{ background: 'var(--raw-rgba-8-8-20-0p93)', border: '1px solid var(--raw-rgba-99-102-241-0p55)', backdropFilter: 'blur(8px)' }}>
           {/* Drag handle + collapse */}
           <div
             className="flex items-center justify-between px-3 py-1.5 cursor-grab active:cursor-grabbing"
-            style={{ background: 'rgba(99,102,241,0.22)', borderBottom: debugOpen ? '1px solid rgba(99,102,241,0.3)' : 'none', touchAction: 'none' }}
+            style={{ background: 'var(--raw-rgba-99-102-241-0p22)', borderBottom: debugOpen ? '1px solid var(--raw-rgba-99-102-241-0p3)' : 'none', touchAction: 'none' }}
             onPointerDown={_dbgOnPointerDown}
             onPointerMove={_dbgOnPointerMove}
             onPointerUp={_dbgOnPointerUp}
@@ -11475,7 +11475,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       <div className="flex h-[100dvh] overflow-hidden bg-[var(--raw-0f1117)]">
 
         {/* ════ LEFT PANEL: Video feeds (dark) — 40% ════ */}
-        <div className="w-[40%] flex-shrink-0 flex flex-col bg-[var(--raw-0f1117)] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="w-[40%] flex-shrink-0 flex flex-col bg-[var(--raw-0f1117)] overflow-hidden" style={{ borderRight: '1px solid var(--raw-rgba-255-255-255-0p06)' }}>
 
           {/* ── Top half: BINA AI Avatar ── */}
           {/* Inset card with rounded corners, matching the webcam frame below
@@ -11520,7 +11520,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     className={`relative w-44 h-44 rounded-full overflow-hidden border-4 transition-colors duration-300 ${
                       binaSpeakingVisible ? 'border-purple-400/70' : 'border-white/20'
                     }`}
-                    style={binaSpeakingVisible ? { boxShadow: '0 0 40px 6px rgba(147,51,234,0.35)' } : undefined}
+                    style={binaSpeakingVisible ? { boxShadow: '0 0 40px 6px var(--raw-rgba-147-51-234-0p35)' } : undefined}
                   >
                     <Image
                       src={lindaAvatarSrc}
@@ -11558,7 +11558,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {binaSpeakingVisible && (
               <div
                 className="absolute inset-0 pointer-events-none"
-                style={{ background: 'radial-gradient(ellipse at center, rgba(147,51,234,0.10) 0%, transparent 70%)' }}
+                style={{ background: 'radial-gradient(ellipse at center, var(--raw-rgba-147-51-234-0p1) 0%, transparent 70%)' }}
               />
             )}
 
@@ -12054,7 +12054,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                           // recording waveform of the candidate's mic while they answer
                           // — the transcript is revealed after the turn is processed.
                           <div className="flex flex-col gap-1.5">
-                            <MicWaveform analyserRef={micAnalyserRef} active={isRecording} color="#059669" quietColor="#6ee7b7" />
+                            <MicWaveform analyserRef={micAnalyserRef} active={isRecording} color="var(--raw-059669)" quietColor="var(--raw-6ee7b7)" />
                             <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300">
                               Recording… Your transcript will appear after you finish speaking.
                             </p>
@@ -12265,11 +12265,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                             lineHeight: 1,
                             color: 'transparent',
                             background:
-                              'linear-gradient(110deg, transparent 40%, #d6f1ff 50%, transparent 60%) 100% 0 / 300% 100% no-repeat, ' +
-                              'linear-gradient(135deg, #0284c7 20%, #0369a1 80%)',
+                              'linear-gradient(110deg, transparent 40%, var(--raw-d6f1ff) 50%, transparent 60%) 100% 0 / 300% 100% no-repeat, ' +
+                              'linear-gradient(135deg, var(--raw-0284c7) 20%, var(--raw-0369a1) 80%)',
                             WebkitBackgroundClip: 'text',
                             backgroundClip: 'text',
-                            filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.95)) drop-shadow(0 2px 8px rgba(2,132,199,0.25))',
+                            filter: 'drop-shadow(0 0 10px var(--raw-rgba-255-255-255-0p95)) drop-shadow(0 2px 8px var(--raw-rgba-2-132-199-0p25))',
                             animation: `cdShine ${PRE_TURN_TICK_MS}ms ease-in-out both`,
                           }}
                         >{num}</span>

@@ -738,7 +738,7 @@ function BackgroundTasksDock({ tasks, expanded, setExpanded, onOpen, onRemove, o
         aria-label={`Background tasks: ${running.length} running`}
         title={running.length ? `${running.length} running · ${ring}%` : 'All background tasks finished'}
         className="fixed bottom-6 right-6 z-[10050] h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105"
-        style={{ background: `conic-gradient(var(--brand-blue) ${ring * 3.6}deg, rgb(226 232 240) 0deg)` }}
+        style={{ background: `conic-gradient(var(--brand-blue) ${ring * 3.6}deg, var(--raw-rgb-226-232-240) 0deg)` }}
       >
         <span className="relative flex h-full w-full items-center justify-center rounded-full bg-brand-blue text-white">
           {running.length ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}

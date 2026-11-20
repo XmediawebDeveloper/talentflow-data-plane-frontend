@@ -72,7 +72,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : 'var(--raw-dcfce7)',
+    backgroundColor: isDark ? 'var(--raw-rgba-34-197-94-0p2)' : 'var(--raw-dcfce7)',
     color: isDark ? 'var(--raw-86efac)' : 'var(--raw-16a34a)',
     fontSize: '14px',
     fontWeight: 600,
@@ -342,7 +342,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
             <div style={{
               padding: '24px',
               borderRadius: '16px',
-              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1))',
+              background: 'linear-gradient(135deg, var(--raw-rgba-102-126-234-0p1), var(--raw-rgba-118-75-162-0p1))',
               border: `1px solid ${isDark ? 'var(--raw-334155)' : 'var(--raw-e5e7eb)'}`,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>

@@ -709,7 +709,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                         border: '1px solid var(--raw-e5e7eb)',
                         borderRadius: 8,
                         fontSize: 12,
-                        boxShadow: '0 4px 14px -2px rgb(15 23 42 / 0.06)',
+                        boxShadow: '0 4px 14px -2px var(--raw-rgba-15-23-42-0p06)',
                       }}
                       labelStyle={{ color: 'var(--raw-0f172a)', fontWeight: 600 }}
                       formatter={(v: number) => [`${v}`, 'Actions']}
@@ -789,7 +789,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                         border: '1px solid var(--raw-e5e7eb)',
                         borderRadius: 8,
                         fontSize: 12,
-                        boxShadow: '0 4px 14px -2px rgb(15 23 42 / 0.06)',
+                        boxShadow: '0 4px 14px -2px var(--raw-rgba-15-23-42-0p06)',
                       }}
                       labelStyle={{ color: 'var(--raw-0f172a)', fontWeight: 600 }}
                       formatter={(v: number) => [`${v}`, 'Jobs']}
