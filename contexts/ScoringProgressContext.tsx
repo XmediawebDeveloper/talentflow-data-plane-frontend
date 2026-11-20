@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import { emitBackgroundWork } from '@/lib/backgroundWorkEvents';
 import { getTokens } from '@/lib/services/api';
 import { scoringService, normalizeScoringStatus, type BatchScoringStatus, type MyScoringBatch } from '@/lib/services/scoringService';
+import { useActivityFeed } from '@/contexts/ActivityFeedContext';
+import type { ActivityRef } from '@/lib/services/activityService';
 
 export interface ScoringProgressItem {
   id: string;
@@ -69,10 +71,15 @@ interface ScoringProgressContextType {
   isMinimized: boolean;
   hasActiveScoring: boolean;
   isMainPanelOpen: boolean;  // True when center panel is visible (not minimized)
-  /** The signed-in user whose saved runs are now in `activeScoringJobs`
-   *  (null until they are read from storage after mount / a user switch).
-   *  Until then the list is a placeholder `[]`, not "no runs". */
+  /** The signed-in user whose runs are now in `activeScoringJobs` — read
+   *  from storage AND brought up to date by the first server read (null
+   *  until then, after mount / a user switch). Until then the list is a
+   *  placeholder, not "no runs": a run this browser last saw running may
+   *  have finished meanwhile, and that is not a finish to announce. */
   restoredFor: string | null;
+  /** Record the server batch behind a run started here (keyed by its JD), so
+   *  the run keeps following the server after its page closes. */
+  attachBatch: (jobId: string, batchId: string) => void;
   /** Record that these runs' finish was announced (see `ScoringJob.announcedAt`). */
   markAnnounced: (jobIds: string[]) => void;
 
@@ -126,19 +133,58 @@ const storageKey = (identity: string) => `${LEGACY_STORAGE_KEY}:${identity}`;
 /** How long a finished run stays available in the corner before it is forgotten. */
 const JOB_RETENTION_MS = 24 * 60 * 60 * 1000;
 
-/** How often the server is asked for this user's running batches — only while
-    a run is going. With nothing running, the corner asks once on load and on
-    tab focus (at most every FOCUS_SYNC_MIN_MS) to pick up a run started on
-    another device; a 15s poll on every page for no run cost a round trip each. */
-const SERVER_SYNC_MS = 15000;
-const FOCUS_SYNC_MIN_MS = 30000;
+/* When the server is asked: see ActivityFeedContext (one read of every
+   activity type — on sign-in, tab focus, every 10s while something runs,
+   every minute otherwise). This context applies each read it gets. */
 /** Cap on remembered "removed from the corner" batch ids. */
 const MAX_DISMISSED = 200;
 /** Finished runs picked up from the server (started in another browser /
     device) — at most this many, newest first, so a fresh browser does not
     fetch dozens of batch details at once. */
 const MAX_ADOPT_FINISHED = 10;
-const RECENT_SYNC_HOURS = JOB_RETENTION_MS / (60 * 60 * 1000);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Server item status → the progress row's. */
+const rowStatus = (raw?: string): ScoringProgressItem['status'] => {
+  const s = (raw || '').toLowerCase();
+  const norm = normalizeScoringStatus(raw);
+  return s === 'cancelled' ? 'Cancelled'
+    : norm === 'completed' ? 'Scored successfully'
+    : norm === 'failed' ? 'Failed'
+    : norm === 'processing' ? 'Scoring in progress'
+    : 'Queued';
+};
+
+/** A run's rows brought up to a server batch snapshot (matched by resume),
+ *  counts recomputed. Rows of other batches of the same JD are left alone. */
+function withBatchStatus(job: ScoringJob, status: BatchScoringStatus): ScoringJob {
+  const byResume = new Map((status.items || []).map(b => [b.resume_id, b]));
+  let changed = false;
+  const items = job.items.map(item => {
+    const b = byResume.get(item.resumeId);
+    if (!b) return item;
+    const st = rowStatus(b.status);
+    const verdict = st === 'Scored successfully' ? toMatchResult(b.match_status) : undefined;
+    if (item.status === st && (st !== 'Scored successfully' || item.matchResult === verdict)) return item;
+    changed = true;
+    return {
+      ...item,
+      status: st,
+      ...(st === 'Scored successfully'
+        ? { score: b.overall_score, overallRating10: b.overall_rating_10, matchResult: verdict, scoredDateTime: item.scoredDateTime || new Date().toISOString() }
+        : st === 'Failed' || st === 'Cancelled' ? { errorReason: b.error_message } : {}),
+    };
+  });
+  if (!changed) return job;
+  return {
+    ...job,
+    items,
+    queued: items.filter(i => i.status === 'Queued').length,
+    processing: items.filter(i => i.status === 'Scoring in progress').length,
+    completed: items.filter(i => i.status === 'Scored successfully').length,
+    failed: items.filter(i => i.status === 'Failed').length,
+  };
+}
 
 /** A server batch that still has resumes waiting or being scored. */
 const isBatchActive = (b: MyScoringBatch) =>
@@ -215,6 +261,10 @@ const ScoringProgressContext = createContext<ScoringProgressContextType | undefi
 
 export function ScoringProgressProvider({ children }: { children: React.ReactNode }) {
   const [activeScoringJobs, setActiveScoringJobs] = useState<ScoringJob[]>([]);
+  const jobsRef = useRef(activeScoringJobs);
+  useEffect(() => { jobsRef.current = activeScoringJobs; }, [activeScoringJobs]);
+  /** The user whose first server read has been applied (see `restoredFor`). */
+  const [serverSyncedFor, setServerSyncedFor] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(true);
 
   /* Tell the pages when a run scores more resumes or finishes, so Scored /
@@ -271,9 +321,21 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
      remembers its LATEST batch id, so an earlier finished batch of the same JD
      would otherwise come back from the server sync after "Clear finished". */
   const dismissedJdsRef = useRef<Record<string, number>>({});
+  const feed = useActivityFeed();
+  const feedDismiss = feed.dismiss;
   const dismiss = useCallback((jobs: ScoringJob[]) => {
     const ids = jobs.flatMap(j => [j.jobId, j.batchId].filter(Boolean) as string[]);
     if (!ids.length) return;
+    /* Removed on the server too, so every device drops these rows: the run's
+       batch, and — for a run kept per JD — every batch of that JD so far
+       (the same rule as `dismissedJds` below). */
+    const refs: ActivityRef[] = [];
+    jobs.forEach(j => {
+      [j.batchId, j.jobId].forEach(id => { if (id && UUID_RE.test(id)) refs.push({ type: 'scoring', id }); });
+      const jd = j.items[0]?.jobId || (j.batchId && j.batchId !== j.jobId ? j.jobId : undefined);
+      if (jd && UUID_RE.test(jd)) refs.push({ type: 'scoring', jd_id: jd });
+    });
+    if (refs.length) feedDismiss(refs);
     dismissedRef.current = [...dismissedRef.current.filter(id => !ids.includes(id)), ...ids].slice(-MAX_DISMISSED);
     const now = Date.now();
     const cutoff = now - JOB_RETENTION_MS;
@@ -281,7 +343,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     Object.entries(dismissedJdsRef.current).forEach(([jd, at]) => { if (at > cutoff) jds[jd] = at; });
     jobs.forEach(j => { jds[j.items[0]?.jobId || j.jobId] = now; });
     dismissedJdsRef.current = jds;
-  }, []);
+  }, [feedDismiss]);
 
   // Load this user's saved state whenever the signed-in user changes
   useEffect(() => {
@@ -290,6 +352,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     dismissedRef.current = [];
     dismissedJdsRef.current = {};
     seenScoring.current = new Map();
+    setServerSyncedFor(null);
     if (!identity) {
       setLoadedFor(null);
       return;
@@ -462,41 +525,62 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     });
   }, []);
 
+  /* Removal is recorded outside the state updaters (they must stay pure —
+     React may run them twice, which would send the server removal twice). */
   const clearCompletedJobs = useCallback(() => {
-    setActiveScoringJobs(prev => {
-      dismiss(prev.filter(job => !isJobActive(job)));
-      return prev.filter(isJobActive);
-    });
+    dismiss(jobsRef.current.filter(job => !isJobActive(job)));
+    setActiveScoringJobs(prev => prev.filter(isJobActive));
   }, [dismiss]);
 
   const clearJob = useCallback((jobId: string) => {
-    setActiveScoringJobs(prev => {
-      dismiss(prev.filter(job => job.jobId === jobId));
-      return prev.filter(job => job.jobId !== jobId);
-    });
+    dismiss(jobsRef.current.filter(job => job.jobId === jobId));
+    setActiveScoringJobs(prev => prev.filter(job => job.jobId !== jobId));
   }, [dismiss]);
 
-  /* Server sync: the runs this user has going, from ANY browser or device.
-     Without it the corner only knew runs started in this browser (they lived
-     in localStorage alone), so the same login in Firefox or on another laptop
-     showed no icon. Runs started here keep their own page pollers; the ones
-     picked up from the server (`serverTracked`) are polled here until done. */
-  const jobsRef = useRef(activeScoringJobs);
-  useEffect(() => { jobsRef.current = activeScoringJobs; }, [activeScoringJobs]);
+  const attachBatch = useCallback((jobId: string, batchId: string) => {
+    setActiveScoringJobs(prev => {
+      const i = prev.findIndex(j => j.jobId === jobId);
+      if (i < 0 || prev[i].batchId === batchId) return prev;
+      const next = [...prev];
+      next[i] = { ...prev[i], batchId };
+      return next;
+    });
+  }, []);
+
+  /* Server sync: the runs this user has going, from ANY browser or device —
+     applied from each read of the activity feed (ActivityFeedContext), which
+     is the one place the server is asked. Runs started here keep their own
+     page pollers; the ones picked up from the server (`serverTracked`) — and
+     runs started here whose page poller is gone (the server's counts moved
+     past this browser's copy) — are brought up to date here until done.
+     Rows removed on another device are dropped here too. */
   const syncBusy = useRef(false);
-  const lastPullAt = useRef(0);
+  const feedRef = useRef(feed);
+  useEffect(() => { feedRef.current = feed; });
   const pullServerJobs = useCallback(async () => {
     const who = identityRef.current;
-    if (!who || loadedFor !== who || syncBusy.current || !getTokens().accessToken) return;
+    const f = feedRef.current;
+    if (!who || loadedFor !== who || f.syncedFor !== who || syncBusy.current || !getTokens().accessToken) return;
     syncBusy.current = true;
-    lastPullAt.current = Date.now();
     try {
+      const scoring = f.items.filter(a => a.type === 'scoring');
+
+      /* Removed from the corner on any device: drop the row here as well. */
+      const removed = new Set(scoring.filter(a => a.dismissed).map(a => a.id));
+      if (removed.size) {
+        dismissedRef.current = [...dismissedRef.current.filter(id => !removed.has(id)), ...removed].slice(-MAX_DISMISSED);
+        setActiveScoringJobs(prev => {
+          const next = prev.filter(j => !removed.has(j.jobId) && !(j.batchId && removed.has(j.batchId)));
+          return next.length === prev.length ? prev : next;
+        });
+      }
+
       /* Running batches (any age) plus every batch started in the retention
          window — so a run that already FINISHED in another browser still shows
          its corner button here, same as in the browser that started it. */
-      const recent = await scoringService.getMyBatches({ hours: RECENT_SYNC_HOURS, page_size: 50 });
+      const recent = scoring.filter(a => !a.dismissed && a.raw).map(a => a.raw as MyScoringBatch);
       const running = recent.filter(isBatchActive);
-      const current = jobsRef.current;
+      const current = jobsRef.current.filter(j => !removed.has(j.jobId) && !(j.batchId && removed.has(j.batchId)));
       const known = new Set<string>();
       current.forEach(j => { known.add(j.jobId); if (j.batchId) known.add(j.batchId); });
       // A run this browser tracks by its JD (the ?batch_id= handoff) — don't add it twice.
@@ -524,7 +608,16 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
         finishedAdopted += 1;
       }
       const follow = current.filter(j => j.serverTracked && j.batchId && isJobActive(j));
-      const ids = [...new Set([...adopt.map(b => b.batch_id), ...follow.map(j => j.batchId as string)])];
+      /* Started here, still "running" in this browser, but the server's batch
+         has moved on (its page — and poller — closed, or this copy is from
+         before a reload): same counts as every other device. */
+      const behind = current.filter(j => {
+        if (j.serverTracked || !j.batchId || !isJobActive(j)) return false;
+        const s = summaries.get(j.batchId);
+        if (!s) return false;
+        return !isBatchActive(s) || (s.completed ?? 0) > j.completed || (s.failed ?? 0) > j.failed;
+      });
+      const ids = [...new Set([...adopt.map(b => b.batch_id), ...follow.map(j => j.batchId as string), ...behind.map(j => j.batchId as string)])];
       if (!ids.length) return;
 
       const results = await Promise.allSettled(ids.map(id => scoringService.getBatchStatus(id)));
@@ -533,43 +626,29 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
         if (r.status !== 'fulfilled' || !r.value?.batch_id) return;
         const status = r.value;
         if (dismissedRef.current.includes(status.batch_id)) return;
+        const local = behind.find(j => j.batchId === status.batch_id);
+        if (local) {
+          setActiveScoringJobs(prev => prev.map(j => (j.jobId === local.jobId ? withBatchStatus(j, status) : j)));
+          return;
+        }
         const existing = jobsRef.current.find(j => j.jobId === status.batch_id);
         syncScoringJob(jobFromServer(status, summaries.get(status.batch_id), existing));
       });
     } catch (error) {
-      // Offline / signed out: the next round retries.
+      // Offline / signed out: the next read retries.
       console.warn('[ScoringProgressContext] Server sync failed:', error);
     } finally {
       syncBusy.current = false;
+      // Same render as the updates above: the first finished-state seen is the baseline.
+      if (identityRef.current === who) setServerSyncedFor(who);
     }
   }, [loadedFor, syncScoringJob]);
 
-  // Once per sign-in, then on focus — throttled, since focus and
-  // visibilitychange both fire on one tab switch.
+  // Every server read (sign-in, tab focus, the feed's steady poll) is applied here.
   useEffect(() => {
-    if (!identity || loadedFor !== identity) return;
+    if (!identity || loadedFor !== identity || feed.syncedFor !== identity) return;
     void pullServerJobs();
-    const onVisible = () => {
-      if (document.visibilityState === 'hidden') return;
-      if (Date.now() - lastPullAt.current < FOCUS_SYNC_MIN_MS) return;
-      void pullServerJobs();
-    };
-    window.addEventListener('focus', onVisible);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      window.removeEventListener('focus', onVisible);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [identity, loadedFor, pullServerJobs]);
-
-  // The steady poll runs only while a run is going (started here or picked up).
-  useEffect(() => {
-    if (!identity || loadedFor !== identity || !hasActiveScoring) return;
-    const t = setInterval(() => {
-      if (document.visibilityState !== 'hidden') void pullServerJobs();
-    }, SERVER_SYNC_MS);
-    return () => clearInterval(t);
-  }, [identity, loadedFor, hasActiveScoring, pullServerJobs]);
+  }, [identity, loadedFor, feed.syncedFor, feed.generation, pullServerJobs]);
 
   const setMinimized = useCallback((minimized: boolean) => {
     setIsMinimized(minimized);
@@ -593,7 +672,10 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     setOnRestorePanelState(() => callback);
   }, []);
 
-  const restoredFor = identity && loadedFor === identity ? identity : null;
+  /* Restored = read from storage AND brought up to date by the first server
+     read — so a run this browser last saw running, that finished meanwhile
+     (here or on another device), is a baseline and not a finish to announce. */
+  const restoredFor = identity && loadedFor === identity && serverSyncedFor === identity ? identity : null;
 
   const contextValue = useMemo<ScoringProgressContextType>(() => ({
     activeScoringJobs,
@@ -602,6 +684,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     isMainPanelOpen,
     restoredFor,
     markAnnounced,
+    attachBatch,
     startScoringJob,
     syncScoringJob,
     updateItemStatus,
@@ -619,6 +702,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     isMainPanelOpen,
     restoredFor,
     markAnnounced,
+    attachBatch,
     startScoringJob,
     syncScoringJob,
     updateItemStatus,

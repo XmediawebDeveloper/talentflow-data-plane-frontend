@@ -3113,6 +3113,16 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per arrival with the param
   }, [searchParams]);
 
+  /* `?upload_history=1` — an upload row in "My Activities" (the dock) opened
+     from a page with no Upload History of its own: open it here. The param
+     is dropped right after, like `?upload=1`. */
+  useEffect(() => {
+    if (searchParams.get('upload_history') !== '1') return;
+    router.replace('/recruitment/resume-database?tab=my-resumes', { scroll: false });
+    openUploadHistoryModal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per arrival with the param
+  }, [searchParams]);
+
   if (loading) {
     // Structure-matched skeleton mirroring the real My Resumes page: same
     // outer wrapper / white card, the same header block (icon box, title +
