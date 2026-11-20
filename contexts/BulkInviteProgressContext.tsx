@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import { bulkInviteService, isBulkInviteActive, type BulkInviteApiError, type BulkInviteJob } from '@/lib/services/bulkInviteService';
 import { getTokens } from '@/lib/services/api';
 import { emitBackgroundWork } from '@/lib/backgroundWorkEvents';
+import { useActivityFeed } from '@/contexts/ActivityFeedContext';
+import type { ActivityRef } from '@/lib/services/activityService';
 
 /**
  * The Create / Send bulk runs of the signed-in user, polled while they run so
@@ -13,12 +15,17 @@ import { emitBackgroundWork } from '@/lib/backgroundWorkEvents';
  * The backend owns the run; this only mirrors its counts.
  *
  * Where the list comes from:
- *   - the server's "my sends" (GET /bulk-invites/mine) on load, on sign-in
- *     and every minute — so the widget works on any browser, after clearing
- *     storage, and picks up sends started on another device;
- *   - localStorage, keyed by account + user, for what the server does not
- *     keep: which runs were removed from the widget. Another user signing in
- *     on the same browser never sees this list.
+ *   - the server: every read of the activity feed (ActivityFeedContext —
+ *     sign-in, tab focus, every 10s while something runs, every minute
+ *     otherwise) carries this user's sends with the same payload as
+ *     GET /bulk-invites/mine — so the widget works on any browser, after
+ *     clearing storage, and picks up sends started on another device;
+ *   - which runs were removed from the widget is kept on the server too
+ *     (POST /activities/dismiss), so a send removed on one device is removed
+ *     on every device;
+ *   - localStorage, keyed by account + user, is only a copy for the first
+ *     paint after a reload. Another user signing in on the same browser never
+ *     sees this list.
  *
  * Several tabs: only one tab polls (a short lease in localStorage); the
  * others take its snapshots from the storage event and merge them, so a run
@@ -80,6 +87,10 @@ interface BulkInviteProgressContextType {
   openResultsBack: (() => void) | null;
   /** Re-read "my sends" from the server now. */
   refreshMine: () => void;
+  /** The user whose first server read has been applied — until then `jobs`
+   *  is this browser's saved copy, and a send it last saw running may have
+   *  finished meanwhile (not a finish to announce). */
+  serverSyncedFor: string | null;
   /** The round invite icon is on screen (bottom-right). The scoring widget
    *  sits to its left meanwhile, so the invite icon never moves. */
   iconShown: boolean;
@@ -91,8 +102,6 @@ const LEGACY_KEY = 'bulk_invite_progress_state';
 const POLLER_PREFIX = 'bulk_invite_poller';
 const RETENTION_MS = 24 * 60 * 60 * 1000;
 const POLL_MS = 2500;
-/** Minimum gap between "my sends" re-reads on tab focus. */
-const MINE_EVERY_MS = 60 * 1000;
 /* The polling tab renews its lease every tick; a lease older than this is
    free (that tab closed or went to sleep). */
 const POLLER_LEASE_MS = 8000;
@@ -100,19 +109,14 @@ const POLLER_LEASE_MS = 8000;
    STALE_POLL_MS instead, so stuck runs do not keep hitting the API. */
 const STALE_POLL_MS = 30 * 1000;
 
-/* When this page was opened / refreshed. The widget lists only the sends of
-   this visit: a batch that finished before it starts hidden ("Show removed"
-   brings it back). Batches still sending always show. */
-const PAGE_OPENED_AT = Date.now();
-const isEarlier = (j: TrackedBulkInvite) => {
-  if (isBulkInviteActive(j) || j.status === 'paused' || j.stalled) return false;
-  const t = new Date(j.created_at ?? j.trackedAt).getTime();
-  return Number.isFinite(t) && t < PAGE_OPENED_AT;
-};
-/* Hidden as "earlier", not removed by hand: dismissedAt 0 so another tab's
-   own choice for the same run still wins the merge. */
-const hideEarlier = (j: TrackedBulkInvite): TrackedBulkInvite =>
-  (!j.dismissed && isEarlier(j) ? { ...j, dismissed: true, dismissedAt: 0 } : j);
+/* Finished sends of the last day show in EVERY browser, same as scoring runs
+   (2026-11-19). They used to start hidden when they finished before the page
+   was opened ("this visit only"), so a fresh browser or a refresh showed no
+   icon for a send the starting browser still listed. Sends hidden that way
+   were stored with dismissedAt 0 (never a hand removal, which stamps the
+   time) — un-hide those. */
+const unhideEarlier = (j: TrackedBulkInvite): TrackedBulkInvite =>
+  (j.dismissed && j.dismissedAt === 0 ? { ...j, dismissed: false } : j);
 
 const TAB_ID = typeof window !== 'undefined' ? `${Date.now()}-${Math.random().toString(36).slice(2)}` : 'ssr';
 
@@ -227,7 +231,7 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
   useEffect(() => { checkIdentity(); }, [pathname, checkIdentity]);
 
   useEffect(() => {
-    const stored = readStored(identity).map(hideEarlier);
+    const stored = readStored(identity).map(unhideEarlier);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setJobs(stored);
     // Runs carried over from before a reload come back as the round icon.
@@ -280,11 +284,26 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     const at = Date.now();
     setJobs((prev) => prev.map((j) => (ids.has(j.job_id) ? { ...j, dismissed, dismissedAt: at } : j)));
   }, []);
-  const dismiss = useCallback((jobId: string | string[]) => setDismissed(jobId, true), [setDismissed]);
+  /* Removed / restored on the server too, so every device follows. */
+  const feed = useActivityFeed();
+  const jobsRef = useRef(jobs);
+  useEffect(() => { jobsRef.current = jobs; }, [jobs]);
+  const refsOf = useCallback((jobId: string | string[]): ActivityRef[] => {
+    const ids = new Set(Array.isArray(jobId) ? jobId : [jobId]);
+    return jobsRef.current.filter((j) => ids.has(j.job_id))
+      .map((j) => ({ type: j.kind === 'assessment' ? 'assessment_invite' : 'interview_invite', id: j.job_id }));
+  }, []);
+  const feedDismiss = feed.dismiss;
+  const feedRestore = feed.restore;
+  const dismiss = useCallback((jobId: string | string[]) => {
+    setDismissed(jobId, true);
+    feedDismiss(refsOf(jobId));
+  }, [setDismissed, feedDismiss, refsOf]);
   const restore = useCallback((jobId: string | string[]) => {
     setDismissed(jobId, false);
+    feedRestore(refsOf(jobId));
     setWidget((w) => (w === 'hidden' ? 'icon' : w));
-  }, [setDismissed]);
+  }, [setDismissed, feedRestore, refsOf]);
 
   const [inPopupIds, setInPopupIds] = useState<ReadonlySet<string>>(() => new Set());
   const setInPopup = useCallback((jobId: string, open: boolean) => {
@@ -302,58 +321,45 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     setOpenResults(jobId ? { id: jobId, tab, onBack } : null);
   }, []);
 
-  /* "My sends" from the server: merged in (server counts win, this
-     browser's remove choices stay), new ones show the round icon. */
-  const mineBusy = useRef(false);
-  const pullMine = useCallback(async () => {
-    if (!identity || mineBusy.current || !getTokens().accessToken) return;
-    mineBusy.current = true;
-    try {
-      const fresh = await bulkInviteService.mine();
-      const now = Date.now();
-      let added = false;
-      setJobs((prev) => {
-        const byId = new Map(prev.map((j) => [j.job_id, j]));
-        for (const f of fresh) {
-          const p = byId.get(f.job_id);
-          if (!p) added = true;
-          byId.set(f.job_id, p
-            ? { ...p, ...f, ...withNames(f, p), syncedAt: now }
-            : hideEarlier({ ...f, ...withNames(f), trackedAt: f.created_at ?? new Date().toISOString(), syncedAt: now } as TrackedBulkInvite));
-        }
-        return [...byId.values()].filter(keep)
-          .sort((a, b) => (b.created_at ?? b.trackedAt).localeCompare(a.created_at ?? a.trackedAt));
-      });
-      if (added && fresh.some((f) => !isEarlier({ ...f, trackedAt: f.created_at ?? new Date().toISOString() } as TrackedBulkInvite))) setWidget((w) => (w === 'hidden' ? 'icon' : w));
-    } catch {
-      /* offline / signed out: the next round retries */
-    } finally {
-      mineBusy.current = false;
-    }
-  }, [identity]);
-  const refreshMine = useCallback(() => { void pullMine(); }, [pullMine]);
+  /* "My sends" from the server — each read of the activity feed: merged in
+     (server counts win; whether a send is removed from the widget is the
+     server's too, unless this browser changed it after that read was sent),
+     new ones show the round icon. */
+  const [serverSyncedFor, setServerSyncedFor] = useState<string | null>(null);
   useEffect(() => {
-    if (!identity) return;
-    // Async: the list is set after the server answers, not in this pass.
+    if (!identity || !loaded || feed.syncedFor !== identity) return;
+    const fresh = feed.items.filter((a) => (a.type === 'assessment_invite' || a.type === 'interview_invite') && a.raw);
+    const sentAt = feed.fetchedAt;
+    const now = Date.now();
+    let added = false;
+    // Applying a server read into local state is this effect's whole job.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void pullMine();
-    /* No steady poll: a run this browser knows is followed by the per-run poll
-       below, and one started on another device is picked up on the next tab
-       focus (at most once per MINE_EVERY_MS). A 60s poll on every page, with
-       nothing sending, cost a round trip a minute for nothing. */
-    let lastPull = Date.now();
-    const onFocus = () => {
-      if (document.visibilityState === 'hidden' || Date.now() - lastPull < MINE_EVERY_MS) return;
-      lastPull = Date.now();
-      void pullMine();
-    };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
-    };
-  }, [identity, pullMine]);
+    setJobs((prev) => {
+      const byId = new Map(prev.map((j) => [j.job_id, j]));
+      for (const a of fresh) {
+        const f = a.raw as BulkInviteJob;
+        const p = byId.get(f.job_id);
+        // A remove / restore made here after this read was sent is newer.
+        const localNewer = !!p && (p.dismissedAt ?? 0) > sentAt;
+        const hide = localNewer ? { dismissed: p!.dismissed, dismissedAt: p!.dismissedAt }
+          : { dismissed: a.dismissed, dismissedAt: a.dismissed ? (p?.dismissed ? p.dismissedAt ?? sentAt : sentAt) : p?.dismissedAt };
+        if (!p && !a.dismissed) added = true;
+        byId.set(f.job_id, p
+          ? { ...p, ...f, ...withNames(f, p), ...hide, syncedAt: now }
+          : ({ ...f, ...withNames(f), ...hide, trackedAt: f.created_at ?? new Date().toISOString(), syncedAt: now } as TrackedBulkInvite));
+      }
+      return [...byId.values()].filter(keep)
+        .sort((a, b) => (b.created_at ?? b.trackedAt).localeCompare(a.created_at ?? a.trackedAt));
+    });
+    if (added) setWidget((w) => (w === 'hidden' ? 'icon' : w));
+    setServerSyncedFor(identity);
+  }, [identity, loaded, feed.syncedFor, feed.generation, feed.items, feed.fetchedAt]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setServerSyncedFor(null);
+  }, [identity]);
+  const feedRefresh = feed.refresh;
+  const refreshMine = useCallback(() => { feedRefresh(); }, [feedRefresh]);
 
   const [iconShown, setIconShown] = useState(false);
 
@@ -422,8 +428,8 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     jobs, activeJobs, track, sync, dismiss, restore, inPopupIds, setInPopup,
     openResultsFor: openResults?.id ?? null, openResultsTab: openResults?.tab ?? 'all', setOpenResultsFor,
     openResultsBack: openResults?.onBack ?? null,
-    widget, setWidget, refreshMine, iconShown, setIconShown,
-  }), [jobs, activeJobs, track, sync, dismiss, restore, inPopupIds, setInPopup, openResults, setOpenResultsFor, widget, refreshMine, iconShown]);
+    widget, setWidget, refreshMine, iconShown, setIconShown, serverSyncedFor,
+  }), [jobs, activeJobs, track, sync, dismiss, restore, inPopupIds, setInPopup, openResults, setOpenResultsFor, widget, refreshMine, iconShown, serverSyncedFor]);
 
   return <BulkInviteProgressContext.Provider value={value}>{children}</BulkInviteProgressContext.Provider>;
 }
