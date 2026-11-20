@@ -45,7 +45,7 @@ const CHIP: Record<BulkInviteItemStatus, { label: string; className: string }> =
   queued: { label: 'Queued', className: 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 ring-gray-200 dark:ring-slate-700' },
   processing: { label: 'Sending…', className: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' },
   sent: { label: 'Sent', className: 'bg-success-subtle text-success ring-success-line' },
-  skipped: { label: 'Skipped', className: 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 ring-gray-200 dark:ring-slate-700' },
+  skipped: { label: 'Skipped', className: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/25' },
   failed: { label: 'Failed', className: 'bg-destructive-subtle text-destructive ring-destructive-line' },
   cancelled: { label: 'Cancelled', className: 'bg-warning-subtle text-warning-strong ring-warning-line' },
 };
@@ -328,7 +328,7 @@ export default function BulkInviteProgressPanel({
   /* The bar: one segment per outcome, inside an inset rounded bar. */
   const segments = [
     { key: 'sent', n: job.sent, bar: 'bg-success' },
-    { key: 'skipped', n: job.skipped, bar: 'bg-gray-400 dark:bg-slate-500' },
+    { key: 'skipped', n: job.skipped, bar: 'bg-brand-orange' },
     { key: 'cancelled', n: job.cancelled ?? 0, bar: 'bg-warning-strong' },
     { key: 'failed', n: job.failed, bar: 'bg-destructive' },
     { key: 'processing', n: active ? Math.min(job.processing ?? 0, job.remaining) : 0, bar: 'bg-brand-blue animate-pulse' },
@@ -338,7 +338,7 @@ export default function BulkInviteProgressPanel({
     { key: 'all', label: 'All', n: job.total, icon: <Layers />, tone: 'text-gray-500 dark:text-slate-400', hint: 'Every candidate in this send.' },
     { key: 'remaining', label: 'Queue', n: job.remaining, icon: (job.processing ?? 0) > 0 && active ? <Loader2 className="animate-spin" /> : <Clock />, tone: 'text-gray-600 dark:text-slate-300', hint: 'Waiting their turn, or being sent right now.' },
     { key: 'sent', label: 'Sent', n: job.sent, icon: <CheckCircle2 />, tone: 'text-success', hint: 'The invitation reached the candidate’s mail server.' },
-    { key: 'skipped', label: 'Skipped', n: job.skipped, icon: <SkipForward />, tone: 'text-gray-500 dark:text-slate-400', hint: 'Left out on purpose — e.g. already invited to this version, or no email.' },
+    { key: 'skipped', label: 'Skipped', n: job.skipped, icon: <SkipForward />, tone: 'text-brand-orange-deep', hint: 'Left out on purpose — e.g. already invited to this version, or no email.' },
     { key: 'failed', label: 'Failed', n: job.failed, icon: <XCircle />, tone: 'text-destructive', hint: 'Could not be delivered — see why on the row, then Edit or Send again.' },
     { key: 'cancelled', label: 'Cancelled', n: job.cancelled ?? 0, icon: <XCircle />, tone: 'text-warning-strong', hint: 'Stopped before it was sent — no units used.' },
   ];
@@ -603,12 +603,12 @@ export default function BulkInviteProgressPanel({
           const isSent = r.status === 'sent';
           const isPicked = pickAll ? !!r.can_retry : picked.has(r.id);
           const avatar = isSent ? 'bg-brand-blue/10 text-brand-blue'
-            : r.status === 'skipped' ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400'
+            : r.status === 'skipped' ? 'bg-brand-orange/10 text-brand-orange-deep'
             : r.status === 'cancelled' ? 'bg-warning-subtle text-warning-strong'
             : r.status === 'failed' ? 'bg-destructive-subtle text-destructive'
             : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300';
           const reasonColor = r.status === 'failed' ? 'text-destructive'
-            : r.status === 'skipped' ? 'text-gray-500 dark:text-slate-400'
+            : r.status === 'skipped' ? 'text-brand-orange-deep'
             : r.status === 'cancelled' ? 'text-warning-strong'
             : 'text-gray-700 dark:text-slate-300';
           return (

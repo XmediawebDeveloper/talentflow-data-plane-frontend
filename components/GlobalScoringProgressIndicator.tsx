@@ -502,6 +502,8 @@ export default function GlobalScoringProgressIndicator() {
     : 100;
   const finishedScoring = activeScoringJobs.filter(isRunDone);
   const finishedInvites = inviteJobs.filter(j => !inviteRunning(j));
+  /* Page tasks (e.g. a finished resume upload) that can be cleared. */
+  const finishedExternal = externalTasks.filter(t => t.done && t.onDismiss);
 
   /* ── Overview popup ── */
   const overviewRows = items.flatMap(i => (i.row ? [i.row] : []));
@@ -781,12 +783,13 @@ export default function GlobalScoringProgressIndicator() {
           </ul>
           <footer className="flex items-center justify-between border-t border-[var(--border-dark)] bg-[var(--surface)] px-2.5 py-1">
             <span className="text-[9px] text-[var(--text-muted)]">Keeps running even if you change pages.</span>
-            {(finishedScoring.length > 0 || finishedInvites.length > 0) && (
+            {(finishedScoring.length > 0 || finishedInvites.length > 0 || finishedExternal.length > 0) && (
               <button
                 type="button"
                 onClick={() => {
                   finishedScoring.forEach(job => clearJob(job.jobId));
                   if (finishedInvites.length) invite?.dismiss(finishedInvites.map(j => j.job_id));
+                  finishedExternal.forEach(t => t.onDismiss?.());
                 }}
                 className="text-[10px] text-[var(--muted-foreground)] hover:text-brand-blue hover:underline"
               >

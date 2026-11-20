@@ -21,6 +21,7 @@ import { type ResumeVersionFilter, RESUME_VERSION_FILTER_OPTIONS, keepByVersion 
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
 import { useResumeSelection } from '@/components/resumes/ResumeSelectionContext';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
+import ResumeSelectAllMenu, { ResumeBulkActions } from '@/components/resumes/ResumeSelectAllMenu';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import { useResumeUploadFlow } from '@/components/resumes/useResumeUploadFlow';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
@@ -905,9 +906,11 @@ function CardFolderNameInput({
  * organised into folders. Rendered by the tabbed shell at
  * app/(dashboard)/recruitment/resume-database/page.tsx, which owns the
  * breadcrumb and the tab strip and passes them down as `header` so they sit
- * inside this view's white card (and stay put while the list loads).
+ * inside this view's white card (and stay put while the list loads). `header`
+ * takes this view's title row and places it between the breadcrumb and tabs.
  */
-export default function MyResumesView({ header }: { header?: ReactNode }) {
+export default function MyResumesView({ header }: { header?: (titleRow: ReactNode) => ReactNode }) {
+  const withHeader = (titleRow: ReactNode) => (header ? header(titleRow) : titleRow);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, hasPermission, hasPermissionCode, isLoading: authLoading } = useAuth();
@@ -930,7 +933,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [folders, setFolders] = useState<FolderType[]>([]);
   // Shared with the Shared Database tab (see ResumeSelectionContext); the row
   // cache lets bulk actions read ticked resumes that are not on screen.
-  const { selectedResumes, setSelectedResumes, rowById, selectedRows } = useResumeSelection(resumes);
+  const { selectedResumes, setSelectedResumes, rowById, selectedRows, rememberRows } = useResumeSelection(resumes);
+  /* "Select all resumes": the last list request (folder, search, filters,
+     sort, versions), re-run across every page; the ids it selected. */
+  const lastListRequestRef = useRef<{ params: Record<string, unknown>; versionFilter: ResumeVersionFilter } | null>(null);
+  const [selectingAllResumes, setSelectingAllResumes] = useState(false);
+  const [allMatchingIds, setAllMatchingIds] = useState<string[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   // The folder id the currently-rendered `resumes` actually belong to. Set in
   // lockstep with setResumes in fetchData — unlike `selectedFolder`, which
@@ -1469,6 +1477,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         }
       }
 
+      lastListRequestRef.current = { params: searchParams, versionFilter };
+
       /* Guard replay of a param-effect call (see `dedupe` above): skip it when
          it asks for exactly what the fetch that just finished loaded. On a
          refresh the restored view usually equals the mount fetch's defaults,
@@ -1838,6 +1848,35 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   // must be preserved — wiping them would surprise users with multi-folder
   // selections (e.g. picking 5 in folder A then opening folder B and clicking
   // Select All used to drop the original 5).
+  /* Select all resumes — every page of the current list (same folder, search,
+     filters, sort and versions), not just the one on screen. The rows go into
+     the shared row cache so the bulk actions can read them. Team-member email
+     resumes stay out, as with the page's own Select All. */
+  const selectAllMatchingResumes = async () => {
+    const last = lastListRequestRef.current;
+    if (!last || selectingAllResumes) return;
+    setSelectingAllResumes(true);
+    const toastId = toast.loading('Selecting all resumes…');
+    try {
+      const { page: _page, page_size: _pageSize, ...rest } = last.params;
+      void _page; void _pageSize;
+      const all = await fetchAllRows((ps, pg) => resumeService.list({ ...rest, page: pg, page_size: ps }));
+      const rows = keepByVersion(all.items || [], last.versionFilter)
+        .map(convertApiResumeToRow)
+        .filter(r => !(r.is_tenant_user_email || r.isTenantUserEmail));
+      rememberRows(rows);
+      const ids = rows.map(r => r.id);
+      setAllMatchingIds(ids);
+      setSelectedResumes(prev => Array.from(new Set([...prev, ...ids])));
+      toast.success(`${ids.length} resume${ids.length === 1 ? '' : 's'} selected`, { id: toastId });
+    } catch (error) {
+      toast.dismiss(toastId);
+      showErrorToast(error, "Couldn't select all resumes", { retry: selectAllMatchingResumes });
+    } finally {
+      setSelectingAllResumes(false);
+    }
+  };
+
   const handleSelectAll = (selected: boolean) => {
     // Resumes locked out for a team-member email never enter a "select all".
     const visibleIds = filteredResumes
@@ -3122,26 +3161,27 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="tf-page-sheet">
-            {/* Breadcrumb + tab strip — rendered for real even while the list
-                loads, so switching tabs stays possible and nothing shifts. */}
-            {header}
-            {/* Header row */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
-              <div className="w-full sm:w-auto flex items-start gap-3">
-                <Skeleton className="hidden sm:block h-9 w-9 rounded-lg flex-shrink-0" />
-                <div>
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-                    <Skeleton className="h-6 w-48" />
-                    <Skeleton className="h-5 w-20 rounded-full" />
+            {/* Breadcrumb › title row (skeleton) › tab strip — the breadcrumb
+                and tabs render for real even while the list loads, so
+                switching tabs stays possible and nothing shifts. */}
+            {withHeader(
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                <div className="w-full sm:w-auto flex items-start gap-3">
+                  <Skeleton className="hidden sm:block h-9 w-9 rounded-lg flex-shrink-0" />
+                  <div>
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
+                      <Skeleton className="h-6 w-48" />
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                    <Skeleton className="h-4 w-40" />
                   </div>
-                  <Skeleton className="h-4 w-40" />
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <Skeleton className="h-9 w-32 rounded-md flex-1 sm:flex-initial" />
+                  <Skeleton className="h-9 w-32 rounded-md flex-1 sm:flex-initial" />
                 </div>
               </div>
-              <div className="flex gap-2 w-full sm:w-auto">
-                <Skeleton className="h-9 w-32 rounded-md flex-1 sm:flex-initial" />
-                <Skeleton className="h-9 w-32 rounded-md flex-1 sm:flex-initial" />
-              </div>
-            </div>
+            )}
             {/* Search / toolbar card */}
             <div className="tf-card-soft p-3 sm:p-4 mb-4">
               <div className="flex items-center gap-3">
@@ -3173,7 +3213,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="tf-page-sheet">
-      {header}
+      {withHeader(
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <div className="w-full sm:w-auto min-w-0 flex items-start gap-3">
           <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
@@ -3242,6 +3282,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           </button>
         </div>
       </div>
+      )}
 
       {/* No frame of its own: this wraps the page's whole list inside the white
           page panel, so a border/ring/shadow here was a card-in-panel double
@@ -3249,52 +3290,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           content inset. Still no overflow-hidden — that would make it a scroll
           container the sticky search bar below would pin to. */}
       <div className="bg-white">
-        {/* Bulk Actions Bar - Shows at TOP when resumes selected */}
-        {selectedResumes.length > 0 && (() => {
-          // Detect the Archived Resumes folder context — when active, the
-          // recruiter is looking at archived resumes, so swap Archive → Unarchive
-          // and hide Apply-to-Job / Assessment / AI Talent Match (those actions
-          // shouldn't apply to retired records).
-          const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
-          const isArchivedContext =
-            !!archivedFolder &&
-            (selectedFolder === archivedFolder.id ||
-              selectedResumes.every(id => rowById(id)?.isArchived));
-          return (
-          <BulkActionsBar
-            selectedCount={selectedResumes.length}
-            onCancel={() => setSelectedResumes([])}
-            onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
-            onMoveToFolderDisabled={!canMoveMyResumes}
-            onMoveToFolderDisabledReason="You do not have permission to move resumes to a folder"
-            onApplyToJob={!isArchivedContext ? handleApplyToJob : undefined}
-            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
-            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
-            onDownload={handleBulkDownload}
-            // Own uploads: downloading needs Resume Upload access (lib/permissions/resumeDownload.ts).
-            onDownloadDisabled={!canDownloadMyResumes}
-            onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
-            onDelete={() => handleDeleteResumes(selectedResumes)}
-            onDeleteDisabled={!canDeleteMyResumes}
-            onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
-            folders={folders.filter(f => f.id !== 'all')}
-            onAssessment={!isArchivedContext ? handleAssessment : undefined}
-            onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment')))}
-            onAssessmentDisabledReason={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? "You do not have permission to invite candidates to an assessment" : PLAN_LOCKED_MESSAGE}
-            onArchive={!isArchivedContext ? () => setIsArchiveModalOpen(true) : undefined}
-            onArchiveDisabled={!canArchiveMyResumes}
-            onArchiveDisabledReason="You do not have permission to archive resumes"
-            onUnarchive={isArchivedContext ? () => handleUnarchiveResumes(selectedResumes) : undefined}
-            onUnarchiveDisabled={!canArchiveMyResumes}
-            onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
-            // No `my_resumes:ai_interview` action code exists yet, so this
-            // follows the AI Interviews module's own share permission.
-            onAIInterview={!isArchivedContext ? handleAIInterview : undefined}
-            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview')))}
-            onAIInterviewDisabledReason={!(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview'))) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
-          />
-          );
-        })()}
 
         {/* Search pinned to the top of the scroll viewport so it stays reachable
             while the list scrolls beneath it. Opaque bg so rows don't show
@@ -3306,6 +3301,79 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 Job Openings toolbar (the buttons drop under the search only below
                 ~360px); Folder Filters takes its own line under them. */}
             <div className="flex flex-wrap items-start gap-2 xl:flex-nowrap">
+              {/* Select All — what to select (as on Job Openings). The bulk
+                  actions open from the Actions (N) row below. */}
+              {(() => {
+                const pageIds = filteredResumes
+                  .filter(r => !(r.is_tenant_user_email || r.isTenantUserEmail))
+                  .map(r => r.id);
+                return (
+                  <ResumeSelectAllMenu
+                    selectedCount={selectedResumes.length}
+                    pageCount={pageIds.length}
+                    pageSelected={pageIds.length > 0 && pageIds.every(id => selectedResumes.includes(id))}
+                    onSelectPage={() => handleSelectAll(true)}
+                    onDeselectPage={() => handleSelectAll(false)}
+                    onClear={() => setSelectedResumes([])}
+                    totalCount={totalItems}
+                    onSelectAll={() => { void selectAllMatchingResumes(); }}
+                    allSelected={allMatchingIds.length > 0 && allMatchingIds.length === totalItems && allMatchingIds.every(id => selectedResumes.includes(id))}
+                  />
+                );
+              })()}
+              {/* Actions (N) + Clear — beside Select All, before the search, while
+                  anything is ticked (the Select Applicants to Score popup). */}
+              <ResumeBulkActions
+                count={selectedResumes.length}
+                onClear={() => setSelectedResumes([])}
+                renderActions={(close) => {
+                      // Detect the Archived Resumes folder context — when active, the
+                      // recruiter is looking at archived resumes, so swap Archive → Unarchive
+                      // and hide Apply-to-Job / Assessment / AI Talent Match (those actions
+                      // shouldn't apply to retired records).
+                      const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+                      const isArchivedContext =
+                        !!archivedFolder &&
+                        (selectedFolder === archivedFolder.id ||
+                          selectedResumes.every(id => rowById(id)?.isArchived));
+                      return (
+                      <BulkActionsBar
+                        variant="menu"
+                        onAction={close}
+                        selectedCount={selectedResumes.length}
+                        onCancel={() => setSelectedResumes([])}
+                        onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
+                        onMoveToFolderDisabled={!canMoveMyResumes}
+                        onMoveToFolderDisabledReason="You do not have permission to move resumes to a folder"
+                        onApplyToJob={!isArchivedContext ? handleApplyToJob : undefined}
+                        onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
+                        onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
+                        onDownload={handleBulkDownload}
+                        // Own uploads: downloading needs Resume Upload access (lib/permissions/resumeDownload.ts).
+                        onDownloadDisabled={!canDownloadMyResumes}
+                        onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
+                        onDelete={() => handleDeleteResumes(selectedResumes)}
+                        onDeleteDisabled={!canDeleteMyResumes}
+                        onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
+                        folders={folders.filter(f => f.id !== 'all')}
+                        onAssessment={!isArchivedContext ? handleAssessment : undefined}
+                        onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment')))}
+                        onAssessmentDisabledReason={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? "You do not have permission to invite candidates to an assessment" : PLAN_LOCKED_MESSAGE}
+                        onArchive={!isArchivedContext ? () => setIsArchiveModalOpen(true) : undefined}
+                        onArchiveDisabled={!canArchiveMyResumes}
+                        onArchiveDisabledReason="You do not have permission to archive resumes"
+                        onUnarchive={isArchivedContext ? () => handleUnarchiveResumes(selectedResumes) : undefined}
+                        onUnarchiveDisabled={!canArchiveMyResumes}
+                        onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
+                        // No `my_resumes:ai_interview` action code exists yet, so this
+                        // follows the AI Interviews module's own share permission.
+                        onAIInterview={!isArchivedContext ? handleAIInterview : undefined}
+                        onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview')))}
+                        onAIInterviewDisabledReason={!(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview'))) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
+                      />
+                      );
+                }}
+              />
               <div className="min-w-[6.5rem] flex-1 basis-0">
                 <UnifiedFolderResumeSearch
                   query={searchQuery}

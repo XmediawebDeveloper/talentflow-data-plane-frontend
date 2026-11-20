@@ -6,7 +6,7 @@ import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Cell, Pie, PieChart as RechartsPieChart, ResponsiveContainer } from 'recharts';
-import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, FileDown, Video, MinusSquare, ChevronsUpDown, ChevronsDownUp, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList, MinusCircle } from 'lucide-react';
+import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, FileDown, Video, MinusSquare, ChevronsUpDown, ChevronsDownUp, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList, MinusCircle, Plus } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId, Fragment } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -567,6 +567,7 @@ export default function ResumeScoringPage({
   // ✅ RBAC: Get user permissions (bypass for tenant admin)
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
+  const canCreateJD = isTenantAdmin || !!user?.permissions?.canCreateJD;
   const canExport = isTenantAdmin || hasPermissionCode('scoring:export');
   // Resume Scoring's own export right — the same check ScoredResumesTable's
   // Export uses, so View by Job and View by Candidates gate it identically.
@@ -6232,6 +6233,21 @@ export default function ResumeScoringPage({
         icon={<ClipboardList className="h-5 w-5" />}
         title="Score Resumes"
         description="Select a job and let AI score candidates."
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => {
+              if (!canCreateJD) return;
+              router.push('/recruitment/jd-creation?from=resume-scoring');
+            }}
+            aria-disabled={!canCreateJD}
+            className={`w-full sm:w-auto${!canCreateJD ? ' opacity-60 cursor-not-allowed' : ''}`}
+            title={!canCreateJD ? 'You do not have permission to create job descriptions' : undefined}
+            icon={<Plus className="w-4 h-4" />}
+          >
+            Create New Job
+          </Button>
+        }
       />
 
       {/* Job Selection — static on the page: the same search, job cards and

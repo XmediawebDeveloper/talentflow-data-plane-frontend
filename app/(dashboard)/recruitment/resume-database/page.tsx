@@ -17,7 +17,7 @@
  * that view's white card, above its title row.
  */
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import FirstTimeHint from '@/components/ui/first-time-hint';
 import { RESUME_DB_ACTIONS_HINT } from '@/components/resumes/useInPageScoringProgress';
 import { useSearchParams } from 'next/navigation';
@@ -158,9 +158,12 @@ export default function ResumeDatabasePage() {
     };
   }, [bothPools, activeTab]);
 
-  const header = (
+  /* Breadcrumb › the view's own title row (title, count, actions) › tab strip.
+     Each view hands its title row in, so it sits above the tabs. */
+  const header = (titleRow: ReactNode) => (
     <>
-      <PageBreadcrumb className={showTabs ? 'mb-3' : 'mb-4 md:mb-6'} items={CRUMBS} barRef={crumbRef} />
+      <PageBreadcrumb className="mb-4 md:mb-6" items={CRUMBS} barRef={crumbRef} />
+      {titleRow}
       {showTabs && (
         <Tabs value={activeTab ?? undefined} onValueChange={handleTabChange} className="mb-5 md:mb-6">
           {/* Sized to its labels and visibly grooved, so the selected pool reads

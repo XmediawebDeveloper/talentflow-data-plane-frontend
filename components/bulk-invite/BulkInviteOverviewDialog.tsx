@@ -34,7 +34,7 @@ const STATUS: Record<BulkInviteItemStatus, { label: string; cls: string; icon: R
   queued: { label: 'In queue', cls: 'bg-slate-50 text-gray-700 ring-gray-200', icon: <Clock className="w-3.5 h-3.5" /> },
   processing: { label: 'Sending', cls: 'bg-brand-blue/5 text-brand-blue ring-brand-blue/20', icon: <Loader2 className="w-3.5 h-3.5 animate-spin" /> },
   sent: { label: 'Sent successfully', cls: 'bg-success-subtle text-success ring-success/30', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
-  skipped: { label: 'Skipped', cls: 'bg-warning-subtle text-warning-strong ring-warning-line', icon: <SkipForward className="w-3.5 h-3.5" /> },
+  skipped: { label: 'Skipped', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/25', icon: <SkipForward className="w-3.5 h-3.5" /> },
   failed: { label: 'Failed', cls: 'bg-destructive-subtle text-destructive ring-destructive-line', icon: <XCircle className="w-3.5 h-3.5" /> },
   cancelled: { label: 'Cancelled', cls: 'bg-warning-subtle text-warning-strong ring-warning-line', icon: <Ban className="w-3.5 h-3.5" /> },
 };
@@ -160,10 +160,10 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
   const to = Math.min(filtered.length, current * perPage);
 
   const chips: { key: BulkInviteItemStatus; label: string; icon: React.ReactNode }[] = [
-    { key: 'queued', label: 'Queue', icon: <Clock className="w-4 h-4 text-brand-blue" /> },
+    { key: 'queued', label: 'Queue', icon: <Clock className="w-4 h-4 text-gray-500 dark:text-slate-400" /> },
     { key: 'processing', label: 'Sending', icon: <Loader2 className={`w-4 h-4 text-brand-blue ${counts.processing > 0 ? 'animate-spin' : ''}`} /> },
     { key: 'sent', label: 'Sent', icon: <CheckCircle2 className="w-4 h-4 text-success" /> },
-    { key: 'skipped', label: 'Skipped', icon: <SkipForward className="w-4 h-4 text-gray-500" /> },
+    { key: 'skipped', label: 'Skipped', icon: <SkipForward className="w-4 h-4 text-brand-orange-deep" /> },
     { key: 'cancelled', label: 'Cancelled', icon: <Ban className="w-4 h-4 text-warning-strong" /> },
     { key: 'failed', label: 'Failed', icon: <XCircle className="w-4 h-4 text-destructive" /> },
   ];

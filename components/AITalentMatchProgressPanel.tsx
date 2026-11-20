@@ -10,6 +10,9 @@ interface AITalentMatchProgressPanelProps {
   jobId: string;
   onComplete: (results: MatchedCandidate[]) => void;
   onError?: (error: string) => void;
+  /** The dock's "Clear finished" on a match that finished while minimized:
+   *  the host drops this panel without opening the results (they are saved). */
+  onDismiss?: () => void;
 }
 
 export default function AITalentMatchProgressPanel({
@@ -17,7 +20,11 @@ export default function AITalentMatchProgressPanel({
   jobId,
   onComplete,
   onError,
+  onDismiss,
 }: AITalentMatchProgressPanelProps) {
+  const onDismissRef = useRef(onDismiss);
+  useEffect(() => { onDismissRef.current = onDismiss; });
+  const canDismiss = !!onDismiss;
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +71,12 @@ export default function AITalentMatchProgressPanel({
       done: !!heldResults,
       detail: heldResults ? `${heldResults.length} matching candidate${heldResults.length === 1 ? '' : 's'} found` : undefined,
       onOpen: () => openFromDock.current(),
+      // Clearable only once finished (results held) and when the host handles it.
+      onDismiss: heldResults && canDismiss
+        ? () => { removeBackgroundTask(taskId); onDismissRef.current?.(); }
+        : undefined,
     });
-  }, [view, error, progress, heldResults, jobTitle, taskId]);
+  }, [view, error, progress, heldResults, jobTitle, taskId, canDismiss]);
   useEffect(() => () => removeBackgroundTask(taskId), [taskId]);
 
   const minimize = () => {

@@ -23,6 +23,9 @@ export interface ExternalBackgroundTask {
   detail?: string;
   /** Reopen the task's own popup (or hand over its results). */
   onOpen: () => void;
+  /** The dock's "Clear finished" on a done task. The owner stops tracking it
+   *  (and so stops re-registering it). Tasks without one are left in place. */
+  onDismiss?: () => void;
 }
 
 const tasks = new Map<string, ExternalBackgroundTask>();
