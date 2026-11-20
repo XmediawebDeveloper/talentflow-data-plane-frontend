@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Tag, Filter, X, Save, AlertCircle, MessageSquare, FileText, CheckCircle2 } from 'lucide-react';
 import api from '@/lib/services/api';
+import { cachedList, listCacheKey, listReadOptions, type ListReadOptions } from '@/lib/utils/listCache';
 import { toast } from '@/components/ui/enhanced-toast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
@@ -239,17 +240,22 @@ export default function HRQuestionBank() {
   // Load questions from API
   useEffect(() => {
     if (canViewHRQuestionBank) {
-      loadQuestions();
+      loadQuestions({ reuseRecent: true });
     } else {
       setLoading(false);
     }
   }, [canViewHRQuestionBank]);
 
-  const loadQuestions = async () => {
+  /* `reuseRecent` (arrival only): coming back within 30 s shows the list it
+     just read. The reloads after a save / delete ask the server. */
+  const loadQuestions = async (opts?: ListReadOptions) => {
     setLoading(true);
     try {
-      const response = await api.get('/hr-question-bank');
-      const data = response.data || [];
+      const data = (await cachedList(
+        listCacheKey('hr-question-bank'),
+        async () => (await api.get('/hr-question-bank')).data,
+        listReadOptions(opts),
+      )) || [];
       // Map backend fields to frontend format
       const mapped = data.map((q: any) => ({
         id: q.id,

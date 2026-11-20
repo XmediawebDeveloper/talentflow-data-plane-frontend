@@ -16,8 +16,8 @@ import type { ActivityRef } from '@/lib/services/activityService';
  *
  * Where the list comes from:
  *   - the server: every read of the activity feed (ActivityFeedContext —
- *     sign-in, tab focus, every 10s while something runs, every minute
- *     otherwise) carries this user's sends with the same payload as
+ *     sign-in, tab focus, every 10s while the tab is visible)
+ *     carries this user's sends with the same payload as
  *     GET /bulk-invites/mine — so the widget works on any browser, after
  *     clearing storage, and picks up sends started on another device;
  *   - which runs were removed from the widget is kept on the server too

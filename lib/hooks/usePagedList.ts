@@ -45,6 +45,10 @@ export interface UsePagedListOptions<T, S, Q extends PagedListQuery> {
   fetchPage: (query: Q) => Promise<PagedResult<T>>;
   /** Stats ignore paging/sort: receives the query without page, page_size, sort_*. */
   fetchStats?: (filters: Omit<Q, 'page' | 'page_size'>) => Promise<S>;
+  /** Query keys the stats do not depend on (e.g. a status tab whose counts the
+   *  cards show). Left out of the stats request AND its cache key, so changing
+   *  one re-reads the page only, not the stats. */
+  statsIgnore?: readonly string[];
   enabled?: boolean;
   /** Prefetch page+1 after the current page lands (default true). */
   prefetchNext?: boolean;
@@ -69,16 +73,16 @@ export interface UsePagedListResult<T, S> {
 
 const SORT_KEYS = new Set(['page', 'page_size', 'sort_by', 'sort_dir', 'sort_order']);
 
-function statsFilters<Q extends PagedListQuery>(query: Q): Omit<Q, 'page' | 'page_size'> {
+function statsFilters<Q extends PagedListQuery>(query: Q, ignore?: readonly string[]): Omit<Q, 'page' | 'page_size'> {
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(query as object)) if (!SORT_KEYS.has(k)) out[k] = v;
+  for (const [k, v] of Object.entries(query as object)) if (!SORT_KEYS.has(k) && !ignore?.includes(k)) out[k] = v;
   return out as Omit<Q, 'page' | 'page_size'>;
 }
 
 export function usePagedList<T, S = unknown, Q extends PagedListQuery = PagedListQuery>(
   opts: UsePagedListOptions<T, S, Q>,
 ): UsePagedListResult<T, S> {
-  const { name, query, fetchPage, fetchStats, enabled = true, prefetchNext = true, errorToast } = opts;
+  const { name, query, fetchPage, fetchStats, statsIgnore, enabled = true, prefetchNext = true, errorToast } = opts;
   const errorToastRef = useRef(errorToast);
   errorToastRef.current = errorToast;
   const [items, setItems] = useState<T[]>([]);
@@ -97,8 +101,9 @@ export function usePagedList<T, S = unknown, Q extends PagedListQuery = PagedLis
 
   const seqRef = useRef(0);
   const freshRef = useRef(false);
+  const statsStampRef = useRef<{ stamp: string; promise: Promise<S | null> } | null>(null);
   const queryKey = JSON.stringify(query);
-  const statsKey = JSON.stringify(statsFilters(query));
+  const statsKey = JSON.stringify(statsFilters(query, statsIgnore));
 
   useEffect(() => {
     if (!enabled) return;
@@ -112,9 +117,15 @@ export function usePagedList<T, S = unknown, Q extends PagedListQuery = PagedLis
 
     const pageP = cachedList(listCacheKey(`${name}:page`, q as unknown as Record<string, unknown>), () => fetchPageRef.current(q), cacheOpts);
     const statsFn = fetchStatsRef.current;
-    const statsP = statsFn
-      ? cachedList(listCacheKey(`${name}:stats`, JSON.parse(statsKey)), () => statsFn(JSON.parse(statsKey)), cacheOpts)
-      : Promise.resolve(null as S | null);
+    // Paging, sorting or an ignored key changed: the cards on screen still hold.
+    const statsStamp = `${statsKey}|${reloadTick}`;
+    let statsP: Promise<S | null>;
+    if (!statsFn) statsP = Promise.resolve(null);
+    else if (statsStampRef.current?.stamp === statsStamp) statsP = statsStampRef.current.promise; // same (maybe still in-flight) read
+    else {
+      statsP = cachedList(listCacheKey(`${name}:stats`, JSON.parse(statsKey)), () => statsFn(JSON.parse(statsKey)), cacheOpts);
+      statsStampRef.current = { stamp: statsStamp, promise: statsP };
+    }
 
     pageP.then(
       (res) => {
@@ -142,7 +153,11 @@ export function usePagedList<T, S = unknown, Q extends PagedListQuery = PagedLis
     );
     statsP.then(
       (s) => { if (seq === seqRef.current) setStats(s); },
-      (err) => { if (seq === seqRef.current) console.warn(`[usePagedList:${name}] stats failed`, err); },
+      (err) => {
+        if (statsStampRef.current?.promise === statsP) statsStampRef.current = null; // let the next change retry
+        if (seq !== seqRef.current) return;
+        console.warn(`[usePagedList:${name}] stats failed`, err);
+      },
     );
     Promise.allSettled([pageP, statsP]).then(() => {
       if (seq === seqRef.current) setRefreshing(false);

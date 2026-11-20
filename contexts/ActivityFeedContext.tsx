@@ -27,7 +27,10 @@ import { activityService, isActivityRunning, type ActivityItem, type ActivityRef
  */
 
 const ACTIVE_POLL_MS = 10_000;
-const IDLE_POLL_MS = 60_000;
+/* Same as while running: most activities finish in seconds (a match in under
+   2s, a small scoring run in ~15s), so a slower idle read meant another device
+   often showed a run only long after it had finished. */
+const IDLE_POLL_MS = 10_000;
 const FOCUS_MIN_MS = 5_000;
 const WINDOW_HOURS = 24;
 

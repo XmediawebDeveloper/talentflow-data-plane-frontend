@@ -4168,7 +4168,8 @@ export default function ResumeScoringPage({
               {/* Sort by, then List / Grid — where Export used to be (Export
                   is now in the Actions menu, shown once jobs are ticked). */}
               {/* Phones sort from the Sort menu in the row below (PhoneSortMenu). */}
-              {displayHistory.length > 0 && (
+              {/* Always shown, an empty list included. */}
+              {(
                 <div className="tf-jobs-sort contents">
                 <SortByControl
                   value={jobSortBy}
@@ -4291,7 +4292,7 @@ export default function ResumeScoringPage({
           )}
           {viewPills}
           {/* Phones: the Job Openings list's Sort menu (the inline Sort by above hides). */}
-          {displayHistory.length > 0 && (
+          {(
             <PhoneSortMenu<JobSortKey>
               value={jobSortBy}
               order={jobSortOrder}
