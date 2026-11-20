@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useScoringProgress, ScoringJob, toMatchResult } from '@/contexts/ScoringProgressContext';
 import { Check, CheckCircle2, Loader2, Layers, ChevronDown, ChevronRight, Maximize2, Search, Trash2, Sparkles, Play, FileText, ClipboardList, Video, Upload, X } from 'lucide-react';
 import ActivitiesOverviewModal, { ACTIVITY_MODULE, type ActivityKind, type ActivityRow } from '@/components/activities/ActivitiesOverviewModal';
@@ -11,7 +11,9 @@ import { useBulkInviteActions } from '@/components/bulk-invite/useBulkInviteActi
 import { inviteStateOf, inviteVersionOf } from '@/components/bulk-invite/BulkInviteProgressIndicator';
 import { bulkInviteNeedsLook, formatTimeLeft, isBulkInviteActive } from '@/lib/services/bulkInviteService';
 import type { TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
-import { useExternalBackgroundTasks, type ExternalBackgroundTask } from '@/lib/backgroundTasks';
+import { getUploadHistoryOpener, useExternalBackgroundTasks, useLocalTalentMatchJds, wasLocalTalentMatch, type ExternalBackgroundTask } from '@/lib/backgroundTasks';
+import { useOptionalActivityFeed } from '@/contexts/ActivityFeedContext';
+import type { ActivityItem, ActivityRef } from '@/lib/services/activityService';
 import { usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -40,6 +42,7 @@ export default function GlobalScoringProgressIndicator() {
     isMainPanelOpen,
     setMinimized,
     clearJob,
+    clearCompletedJobs,
     updateItemStatus,
     onRestorePanel,
     restoredFor,
@@ -53,6 +56,27 @@ export default function GlobalScoringProgressIndicator() {
   const invite = useOptionalBulkInviteProgress();
   const inviteActions = useBulkInviteActions();
   const externalTasks = useExternalBackgroundTasks();
+  /* AI Talent Match runs and resume upload batches, from the server — the
+     same rows on every device (ActivityFeedContext). A match whose popup is
+     open in this tab is left out (that popup, or its minimized row, is it). */
+  const feed = useOptionalActivityFeed();
+  const localMatchJds = useLocalTalentMatchJds();
+  const feedItems = feed?.items;
+  const feedDismiss = feed?.dismiss;
+  const feedTasks = useMemo<ExternalBackgroundTask[]>(() => (feedItems ?? [])
+    .filter(a => !a.dismissed && (a.type === 'talent_match' || a.type === 'resume_upload'))
+    .filter(a => !(a.type === 'talent_match' && a.jd_id && localMatchJds.has(a.jd_id)))
+    .map(a => feedTask(a, {
+      openMatch: () => router.push(a.jd_id ? `/recruitment/ai-talent-match?jdId=${a.jd_id}&view=results` : '/recruitment/ai-talent-match'),
+      openUploads: () => {
+        const open = getUploadHistoryOpener();
+        if (open) open(); else router.push('/recruitment/resume-database?tab=my-resumes&upload_history=1');
+      },
+      remove: () => feedDismiss?.([{ type: a.type, id: a.id }]),
+    })),
+  [feedItems, localMatchJds, router, feedDismiss]);
+  const dockTasks = useMemo(() => [...externalTasks, ...feedTasks], [externalTasks, feedTasks]);
+
   /* Invite sends in the background: not removed, not open in their own popup —
      unless the recruiter closed them all (widget 'hidden'). */
   const inviteJobs: TrackedBulkInvite[] = invite && invite.widget !== 'hidden'
@@ -66,6 +90,36 @@ export default function GlobalScoringProgressIndicator() {
      longer derives its shape from it, so there is no frame where a panel
      flashes up between the popup closing and the flag catching up.) */
   const [listOpen, setListOpen] = useState(false);
+  /* An AI Talent Match that finishes while this device watches — started on
+     another device, or in another tab — says so, like the popup does where it
+     ran. Only a running → finished change seen here: a match already finished
+     when first seen (sign-in, reload, another laptop) is not announced. */
+  const matchSeen = useRef<{ for: string | null; status: Map<string, string> }>({ for: null, status: new Map() });
+  const feedSyncedFor = feed?.syncedFor ?? null;
+  useEffect(() => {
+    if (!feedSyncedFor || !feedItems) return;
+    const seen = matchSeen.current;
+    const first = seen.for !== feedSyncedFor;
+    if (first) { seen.for = feedSyncedFor; seen.status = new Map(); }
+    for (const a of feedItems) {
+      if (a.type !== 'talent_match') continue;
+      const before = seen.status.get(a.id);
+      seen.status.set(a.id, a.status);
+      if (first || before !== 'running' || a.status === 'running' || a.dismissed) continue;
+      if (a.jd_id && wasLocalTalentMatch(a.jd_id)) continue; // this tab's popup announced it
+      const matches = Number(a.extra?.matches ?? a.done ?? 0);
+      const view = () => { setListOpen(false); router.push(a.jd_id ? `/recruitment/ai-talent-match?jdId=${a.jd_id}&view=results` : '/recruitment/ai-talent-match'); };
+      if (a.status === 'completed') {
+        toast.success(`AI matching finished — ${a.title}`, {
+          description: `${matches} matching candidate${matches === 1 ? '' : 's'} found.`,
+          duration: 10000,
+          action: { label: 'View results', onClick: view },
+        });
+      } else if (a.status === 'failed') {
+        toast.error(`AI matching failed — ${a.title}`, { description: a.error_message ?? undefined, duration: 10000 });
+      }
+    }
+  }, [feedItems, feedSyncedFor, router]);
   /* The list and its button — a click anywhere else, or Escape, closes the
      list so it never sits over the page the recruiter went back to. */
   const listRef = useRef<HTMLElement | null>(null);
@@ -195,18 +249,32 @@ export default function GlobalScoringProgressIndicator() {
   /* Toasted but `announcedAt` not saved yet (the next render has it) —
      stops a second toast from an effect re-run in between. */
   const announcingRef = useRef<Set<string>>(new Set());
+  /* Runs seen at least once. A run that is ALREADY finished the first time it
+     shows up (a reload, or a finished run picked up from the server in another
+     browser) is not announced — the recruiter saw that toast where it ran. */
+  const seenJobsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!restoredFor) return;
     const isDone = (job: ScoringJob) => job.total > 0 && job.queued === 0 && job.processing === 0;
+    const seen = seenJobsRef.current;
     if (restoredSeenRef.current !== restoredFor) {
       restoredSeenRef.current = restoredFor;
       const finished = activeScoringJobs.filter(job => isDone(job) && !job.announcedAt).map(job => job.jobId);
       announcingRef.current = new Set(finished);
       markAnnounced(finished);
+      activeScoringJobs.forEach(job => seen.add(job.jobId));
       return;
     }
     const announcing = announcingRef.current;
     const toAnnounce = activeScoringJobs.filter(job => {
+      const firstSighting = !seen.has(job.jobId);
+      seen.add(job.jobId);
+      // Already finished when first seen (picked up from the server, finished
+      // on another device): the baseline — marked announced, no toast.
+      if (firstSighting && isDone(job)) {
+        if (!job.announcedAt) { announcing.add(job.jobId); markAnnounced([job.jobId]); }
+        return false;
+      }
       if (!isDone(job)) { announcing.delete(job.jobId); return false; }
       return !job.announcedAt && !announcing.has(job.jobId);
     });
@@ -329,7 +397,7 @@ export default function GlobalScoringProgressIndicator() {
   }, [inviteWidget, setInviteWidget]);
 
   // Nothing tracked anywhere: no dock (an invite cancel confirm may still be open).
-  if (activeScoringJobs.length === 0 && inviteJobs.length === 0 && externalTasks.length === 0) {
+  if (activeScoringJobs.length === 0 && inviteJobs.length === 0 && dockTasks.length === 0) {
     return <>{inviteActions.cancelDialog}</>;
   }
 
@@ -410,6 +478,8 @@ export default function GlobalScoringProgressIndicator() {
   /* Every task as one list: running first, then finished; newest first. */
   type DockItem = {
     key: string; running: boolean; look: boolean; pct: number; at: number; node: React.ReactNode;
+    /** No measurable progress (AI Talent Match): left out of the ring's average. */
+    indeterminate?: boolean;
     /** Which module group it belongs to; page tasks (match / upload) stay ungrouped. */
     kind: ActivityKind | null;
     /** JD ID + title, for the dock search. */
@@ -480,12 +550,13 @@ export default function GlobalScoringProgressIndicator() {
         />
       ),
     })),
-    ...externalTasks.map((t): DockItem => ({
+    ...dockTasks.map((t): DockItem => ({
       key: t.id,
-      running: !t.done,
-      look: false,
-      pct: t.pct,
-      at: Number.MAX_SAFE_INTEGER,
+      running: !t.done && !t.failed,
+      look: !!t.failed,
+      pct: t.indeterminate ? 0 : t.pct,
+      indeterminate: !t.done && !t.failed && !!t.indeterminate,
+      at: t.at ?? Number.MAX_SAFE_INTEGER,
       kind: null,
       search: t.title.toLowerCase(),
       node: <MatchRow key={t.id} task={t} onOpen={() => { setListOpen(false); t.onOpen(); }} />,
@@ -497,11 +568,13 @@ export default function GlobalScoringProgressIndicator() {
   /* The ring: how far the running tasks are (each counts the same); all
      finished → full. */
   const running = items.filter(i => i.running);
+  const measured = running.filter(i => !i.indeterminate);
   const overallProgress = running.length
-    ? Math.round(running.reduce((n, i) => n + i.pct, 0) / running.length)
+    ? (measured.length ? Math.round(measured.reduce((n, i) => n + i.pct, 0) / measured.length) : 0)
     : 100;
   const finishedScoring = activeScoringJobs.filter(isRunDone);
   const finishedInvites = inviteJobs.filter(j => !inviteRunning(j));
+  const finishedFeedTasks = feedTasks.filter(t => (t.done || t.failed) && t.onRemove);
 
   /* ── Overview popup ── */
   const overviewRows = items.flatMap(i => (i.row ? [i.row] : []));
@@ -781,12 +854,17 @@ export default function GlobalScoringProgressIndicator() {
           </ul>
           <footer className="flex items-center justify-between border-t border-[var(--border-dark)] bg-[var(--surface)] px-2.5 py-1">
             <span className="text-[9px] text-[var(--text-muted)]">Keeps running even if you change pages.</span>
-            {(finishedScoring.length > 0 || finishedInvites.length > 0) && (
+            {(finishedScoring.length > 0 || finishedInvites.length > 0 || finishedFeedTasks.length > 0) && (
               <button
                 type="button"
                 onClick={() => {
-                  finishedScoring.forEach(job => clearJob(job.jobId));
+                  // One removal per module (saved on the server: every device).
+                  if (finishedScoring.length) clearCompletedJobs();
                   if (finishedInvites.length) invite?.dismiss(finishedInvites.map(j => j.job_id));
+                  const refs: ActivityRef[] = (feedItems ?? [])
+                    .filter(a => finishedFeedTasks.some(t => t.id === `feed:${a.type}:${a.id}`))
+                    .map(a => ({ type: a.type, id: a.id }));
+                  if (refs.length) feedDismiss?.(refs);
                 }}
                 className="text-[10px] text-[var(--muted-foreground)] hover:text-brand-blue hover:underline"
               >
@@ -950,7 +1028,8 @@ function TaskRow({
   counts?: React.ReactNode;
   /** Plain-text counts, for the tooltip when the line is cut short. */
   countsTitle?: string;
-  pct: number;
+  /** null: no measurable progress — a moving bar and no percentage. */
+  pct: number | null;
   barTone: string;
   extra?: React.ReactNode;
   actions: React.ReactNode;
@@ -973,9 +1052,11 @@ function TaskRow({
               with a tooltip when they run long — 1,000+ is normal) → buttons. */}
           <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
             <div className="h-1.5 w-10 sm:w-14 shrink-0 overflow-hidden rounded-full bg-[var(--border-dark)]">
-              <div className={`h-full rounded-full transition-[width] duration-500 ${barTone}`} style={{ width: `${pct}%` }} />
+              {pct === null
+                ? <div className={`h-full w-1/2 rounded-full animate-pulse ${barTone}`} />
+                : <div className={`h-full rounded-full transition-[width] duration-500 ${barTone}`} style={{ width: `${pct}%` }} />}
             </div>
-            <span className={`${META_SM} tabular-nums shrink-0 font-medium`}>{pct}%</span>
+            {pct !== null && <span className={`${META_SM} tabular-nums shrink-0 font-medium`}>{pct}%</span>}
             {/* In brackets after the %: "100% (1,234 invited)", "(2 scored)". */}
             <p className={`${META_SM} min-w-0 flex-1 basis-20 truncate`} title={countsTitle ? `(${countsTitle})` : undefined}>
               {counts ? <><span className={COUNT_TEXT}>(</span>{counts}<span className={COUNT_TEXT}>)</span></> : null}
@@ -1162,23 +1243,64 @@ function InviteRow({
 /** A task a page registered (lib/backgroundTasks): a minimized AI Talent
  *  Match run, or resume uploads still processing. */
 function MatchRow({ task, onOpen }: { task: ExternalBackgroundTask; onOpen: () => void }) {
-  const pct = Math.round(task.done ? 100 : task.pct);
   const upload = task.kind === 'resume-upload';
+  const finished = task.done || !!task.failed;
+  const pct = !finished && task.indeterminate ? null : Math.round(task.done ? 100 : task.pct);
   return (
     <TaskRow
       module={upload ? 'upload' : 'match'}
       badge={
-        <span className={`${BADGE_SM} ring-1 ${task.done ? BADGE_TONE.ok : BADGE_TONE.run}`}>
-          {task.done ? <CheckCircle2 className="w-3 h-3" /> : <Loader2 className="w-3 h-3 animate-spin" />}
-          {task.done ? 'Complete' : upload ? 'Uploading' : 'Matching'}
+        <span className={`${BADGE_SM} ring-1 ${task.failed ? BADGE_TONE.bad : task.done ? BADGE_TONE.ok : BADGE_TONE.run}`}>
+          {task.failed ? <X className="w-3 h-3" /> : task.done ? <CheckCircle2 className="w-3 h-3" /> : <Loader2 className="w-3 h-3 animate-spin" />}
+          {task.failed ? 'Failed' : task.done ? 'Complete' : upload ? 'Uploading' : 'Matching…'}
         </span>
       }
       job={<JobLine name={task.title} onOpen={onOpen} title={upload ? 'Open Upload History' : task.done ? 'See the matches' : 'Open'} />}
       countsTitle={task.detail}
       counts={task.detail ? <span className={COUNT_TEXT}>{task.detail}</span> : undefined}
       pct={pct}
-      barTone={task.done ? 'bg-success' : 'bg-brand-blue'}
-      actions={<Button variant={task.done ? 'primary' : 'secondary'} size="sm" className={BTN_SM} onClick={onOpen}>View</Button>}
+      barTone={task.failed ? 'bg-destructive' : task.done ? 'bg-success' : 'bg-brand-blue'}
+      actions={<>
+        <Button variant={task.done ? 'primary' : 'secondary'} size="sm" className={BTN_SM} onClick={onOpen}>View</Button>
+        {finished && task.onRemove && <RemoveButton onClick={task.onRemove} what={upload ? 'upload' : 'match'} />}
+      </>}
     />
   );
+}
+
+/** A server activity (AI Talent Match run / resume upload batch) → a dock row. */
+function feedTask(a: ActivityItem, act: { openMatch: () => void; openUploads: () => void; remove: () => void }): ExternalBackgroundTask {
+  const upload = a.type === 'resume_upload';
+  const running = a.status === 'running' || a.status === 'paused';
+  const failed = !running && (a.status === 'failed' || a.status === 'cancelled');
+  const fmt = (v: number) => (v ?? 0).toLocaleString('en-IN');
+  let detail: string | undefined;
+  if (upload) {
+    const uploaded = Number(a.extra?.uploaded ?? a.done) || 0;
+    const parts = running
+      ? [`${fmt(a.total - a.pending)}/${fmt(a.total)} processed`]
+      : [`${fmt(uploaded)} uploaded`, a.skipped ? `${fmt(a.skipped)} duplicate${a.skipped === 1 ? '' : 's'}` : '', a.failed ? `${fmt(a.failed)} failed` : '', a.cancelled ? `${fmt(a.cancelled)} cancelled` : ''];
+    detail = parts.filter(Boolean).join(' · ');
+    if (failed && a.error_message) detail = `${detail} — ${a.error_message}`;
+  } else if (running) {
+    detail = undefined;
+  } else if (failed) {
+    detail = a.error_message || 'Matching failed';
+  } else {
+    const m = Number(a.extra?.matches ?? a.done) || 0;
+    detail = `${fmt(m)} matching candidate${m === 1 ? '' : 's'} found`;
+  }
+  return {
+    id: `feed:${a.type}:${a.id}`,
+    kind: upload ? 'resume-upload' : 'talent-match',
+    title: [a.jd_code, a.title].filter(Boolean).join(' '),
+    pct: a.progress_pct ?? (running ? 0 : 100),
+    done: !running && !failed,
+    failed,
+    indeterminate: running && a.progress_pct === null,
+    detail,
+    onOpen: upload ? act.openUploads : act.openMatch,
+    onRemove: running ? undefined : act.remove,
+    at: a.started_at ? new Date(a.started_at).getTime() || 0 : 0,
+  };
 }
