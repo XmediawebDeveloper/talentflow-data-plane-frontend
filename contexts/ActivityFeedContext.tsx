@@ -49,6 +49,24 @@ export const readSessionIdentity = (): string | null => {
 
 export const activityKey = (type: string, id: string) => `${type}:${id}`;
 
+/* The last server list, kept per user so the corner shows at once after a
+   refresh instead of waiting for the first read. Only a first-paint copy:
+   the first server read replaces it, and nothing (toasts, removals, adoption)
+   acts on it until that read is in (`syncedFor`). */
+const cacheKey = (identity: string) => `activity_feed_cache:${identity}`;
+const readCache = (identity: string): ActivityItem[] => {
+  try {
+    const raw = localStorage.getItem(cacheKey(identity));
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+const writeCache = (identity: string, items: ActivityItem[]) => {
+  try { localStorage.setItem(cacheKey(identity), JSON.stringify(items)); } catch { /* storage blocked */ }
+};
+
 interface ActivityFeedContextType {
   /** Latest server list for `identity` (rows removed by the user carry `dismissed`). */
   items: ActivityItem[];
@@ -107,6 +125,7 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
       const items = await activityService.mine(WINDOW_HOURS);
       if (identityRef.current !== who || mine !== seq.current) return; // signed out / switched meanwhile
       setState(prev => ({ for: who, items, generation: prev.generation + 1, fetchedAt: sentAt, synced: true }));
+      writeCache(who, items);
       setOverrides(prev => {
         if (!prev.size) return prev;
         const next = new Map([...prev].filter(([, o]) => o.at > sentAt));
@@ -126,7 +145,7 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     identityRef.current = identity;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setState({ for: identity, items: [], generation: 0, fetchedAt: 0, synced: false });
+    setState({ for: identity, items: identity ? readCache(identity) : [], generation: 0, fetchedAt: 0, synced: false });
     setOverrides(new Map());
     seq.current += 1; // a read for the previous user is now stale
     busy.current = false;
