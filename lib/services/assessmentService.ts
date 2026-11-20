@@ -3,6 +3,7 @@
  */
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
+import { sessionTokenManager } from './candidateService';
 import { cachedList, listCacheKey, listReadOptions, onListCacheInvalidate, withListCacheInvalidation, type ListReadOptions } from '@/lib/utils/listCache';
 import { primeLineages, primeVersionCounts } from '@/lib/utils/jdLineagePrime';
 import type { JDLineageVersion } from './jdService';
@@ -1875,6 +1876,15 @@ withListCacheInvalidation(assessmentService, [
   'regenerateQuestions',
 ]);
 
+// The candidate answer/complete endpoints only accept requests from the
+// invitation that owns the attempt (and its live session), like code run.
+function candidateAttemptHeaders(invitationToken: string): Record<string, string> {
+  const headers: Record<string, string> = { 'X-Invitation-Token': invitationToken };
+  const sessionToken = sessionTokenManager.getToken(invitationToken);
+  if (sessionToken) headers['X-Session-Token'] = sessionToken;
+  return headers;
+}
+
 // Candidate-facing services (public)
 export const candidateAssessmentService = {
   /**
@@ -1890,12 +1900,13 @@ export const candidateAssessmentService = {
   },
 
   /**
-   * Start assessment
+   * Start assessment. The invitation's email is required (the backend refuses
+   * a start without it, so a forwarded link cannot be used).
    */
-  async start(token: string, consentAccepted: boolean = true) {
+  async start(token: string, candidateEmail: string, consentAccepted: boolean = true) {
     try {
-      const response = await api.post('/assessments/candidate/start', {
-        invitation_token: token,
+      const response = await api.post(`/assessments/candidate/assessment/${token}/start`, {
+        candidate_email: candidateEmail,
         consent_accepted: consentAccepted,
       });
       return response.data;
@@ -1905,14 +1916,15 @@ export const candidateAssessmentService = {
   },
 
   /**
-   * Submit answer
+   * Submit answer. The backend checks the invitation owns the question's
+   * attempt, so send the same headers as code run/submit.
    */
-  async submitAnswer(questionId: string, answer: string) {
+  async submitAnswer(token: string, questionId: string, answer: string) {
     try {
       const response = await api.post('/assessments/candidate/answer', {
         question_id: questionId,
         answer,
-      });
+      }, { headers: candidateAttemptHeaders(token) });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -1920,11 +1932,15 @@ export const candidateAssessmentService = {
   },
 
   /**
-   * Complete assessment
+   * Complete assessment (same ownership headers as submitAnswer).
    */
-  async complete(attemptId: string) {
+  async complete(token: string, attemptId: string) {
     try {
-      const response = await api.post(`/assessments/candidate/${attemptId}/complete`);
+      const response = await api.post(
+        `/assessments/candidate/${attemptId}/complete`,
+        undefined,
+        { headers: candidateAttemptHeaders(token) },
+      );
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

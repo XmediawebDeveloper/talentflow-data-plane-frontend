@@ -25,6 +25,8 @@
 # other job must pass before anything is released.
 #
 #   Code style (advisory)            formatting and lint warnings
+#   Dependency audit                 no high/critical npm advisories (blocking)
+#   Secret scan                      no secrets in the pushed commits (blocking)
 #   Build the app                    produces the image that will be released
 #   Set up the test environment      brings up the QA backend, frontend and database
 #   Test 1 of 3 · Screens            every screen renders correctly, with test data
@@ -124,9 +126,48 @@ variables:
     # --user: run as the runner's uid so no root-owned files land in the
     # builds dir (they would break the next job's git clean/checkout)
     - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm
-        -v "$CI_PROJECT_DIR:/src" -w /src node:22-alpine
+        -v "$CI_PROJECT_DIR:/src" -w /src node:22.21.1-alpine
         sh -c "npm ci --no-audit --no-fund && npx eslint . || true"
   allow_failure: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'
+
+# ------------------------------------------------------- security ------
+# BLOCKING (security sheet D1). Known-vulnerable npm packages at high or
+# critical severity stop the pipeline (moderate/low are reported only). An
+# accepted advisory without a fix goes in package.json "overrides" or is
+# documented here — never by flipping allow_failure.
+"Dependency audit":
+  stage: check
+  tags: [talentflow]
+  script:
+    - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+        -v "$CI_PROJECT_DIR:/src" -w /src node:22.21.1-alpine
+        sh -c "npm audit --audit-level=high --omit=optional"
+  allow_failure: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'
+
+# Secrets committed to the repo (API keys, private keys, tokens). BLOCKING.
+# Scans only the commits this push adds, so a key already in old history
+# (rotated) doesn't keep every pipeline red; a first push scans the tree.
+# A confirmed false positive goes in .gitleaksignore (its fingerprint line).
+"Secret scan":
+  stage: check
+  tags: [talentflow]
+  variables:
+    GIT_DEPTH: "0"   # full history, so the before..after range resolves
+  script:
+    - |
+      GITLEAKS="docker run --rm --user $(id -u):$(id -g) -v $CI_PROJECT_DIR:/repo -w /repo ghcr.io/gitleaks/gitleaks:v8.28.0"
+      ZERO_SHA=0000000000000000000000000000000000000000
+      if [ -n "$CI_COMMIT_BEFORE_SHA" ] && [ "$CI_COMMIT_BEFORE_SHA" != "$ZERO_SHA" ] &&
+         git cat-file -e "$CI_COMMIT_BEFORE_SHA^{commit}" 2>/dev/null; then
+        $GITLEAKS git --redact --no-banner --exit-code 1 --log-opts="$CI_COMMIT_BEFORE_SHA..$CI_COMMIT_SHA" /repo
+      else
+        $GITLEAKS dir --redact --no-banner --exit-code 1 /repo
+      fi
+  allow_failure: false
   rules:
     - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'
 
@@ -658,7 +699,7 @@ variables:
       ensure "$QA_CP_CONTAINER" "cp:$(sha256sum "$STUB" | cut -d' ' -f1):$QA_CP_PORT" \
         -p "$QA_CP_PORT:$QA_CP_PORT" -e "PORT=$QA_CP_PORT" \
         -v "$QA_STATE_DIR/qa-control-plane-stub.mjs:/app/stub.mjs:ro" \
-        --memory=256m node:22-alpine node /app/stub.mjs
+        --memory=256m node:22.21.1-alpine node /app/stub.mjs
 
       ensure "$QA_API_CONTAINER" "api:$BACKEND_IMAGE:$(sha256sum "$ENVFILE" | cut -d' ' -f1):$QA_API_PORT" \
         --env-file "$ENVFILE" -p "$QA_API_PORT:8001" --memory=2g "$BACKEND_IMAGE"
@@ -1204,7 +1245,7 @@ variables:
 # restore the `if:` rule below.
 "Release to staging":
   <<: *deploy
-  needs: ["Build the app", "Test 1 of 3 · Screens", "Test 2 of 3 · API and database", "Test 3 of 3 · Real browser"]   # all three suites gate; build-image supplies the image
+  needs: ["Build the app", "Test 1 of 3 · Screens", "Test 2 of 3 · API and database", "Test 3 of 3 · Real browser", "Dependency audit", "Secret scan"]   # all three suites + security gate; build-image supplies the image
   variables:
     DEPLOY_DIR: /opt/talentflow/staging/frontend
     COMPOSE_PROJECT_NAME: tf-frontend-staging
@@ -1218,7 +1259,7 @@ variables:
 
 "Release to production":
   <<: *deploy
-  needs: ["Build the app (production)", "Test 1 of 3 · Screens", "Test 2 of 3 · API and database", "Test 3 of 3 · Real browser"]   # all three suites gate
+  needs: ["Build the app (production)", "Test 1 of 3 · Screens", "Test 2 of 3 · API and database", "Test 3 of 3 · Real browser", "Dependency audit", "Secret scan"]   # all three suites + security gate
   variables:
     DEPLOY_DIR: /opt/talentflow/frontend
     COMPOSE_PROJECT_NAME: tf-frontend-prod

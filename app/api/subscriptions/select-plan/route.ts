@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 // Route to the DP backend (has queue logic for paid plan upgrades)
 const DP_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
+// tenant_id goes into the upstream URL path and a header, so only a UUID is accepted.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -14,15 +17,20 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    if (typeof tenant_id !== 'string' || !UUID_RE.test(tenant_id)) {
+      return NextResponse.json(
+        { detail: 'Invalid tenant_id' },
+        { status: 400 }
+      );
+    }
 
     // Forward auth token so DP backend can authenticate via get_current_user
     // (The access token is no longer in a cookie - security sheet #5 - so the
     // caller's Authorization header is passed through.)
     const authHeader = request.headers.get('authorization') || '';
 
-    const apiUrl = `${DP_API_URL}/subscription/${tenant_id}/select-plan`;
-    console.log('[Subscription API] Calling DP backend:', apiUrl);
-    console.log('[Subscription API] Payload:', JSON.stringify(payload));
+    const apiUrl = `${DP_API_URL}/subscription/${encodeURIComponent(tenant_id)}/select-plan`;
+    // Payload / response bodies are never logged (payment + account data).
 
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -37,8 +45,9 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await response.json().catch(() => ({}));
-    console.log('[Subscription API] Response status:', response.status);
-    console.log('[Subscription API] Response data:', JSON.stringify(data));
+    if (!response.ok) {
+      console.warn('[Subscription API] DP backend returned status', response.status);
+    }
 
     if (!response.ok) {
       return NextResponse.json(
@@ -49,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error('[Subscription API] Error:', error);
+    console.error('[Subscription API] Error:', error instanceof Error ? error.name : 'unknown');
 
     // Provide more specific error messages
     let errorMessage = 'Internal server error';

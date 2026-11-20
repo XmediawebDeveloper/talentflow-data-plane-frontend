@@ -26,6 +26,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Skeleton } from '@/components/ui/skeleton';
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -1217,13 +1218,14 @@ export default function JDListPage() {
                 setEditingJDId(null);
 
                 // Check if returnUrl is provided - redirect back to that page
-                const returnUrl = searchParams.get('returnUrl');
+                // Same-site paths only (security sheet N4).
+                const returnUrl = safeReturnUrl(searchParams.get('returnUrl'));
                 if (returnUrl) {
                   // If JD was published (not just saved as draft), redirect to assessment creation with JD pre-selected
                   if (jdId) {
                     toast.success('JD published successfully. Redirecting to create assessment...');
                     setTimeout(() => {
-                      router.push(`${returnUrl}/create?jd_id=${jdId}`);
+                      router.push(`${returnUrl}/create?jd_id=${encodeURIComponent(String(jdId))}`);
                     }, 500);
                   } else {
                     // Draft saved - just redirect back

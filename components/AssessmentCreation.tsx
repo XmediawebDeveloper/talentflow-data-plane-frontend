@@ -60,6 +60,7 @@ import { Skeleton, PageSkeleton } from '@/components/ui/skeleton';
 import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
 import { ASSESSMENT_JOB_LOCK_MESSAGE, isJobVersionLocked } from '@/lib/utils/assessmentJobLock';
 import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -719,7 +720,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // Assessment" (the job had none to invite to). The trail starts at that
   // page and the published screen leads straight back there to send the
   // invites.
-  const returnUrl = searchParams.get('returnUrl');
+  // Same-site paths only (security sheet N4): never an off-site redirect.
+  const returnUrl = safeReturnUrl(searchParams.get('returnUrl'));
   const inviteOrigin = embedded ? null : resolveInviteHandoffOrigin(searchParams.get('from'), returnUrl);
   const fromInviteOrigin = !!inviteOrigin;
   const inviteOriginSource = inviteOrigin?.source ?? '';

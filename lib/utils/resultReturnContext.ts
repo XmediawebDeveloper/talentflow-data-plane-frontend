@@ -1,3 +1,5 @@
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
+
 /**
  * Where a candidate's Result Details page was opened from, carried on its URL
  * so the page's breadcrumb (and Back) return to that exact place — the same
@@ -66,7 +68,7 @@ export function resultReturnQuery(returnTo: string, label?: string | null): stri
  * module — so the parameter cannot be pointed at another page or site.
  */
 export function safeResultReturnTo(value: string | null | undefined): string {
-  if (!value) return '';
-  if (!value.startsWith('/recruitment/assessments/') || value.startsWith('//') || value.includes('://')) return '';
-  return value;
+  const safe = safeReturnUrl(value);
+  if (!safe || !safe.startsWith('/recruitment/assessments/') || safe.includes('://')) return '';
+  return safe;
 }
