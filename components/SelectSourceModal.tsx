@@ -1391,11 +1391,15 @@ export default function SelectSourceModal({
                 list's row checkboxes (measured): the phone/tablet cards sit 16px
                 further in, the md+ table runs edge to edge, so the toolbar's
                 left inset follows each. */}
-            <div className="pl-[17px] pr-3 sm:pl-[20px] sm:pr-6 md:pl-0.5 py-3 sm:py-4 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
-                {/* Select All ▾ sits before the search box, on the same row
-                    (phones included); Upload stays on the right. */}
-                <div className="flex flex-1 min-w-0 flex-wrap items-center gap-2 sm:gap-x-4">
+            <div className="pl-[17px] pr-3 sm:pl-[20px] sm:pr-6 md:pl-0.5 py-2.5 sm:py-4 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
+              {/* sm+: Select All ▾ · search · Upload on one row.
+                  Phones, two rows: the search with an icon-only Upload beside
+                  it, then Select All ▾ with Actions ▾ and an icon-only Clear
+                  once something is ticked. The inner group is `contents`
+                  there so all of these wrap as one set of items; the search's
+                  basis (100% − the 36px Upload − the gap) closes row one. */}
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-4">
+                <div className="flex flex-1 min-w-0 flex-wrap items-center gap-2 sm:gap-x-4 max-sm:contents">
                 <div className="shrink-0">
                   {(() => {
                     /* Inside Archived Resumes the same menu ticks resumes to
@@ -1478,7 +1482,7 @@ export default function SelectSourceModal({
                           <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
                         </span>
                         {bulkBusy || unarchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                        Actions ({actionIds.length})
+                        Actions<span className="max-sm:hidden"> ({actionIds.length})</span>
                         <ChevronDown className="w-4 h-4" />
                       </button>
 
@@ -1595,16 +1599,17 @@ export default function SelectSourceModal({
                       type="button"
                       onClick={clearActionSelection}
                       title="Clear the selection"
-                      className="h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm"
+                      aria-label="Clear the selection"
+                      className="h-9 px-3 max-sm:w-9 max-sm:px-0 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm"
                     >
                       <X className="w-4 h-4" />
-                      Clear
+                      <span className="max-sm:sr-only">Clear</span>
                     </button>
                   </div>
                 )}
                 {/* min width so, beside Actions + Clear on a phone, the search
                     wraps to its own line instead of squeezing to nothing. */}
-                <div className="flex-1 min-w-[12rem] relative">
+                <div className={`flex-1 min-w-[12rem] relative max-sm:order-first max-sm:min-w-0 ${activeTab === 'my-resumes' && !viewingArchivedFolder ? 'max-sm:basis-[calc(100%-2.75rem)]' : 'max-sm:basis-full'}`}>
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
                   <input
                     type="text"
@@ -1618,12 +1623,13 @@ export default function SelectSourceModal({
                 {/* Upload Resume button - only for My Resumes tab + canUploadResumes RBAC.
                     Not inside Archived Resumes — nothing is uploaded there. */}
                 {activeTab === 'my-resumes' && !viewingArchivedFolder && (
-                  <div className="flex items-center justify-end">
+                  <div className="flex items-center justify-end max-sm:order-first">
                     <button
                       onClick={() => { if (!canUploadResumes) return; openUploadToFolder(); }}
                       aria-disabled={!canUploadResumes}
-                      title={!canUploadResumes ? 'You do not have permission to upload resumes' : undefined}
-                      className={`h-9 px-3 sm:px-4 text-sm whitespace-nowrap rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
+                      aria-label="Upload Resume"
+                      title={!canUploadResumes ? 'You do not have permission to upload resumes' : 'Upload Resume'}
+                      className={`h-9 max-sm:w-9 max-sm:justify-center max-sm:px-0 px-3 sm:px-4 text-sm whitespace-nowrap rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
                         canUploadResumes
                           ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                           : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
@@ -1631,7 +1637,7 @@ export default function SelectSourceModal({
                     >
                       <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span className="hidden sm:inline">Upload Resume</span>
-                      <span className="sm:hidden">Upload</span>
+                      <span className="sr-only">Upload</span>
                     </button>
                   </div>
                 )}

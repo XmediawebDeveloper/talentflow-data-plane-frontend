@@ -3,7 +3,7 @@
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, Loader2 } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, Loader2 } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -1212,13 +1212,17 @@ export default function ResumeTable({
                 {isBlocked && <TeamMemberEmailBadge />}
               </>
             ) : undefined}
+            /* The role with a briefcase icon (as the AI Interview cards show
+               the role), then labelled lines as on the AI Interview Results
+               card ("Email: name@…"). Empty values are dropped by the card. */
             meta={[
-              { label: resume.title },
-              { icon: <Mail className="w-3.5 h-3.5 flex-shrink-0" />, label: resume.email && resume.email !== 'No email' ? resume.email : '' },
+              { icon: <Briefcase className="w-3.5 h-3.5 flex-shrink-0" />, label: resume.title || null },
+            ]}
+            fields={[
+              { label: 'Email', value: resume.email && resume.email !== 'No email' ? <span className="[overflow-wrap:anywhere]">{resume.email}</span> : null },
               /* Already formatted with its units ("6 years 3 months", "N/A")
-                 — the table cell shows it as-is; appending "years exp."
-                 here read "6 years 3 months years exp." on phones. */
-              { icon: <Briefcase className="w-3.5 h-3.5 flex-shrink-0" />, label: resume.experience },
+                 — shown as-is, as in the table cell. */
+              { label: 'Experience', value: resume.experience || null },
             ]}
             actions={
               /* Apply to Job was dropped here too, to match the desktop ⋮
@@ -1244,12 +1248,16 @@ export default function ResumeTable({
               )
             }
           >
+            {/* One skill pill, then "+N more" in the same pill style (its
+                popover lists every skill). One line: a long skill ends in "…"
+                rather than wrapping the pill onto two lines. */}
             {getDisplaySkills(resume).length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex items-center gap-1.5 mt-2 min-w-0">
                 <SkillsList
                   skills={getDisplaySkills(resume)}
-                  chipClassName="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs ring-1 ring-brand-blue/20"
-                  moreClassName="px-2 py-0.5 text-brand-blue text-xs font-medium rounded hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                  max={1}
+                  chipClassName="min-w-0 truncate px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20"
+                  moreClassName="shrink-0 whitespace-nowrap px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-full text-xs font-medium ring-1 ring-brand-blue/20 hover:bg-brand-blue/10 transition-colors cursor-pointer"
                 />
               </div>
             )}

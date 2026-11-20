@@ -2331,13 +2331,19 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                         ID / Job Name line; the footer wraps under at full width. */}
                     {/* ── Phones (below md): the JD card ─────────────────────
                         Dense flow, no column gaps:
-                        1. checkbox · JD ID · source · status
-                        2. job name (one line, "…") · version · Edit / View / ⋮ on the right
+                        1. JD ID · source · status · version (the version chip is also the
+                           version-history dropdown); wraps on very narrow phones
+                        2. checkbox · job name (one line, "…" when long)
                         3. experience · industry · type · work mode (flowing)
                         4. Created | Posted / By | Last Updated — two aligned columns
-                        5. divider, then Scored / Assessed / Interviewed — three tiles */}
+                        Lines 1–4 are the left column; Edit / View / ⋮ stand in a
+                        vertical stack in the card's top-right corner beside them.
+                        5. divider, then Scored / Assessed / Interviewed — three tiles,
+                           full width under both columns */}
                     <div className="md:hidden">
-                      <div className="tf-jd-card-top">
+                      <div className="flex items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                      <div className="tf-jd-card-top flex-wrap gap-y-1.5">
                         {job.job_id && <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.job_id}>{job.job_id}</JobIdBadge>}
                         {(() => {
                           const method = getCreationMethodConfig(job.creation_method);
@@ -2356,6 +2362,28 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                             </>
                           );
                         })()}
+                        {job.versionNumber && job.versionNumber >= 1 ? (
+                          hasVersionHistory ? (
+                            /* Version dropdown: opens / closes this job's version history.
+                               A pill like the badges beside it (same height and shape). */
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleVersions(versionKey, job.id); }}
+                              aria-expanded={versionsExpanded}
+                              title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                              className={`tf-jd-card-version tf-jd-card-version-btn !h-5 !rounded-full ${versionsExpanded ? 'tf-jd-card-version-open' : ''}`}
+                            >
+                              <span className="tf-jd-card-dot bg-gray-400" />
+                              v{job.versionNumber}
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+                          ) : (
+                            <span className="tf-jd-card-version !h-5 !rounded-full">
+                              <span className="tf-jd-card-dot bg-gray-400" />
+                              v{job.versionNumber}
+                            </span>
+                          )
+                        ) : null}
                       </div>
 
                       <div className="tf-jd-card-head">
@@ -2370,31 +2398,9 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                                 ? <CheckSquare className="w-5 h-5 text-brand-blue" />
                                 : <Square className="w-5 h-5 text-gray-500 hover:text-brand-blue" />}
                             </IconButton>
-                            <h3 className="tf-jd-card-title" title={job.title}>{job.title}</h3>
+                            <h3 className="tf-jd-card-title truncate" title={job.title}>{job.title}</h3>
                           </div>
-                          {job.versionNumber && job.versionNumber >= 1 ? (
-                            hasVersionHistory ? (
-                              /* Version dropdown: opens / closes this job's version history. */
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); toggleVersions(versionKey, job.id); }}
-                                aria-expanded={versionsExpanded}
-                                title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                                className={`tf-jd-card-version tf-jd-card-version-btn ${versionsExpanded ? 'tf-jd-card-version-open' : ''}`}
-                              >
-                                <span className="tf-jd-card-dot bg-gray-400" />
-                                v{job.versionNumber}
-                                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                              </button>
-                            ) : (
-                              <span className="tf-jd-card-version">
-                                <span className="tf-jd-card-dot bg-gray-400" />
-                                v{job.versionNumber}
-                              </span>
-                            )
-                          ) : null}
                         </div>
-                        <div className="tf-jd-card-actions">{rowActions}</div>
                       </div>
 
                       <div className="tf-jd-card-meta">
@@ -2402,6 +2408,10 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                           <JobOpeningPrimaryItems job={job} hideEmpty breakBeforeType />
                         </div>
                         <JobOpeningDatesGrid job={job} />
+                      </div>
+                      </div>
+                      {/* Edit / View / ⋮ — stacked in the top-right corner. */}
+                      <div className="tf-jd-card-actions [&>div]:!ml-0 [&>div]:!flex-col [&>div]:!gap-1.5">{rowActions}</div>
                       </div>
 
                       {hasCountBadges && (

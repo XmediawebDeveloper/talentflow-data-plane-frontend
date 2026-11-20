@@ -377,6 +377,36 @@ export default function FolderTree({
     };
   }, []);
 
+  /* Phones / small tablets (below md, where the tree is a band above the
+     list): My Folders shows SIX folder rows by default and scrolls the rest.
+     Measured from the rendered rows (expanded subfolders count as rows), so
+     it stays exact when a name or the zoom changes the row height. From md
+     the list takes the panel's height instead, so the cap is removed. */
+  useEffect(() => {
+    const list = folderListRef.current;
+    if (!list) return;
+    const VISIBLE_FOLDER_ROWS = 6;
+    const measure = () => {
+      const rows = list.querySelectorAll<HTMLElement>('[data-folder-row]');
+      if (window.innerWidth >= 768 || rows.length <= VISIBLE_FOLDER_ROWS) {
+        list.style.removeProperty('max-height');
+        return;
+      }
+      const last = rows[VISIBLE_FOLDER_ROWS - 1].getBoundingClientRect();
+      const top = list.getBoundingClientRect().top;
+      const cap = `${Math.ceil(last.bottom - top + list.scrollTop)}px`;
+      if (list.style.maxHeight !== cap) list.style.maxHeight = cap;
+    };
+    measure();
+    const mo = new MutationObserver(measure);
+    mo.observe(list, { childList: true, subtree: true });
+    window.addEventListener('resize', measure);
+    return () => {
+      mo.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+
   const clampWidth = (value: number) =>
     Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, Math.round(value)));
 
@@ -664,7 +694,7 @@ export default function FolderTree({
       <div key={folder.id} className="relative">
         {/* Row-level wrapper: the guides span this row only, never the
             children rendered below it. */}
-        <div className="relative">
+        <div className="relative" data-folder-row>
           {level > 0 && (
             <>
               {/* Ancestor trunks passing this row on their way further down. */}
