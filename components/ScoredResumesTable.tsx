@@ -2756,7 +2756,7 @@ Best regards`);
               {/* Sort by — embedded: ahead of More Filters, matching the AI
                   Talent Match reference's control order. Standalone: after
                   More Filters (the toolbar's children), as View by Job. */}
-              {embedded && filteredResumes.length > 0 && (
+              {embedded && (
                 <SortByControl<SortKey>
                   value={sortBy}
                   order={sortOrder}
@@ -2802,7 +2802,7 @@ Best regards`);
           {/* Standalone: Sort by, then List / Grid, after More Filters — the
               same order and sizes as View by Job's toolbar row. */}
           {/* Phones sort from the Sort menu in row 2 (PhoneSortMenu). */}
-          {!embedded && filteredResumes.length > 0 && (
+          {!embedded && (
             <div className="tf-jobs-sort contents">
             <SortByControl<SortKey>
               value={sortBy}
@@ -3001,7 +3001,7 @@ Best regards`);
           )}
           {viewPillsSlot}
           {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
-          {!embedded && filteredResumes.length > 0 && (
+          {!embedded && (
             <PhoneSortMenu<SortKey>
               value={sortBy}
               order={sortOrder}

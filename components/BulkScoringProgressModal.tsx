@@ -1,7 +1,7 @@
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { X, ArrowLeft, Clock, CheckCircle2, XCircle, AlertCircle, AlertTriangle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, ChevronDown, Eye, ClipboardList, Ban, Layers, Square, CheckSquare, Coins, Filter as FilterIcon } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useModuleQuota } from '@/contexts/QuotaContext';
 import ScoreTableModal from '@/components/ScoreTableModal';
@@ -146,6 +146,9 @@ interface BulkScoringProgressModalProps {
   /** Every batch snapshot the popup reads or gets back from Cancel / Retry,
    *  so the host can keep its own state (e.g. the corner widget) in step. */
   onBatchStatus?: (status: BatchScoringStatus) => void;
+  /** How often the popup re-reads the batch while anything in it is waiting
+   *  or running (ms). Default 2000. A settled batch is not re-read. */
+  activePollMs?: number;
   /** The JD version this run scores against, for the header — used when the
    *  rows themselves don't carry `jobVersion` (most hosts). */
   headerJobVersion?: number | null;
@@ -190,19 +193,24 @@ export default function BulkScoringProgressModal({
   onOpenResume,
   batchId,
   onBatchStatus,
+  activePollMs = 2000,
   headerJobVersion,
   onBack,
   backLabel = 'Back',
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
 
-  /* The batch, polled while this popup is open: fast while anything is
-     waiting or running, slowly once settled (a Retry from another tab still
-     shows). `batchKick` restarts it right after Cancel / Retry. */
+  /* The batch, polled while this popup is open and anything in it is waiting
+     or running; once settled (queued 0, processing 0) it is not read again —
+     it used to keep re-reading a finished batch every 10s for as long as the
+     popup stayed open. `batchKick` restarts it right after Cancel / Retry. */
   const [batchStatus, setBatchStatus] = useState<BatchScoringStatus | null>(null);
   const [batchKick, setBatchKick] = useState(0);
   const [batchBusy, setBatchBusy] = useState<string | null>(null);
   const [confirmCancelAll, setConfirmCancelAll] = useState(false);
+  // Read fresh on each tick; a new callback must not restart the poll.
+  const onBatchStatusRef = useRef(onBatchStatus);
+  useEffect(() => { onBatchStatusRef.current = onBatchStatus; });
   useEffect(() => {
     if (!batchId) return;
     let stopped = false;
@@ -212,21 +220,19 @@ export default function BulkScoringProgressModal({
         const s = await scoringService.getBatchStatus(batchId);
         if (stopped) return;
         setBatchStatus(s);
-        onBatchStatus?.(s);
-        timer = setTimeout(tick, s.queued > 0 || s.processing > 0 ? 2000 : 10000);
+        onBatchStatusRef.current?.(s);
+        if (s.queued > 0 || s.processing > 0) timer = setTimeout(tick, activePollMs);
       } catch {
         if (!stopped) timer = setTimeout(tick, 5000);
       }
     };
     void tick();
     return () => { stopped = true; if (timer) clearTimeout(timer); };
-    // onBatchStatus is read fresh on each tick; a new callback must not restart the poll.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [batchId, batchKick]);
+  }, [batchId, batchKick, activePollMs]);
 
   const applyBatch = (s: BatchScoringStatus) => {
     setBatchStatus(s);
-    onBatchStatus?.(s);
+    onBatchStatusRef.current?.(s);
     setBatchKick(k => k + 1);
   };
   const cancelBatchRows = async (resumeIds?: string[], label?: string) => {

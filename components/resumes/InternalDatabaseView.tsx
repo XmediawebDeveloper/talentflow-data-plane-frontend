@@ -355,7 +355,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   /* The library's own count for the header badge, read once on landing (the
      list may open already filtered); unfiltered list loads keep it current. */
   useEffect(() => {
-    resumeService.stats({ source: 'internal-db', include_folders: false })
+    resumeService.stats({ source: 'internal-db', include_folders: false }, { reuseRecent: true })
       .then((s) => {
         const n = s.sources?.['internal-db'] ?? s.all_total;
         if (typeof n === 'number') setLibraryTotal((prev) => prev ?? n);

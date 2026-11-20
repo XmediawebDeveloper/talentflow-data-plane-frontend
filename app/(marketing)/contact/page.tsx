@@ -7,6 +7,7 @@ import {
   CircleHelp,
   Copy,
   CreditCard,
+  Loader2,
   LifeBuoy,
   Mail,
   MessageSquareText,
@@ -37,6 +38,7 @@ const EMAILS = [
   { label: "Support", address: "support@talentflow.com" },
 ];
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 const MAX_MESSAGE = 1000;
 const EMPTY = { name: "", email: "", company: "", message: "" };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -140,6 +142,8 @@ export default function ContactPage() {
   const [topic, setTopic] = useState(TOPICS[0].id);
   const [emailTouched, setEmailTouched] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const set = (key: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setFormData({ ...formData, [key]: e.target.value });
@@ -156,15 +160,48 @@ export default function ContactPage() {
     window.setTimeout(() => document.getElementById("name")?.focus({ preventScroll: true }), reduce ? 0 : 700);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Sent to the Control Plane (Demo Enquiries), together with Book a Demo requests.
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     if (!emailValid) {
       setEmailTouched(true);
       return;
     }
-    setSentTo(formData.name.trim().split(" ")[0] || "there");
-    setFormData(EMPTY);
-    setEmailTouched(false);
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch(`${API_URL}/public/contact-messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: formData.name.trim(),
+          email: formData.email.trim(),
+          company: formData.company.trim() || null,
+          topic,
+          message: formData.message.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        const detail = typeof body?.detail === "string" ? body.detail : null;
+        throw new Error(
+          res.status === 429
+            ? "Too many messages. Please try again later."
+            : res.status === 422
+              ? detail || "Please check the details you entered."
+              : detail || "We couldn't send your message. Please try again.",
+        );
+      }
+      const first = formData.name.trim().split(" ")[0];
+      setSentTo(first ? first.charAt(0).toUpperCase() + first.slice(1) : "there");
+      setFormData(EMPTY);
+      setEmailTouched(false);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "We couldn't send your message. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -359,21 +396,31 @@ export default function ContactPage() {
                       </div>
                     </div>
 
+                    {submitError && (
+                      <p role="alert" className="text-sm font-medium text-rose-600 dark:text-rose-400">
+                        {submitError}
+                      </p>
+                    )}
+
                     <div className="flex flex-col-reverse items-stretch gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs text-slate-500 dark:text-slate-400">
                         We&apos;ll only use your details to reply to you.
                       </p>
                       <button
                         type="submit"
-                        disabled={!formData.name.trim() || !formData.message.trim() || !formData.email}
+                        disabled={submitting || !formData.name.trim() || !formData.message.trim() || !formData.email}
                         className="group relative isolate inline-flex h-12 items-center justify-center gap-2 overflow-hidden rounded-full bg-mkt-ink px-7 text-[15px] font-semibold text-mkt-canvas transition-[box-shadow,opacity] duration-300 hover:shadow-[0_14px_32px_-12px_rgba(15,60,153,0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-surface active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none"
                       >
                         <span
                           aria-hidden="true"
                           className="absolute inset-0 -z-10 translate-y-[101%] rounded-[inherit] bg-mkt-accent transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-enabled:group-hover:translate-y-0"
                         />
-                        Send message
-                        <Send className="h-4 w-4 transition-transform duration-300 ease-out group-enabled:group-hover:-translate-y-0.5 group-enabled:group-hover:translate-x-1" />
+                        {submitting ? "Sending…" : "Send message"}
+                        {submitting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4 transition-transform duration-300 ease-out group-enabled:group-hover:-translate-y-0.5 group-enabled:group-hover:translate-x-1" />
+                        )}
                       </button>
                     </div>
                   </form>

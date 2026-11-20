@@ -87,7 +87,11 @@ type CardFolderFilter = 'all' | 'with-resumes' | 'empty' | 'with-subfolders';
 /* fetchData options. `dedupe`: the call came from the params effect and may be
    skipped if it ends up replayed behind a running fetch that loaded the same
    params. `replay`: set internally when the guard replays a queued call. */
-type FetchDataOptions = { dedupe?: boolean; replay?: boolean };
+type FetchDataOptions = { dedupe?: boolean; replay?: boolean; reuse?: boolean };
+/* `reuse` (the mount fetch only): switching back to this tab within 30 s shows
+   the list / folders / counts it just read instead of re-asking all of them.
+   Any write clears that cache, so it never hides a change made in this tab. */
+const MOUNT_REUSE_WINDOW_MS = 5_000;
 
 const CARD_FOLDER_FILTER_OPTIONS: { value: CardFolderFilter; label: string }[] = [
   { value: 'all', label: 'All folders' },
@@ -1052,6 +1056,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   // successfully. Cleared when a fetch starts, so it never describes data that
   // a later fetch may have replaced. Read by the guard replay below.
   const lastCompletedFetchKeyRef = useRef<string>('');
+  // Until when the landing's stats reads may reuse a 30 s-old answer.
+  const mountReuseUntilRef = useRef(0);
   // Always the newest fetchData. The replay has to go through this rather than
   // calling itself: page/sort live in the closure, not the arguments, so a
   // self-call would refetch with the page the *outgoing* render had.
@@ -1098,7 +1104,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   );
 
   useEffect(() => {
-    fetchData();
+    mountReuseUntilRef.current = Date.now() + MOUNT_REUSE_WINDOW_MS;
+    fetchData(undefined, undefined, undefined, false, { reuse: true });
     // Upload history is fetched by the `user?.id` effect below, which also
     // runs on mount whenever the user is already known — calling it here too
     // sent `upload/batches` twice on every visit.
@@ -1213,7 +1220,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
      and every folder's listing total (archived rows included, as a folder
      listing includes them). Unfiltered — the badges describe the library. */
   const fetchMyResumeStats = () =>
-    resumeService.stats({ source: 'my-resumes', include_archived: false });
+    resumeService.stats(
+      { source: 'my-resumes', include_archived: false },
+      // The landing's own reads (prefetch + first folder reconcile) may reuse;
+      // later ones (after uploads finish processing) always ask the server.
+      { reuseRecent: Date.now() < mountReuseUntilRef.current },
+    );
 
   const refreshAllResumesTotal = async () => {
     try {
@@ -1481,7 +1493,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       /* Versions filter: every matching row, filtered on `version_count`, then
          this page sliced out — totals describe the filtered set. */
       const listResumes = async () => {
-        if (versionFilter === 'all') return resumeService.list(searchParams);
+        if (versionFilter === 'all') return resumeService.list(searchParams, { reuseRecent: !!opts?.reuse });
         const all = await fetchAllRows((page_size, page) => resumeService.list({ ...searchParams, page, page_size }));
         const kept = keepByVersion(all.items || [], versionFilter);
         const start = (currentPage - 1) * itemsPerPage;
@@ -1518,7 +1530,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         // of re-reading /folders on every click. Writes always re-read.
         folderService.list(
           searchParams.uploaded_by_name ? { uploaded_by_name: searchParams.uploaded_by_name } : undefined,
-          opts?.dedupe ? { reuseMs: 30_000 } : undefined,
+          opts?.dedupe || opts?.reuse ? { reuseMs: 30_000 } : undefined,
         ).catch(() => []),
       ]);
 
@@ -3108,6 +3120,16 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     } else {
       toast.error('You do not have permission to upload resumes. Ask your admin for upload access.');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per arrival with the param
+  }, [searchParams]);
+
+  /* `?upload_history=1` — an upload row in "My Activities" (the dock) opened
+     from a page with no Upload History of its own: open it here. The param
+     is dropped right after, like `?upload=1`. */
+  useEffect(() => {
+    if (searchParams.get('upload_history') !== '1') return;
+    router.replace('/recruitment/resume-database?tab=my-resumes', { scroll: false });
+    openUploadHistoryModal();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per arrival with the param
   }, [searchParams]);
 

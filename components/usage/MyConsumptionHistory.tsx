@@ -173,16 +173,17 @@ export default function MyConsumptionHistory() {
     toast.success('Export completed');
   };
 
-  // Calculate summary stats
+  // Summary cards: standing totals for the period — the Type / Status filters
+  // narrow the table below, never these cards (the period is in each card's label).
   const summary = {
-    total: filteredHistory.reduce((sum, item) => sum + (item.units_consumed || 0), 0),
+    total: history.reduce((sum, item) => sum + (item.units_consumed || 0), 0),
     byType: {
-      RS: filteredHistory.filter(item => item.unit_type === 'RS').reduce((sum, item) => sum + (item.units_consumed || 0), 0),
-      AS: filteredHistory.filter(item => item.unit_type === 'AS').reduce((sum, item) => sum + (item.units_consumed || 0), 0),
-      AIU: filteredHistory.filter(item => item.unit_type === 'AIU').reduce((sum, item) => sum + (item.units_consumed || 0), 0),
+      RS: history.filter(item => item.unit_type === 'RS').reduce((sum, item) => sum + (item.units_consumed || 0), 0),
+      AS: history.filter(item => item.unit_type === 'AS').reduce((sum, item) => sum + (item.units_consumed || 0), 0),
+      AIU: history.filter(item => item.unit_type === 'AIU').reduce((sum, item) => sum + (item.units_consumed || 0), 0),
     },
-    successCount: filteredHistory.filter(item => item.status === 'SUCCESS').length,
-    failedCount: filteredHistory.filter(item => item.status === 'FAILED').length,
+    successCount: history.filter(item => item.status === 'SUCCESS').length,
+    failedCount: history.filter(item => item.status === 'FAILED').length,
   };
 
   // Active filter tags: Type, Status and a non-default date range (30 days is

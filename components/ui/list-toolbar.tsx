@@ -14,7 +14,7 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
  * /recruitment/job-openings (components/JobsListing.tsx) — the reference page.
  *
  * Layout, left to right:
- *   [ search ............ ]  [ ⚙ More Filters ③ ]  [ ✕ Clear ]  [ 24 of 56 ]
+ *   [ search ............ ]  [ ⚙ More Filters ③ ]  [ ✕ Reset ]  [ Sort by ]  [ 24 of 56 ]
  *
  * Every part after the search box is optional, so pages that have no
  * advanced-filter panel can still use this and stay consistent with the ones
@@ -87,7 +87,7 @@ export interface ListToolbarProps {
   leadingActions?: React.ReactNode;
 
   /**
-   * Controls placed IMMEDIATELY after More Filters — ahead of Reset and
+   * Controls placed after More Filters and its Reset — ahead of
    * `children` — for a control that belongs beside the filter button itself
    * (the Invitation Status tab's Refresh).
    */
@@ -416,11 +416,8 @@ export default function ListToolbar({
           ) : filtersButton;
         })()}
 
-        {/* Sort by lands here — see `useListSortSlot`. */}
-        <span data-list-sort-slot className="contents" />
-
-        {afterFiltersActions}
-
+        {/* Reset sits IMMEDIATELY after More Filters on every list — ahead of
+            Sort by and any other control — so it is always found in one place. */}
         {showClear && (
           <ToolbarResetButton
             onClick={() => {
@@ -429,6 +426,11 @@ export default function ListToolbar({
             }}
           />
         )}
+
+        {/* Sort by lands here — see `useListSortSlot`. */}
+        <span data-list-sort-slot className="contents" />
+
+        {afterFiltersActions}
 
         {children}
 

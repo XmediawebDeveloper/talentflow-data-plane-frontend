@@ -77,6 +77,9 @@ function CompletePaymentContent() {
     billingIntervalParam === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'
   );
   const [planDetails, setPlanDetails] = useState<PlanDetails | null>(null);
+  // Set only when the plan came from the CP pending-payment record (private/CUSTOM
+  // plan of an admin-created tenant): amounts are the CP invoice, not base_price + GST.
+  const [invoiceAmounts, setInvoiceAmounts] = useState<{ subtotal: number; gst: number; total: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -92,6 +95,7 @@ function CompletePaymentContent() {
         return;
       }
 
+      let found = false;
       try {
         const response = await fetch(`${API_URL}/subscription/public/plans`);
         if (response.ok) {
@@ -131,8 +135,50 @@ function CompletePaymentContent() {
                   features: planVariant.features,
                   quotas: planVariant.quotas,
                 });
+                found = true;
               }
               break;
+            }
+          }
+        }
+
+        // Fallback: plan is not public (e.g. private/CUSTOM plan picked by a CP admin
+        // when creating the tenant). Load it from the tenant's pending-payment record.
+        if (!found && tenantId) {
+          const pendingRes = await fetch(`${API_URL}/signup/pending-payment/${encodeURIComponent(tenantId)}`);
+          if (pendingRes.status === 409) {
+            toast.info('Payment already completed', { description: 'Please log in to continue.' });
+            router.push('/login');
+            return;
+          }
+          if (pendingRes.ok) {
+            const pending = await pendingRes.json();
+            const plan = pending?.plan;
+            if (plan && pending.plan_id === parseInt(planId)) {
+              if (pending.billing_interval === 'ANNUAL' || pending.billing_interval === 'MONTHLY') {
+                setBillingInterval(pending.billing_interval);
+              }
+              setPlanDetails({
+                id: plan.id,
+                plan_name: plan.plan_name,
+                plan_tier: plan.plan_tier,
+                description: plan.description,
+                base_price: plan.base_price,
+                monthly_price: plan.monthly_price,
+                currency: pending.currency || plan.currency,
+                billing_period: plan.billing_period,
+                included_seats: plan.included_seats,
+                discount_percentage: plan.discount_percentage ?? undefined,
+                features: plan.features,
+                quotas: plan.quotas,
+              });
+              if (pending.total_amount != null && pending.amount_due != null) {
+                setInvoiceAmounts({
+                  subtotal: Number(pending.amount_due),
+                  gst: Number(pending.tax_amount ?? 0),
+                  total: Number(pending.total_amount),
+                });
+              }
             }
           }
         }
@@ -436,8 +482,9 @@ function CompletePaymentContent() {
 
           {/* Price Display */}
           {(() => {
-            const gstAmount = Math.round(planDetails.base_price * GST_RATE * 100) / 100;
-            const totalAmount = Math.round((planDetails.base_price + gstAmount) * 100) / 100;
+            const subtotalAmount = invoiceAmounts ? invoiceAmounts.subtotal : planDetails.base_price;
+            const gstAmount = invoiceAmounts ? invoiceAmounts.gst : Math.round(planDetails.base_price * GST_RATE * 100) / 100;
+            const totalAmount = invoiceAmounts ? invoiceAmounts.total : Math.round((planDetails.base_price + gstAmount) * 100) / 100;
             return (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderTop: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}` }}>
@@ -482,7 +529,7 @@ function CompletePaymentContent() {
                 <div style={{ padding: '12px 0', borderTop: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}`, borderBottom: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <span style={{ fontSize: 13, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>Subtotal</span>
-                    <span style={{ fontSize: 13, color: isDark ? 'var(--raw-d1d5db)' : 'var(--raw-374151)' }}>{formatCurrency(planDetails.base_price, planDetails.currency)}</span>
+                    <span style={{ fontSize: 13, color: isDark ? 'var(--raw-d1d5db)' : 'var(--raw-374151)' }}>{formatCurrency(subtotalAmount, planDetails.currency)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <span style={{ fontSize: 13, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>GST (18%)</span>
@@ -573,7 +620,7 @@ function CompletePaymentContent() {
           ) : (
             <>
               <CreditCard style={{ width: 20, height: 20 }} />
-              Pay {formatCurrency(Math.round((planDetails.base_price * (1 + GST_RATE)) * 100) / 100, planDetails.currency)} - Razorpay
+              Pay {formatCurrency(invoiceAmounts ? invoiceAmounts.total : Math.round((planDetails.base_price * (1 + GST_RATE)) * 100) / 100, planDetails.currency)} - Razorpay
             </>
           )}
         </button>

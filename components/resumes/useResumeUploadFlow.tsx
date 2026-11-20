@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo, useId, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { Copy, GitBranch, Loader2, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronDown, FileText, Info, RefreshCw, Ban, Lightbulb, HelpCircle, Minus, Upload } from 'lucide-react';
 import AppModal, { AppModalFooterButtons } from '@/components/ui/app-modal';
@@ -29,7 +29,7 @@ import { toast } from 'sonner';
 import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { removeBackgroundTask, upsertBackgroundTask } from '@/lib/backgroundTasks';
+import { setUploadHistoryOpener } from '@/lib/backgroundTasks';
 import { clickableProps } from '@/lib/a11y/clickableProps';
 import { IconButton } from '@/components/ui/icon-button';
 
@@ -127,40 +127,19 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
   const [isUploadHistoryModalOpen, setIsUploadHistoryModalOpen] = useState(false);
   const [isUploadHistoryMinimized, setIsUploadHistoryMinimized] = useState(false);
 
-  /* Minimized Upload History: a row in the shared "My Activities" list
-     (bottom-right, beside scoring runs and invite sends) instead of a floating
-     button of its own in the same corner. The row's View reopens the panel. */
-  const uploadTaskId = `resume-upload:${useId()}`;
-  const reopenUploadHistory = useRef<() => void>(() => {});
+  /* Upload History in the shared "My Activities" list: every upload batch of
+     this user is a row of its own there, built from the server (the dock
+     reads them from the activity feed), so the same rows show on every
+     device. A row's View reopens this panel — registered here while this
+     host is mounted; with no host on the page the row opens My Resumes. */
   useEffect(() => {
-    reopenUploadHistory.current = () => {
+    const open = () => {
       setIsUploadHistoryMinimized(false);
       setIsUploadHistoryModalOpen(true);
     };
-  });
-  useEffect(() => {
-    if (!isUploadHistoryMinimized) { removeBackgroundTask(uploadTaskId); return; }
-    const mine = uploadHistory.filter((r) => r.source === 'my-resumes');
-    const running = mine.filter((r) => r.status === 'processing' || (r.pending ?? 0) > 0);
-    const of = (list: typeof mine, pick: (r: (typeof mine)[number]) => number) => list.reduce((sum, r) => sum + (Number(pick(r)) || 0), 0);
-    const total = of(running, (r) => r.totalFiles);
-    const left = of(running, (r) => r.pending);
-    const uploaded = of(mine, (r) => r.completed) + of(mine, (r) => r.versioned);
-    const failed = of(mine, (r) => r.errors);
-    const fmt = (v: number) => v.toLocaleString('en-IN');
-    upsertBackgroundTask({
-      id: uploadTaskId,
-      kind: 'resume-upload',
-      title: 'Upload History',
-      pct: running.length && total > 0 ? Math.round(((total - left) / total) * 100) : 100,
-      done: running.length === 0,
-      detail: running.length
-        ? `${fmt(total - left)}/${fmt(total)} processed`
-        : `${fmt(uploaded)} uploaded${failed ? ` · ${fmt(failed)} failed` : ''}`,
-      onOpen: () => reopenUploadHistory.current(),
-    });
-  }, [isUploadHistoryMinimized, uploadHistory, uploadTaskId]);
-  useEffect(() => () => removeBackgroundTask(uploadTaskId), [uploadTaskId]);
+    setUploadHistoryOpener(open);
+    return () => setUploadHistoryOpener(null, open);
+  }, []);
   const [uploadHistoryTab, setUploadHistoryTab] = useState<'current' | 'completed'>('current');
   // Flipped the moment an upload starts here, so the Upload History button goes
   // live for a first-time user immediately instead of waiting for the resume
@@ -236,72 +215,15 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
     })) || [],
   });
 
-  /* `/resumes/upload/batches` is tenant-scoped — it takes no owner filter and
-     its payload doesn't say who created a batch — so a second account in the
-     same tenant was shown everybody else's uploads. Ownership is therefore
-     established two ways, in order:
-
-       1. An owner field on the payload, if the API ever sends one. Authoritative.
-       2. A local ledger of the batch ids THIS account created, kept per user in
-          localStorage and written the moment an upload starts here.
-
-     A batch that matches neither is another account's and is dropped. That
-     means uploads made before this ledger existed, or from another browser,
-     won't be listed — the endpoint gives the client nothing to recognise them
-     by. Scoping the endpoint server-side is the real fix. */
-  const BATCH_OWNER_FIELDS = [
-    'user_id', 'uploaded_by', 'uploaded_by_id', 'uploaded_by_name',
-    'created_by', 'created_by_id', 'owner_id',
-  ];
-
-  const batchLedgerKey = user?.id ? `tf:upload-batches:${user.id}` : null;
-
-  const readBatchLedger = useCallback((): string[] => {
-    if (!batchLedgerKey || typeof window === 'undefined') return [];
-    try {
-      const stored = JSON.parse(localStorage.getItem(batchLedgerKey) || '[]');
-      return Array.isArray(stored) ? stored.map(String) : [];
-    } catch {
-      return [];
-    }
-  }, [batchLedgerKey]);
-
-  const rememberBatchIds = useCallback((ids: string[]) => {
-    if (!batchLedgerKey || typeof window === 'undefined') return;
-    const fresh = ids.filter(Boolean).map(String);
-    if (fresh.length === 0) return;
-    try {
-      // Newest first, capped — a ledger is only useful for recent history.
-      const next = Array.from(new Set([...fresh, ...readBatchLedger()])).slice(0, 200);
-      localStorage.setItem(batchLedgerKey, JSON.stringify(next));
-    } catch {
-      // Private mode / quota — ownership just falls back to the payload check.
-    }
-  }, [batchLedgerKey, readBatchLedger]);
-
-  const batchOwnerValue = (batch: any) =>
-    BATCH_OWNER_FIELDS
-      .map(field => batch?.[field])
-      .find(value => value !== undefined && value !== null && value !== '');
-
-  const isOwnBatch = (batch: any, ledger: string[]) => {
-    const owner = batchOwnerValue(batch);
-    if (owner !== undefined) {
-      const identities = [user?.id, user?.email, user?.name]
-        .filter(Boolean)
-        .map(v => String(v).toLowerCase());
-      return identities.includes(String(owner).toLowerCase());
-    }
-    return ledger.includes(String(batch?.id));
-  };
-
+  /* `/resumes/upload/batches?mine=true` lists only this user's batches, on
+     every device (the server filters by who uploaded them). It used to be
+     tenant-wide, and ownership was guessed from a list of batch ids kept in
+     this browser's localStorage — so uploads made in another browser or on
+     another laptop never showed here. */
   const hasBatchFiles = (batch: any) =>
     (batch?.total_files ?? 0) > 0 || (batch?.items?.length ?? 0) > 0;
 
-  const ownBatchRecords = (batches: any[]) => {
-    const ledger = readBatchLedger();
-    return batches.filter(b => isOwnBatch(b, ledger) && hasBatchFiles(b)).map(mapBatchRecord);
-  };
+  const ownBatchRecords = (batches: any[]) => batches.filter(hasBatchFiles).map(mapBatchRecord);
 
   /* Single-file uploads go through `/resumes/upload`, which returns a resume
      and never tells us the batch it landed in. So we snapshot the batch ids
@@ -326,10 +248,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
         const fresh = (response?.batches ?? [])
           .map((b: any) => String(b.id))
           .filter((id: string) => !prior.has(id));
-        if (fresh.length > 0) {
-          rememberBatchIds(fresh);
-          return fresh;
-        }
+        if (fresh.length > 0) return fresh;
       } catch {
         // Ignore and retry — a transient failure shouldn't lose the batch.
       }
@@ -873,8 +792,6 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
 
       // Start bulk upload - returns immediately with batch info
       const batch = await resumeService.uploadBulk(files, targetFolderId);
-      // Claim it straight away — every later refresh filters on this ledger.
-      rememberBatchIds([batch.id]);
 
       // Fetch full status with items immediately
       let initialStatuses: any[] = [];
@@ -1142,7 +1059,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
       )}
 
       {/* Upload History Sheet (Slide-in Panel) */}
-      {/* Minimized Upload History: a row in My Activities (see uploadTaskId above). */}
+      {/* Minimized Upload History: its batches are rows in My Activities (see setUploadHistoryOpener above). */}
 
       {isUploadHistoryModalOpen && !isUploadHistoryMinimized && (
         /* The same frame as the AI Assessment / AI Interview invitation

@@ -391,9 +391,10 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
 
 
     try {
+      const period = activePresetId === 'billing' ? 'billing' : undefined;
       const data = isTenantAdmin
-        ? await teamService.getAllTeamsUsage(fromDate, toDate)
-        : ((await teamService.getMyTeamsUsage(fromDate, toDate)) as unknown as AllTeamsUsageSummary);
+        ? await teamService.getAllTeamsUsage(fromDate, toDate, period)
+        : ((await teamService.getMyTeamsUsage(fromDate, toDate, period)) as unknown as AllTeamsUsageSummary);
       if (seq !== fetchSeq.current) return;
       setTeamsUsage(data);
       // Daily trend by default (was behind a button); never holds up the page.
@@ -411,7 +412,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
     } finally {
       if (seq === fetchSeq.current) setIsLoading(false);
     }
-  }, [fromDate, toDate, isTenantAdmin, fetchTrend]);
+  }, [fromDate, toDate, isTenantAdmin, fetchTrend, activePresetId]);
 
   useEffect(() => {
     fetchAnalyticsData();

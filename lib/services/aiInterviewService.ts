@@ -799,7 +799,9 @@ export const aiInterviewService = {
    */
   async create(data: AIInterviewCreate): Promise<AIInterviewResponse> {
     try {
-      const response = await api.post<AIInterviewResponse>('/ai-interview', data);
+      // Trailing slash = the backend's route. Without it the backend answered with a
+      // redirect, which behind the HTTPS proxy came back as http:// (mixed content).
+      const response = await api.post<AIInterviewResponse>('/ai-interview/', data);
       dispatchUnitsConsumed();
       return response.data;
     } catch (error) {
@@ -1250,10 +1252,15 @@ export const aiInterviewService = {
   /**
    * Get config-level stats
    */
-  async getConfigStats(): Promise<AIInterviewStatsResponse> {
+  async getConfigStats(opts?: ListReadOptions): Promise<AIInterviewStatsResponse> {
     try {
-      const response = await api.get<AIInterviewStatsResponse>('/ai-interview/configs/stats');
-      return response.data;
+      // `reuseRecent` (page arrival only): coming back within 30 s shows the
+      // cards it just read. Any write clears the cache.
+      return await cachedList(
+        listCacheKey('ai-interview:config-stats'),
+        async () => (await api.get<AIInterviewStatsResponse>('/ai-interview/configs/stats')).data,
+        listReadOptions(opts),
+      );
     } catch (error) {
       throw new Error(handleApiError(error));
     }

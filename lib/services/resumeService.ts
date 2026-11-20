@@ -3,6 +3,7 @@
  */
 
 import api, { handleApiError, dispatchUnitsConsumed, getTokens } from './api';
+import { cachedList, listCacheKey, listReadOptions, type ListReadOptions } from '@/lib/utils/listCache';
 
 /* Throttle for POST /resumes/usage/reconcile. Three places ask for it (the
    dashboard layout once per load, My Resumes and Resume Database on mount),
@@ -455,10 +456,15 @@ export const resumeService = {
    * Card / badge counts for the Resume Database in one call (replaces the
    * per-tab and per-folder page_size=1 probes).
    */
-  async stats(params?: ResumeStatsParams): Promise<ResumeStats> {
+  async stats(params?: ResumeStatsParams, opts?: ListReadOptions): Promise<ResumeStats> {
     try {
-      const response = await api.get<ResumeStats>('/resumes/stats', { params });
-      return response.data;
+      // `reuseRecent`: a tab re-opened within 30 s shows the counts it just read
+      // (any write clears the cache, so a change made here is never missed).
+      return await cachedList(
+        listCacheKey('resumes:stats', { ...(params ?? {}) }),
+        async () => (await api.get<ResumeStats>('/resumes/stats', { params })).data,
+        listReadOptions(opts),
+      );
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -467,10 +473,13 @@ export const resumeService = {
   /**
    * List resumes with filters
    */
-  async list(params?: ResumeSearchParams): Promise<ResumeListResponse> {
+  async list(params?: ResumeSearchParams, opts?: ListReadOptions): Promise<ResumeListResponse> {
     try {
-      const response = await api.get<ResumeListResponse>('/resumes', { params });
-      return response.data;
+      return await cachedList(
+        listCacheKey('resumes:list', { ...(params ?? {}) }),
+        async () => (await api.get<ResumeListResponse>('/resumes', { params })).data,
+        listReadOptions(opts),
+      );
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -691,9 +700,11 @@ export const resumeService = {
   /**
    * List all upload batches
    */
-  async listUploadBatches(limit: number = 20, onlyProcessing: boolean = false): Promise<any> {
+  /** `mine` (default): only the batches this user uploaded, on any device —
+   *  the server scopes it (the list used to be tenant-wide). */
+  async listUploadBatches(limit: number = 20, onlyProcessing: boolean = false, mine: boolean = true): Promise<any> {
     try {
-      const response = await api.get(`/resumes/upload/batches?limit=${limit}&only_processing=${onlyProcessing}`);
+      const response = await api.get(`/resumes/upload/batches?limit=${limit}&only_processing=${onlyProcessing}&mine=${mine}`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

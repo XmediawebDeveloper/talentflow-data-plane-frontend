@@ -22,7 +22,7 @@ import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import ApplyToJobModal from './ApplyToJobModal';
 import type { Job as SharedJob, Resume as SharedResume } from '@/lib/types/types';
 import { convertApiResumeToRow, convertApiFolderToTree } from '@/lib/utils/resumeMappers';
-import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
+import { scoringService, normalizeScoringStatus, type BatchScoringStatus } from '@/lib/services/scoringService';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -339,8 +339,20 @@ export default function SelectSourceModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasInternalDBAccess]);
 
+  type FolderListResult = { data?: Awaited<ReturnType<typeof folderService.list>>; error?: unknown; failed: boolean };
   const fetchData = async () => {
     setLoading(true);
+    /* Folders (My Resumes tab only) start WITH the resume list rather than
+       after it — they don't depend on it, and the serial wait added a full
+       round trip to opening the popup. Applied at the same point as before
+       (after the resumes land, skipped if they fail), so the result is the
+       same; only the wait is gone. Settles to a tagged result, never throws. */
+    const foldersPromise = activeTab === 'my-resumes'
+      ? folderService.list().then<FolderListResult, FolderListResult>(
+          (data) => ({ data, failed: false }),
+          (error: unknown) => ({ error, failed: true }),
+        )
+      : null;
     try {
       // Fetch resumes based on active tab (include archived so they show as disabled)
       const resumeResponse = await resumeService.list({
@@ -358,9 +370,11 @@ export default function SelectSourceModal({
       else setTabCounts(prev => ({ ...prev, internalDb: loadedTotal }));
 
       // Fetch folders only for my-resumes tab
-      if (activeTab === 'my-resumes') {
+      if (foldersPromise) {
         try {
-          const folderData = await folderService.list();
+          const folderResult = await foldersPromise;
+          if (folderResult.failed) throw folderResult.error;
+          const folderData = folderResult.data;
           console.log('[SelectSourceModal] Fetched folders:', folderData);
           console.log('[SelectSourceModal] Folders count:', folderData?.length || 0);
 
@@ -869,50 +883,125 @@ export default function SelectSourceModal({
     setSelectedFolder('all');
   };
 
+  /* Each snapshot of the run's batch. The progress popup (BulkScoringProgressModal,
+     mounted for the whole run, minimised or not) is the ONE poller of the batch
+     — every second while it runs, and it stops once the batch is settled. This
+     popup used to run a second, 3-second loop of its own on the same batch. */
+  const settledBatchRef = useRef<string | null>(null);
+  const handleRunBatchStatus = (batchStatus: BatchScoringStatus) => {
+    // Update progress items from batch status. `items` is guarded — an
+    // undefined `items` used to throw before ever reaching the `allDone`
+    // check, leaving the popup stuck on "Queued".
+    setProgressItems(prev => prev.map(item => {
+      const batchItem = (batchStatus.items || []).find((b: any) => b.resume_id === item.resumeId);
+      if (!batchItem) return item;
+      const status = normalizeScoringStatus(batchItem.status) as ProgressItem['status'];
+      return {
+        ...item,
+        status,
+        score: batchItem.overall_score,
+        overallRating10: batchItem.overall_rating_10,
+        matchStatus: batchItem.match_status,
+        // Never copied here before — only the context-sync loop below set
+        // it (for GlobalScoringProgressIndicator), so the modal rendered
+        // from THIS state always showed a bare "Failed" badge with no reason.
+        errorMessage: batchItem.error_message || item.errorMessage,
+      };
+    }));
+    setScoringStats({
+      queued: batchStatus.queued,
+      processing: batchStatus.processing,
+      completed: batchStatus.completed,
+      failed: batchStatus.failed,
+    });
+
+    // Sync status updates into the persistent context (drives GlobalScoringProgressIndicator)
+    for (const batchItem of (batchStatus.items || [])) {
+      const itemId = `${jobId}-${batchItem.resume_id}`;
+      const itemStatus = normalizeScoringStatus(batchItem.status);
+      if (itemStatus === 'completed') {
+        updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10, matchResult: toMatchResult(batchItem.match_status) });
+      } else if (itemStatus === 'failed') {
+        updateItemStatus(jobId, itemId, 'Failed', { errorReason: batchItem.error_message || 'Scoring failed' });
+      } else if (itemStatus === 'processing') {
+        updateItemStatus(jobId, itemId, 'Scoring in progress');
+      }
+    }
+
+    const aggregateStatus = normalizeScoringStatus(batchStatus.status);
+    const allDone = aggregateStatus === 'completed' || aggregateStatus === 'failed' ||
+      (batchStatus.queued === 0 && batchStatus.processing === 0);
+
+    if (!allDone) {
+      // Running again (e.g. Retry from the popup): its finish is reported again.
+      settledBatchRef.current = null;
+      return;
+    }
+    if (settledBatchRef.current === batchStatus.batch_id) return; // reported already
+    settledBatchRef.current = batchStatus.batch_id;
+    setSubmitting(false);
+    // Refresh header quota dropdown — RS deductions landed on CP
+    dispatchUnitsConsumed();
+    /* The popup stays up, finished, until the recruiter closes it; the
+       page brings the results in behind it meanwhile. It used to close
+       ITSELF here after 1.5s and only then hand off to the page. On the
+       Resume Scoring page that hand-off awaits a history refresh before
+       unmounting this modal, so the whole fetch showed this modal's own
+       resume-selection tabs. And a popup closing on its own reads to
+       the corner widget as "minimised" — with the run already older
+       than its 3s card, it dropped straight to the round button nobody
+       had asked for. */
+    onScoringFinished?.();
+  };
+
   // Submit for scoring with progress tracking
   const handleSubmitForScoring = async (reviewedIds?: string[], reviewedVersions?: (number | undefined)[]) => {
     // From the review step: the resumes still ticked, each on its chosen version.
     const idsToScore = reviewedIds ?? selectedResumes;
     if (idsToScore.length === 0) return;
 
-    // Check for already-scored resumes before proceeding
     let resumesToScore = [...idsToScore];
+    setSubmitting(true);
+
     try {
-      const checkResult = await scoringService.checkExistingScores(jobId, resumesToScore);
-      if (checkResult.existing_count > 0) {
-        const alreadyScoredNames = checkResult.existing_scores
-          .map((s: any) => `${s.candidate_name} (${formatOverallScore(s.overall_rating_10, s.overall_score)})`)
+      /* One request (2026-11-20): the server leaves out the resumes already
+         scored for this job (POST /scoring/check-existing's rule), runs the
+         unit check on the ones left (POST /unit-pool/validate-before-action's
+         rule) and starts the batch — it used to be three serial round trips. */
+      const response = await scoringService.startBulkScoringAsync(jobId, resumesToScore, { skipExisting: true, validateUnits: true });
+
+      // Already-scored resumes: the same toasts the separate check showed.
+      if ((response.existing_count ?? 0) > 0 && response.existing_scores) {
+        const alreadyScoredNames = response.existing_scores
+          .map(s => `${s.candidate_name} (${formatOverallScore(s.overall_rating_10, s.overall_score)})`)
           .join(', ');
 
-        if (checkResult.new_count === 0) {
+        if (response.new_count === 0) {
           // ALL resumes already scored - block entirely
           toast.error(
-            `All ${checkResult.existing_count} resume(s) already scored for "${checkResult.jd_title}": ${alreadyScoredNames}`,
+            `All ${response.existing_count} resume(s) already scored for "${response.jd_title}": ${alreadyScoredNames}`,
             { duration: 6000 }
           );
+          setSubmitting(false);
           return;
         }
 
         // SOME already scored - warn and filter them out
         toast.warning(
-          `${checkResult.existing_count} resume(s) already scored and will be skipped: ${alreadyScoredNames}`,
+          `${response.existing_count} resume(s) already scored and will be skipped: ${alreadyScoredNames}`,
           { duration: 5000 }
         );
-        const existingIds = new Set(checkResult.existing_scores.map((s: any) => s.resume_id));
+        const existingIds = new Set(response.existing_scores.map(s => s.resume_id));
         resumesToScore = resumesToScore.filter(id => !existingIds.has(id));
-
-        if (resumesToScore.length === 0) return;
       }
-    } catch (error) {
-      console.error('Error checking existing scores:', error);
-      // Continue with scoring even if check fails
-    }
 
-    setSubmitting(true);
-
-    try {
-      // Use async Celery-based bulk scoring (same as Resume Scoring module)
-      const response = await scoringService.startBulkScoringAsync(jobId, resumesToScore);
+      // Not enough units for the ones left: the message the client check showed.
+      const unitRefusal = scoringService.bulkUnitRefusal(response);
+      if (unitRefusal) throw unitRefusal;
+      if (!response.batch_id || resumesToScore.length === 0) {
+        setSubmitting(false);
+        return;
+      }
 
       // Build resume items for progress display. The version is the one picked
       // in the review step (parallel to `reviewedIds`), else the row's own.
@@ -951,83 +1040,7 @@ export default function SelectSourceModal({
       setProgressBatchId(batchId);
       startScoringJob(jobId, jobTitle, contextItems, typeof window !== 'undefined' ? window.location.pathname + window.location.search : undefined, { batchId });
 
-      // Poll batch status until all items are done
-      const poll = async () => {
-        try {
-          const batchStatus = await scoringService.getBatchStatus(batchId);
-
-          // Update progress items from batch status. `items` guarded the same
-          // way the context-sync loop below already does — an undefined
-          // `items` here used to throw before ever reaching that loop or the
-          // `allDone` check, so every poll tick silently failed into the
-          // catch block below and retried forever: the popup stayed stuck on
-          // "Queued" indefinitely with no visible error.
-          setProgressItems(prev => prev.map(item => {
-            const batchItem = (batchStatus.items || []).find((b: any) => b.resume_id === item.resumeId);
-            if (!batchItem) return item;
-            const status = normalizeScoringStatus(batchItem.status) as ProgressItem['status'];
-            return {
-              ...item,
-              status,
-              score: batchItem.overall_score,
-              overallRating10: batchItem.overall_rating_10,
-              matchStatus: batchItem.match_status,
-              // Never copied here before — only the context-sync loop below set
-              // it (for GlobalScoringProgressIndicator), so the modal rendered
-              // from THIS state always showed a bare "Failed" badge with no reason.
-              errorMessage: batchItem.error_message || item.errorMessage,
-            };
-          }));
-          setScoringStats({
-            queued: batchStatus.queued,
-            processing: batchStatus.processing,
-            completed: batchStatus.completed,
-            failed: batchStatus.failed,
-          });
-
-          // Sync status updates into the persistent context (drives GlobalScoringProgressIndicator)
-          for (const batchItem of (batchStatus.items || [])) {
-            const itemId = `${jobId}-${batchItem.resume_id}`;
-            const itemStatus = normalizeScoringStatus(batchItem.status);
-            if (itemStatus === 'completed') {
-              updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10, matchResult: toMatchResult(batchItem.match_status) });
-            } else if (itemStatus === 'failed') {
-              updateItemStatus(jobId, itemId, 'Failed', { errorReason: batchItem.error_message || 'Scoring failed' });
-            } else if (itemStatus === 'processing') {
-              updateItemStatus(jobId, itemId, 'Scoring in progress');
-            }
-          }
-
-          const aggregateStatus = normalizeScoringStatus(batchStatus.status);
-          const allDone = aggregateStatus === 'completed' || aggregateStatus === 'failed' ||
-            (batchStatus.queued === 0 && batchStatus.processing === 0);
-
-          if (allDone) {
-            setSubmitting(false);
-            // Refresh header quota dropdown — RS deductions landed on CP
-            dispatchUnitsConsumed();
-            /* The popup stays up, finished, until the recruiter closes it; the
-               page brings the results in behind it meanwhile. It used to close
-               ITSELF here after 1.5s and only then hand off to the page. On the
-               Resume Scoring page that hand-off awaits a history refresh before
-               unmounting this modal, so the whole fetch showed this modal's own
-               resume-selection tabs. And a popup closing on its own reads to
-               the corner widget as "minimised" — with the run already older
-               than its 3s card, it dropped straight to the round button nobody
-               had asked for. */
-            onScoringFinished?.();
-          } else {
-            setTimeout(poll, 3000);
-          }
-        } catch (pollError) {
-          // Was silently swallowed — a poll tick that keeps throwing (like the
-          // undefined-`items` case above used to) retried forever with no
-          // trace of why, which is exactly what made this bug invisible.
-          console.error('[SelectSourceModal] Error polling batch status:', pollError);
-          setTimeout(poll, 5000);
-        }
-      };
-      setTimeout(poll, 3000);
+      // Batch progress arrives through handleRunBatchStatus (the popup polls it).
 
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
@@ -1846,6 +1859,8 @@ export default function SelectSourceModal({
         <BulkScoringProgressModal
           headerJobVersion={jobVersion}
           batchId={progressBatchId}
+          onBatchStatus={handleRunBatchStatus}
+          activePollMs={1000}
           onClose={handleCloseProgress}
           progressData={progressItems.map((item): ScoringProgressItem => ({
             id: item.resumeId,

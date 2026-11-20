@@ -5,6 +5,7 @@ import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ModalProvider } from "@/components/providers/ModalProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { ScoringProgressProvider } from "@/contexts/ScoringProgressContext";
+import { ActivityFeedProvider } from "@/contexts/ActivityFeedContext";
 import { BulkInviteProgressProvider } from "@/contexts/BulkInviteProgressContext";
 import { Toaster } from "sonner";
 import SubscriptionInactiveModal from "@/components/SubscriptionInactiveModal";
@@ -123,6 +124,7 @@ export default function RootLayout({
           <AuthProvider>
             <ModalProvider>
               <GlobalDialogProvider>
+                <ActivityFeedProvider>
                 <ScoringProgressProvider>
                 <BulkInviteProgressProvider>
                   {children}
@@ -170,6 +172,7 @@ export default function RootLayout({
                   <DropdownViewportGuard />
                 </BulkInviteProgressProvider>
                 </ScoringProgressProvider>
+                </ActivityFeedProvider>
               </GlobalDialogProvider>
             </ModalProvider>
           </AuthProvider>

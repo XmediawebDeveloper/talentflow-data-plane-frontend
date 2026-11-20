@@ -587,6 +587,7 @@ export default function ResumeScoringPage({
     clearJob,
     activeScoringJobs,
     syncScoringJob,
+    attachBatch,
   } = useScoringProgress();
   // Stable per-instance id for the ref-counted panel-visibility registry —
   // see `setPanelVisibility` on ScoringProgressContext.
@@ -716,6 +717,9 @@ export default function ResumeScoringPage({
   /* The job picker's reload trigger, and whether a run finished in the
      current "Select Applicants to Score" popup. */
   const [pickerReloadSignal, setPickerReloadSignal] = useState(0);
+  /* The JD version(s) the run scored: the picker re-reads only those rows on
+     the reload (a run changes nothing else in the job list). */
+  const [pickerReloadIds, setPickerReloadIds] = useState<string[]>([]);
   const scoredInPopupRef = useRef(false);
   const [resumeSource, setResumeSource] = useState<'my-resumes' | 'internal-database' | null>(null);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -2124,6 +2128,8 @@ export default function ResumeScoringPage({
         const batch = await scoringService.startBulkScoringAsync(jobId, resumeIds);
         const batchId = batch.batch_id;
         setProgressBatchId(batchId);
+        // The corner run keeps following this batch after the page closes.
+        attachBatch(jobId, batchId);
         console.log(`[ResumeScoringPage] Batch created: ${batchId}`);
 
         // Map resumeId → array index for O(1) status updates
@@ -2217,7 +2223,7 @@ export default function ResumeScoringPage({
     };
 
     scoreResumes();
-  }, [pendingScoringData, startScoringJob, updateItemStatus, onRefreshHistory, router]);
+  }, [pendingScoringData, startScoringJob, updateItemStatus, onRefreshHistory, router, attachBatch]);
 
   // Track completed job IDs to prevent flickering from stale polling data
   const completedJobsRef = useRef<Set<string>>(new Set());
@@ -2643,6 +2649,8 @@ export default function ResumeScoringPage({
      stays where it is. */
   const clearPickAfterScoring = () => {
     scoredInPopupRef.current = false;
+    const scoredJdId = modalJobData?.id || pickerSelection?.job.id || selectedJob;
+    setPickerReloadIds(scoredJdId ? [scoredJdId] : []);
     handleJobPicked(null);
     setPickerReloadSignal(n => n + 1);
   };
@@ -4166,7 +4174,8 @@ export default function ResumeScoringPage({
               {/* Sort by, then List / Grid — where Export used to be (Export
                   is now in the Actions menu, shown once jobs are ticked). */}
               {/* Phones sort from the Sort menu in the row below (PhoneSortMenu). */}
-              {displayHistory.length > 0 && (
+              {/* Always shown, an empty list included. */}
+              {(
                 <div className="tf-jobs-sort contents">
                 <SortByControl
                   value={jobSortBy}
@@ -4289,7 +4298,7 @@ export default function ResumeScoringPage({
           )}
           {viewPills}
           {/* Phones: the Job Openings list's Sort menu (the inline Sort by above hides). */}
-          {displayHistory.length > 0 && (
+          {(
             <PhoneSortMenu<JobSortKey>
               value={jobSortBy}
               order={jobSortOrder}
@@ -6234,6 +6243,7 @@ export default function ResumeScoringPage({
         <JobOpeningPickerList
           listAnchorRef={jobPickerListRef}
           reloadSignal={pickerReloadSignal}
+          reloadJobIds={pickerReloadIds}
           layout="page"
           selection={pickerSelection}
           onSelectionChange={handleJobPicked}
