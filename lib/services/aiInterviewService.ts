@@ -799,7 +799,9 @@ export const aiInterviewService = {
    */
   async create(data: AIInterviewCreate): Promise<AIInterviewResponse> {
     try {
-      const response = await api.post<AIInterviewResponse>('/ai-interview', data);
+      // Trailing slash = the backend's route. Without it the backend answered with a
+      // redirect, which behind the HTTPS proxy came back as http:// (mixed content).
+      const response = await api.post<AIInterviewResponse>('/ai-interview/', data);
       dispatchUnitsConsumed();
       return response.data;
     } catch (error) {

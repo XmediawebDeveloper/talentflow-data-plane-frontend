@@ -714,6 +714,9 @@ export default function ResumeScoringPage({
   /* The job picker's reload trigger, and whether a run finished in the
      current "Select Applicants to Score" popup. */
   const [pickerReloadSignal, setPickerReloadSignal] = useState(0);
+  /* The JD version(s) the run scored: the picker re-reads only those rows on
+     the reload (a run changes nothing else in the job list). */
+  const [pickerReloadIds, setPickerReloadIds] = useState<string[]>([]);
   const scoredInPopupRef = useRef(false);
   const [resumeSource, setResumeSource] = useState<'my-resumes' | 'internal-database' | null>(null);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -2643,6 +2646,8 @@ export default function ResumeScoringPage({
      stays where it is. */
   const clearPickAfterScoring = () => {
     scoredInPopupRef.current = false;
+    const scoredJdId = modalJobData?.id || pickerSelection?.job.id || selectedJob;
+    setPickerReloadIds(scoredJdId ? [scoredJdId] : []);
     handleJobPicked(null);
     setPickerReloadSignal(n => n + 1);
   };
@@ -6255,6 +6260,7 @@ export default function ResumeScoringPage({
         <JobOpeningPickerList
           listAnchorRef={jobPickerListRef}
           reloadSignal={pickerReloadSignal}
+          reloadJobIds={pickerReloadIds}
           layout="page"
           selection={pickerSelection}
           onSelectionChange={handleJobPicked}
