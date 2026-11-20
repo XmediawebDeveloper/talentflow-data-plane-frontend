@@ -963,6 +963,7 @@ function TeamWiseTab({
   onPageChange,
   startDate,
   endDate,
+  isBilling,
   isLoading,
 }: {
   teamsData: AllTeamsUsageSummary | null;
@@ -970,6 +971,7 @@ function TeamWiseTab({
   onPageChange: (p: number) => void;
   startDate: string;
   endDate: string;
+  isBilling?: boolean;
   isLoading: boolean;
 }) {
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
@@ -1073,6 +1075,7 @@ function TeamWiseTab({
                     teamName={team.team_name || 'Unnamed Team'}
                     startDate={startDate}
                     endDate={endDate}
+                    isBilling={isBilling}
                   />
                 </div>
               )}
@@ -1176,6 +1179,7 @@ function TeamWiseTab({
                           teamName={team.team_name || 'Unnamed Team'}
                           startDate={startDate}
                           endDate={endDate}
+                          isBilling={isBilling}
                         />
                       </td>
                     </tr>
@@ -1212,11 +1216,13 @@ function InlineTeamMembersUsage({
   teamName,
   startDate,
   endDate,
+  isBilling,
 }: {
   teamId: string;
   teamName: string;
   startDate: string;
   endDate: string;
+  isBilling?: boolean;
 }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1232,7 +1238,7 @@ function InlineTeamMembersUsage({
       setIsLoading(true);
       setError(null);
       try {
-        const data = await teamService.getTeamMembersUsage(teamId, startDate, endDate);
+        const data = await teamService.getTeamMembersUsage(teamId, startDate, endDate, isBilling ? 'billing' : undefined);
         if (isMounted) {
           setMembersUsage(data);
         }
@@ -1252,7 +1258,7 @@ function InlineTeamMembersUsage({
     return () => {
       isMounted = false;
     };
-  }, [endDate, startDate, teamId]);
+  }, [endDate, startDate, teamId, isBilling]);
 
   if (isLoading) {
     return (
@@ -1758,14 +1764,19 @@ export default function UsageHistory() {
   const loadTeams = useCallback(async () => {
     setIsLoadingTeams(true);
     try {
-      const res = await teamService.getAllTeamsUsage(teamRangeStart, teamRangeEnd);
+      // 'billing' resolves to the exact billing-period-start instant server-side,
+      // same as the User-Wise tab, instead of midnight of teamRangeStart's date —
+      // otherwise day-one activity before that instant counted here but not there.
+      const res = quickPeriod === 'billing'
+        ? await teamService.getAllTeamsUsage(undefined, undefined, 'billing')
+        : await teamService.getAllTeamsUsage(teamRangeStart, teamRangeEnd);
       setTeamsData(res);
     } catch (err: any) {
       showErrorToast(err, "Couldn't load team usage", { id: 'usage-teams' });
     } finally {
       setIsLoadingTeams(false);
     }
-  }, [teamRangeStart, teamRangeEnd]);
+  }, [teamRangeStart, teamRangeEnd, quickPeriod]);
 
   // ── Load adjustments ────────────────────────────────────────────────────────
   const [adjustmentsUnavailable, setAdjustmentsUnavailable] = useState(false);
@@ -2147,6 +2158,7 @@ export default function UsageHistory() {
               onPageChange={setTeamPage}
               startDate={teamRangeStart}
               endDate={teamRangeEnd}
+              isBilling={quickPeriod === 'billing'}
               isLoading={isLoadingTeams}
             />
           )}

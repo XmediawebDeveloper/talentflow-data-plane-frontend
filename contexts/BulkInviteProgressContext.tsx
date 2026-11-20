@@ -342,7 +342,7 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
         // A remove / restore made here after this read was sent is newer.
         const localNewer = !!p && (p.dismissedAt ?? 0) > sentAt;
         const hide = localNewer ? { dismissed: p!.dismissed, dismissedAt: p!.dismissedAt }
-          : { dismissed: a.dismissed, dismissedAt: a.dismissed ? (p?.dismissed ? p.dismissedAt ?? sentAt : sentAt) : p?.dismissedAt };
+          : { dismissed: a.dismissed, dismissedAt: a.dismissed ? (p?.dismissed ? p.dismissedAt || sentAt : sentAt) : p?.dismissedAt };
         if (!p && !a.dismissed) added = true;
         byId.set(f.job_id, p
           ? { ...p, ...f, ...withNames(f, p), ...hide, syncedAt: now }

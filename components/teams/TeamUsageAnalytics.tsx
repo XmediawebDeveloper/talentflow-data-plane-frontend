@@ -130,7 +130,7 @@ const LOG_PAGE_SIZE = 200;
 /* Member usage per team + range. Collapsing and re-opening a team used to
    refetch it every time; the cache is cleared whenever the team list reloads. */
 const membersCache = new Map<string, TeamMemberUsage[]>();
-const membersCacheKey = (teamId: string, fromDate: string, toDate: string) => `${teamId}|${fromDate}|${toDate}`;
+const membersCacheKey = (teamId: string, fromDate: string, toDate: string, isBilling?: boolean) => `${teamId}|${fromDate}|${toDate}|${isBilling ? 'billing' : ''}`;
 
 // Human-readable labels for all unit types (including system ones)
 const UNIT_TYPE_LABEL: Record<string, string> = {
@@ -458,13 +458,13 @@ function useMemberLog(member: TeamMemberUsage, fromDate: string, toDate: string)
 }
 
 /** A team's member usage, fetched while the team is expanded. */
-function useTeamMembers(teamId: string, expanded: boolean, fromDate: string, toDate: string) {
+function useTeamMembers(teamId: string, expanded: boolean, fromDate: string, toDate: string, isBilling?: boolean) {
   const [members, setMembers] = useState<TeamMemberUsage[] | null>(null);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
   useEffect(() => {
     if (!expanded) return;
-    const key = membersCacheKey(teamId, fromDate, toDate);
+    const key = membersCacheKey(teamId, fromDate, toDate, isBilling);
     const cached = membersCache.get(key);
     if (cached) {
       setMembers(cached);
@@ -474,7 +474,7 @@ function useTeamMembers(teamId: string, expanded: boolean, fromDate: string, toD
     let cancelled = false;
     setLoadingMembers(true);
     setMembers(null);
-    teamService.getTeamMembersUsage(teamId, fromDate, toDate)
+    teamService.getTeamMembersUsage(teamId, fromDate, toDate, isBilling ? 'billing' : undefined)
       .then(res => {
         membersCache.set(key, res.members);
         if (!cancelled) setMembers(res.members);
@@ -482,7 +482,7 @@ function useTeamMembers(teamId: string, expanded: boolean, fromDate: string, toD
       .catch(() => { if (!cancelled) setMembers([]); })
       .finally(() => { if (!cancelled) setLoadingMembers(false); });
     return () => { cancelled = true; };
-  }, [expanded, teamId, fromDate, toDate]);
+  }, [expanded, teamId, fromDate, toDate, isBilling]);
 
   return { members, loadingMembers };
 }
@@ -765,6 +765,7 @@ function TeamRow({
   team,
   fromDate,
   toDate,
+  isBilling,
   expanded,
   onToggle,
   grandTotal,
@@ -773,13 +774,14 @@ function TeamRow({
   team: TeamUsageSummary;
   fromDate: string;
   toDate: string;
+  isBilling?: boolean;
   expanded: boolean;
   onToggle: () => void;
   grandTotal: number;
   /** Member breakdown is tenant-admin only — others get a plain row. */
   canExpand: boolean;
 }) {
-  const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate);
+  const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate, isBilling);
   const view = useMemberView(members);
   const measure = useContext(MeasureContext);
 
@@ -1046,6 +1048,7 @@ function MobileTeamCard({
   team,
   fromDate,
   toDate,
+  isBilling,
   expanded,
   onToggle,
   grandTotal,
@@ -1054,13 +1057,14 @@ function MobileTeamCard({
   team: TeamUsageSummary;
   fromDate: string;
   toDate: string;
+  isBilling?: boolean;
   expanded: boolean;
   onToggle: () => void;
   grandTotal: number;
   /** Member breakdown is tenant-admin only — others get a plain row. */
   canExpand: boolean;
 }) {
-  const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate);
+  const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate, isBilling);
   const view = useMemberView(members);
   const measure = useContext(MeasureContext);
   const total = teamTotalBy(team, measure);
@@ -1141,18 +1145,18 @@ export type MemberUsageRow = {
   lastActivity: string | null;
 };
 
-export function useAllMembersUsage(teams: TeamUsageSummary[], fromDate: string, toDate: string) {
-  const reqKey = `${fromDate}|${toDate}|${teams.map((t) => t.team_id).join(',')}`;
+export function useAllMembersUsage(teams: TeamUsageSummary[], fromDate: string, toDate: string, isBilling?: boolean) {
+  const reqKey = `${fromDate}|${toDate}|${isBilling ? 'billing' : ''}|${teams.map((t) => t.team_id).join(',')}`;
   const [data, setData] = useState<{ key: string; rows: MemberUsageRow[]; failed: string[] } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     // Same per-team cache as an expanded team row, so either view reuses the other's fetches.
     Promise.allSettled(teams.map(async (team) => {
-      const key = membersCacheKey(team.team_id, fromDate, toDate);
+      const key = membersCacheKey(team.team_id, fromDate, toDate, isBilling);
       const cached = membersCache.get(key);
       if (cached) return cached;
-      const res = await teamService.getTeamMembersUsage(team.team_id, fromDate, toDate);
+      const res = await teamService.getTeamMembersUsage(team.team_id, fromDate, toDate, isBilling ? 'billing' : undefined);
       membersCache.set(key, res.members);
       return res.members;
     })).then((results) => {
@@ -1194,16 +1198,17 @@ export function useAllMembersUsage(teams: TeamUsageSummary[], fromDate: string, 
 type MemberSortKey = 'name' | UnitKey | 'total' | 'last';
 const MEMBER_SORT_DESC_FIRST: readonly MemberSortKey[] = ['RU', 'RS', 'AS', 'AIU', 'total', 'last'];
 
-function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
+function MembersUsageView({ teams, fromDate, toDate, isBilling, query, isMobile, sort }: {
   /** Owned by the parent: the stat cards and the phone sort menu set it too. */
   sort: TableSort<MemberSortKey>;
   teams: TeamUsageSummary[];
   fromDate: string;
   toDate: string;
+  isBilling?: boolean;
   query: string;
   isMobile: boolean;
 }) {
-  const { rows, failed, loading } = useAllMembersUsage(teams, fromDate, toDate);
+  const { rows, failed, loading } = useAllMembersUsage(teams, fromDate, toDate, isBilling);
   const q = query.trim().toLowerCase();
   const visible = rows.filter((r) =>
     !q || r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q) || r.teams.some((t) => t.toLowerCase().includes(q)),
@@ -1372,15 +1377,15 @@ async function exportTeams(format: ExportFileFormat, teams: TeamUsageSummary[], 
   await exportRows(format, TEAM_EXPORT_HEADERS, rows, `team-usage-${fromDate}-to-${toDate}`, { sheetName: 'Team Usage' });
 }
 
-async function exportUsers(format: ExportFileFormat, teams: TeamUsageSummary[], fromDate: string, toDate: string) {
+async function exportUsers(format: ExportFileFormat, teams: TeamUsageSummary[], fromDate: string, toDate: string, isBilling?: boolean) {
   // All teams at once (one by one was slow on a long list); results keep team order.
   // Teams already loaded on screen (expanded rows, Members view) come from the cache.
   const results = await Promise.allSettled(
     teams.map(async (team) => {
-      const key = membersCacheKey(team.team_id, fromDate, toDate);
+      const key = membersCacheKey(team.team_id, fromDate, toDate, isBilling);
       const cached = membersCache.get(key);
       if (cached) return { members: cached };
-      const res = await teamService.getTeamMembersUsage(team.team_id, fromDate, toDate);
+      const res = await teamService.getTeamMembersUsage(team.team_id, fromDate, toDate, isBilling ? 'billing' : undefined);
       membersCache.set(key, res.members);
       return res;
     }),
@@ -1456,6 +1461,9 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
   const last90 = RANGE_PRESETS.find((p) => p.id === '90d')!;
   // Empty range: offer the widest preset unless it's already (or nearly) in use.
   const canWidenRange = fromDate > last90.range().from;
+  // The exact billing-period-start instant, not midnight of its date — so this
+  // page agrees with Usage History's User-Wise tab on day one of the period.
+  const isBilling = activePresetId === 'billing';
 
   // Every fetch gets a number; only the latest one's result is applied (a
   // restored range fires a second fetch right after the default one).
@@ -1477,9 +1485,10 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
     setExpandedTeamId(null);
     membersCache.clear();
     try {
+      const period = isBilling ? 'billing' : undefined;
       const res = isTenantAdmin
-        ? await teamService.getAllTeamsUsage(fromDate, toDate)
-        : await teamService.getMyTeamsUsage(fromDate, toDate);
+        ? await teamService.getAllTeamsUsage(fromDate, toDate, period)
+        : await teamService.getMyTeamsUsage(fromDate, toDate, period);
       if (seq !== fetchSeq.current) return;
       setTeams(res.teams ?? []);
     } catch {
@@ -1489,7 +1498,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
     } finally {
       if (seq === fetchSeq.current) setLoading(false);
     }
-  }, [fromDate, toDate, isTenantAdmin]);
+  }, [fromDate, toDate, isTenantAdmin, isBilling]);
 
   useEffect(() => { fetchTeams(); }, [fetchTeams]);
 
@@ -1660,7 +1669,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
             columns={exportScope === 'user' ? USER_EXPORT_HEADERS : TEAM_EXPORT_HEADERS}
             onExport={(format) =>
               exportScope === 'user'
-                ? exportUsers(format, teams, fromDate, toDate)
+                ? exportUsers(format, teams, fromDate, toDate, isBilling)
                 : exportTeams(format, teams, fromDate, toDate)
             }
           />
@@ -1767,7 +1776,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
           Rendered instead of the table (not alongside it) so an expanded team
           fetches its members once. */}
       {showMembers ? (
-        <MembersUsageView teams={teams} fromDate={fromDate} toDate={toDate} query={teamQuery} isMobile={isMobile} sort={memberSort} />
+        <MembersUsageView teams={teams} fromDate={fromDate} toDate={toDate} isBilling={isBilling} query={teamQuery} isMobile={isMobile} sort={memberSort} />
       ) : isMobile ? (
         <div className="tf-card-soft overflow-hidden">
           {loading ? (
@@ -1804,6 +1813,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                   canExpand={isTenantAdmin}
                   fromDate={fromDate}
                   toDate={toDate}
+                  isBilling={isBilling}
                   expanded={isTenantAdmin && expandedTeamId === team.team_id}
                   onToggle={() => setExpandedTeamId(
                     expandedTeamId === team.team_id ? null : team.team_id
@@ -1895,6 +1905,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                   canExpand={isTenantAdmin}
                   fromDate={fromDate}
                   toDate={toDate}
+                  isBilling={isBilling}
                   expanded={isTenantAdmin && expandedTeamId === team.team_id}
                   onToggle={() => setExpandedTeamId(
                     expandedTeamId === team.team_id ? null : team.team_id
