@@ -204,6 +204,8 @@ export interface JobOpeningsFilters {
   applicants?: string;
   date_from?: string;
   date_to?: string;
+  /** JD version number ('all' = off). Lists the rows OF that version, not each job's latest. */
+  version?: string;
 }
 
 export interface JobOpeningsListParams extends JobOpeningsFilters {
@@ -754,6 +756,8 @@ export const jdService = {
     page_size?: number;
     /** Only these JD ids — sent as repeated `ids=` (FastAPI's list form), not axios' default `ids[]=`. */
     ids?: string[];
+    /** Only JDs of this version number (e.g. 2 → every Version 2 JD). */
+    version?: number;
   }): Promise<JDListResponse> {
     try {
       const response = await api.get<JDListResponse>('/jd', {

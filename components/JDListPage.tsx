@@ -69,6 +69,12 @@ const STATUS_TABS = [
   { id: 'archived', label: 'Archived' },
 ];
 
+// JD versions a job can have (backend MAX_JD_VERSIONS = 5)
+const VERSION_OPTIONS = [
+  { value: 'all', label: 'All Versions' },
+  ...[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `Version ${n}` })),
+];
+
 export default function JDListPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -83,6 +89,7 @@ export default function JDListPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [versionFilter, setVersionFilter] = useState<string>('all');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [bulkActionsOpen, setBulkActionsOpen] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -247,6 +254,7 @@ export default function JDListPage() {
         search: searchQuery || undefined,
         source: 'my-jds',  // Only show JDs created by the logged-in user
         sort_by: sortBy,
+        version: versionFilter !== 'all' ? Number(versionFilter) : undefined,
         page: currentPage,
         page_size: 20,
       });
@@ -303,7 +311,7 @@ export default function JDListPage() {
 
   useEffect(() => {
     fetchJDs();
-  }, [statusFilter, currentPage, sortBy]);
+  }, [statusFilter, currentPage, sortBy, versionFilter]);
 
   // Debounced search
   useEffect(() => {
@@ -740,6 +748,14 @@ export default function JDListPage() {
                 ]}
               />
             </div>
+            {/* JD version filter */}
+            <FilterSelect
+              value={versionFilter}
+              onChange={(v) => { setVersionFilter(v); setCurrentPage(1); }}
+              ariaLabel="Filter by version"
+              className="w-auto px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+              options={VERSION_OPTIONS}
+            />
             {/* Results count */}
             <div className="flex items-center gap-2 tf-body-muted">
               <span className="px-2 py-1 bg-gray-100 rounded">
@@ -803,11 +819,11 @@ export default function JDListPage() {
             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No job descriptions found</h3>
             <p className="text-gray-500 mb-6">
-              {searchQuery || statusFilter !== 'all'
+              {searchQuery || statusFilter !== 'all' || versionFilter !== 'all'
                 ? 'Try adjusting your filters'
                 : 'Create your first job description to get started'}
             </p>
-            {!searchQuery && statusFilter === 'all' && (
+            {!searchQuery && statusFilter === 'all' && versionFilter === 'all' && (
               <Button
                 variant="primary"
                 onClick={() => {
@@ -852,6 +868,9 @@ export default function JDListPage() {
                           </span>
                         )}
                         <h3 className="tf-section-title sm:text-lg break-words min-w-0">{jd.title}</h3>
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md text-xs font-medium shrink-0">
+                          v{jd.version_number ?? 1}
+                        </span>
                         {getStatusBadge(jd.status, jd.current_version)}
                         {jd.creation_method && getCreationMethodBadge(jd.creation_method)}
                       </div>
