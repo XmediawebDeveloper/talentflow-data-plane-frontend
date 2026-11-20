@@ -3618,7 +3618,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <div className="markdown-content prose prose-sm max-w-none text-gray-700 dark:text-slate-300">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{job.description
                         .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
-                          match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
+                          match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/i) ? '' : match
                         )
                         .replace(/\*\*Certifications\*\*[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
                         .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')

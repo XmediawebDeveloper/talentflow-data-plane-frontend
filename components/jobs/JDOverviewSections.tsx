@@ -81,7 +81,7 @@ const stripEmptyCertifications = (description: string): string =>
       match.toLowerCase().includes('none')
       || match.toLowerCase().includes('not required')
       || match.toLowerCase().includes('n/a')
-      || match.trim().match(/^#+\s*Certifications\s*$/im)
+      || match.trim().match(/^#+\s*Certifications\s*$/i)
         ? ''
         : match,
     )
