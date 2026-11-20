@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSingleTabLock } from './useSingleTabLock';
 import {
   candidateService,
   sessionTokenManager,
@@ -298,7 +299,26 @@ const isHRCompleted = (token: string) => {
   );
 };
 
-export function CandidateAssessmentPortal({ token, candidateName, role }: CandidateAssessmentPortalProps) {
+export function CandidateAssessmentPortal(props: CandidateAssessmentPortalProps) {
+  const lock = useSingleTabLock(props.token);
+  if (lock === 'checking') return null;
+  if (lock === 'blocked') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', fontFamily: 'system-ui, sans-serif' }}>
+        <div style={{ maxWidth: 440 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 12 }}>Assessment already open</h1>
+          <p style={{ color: '#555', lineHeight: 1.5 }}>
+            This assessment link is already open in another tab or window. Only one active session is
+            allowed. Please close the other tab and this page will continue automatically.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return <CandidateAssessmentPortalInner {...props} />;
+}
+
+function CandidateAssessmentPortalInner({ token, candidateName, role }: CandidateAssessmentPortalProps) {
   // State
   const [step, setStep] = useState<AssessmentStep>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -1202,12 +1222,20 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // it has not been given yet (same call and error handling as before), then
   // takes the same route to System Check the old Assessment Details screen's
   // Continue took. A failed consent stops on the error screen as it always did.
+  const continueInFlightRef = useRef(false);
   const handleJobConsentContinue = async () => {
-    if (!assessmentInfo?.consent_accepted) {
-      const accepted = await handleConsentAccept();
-      if (!accepted) return;
+    // Ignore repeated clicks while a previous Continue is still running.
+    if (continueInFlightRef.current) return;
+    continueInFlightRef.current = true;
+    try {
+      if (!assessmentInfo?.consent_accepted) {
+        const accepted = await handleConsentAccept();
+        if (!accepted) return;
+      }
+      await handleBeginClick();
+    } finally {
+      continueInFlightRef.current = false;
     }
-    await handleBeginClick();
   };
 
   const getHRQuestions = useCallback(() => {

@@ -323,6 +323,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
       datePostedTo: '',
       createdBy: 'all',
       workMode: 'all',
+      version: 'all',
     },
     countFilters: (f) =>
       [
@@ -339,6 +340,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
         f.datePostedTo !== '',
         f.createdBy !== 'all',
         f.workMode !== 'all',
+        f.version !== 'all',
       ].filter(Boolean).length,
   });
   const searchQuery = search.appliedQuery;
@@ -356,6 +358,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     datePostedTo: datePostedToFilter,
     createdBy: createdByFilter,
     workMode: workModeFilter,
+    version: versionFilter,
   } = search.filters;
 
   // All / AI Generated / Manual: one white chip that slides to the active
@@ -490,7 +493,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     {
       searchQuery, statusFilter, creationMethodFilter, locationFilter,
       departmentFilter, industryFilter, experienceFilter, employmentTypeFilter,
-      applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter,
+      applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter, versionFilter,
       sortBy, sortOrder, currentPage, itemsPerPage, pageView,
     },
     (s) => {
@@ -530,6 +533,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
         datePostedTo: typeof s.datePostedToFilter === 'string' ? s.datePostedToFilter : '',
         createdBy: typeof s.createdByFilter === 'string' ? s.createdByFilter : 'all',
         workMode: typeof s.workModeFilter === 'string' ? s.workModeFilter : 'all',
+        version: typeof s.versionFilter === 'string' ? s.versionFilter : 'all',
       });
       if (typeof s.sortBy === 'string') setSortBy(s.sortBy as JobSortBy);
       if (s.sortOrder === 'asc' || s.sortOrder === 'desc') setSortOrder(s.sortOrder);
@@ -560,7 +564,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     applicants: applicantsFilter,
     date_from: datePostedFromFilter || undefined,
     date_to: datePostedToFilter || undefined,
-  }), [searchQuery, creationMethodFilter, locationFilter, departmentFilter, industryFilter, employmentTypeFilter, workModeFilter, createdByFilter, experienceFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter]);
+    version: versionFilter,
+  }), [searchQuery, creationMethodFilter, locationFilter, departmentFilter, industryFilter, employmentTypeFilter, workModeFilter, createdByFilter, experienceFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, versionFilter]);
   const hasCriteria = Object.values(serverFilters).some((v) => v !== undefined && v !== null && v !== '' && v !== 'all');
   const listQuery = useMemo(() => ({
     ...serverFilters,
@@ -1142,6 +1147,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     experienceFilter !== 'all' && { key: 'experience', label: 'Experience', value: EXPERIENCE_LABELS[experienceFilter] ?? String(experienceFilter), onRemove: () => search.setFilter('experience', 'all') },
     datePostedFromFilter !== '' && { key: 'datePostedFrom', label: 'Posted From', value: formatChipDate(datePostedFromFilter), onRemove: () => search.setFilter('datePostedFrom', '') },
     datePostedToFilter !== '' && { key: 'datePostedTo', label: 'Posted To', value: formatChipDate(datePostedToFilter), onRemove: () => search.setFilter('datePostedTo', '') },
+    versionFilter !== 'all' && { key: 'version', label: 'Version', value: `v${versionFilter}`, onRemove: () => search.setFilter('version', 'all') },
     // No control on this page sets these, but a restored saved view can — and they count.
     departmentFilter !== 'all' && { key: 'department', label: 'Department', value: String(departmentFilter), onRemove: () => search.setFilter('department', 'all') },
     applicantsFilter !== 'all' && { key: 'applicants', label: 'Applicants', value: String(applicantsFilter), onRemove: () => search.setFilter('applicants', 'all') },
@@ -1274,7 +1280,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   useEffect(() => {
     if (skipPageResetRef.current) { skipPageResetRef.current = false; return; }
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter, sortBy, sortOrder]);
+  }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter, versionFilter, sortBy, sortOrder]);
 
   // Keep the current page in range when the list shrinks (e.g. after deleting the
   // jobs on the last page), so the view never gets stuck on an empty page past
@@ -1570,6 +1576,18 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     placeholder="All Levels"
                     searchPlaceholder="Search level..."
                     ariaLabel="Filter by experience level"
+                  />
+                </div>
+                <div>
+                  <label className="block tf-label mb-1.5">Version</label>
+                  <SearchableSelect
+                    value={versionFilter === 'all' ? '' : versionFilter}
+                    onChange={(v) => search.setFilter('version', v || 'all')}
+                    options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `v${n}` }))}
+                    allLabel="All Versions"
+                    placeholder="All Versions"
+                    searchPlaceholder="Search version..."
+                    ariaLabel="Filter by JD version"
                   />
                 </div>
                 <div>

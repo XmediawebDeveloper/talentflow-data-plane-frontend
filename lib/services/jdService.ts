@@ -225,6 +225,8 @@ export interface JobOpeningsFilters {
   applicants?: string;
   date_from?: string;
   date_to?: string;
+  /** JD version number ('all' = off). Lists the rows OF that version, not each job's latest. */
+  version?: string;
 }
 
 export interface JobOpeningsListParams extends JobOpeningsFilters {
@@ -779,6 +781,8 @@ export const jdService = {
     include_scoring_counts?: boolean;
     /** Also return `candidate_counts` for this page's ids. */
     include_candidate_counts?: boolean;
+    /** Only JDs of this version number (e.g. 2 → every Version 2 JD). */
+    version?: number;
   }): Promise<JDListResponse> {
     try {
       const response = await api.get<JDListResponse>('/jd', {
