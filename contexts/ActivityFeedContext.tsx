@@ -126,6 +126,8 @@ export function ActivityFeedProvider({ children }: { children: React.ReactNode }
       if (identityRef.current !== who || mine !== seq.current) return; // signed out / switched meanwhile
       setState(prev => ({ for: who, items, generation: prev.generation + 1, fetchedAt: sentAt, synced: true }));
       writeCache(who, items);
+      // TEMP diagnostics (cross-device icon)
+      console.log('[ActivityFeed] server', { total: items.length, shown: items.filter(a => !a.dismissed).length, running: items.filter(a => !a.dismissed && isActivityRunning(a)).length, types: items.filter(a => !a.dismissed).map(a => `${a.type}:${a.status}`) });
       setOverrides(prev => {
         if (!prev.size) return prev;
         const next = new Map([...prev].filter(([, o]) => o.at > sentAt));
