@@ -53,7 +53,7 @@ export function ResumeVersionFilterSelect({
   return (
     <label title="Versions" className="relative min-w-0 flex-1 sm:min-w-[180px] sm:flex-none">
       <span className="sr-only">Versions</span>
-      <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-400">
+      <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500">
         <Layers className="h-4 w-4" />
       </span>
       <FilterSelect

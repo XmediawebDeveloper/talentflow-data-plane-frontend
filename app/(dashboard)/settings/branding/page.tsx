@@ -10,6 +10,8 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 export default function BrandingPage() {
   const { hasPermission } = useAuth();
@@ -250,9 +252,9 @@ export default function BrandingPage() {
               {branding.logo_url ? (
                 <img src={branding.logo_url} alt="Logo" className="w-full h-full object-contain rounded-xl" />
               ) : isUploadingLogo ? (
-                <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 dark:text-slate-500 animate-spin" />
+                <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-gray-500 dark:text-slate-500 animate-spin" />
               ) : (
-                <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 dark:text-slate-500" />
+                <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-gray-500 dark:text-slate-500" />
               )}
             </div>
             <div className="text-center sm:text-left">
@@ -283,7 +285,7 @@ export default function BrandingPage() {
                   )}
                 </Button>
                 {branding.logo_url && (
-                  <button
+                  <IconButton bare label="Remove logo" tooltip={!canManage ? 'You do not have permission to manage branding' : 'Remove logo'}
                     onClick={() => {
                       if (!canManage) return;
                       setBranding(prev => ({ ...prev, logo_url: '' }));
@@ -291,13 +293,12 @@ export default function BrandingPage() {
                     aria-disabled={!canManage}
                     className={`p-2 rounded-lg transition-colors ${
                       canManage
-                        ? 'text-gray-400 dark:text-slate-500 hover:text-destructive hover:bg-destructive-subtle'
+                        ? 'text-gray-500 dark:text-slate-500 hover:text-destructive hover:bg-destructive-subtle'
                         : 'text-gray-300 dark:text-slate-700 cursor-not-allowed opacity-60'
                     }`}
-                    aria-label="Remove logo" title={!canManage ? 'You do not have permission to manage branding' : 'Remove logo'}
                   >
                     <X className="w-3.5 h-3.5" />
-                  </button>
+                  </IconButton>
                 )}
               </div>
               <p className="tf-body-secondary mt-2">Recommended: 200x200px, PNG, SVG, or JPG (max 2MB)</p>
@@ -429,15 +430,15 @@ export default function BrandingPage() {
               <p className="text-xs font-semibold text-brand-blue mb-2">DNS Setup Instructions:</p>
               <div className="space-y-1 tf-meta font-mono">
                 <div className="flex gap-3">
-                  <span className="text-gray-400 dark:text-slate-500 w-12">Type</span>
+                  <span className="text-gray-500 dark:text-slate-500 w-12">Type</span>
                   <span className="font-semibold text-gray-900 dark:text-slate-50">CNAME</span>
                 </div>
                 <div className="flex gap-3">
-                  <span className="text-gray-400 dark:text-slate-500 w-12">Name</span>
+                  <span className="text-gray-500 dark:text-slate-500 w-12">Name</span>
                   <span className="font-semibold text-gray-900 dark:text-slate-50">{branding.custom_domain || 'careers'}</span>
                 </div>
                 <div className="flex gap-3">
-                  <span className="text-gray-400 dark:text-slate-500 w-12">Value</span>
+                  <span className="text-gray-500 dark:text-slate-500 w-12">Value</span>
                   <span className="font-semibold text-brand-blue">{cnameTarget || 'loading...'}</span>
                 </div>
               </div>
@@ -514,7 +515,7 @@ export default function BrandingPage() {
 
       {/* Full Preview Modal */}
       {showPreviewModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <ModalA11y><div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl shadow-brand-blue/20 ring-1 ring-black/[0.03] w-full max-w-[95vw] sm:max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col">
             {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
@@ -522,14 +523,13 @@ export default function BrandingPage() {
                 <h3 className="tf-section-title">Branded Career Portal Preview</h3>
                 <p className="tf-meta mt-0.5">How candidates will see your portal</p>
               </div>
-              <Button
+              <IconButton label="Close"
                 variant="secondary"
                 size="sm"
                 onClick={() => setShowPreviewModal(false)}
-                className=""
-               aria-label="Close">
+                className="">
                 <X className="w-4 h-4 text-gray-500 dark:text-slate-500" />
-              </Button>
+              </IconButton>
             </div>
 
             {/* Simulated browser chrome */}
@@ -613,7 +613,7 @@ export default function BrandingPage() {
               </div>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </main>
   );

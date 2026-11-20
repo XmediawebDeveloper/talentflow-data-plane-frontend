@@ -35,6 +35,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 const COMMENT_MAX = 500;
 
@@ -114,7 +116,7 @@ function StarRating({ label, hint, Icon, iconClass, value, onChange, disabled }:
           return (
             <span key={star} className="relative inline-block w-7 h-7">
               {/* Empty outline underneath. */}
-              <Star className="absolute inset-0 w-7 h-7 fill-transparent text-gray-300" />
+              <Star className="absolute inset-0 w-7 h-7 fill-transparent text-muted-foreground dark:text-gray-300" />
               {/* Filled star clipped to 50% for a half, 100% for a full one.
                   Clipping a real star keeps the shape identical to the outline
                   — a separate "half star" glyph never lines up exactly. */}
@@ -255,7 +257,7 @@ export default function InterviewFeedbackModal({
   };
 
   return (
-    <div
+    <ModalA11y innerDialog closeOnEscape={false}><div
       className="fixed inset-0 z-[400] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
       // Backdrop click dismisses; clicks inside the card must not bubble here.
       onClick={() => { if (!submitting) handleClose(); }}
@@ -289,15 +291,14 @@ export default function InterviewFeedbackModal({
                   Optional, and it won&apos;t affect your result.
                 </p>
               </div>
-              <button
+              <IconButton bare label="Close feedback"
                 type="button"
                 onClick={handleClose}
                 disabled={submitting}
-                aria-label="Close feedback"
-                className="p-1.5 -mr-1.5 -mt-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                className="p-1.5 -mr-1.5 -mt-1 rounded-lg text-gray-500 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </IconButton>
             </div>
 
             {/* Body — the three ratings and the comment, one divided list. */}
@@ -378,6 +379,6 @@ export default function InterviewFeedbackModal({
           </>
         )}
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

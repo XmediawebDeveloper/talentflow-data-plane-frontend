@@ -7,6 +7,7 @@ import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import BulkInviteProgressPanel from './BulkInviteProgressPanel';
 import type { BulkInviteResultsTab, TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * A bulk send's progress and results, opened from the floating progress
@@ -79,9 +80,9 @@ export default function BulkInviteResultsDialog({
       subtitle={subtitle}
       zIndexClass="z-[70]"
       headerStart={onBack ? (
-        <Button variant="secondary" size="sm" onClick={onBack} className="w-8 shrink-0 !px-0" aria-label={backLabel} title={backLabel}>
+        <IconButton label={backLabel} variant="secondary" size="sm" onClick={onBack} className="w-8 shrink-0 !px-0">
           <ArrowLeft className="w-4 h-4" />
-        </Button>
+        </IconButton>
       ) : undefined}
       headerExtra={onMinimize ? (
         <Button variant="secondary" size="sm" onClick={onMinimize} className="px-2 sm:px-3" aria-label="Minimize" title="Minimize — sending carries on; the icon stays bottom right">

@@ -74,14 +74,14 @@ export default function SubStepProgress({
             <div className="flex items-center gap-2 min-w-0">
               <StepCircle
                 active={active}
-                className={reached ? 'bg-brand-blue text-white' : 'bg-white border-2 border-gray-300 text-gray-400'}
+                className={reached ? 'bg-brand-blue text-white' : 'bg-white border-2 border-gray-300 text-gray-500'}
               >
                 {done ? <CheckCircle className="w-4 h-4" /> : idx + 1}
               </StepCircle>
               {/* Wraps on narrow phones (two long labels don't fit one
                   line at 320px); one line from sm. */}
               <span className={`text-sm font-semibold leading-tight whitespace-normal sm:whitespace-nowrap ${
-                active ? 'text-gray-900' : done ? 'text-gray-500' : 'text-gray-400'
+                active ? 'text-gray-900' : done ? 'text-gray-500' : 'text-gray-500'
               }`}>
                 {label}
               </span>

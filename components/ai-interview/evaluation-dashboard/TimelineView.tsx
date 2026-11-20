@@ -88,7 +88,7 @@ export function TimelineView({ data }: { data: DashboardData }) {
                     <div className="tf-panel mb-5 p-4">
                       <div className="tf-eyebrow mb-2">Candidate Response</div>
                       <p className="tf-body-secondary leading-relaxed">
-                        {r.candidateResponse || <span className="italic text-gray-400">No response captured</span>}
+                        {r.candidateResponse || <span className="italic text-gray-500">No response captured</span>}
                       </p>
                     </div>
 

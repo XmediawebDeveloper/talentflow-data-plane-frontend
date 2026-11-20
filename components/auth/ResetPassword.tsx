@@ -7,6 +7,7 @@ import { Briefcase, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, Spa
 import { toast } from 'sonner';
 import { getLoginUrl } from '@/lib/services/authService';
 import { getAccessToken, hasStoredSession, restoreSession } from '@/lib/services/api';
+import { IconButton } from '@/components/ui/icon-button';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -136,7 +137,7 @@ export default function ResetPassword() {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
+    boxShadow: '0 10px 40px var(--raw-rgba-37-99-235-0p3)',
   };
 
   const gradientTextStyle: React.CSSProperties = {
@@ -164,7 +165,7 @@ export default function ResetPassword() {
   const formCardStyle: React.CSSProperties = {
     backgroundColor: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)',
     borderRadius: '24px',
-    boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.4)' : '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+    boxShadow: isDark ? '0 25px 50px -12px var(--raw-rgba-0-0-0-0p4)' : '0 25px 50px -12px var(--raw-rgba-0-0-0-0p15)',
     padding: isMobile ? '32px' : '40px',
     border: isDark ? '1px solid var(--raw-374151)' : '1px solid var(--raw-f3f4f6)',
   };
@@ -226,7 +227,7 @@ export default function ResetPassword() {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
+    boxShadow: '0 10px 40px var(--raw-rgba-37-99-235-0p3)',
     transition: 'all 0.2s',
     opacity: canSubmit && !isLoading ? 1 : 0.5,
   };
@@ -258,7 +259,7 @@ export default function ResetPassword() {
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 20px',
-              boxShadow: '0 10px 40px rgba(16, 185, 129, 0.3)',
+              boxShadow: '0 10px 40px var(--raw-rgba-16-185-129-0p3)',
             }}>
               <CheckCircle style={{ width: 36, height: 36, color: 'var(--raw-ffffff)' }} />
             </div>
@@ -355,8 +356,8 @@ export default function ResetPassword() {
               <div style={{
                 marginBottom: '24px',
                 padding: '16px',
-                backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : 'var(--raw-fef2f2)',
-                border: `1px solid ${isDark ? 'rgba(239,68,68,0.3)' : 'var(--raw-fecaca)'}`,
+                backgroundColor: isDark ? 'var(--raw-rgba-239-68-68-0p15)' : 'var(--raw-fef2f2)',
+                border: `1px solid ${isDark ? 'var(--raw-rgba-239-68-68-0p3)' : 'var(--raw-fecaca)'}`,
                 borderRadius: '12px',
                 display: 'flex',
                 alignItems: 'flex-start',
@@ -389,9 +390,9 @@ export default function ResetPassword() {
                       e.target.style.backgroundColor = isDark ? 'var(--raw-374151)' : 'var(--raw-f9fafb)';
                     }}
                   />
-                  <button type="button" onClick={() => setShowNew(!showNew)} style={eyeButtonStyle}>
+                  <IconButton bare label={showNew ? 'Hide password' : 'Show password'} type="button" onClick={() => setShowNew(!showNew)} style={eyeButtonStyle}>
                     {showNew ? <EyeOff style={{ width: 20, height: 20 }} /> : <Eye style={{ width: 20, height: 20 }} />}
-                  </button>
+                  </IconButton>
                 </div>
                 {newPassword.length > 0 && !newPasswordValid && (
                   <p style={{ marginTop: '6px', fontSize: '13px', color: 'var(--raw-dc2626)' }}>
@@ -424,9 +425,9 @@ export default function ResetPassword() {
                       e.target.style.backgroundColor = isDark ? 'var(--raw-374151)' : 'var(--raw-f9fafb)';
                     }}
                   />
-                  <button type="button" onClick={() => setShowConfirm(!showConfirm)} style={eyeButtonStyle}>
+                  <IconButton bare label={showConfirm ? 'Hide confirmed password' : 'Show confirmed password'} type="button" onClick={() => setShowConfirm(!showConfirm)} style={eyeButtonStyle}>
                     {showConfirm ? <EyeOff style={{ width: 20, height: 20 }} /> : <Eye style={{ width: 20, height: 20 }} />}
-                  </button>
+                  </IconButton>
                 </div>
                 {confirmTouched && !passwordsMatch && (
                   <p style={{ marginTop: '6px', fontSize: '13px', color: 'var(--raw-dc2626)', display: 'flex', alignItems: 'center', gap: '4px' }}>

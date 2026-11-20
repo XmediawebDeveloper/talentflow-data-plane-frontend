@@ -9,6 +9,7 @@ import {
 import { getLoginUrl } from '@/lib/services/authService';
 import { useRouter, usePathname } from 'next/navigation';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 // Pages where the modal should NOT appear (user needs access to renew)
 const ALLOWED_PATHS = [
@@ -85,7 +86,7 @@ export default function SubscriptionInactiveModal() {
   if (!isOpen || isAllowedPath) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
@@ -212,7 +213,7 @@ export default function SubscriptionInactiveModal() {
         {errorDetails?.support_email && (
           <div className="px-6 sm:px-8 py-3 bg-slate-50 dark:bg-slate-950 border-t border-gray-100 dark:border-slate-700/60 shrink-0">
             <div className="flex items-center justify-center gap-2 text-sm">
-              <svg className="w-4 h-4 text-gray-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4 text-gray-500 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
               <span className="text-gray-500 dark:text-slate-500">Need help?</span>
@@ -226,6 +227,6 @@ export default function SubscriptionInactiveModal() {
           </div>
         )}
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

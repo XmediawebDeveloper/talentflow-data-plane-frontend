@@ -23,6 +23,8 @@ import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 type CategoryFilter = 'all' | 'config_lifecycle' | 'candidate_activity';
 
@@ -561,19 +563,17 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
               {/* Select All — this page's entries, like the table tabs'
                   header checkbox. */}
               <div className="flex items-center gap-2">
-                <button
+                <IconButton bare label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
                   type="button"
                   onClick={toggleAllOnPage}
                   className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
-                  aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
-                  title={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
                 >
                   {allOnPageSelected ? (
                     <CheckSquare className="w-4 h-4 text-brand-blue" />
                   ) : (
-                    <Square className="w-4 h-4 text-gray-400" />
+                    <Square className="w-4 h-4 text-gray-500" />
                   )}
-                </button>
+                </IconButton>
                 <span className="tf-meta">
                   {selectedKeys.size > 0 ? `${selectedKeys.size} selected` : 'Select all'}
                 </span>
@@ -663,7 +663,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
 
                         <div className="mt-auto flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-slate-800 text-xs">
                           <span className="text-gray-500">{formatTimestamp(activity.timestamp)}</span>
-                          <span className="text-gray-400 group-hover:text-gray-600">
+                          <span className="text-gray-500 group-hover:text-gray-600">
                             <Eye className="w-3 h-3 inline mr-1" />
                             {isExpanded ? 'Hide' : 'Details'}
                           </span>
@@ -681,7 +681,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
 
                 return (
                   <Fragment key={key}>
-                    <div
+                    <div {...clickableProps}
                       className={`relative flex items-start gap-3 sm:gap-4 p-4 rounded-lg border ${colors.border} ${colors.bg} hover:shadow-sm transition-shadow cursor-pointer`}
                       onClick={() => setSelectedActivity(isExpanded ? null : activity.id)}
                     >
@@ -689,18 +689,17 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                         <div className="absolute left-[54px] sm:left-[58px] top-[52px] w-0.5 h-[calc(100%+16px)] bg-gray-200" />
                       )}
 
-                      <button
+                      <IconButton bare label={isSelected ? 'Deselect activity' : 'Select activity'}
                         type="button"
                         onClick={(e) => { e.stopPropagation(); toggleSelected(key); }}
                         className="mt-2.5 p-1 -m-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700 flex-shrink-0 relative z-10"
-                        aria-label={isSelected ? 'Deselect activity' : 'Select activity'}
                       >
                         {isSelected ? (
                           <CheckSquare className="w-4 h-4 text-brand-blue" />
                         ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
+                          <Square className="w-4 h-4 text-gray-500" />
                         )}
-                      </button>
+                      </IconButton>
 
                       <div className={`flex-shrink-0 w-10 h-10 rounded-full ${colors.bg} border-2 ${colors.border} flex items-center justify-center ${colors.icon} relative z-10 bg-white`}>
                         {icon}
@@ -748,7 +747,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                           </div>
                           <div className="flex items-center gap-3 sm:block sm:text-right flex-shrink-0">
                             <p className="tf-body-muted">{formatTimestamp(activity.timestamp)}</p>
-                            <button className="mt-1 text-xs text-gray-400 hover:text-gray-600">
+                            <button className="mt-1 text-xs text-gray-500 hover:text-gray-600">
                               <Eye className="w-3 h-3 inline mr-1" />
                               {isExpanded ? 'Hide' : 'Details'}
                             </button>
@@ -822,25 +821,23 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                   className="tf-input w-14 h-8 px-2 text-center rounded-md"
                 />
               </div>
-              <button
+              <IconButton bare label="Previous page"
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
                 className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-700 transition-colors"
-                aria-label="Previous page" title="Previous page"
               >
                 <ChevronLeft className="w-4 h-4" />
-              </button>
+              </IconButton>
               <span className="tf-label px-1 whitespace-nowrap">
                 <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
               </span>
-              <button
+              <IconButton bare label="Next page"
                 onClick={() => setPage(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
                 className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-700 transition-colors"
-                aria-label="Next page" title="Next page"
               >
                 <ChevronRight className="w-4 h-4" />
-              </button>
+              </IconButton>
             </div>
           )}
         </div>

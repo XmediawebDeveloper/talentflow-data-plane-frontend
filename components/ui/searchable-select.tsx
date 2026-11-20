@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Search, ChevronDown, Check, X } from 'lucide-react';
 import { cn } from './utils';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * A single-select dropdown with a type-to-filter box inside it.
@@ -242,7 +243,7 @@ export default function SearchableSelect({
               'pointer-events-none absolute transition-transform',
               variant === 'pill'
                 ? 'right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 dark:text-slate-400'
-                : 'right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400',
+                : 'right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500',
               open && 'rotate-180',
             )}
           />
@@ -256,7 +257,7 @@ export default function SearchableSelect({
         >
           <div className="p-2 border-b border-gray-100 dark:border-slate-700/60">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
               <input
                 ref={searchRef}
                 value={query}
@@ -265,17 +266,16 @@ export default function SearchableSelect({
                 className="tf-input h-8 pl-8 pr-7 rounded-md"
               />
               {query && (
-                <button
+                <IconButton bare label="Clear search"
                   type="button"
                   onClick={() => {
                     setQuery('');
                     searchRef.current?.focus();
                   }}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600"
-                  aria-label="Clear search"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-500 hover:text-gray-600"
                 >
                   <X className="w-3.5 h-3.5" />
-                </button>
+                </IconButton>
               )}
             </div>
           </div>

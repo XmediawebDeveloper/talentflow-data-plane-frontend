@@ -23,6 +23,7 @@ import {
   Search,
   Send,
 } from "lucide-react";
+import { IconButton } from '@/components/ui/icon-button';
 
 interface HomePageProps {
   onNavigate: (page: string) => void;
@@ -112,8 +113,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     gap: '8px',
     padding: '12px 24px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.85)',
-    border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(102,126,234,0.3)'}`,
+    backgroundColor: isDark ? 'var(--raw-rgba-255-255-255-0p12)' : 'var(--raw-rgba-255-255-255-0p85)',
+    border: `1px solid ${isDark ? 'var(--raw-rgba-255-255-255-0p2)' : 'var(--raw-rgba-102-126-234-0p3)'}`,
     backdropFilter: 'blur(12px)',
     marginBottom: '32px',
   };
@@ -170,7 +171,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     border: 'none',
     background: 'linear-gradient(to right, var(--raw-667eea), var(--raw-764ba2))',
     color: 'var(--raw-ffffff)',
-    boxShadow: '0 10px 40px rgba(102, 126, 234, 0.3)',
+    boxShadow: '0 10px 40px var(--raw-rgba-102-126-234-0p3)',
     transition: 'all 0.2s',
     width: isMobile ? '100%' : 'auto',
   };
@@ -186,9 +187,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     fontWeight: 500,
     borderRadius: isMobile ? '12px' : '16px',
     cursor: 'pointer',
-    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)',
+    backgroundColor: isDark ? 'var(--raw-rgba-255-255-255-0p1)' : 'var(--raw-rgba-255-255-255-0p8)',
     color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-374151)',
-    border: `2px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'var(--raw-e5e7eb)'}`,
+    border: `2px solid ${isDark ? 'var(--raw-rgba-255-255-255-0p2)' : 'var(--raw-e5e7eb)'}`,
     transition: 'all 0.2s',
     width: isMobile ? '100%' : 'auto',
   };
@@ -260,7 +261,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   // Features section styles
   const featuresSectionStyle: React.CSSProperties = {
     padding: isMobile ? '48px 0' : isTablet ? '72px 0' : '96px 0',
-    backgroundColor: isDark ? 'rgba(30, 41, 59, 0.5)' : 'var(--raw-f9fafb)',
+    backgroundColor: isDark ? 'var(--raw-rgba-30-41-59-0p5)' : 'var(--raw-f9fafb)',
   };
 
   const sectionHeadingStyle: React.CSSProperties = {
@@ -274,7 +275,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'var(--raw-ede9fe)',
+    backgroundColor: isDark ? 'var(--raw-rgba-139-92-246-0p2)' : 'var(--raw-ede9fe)',
     color: isDark ? 'var(--raw-c4b5fd)' : 'var(--raw-7c3aed)',
     fontSize: '14px',
     fontWeight: 600,
@@ -317,7 +318,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: '24px',
-    boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+    boxShadow: '0 10px 30px var(--raw-rgba-0-0-0-0p1)',
   });
 
   const featureTitleStyle: React.CSSProperties = {
@@ -344,7 +345,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : 'var(--raw-dcfce7)',
+    backgroundColor: isDark ? 'var(--raw-rgba-34-197-94-0p2)' : 'var(--raw-dcfce7)',
     color: isDark ? 'var(--raw-86efac)' : 'var(--raw-16a34a)',
     fontSize: '14px',
     fontWeight: 600,
@@ -417,7 +418,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
   const ctaSubtextStyle: React.CSSProperties = {
     fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
-    color: 'rgba(255,255,255,0.9)',
+    color: 'var(--raw-rgba-255-255-255-0p9)',
     maxWidth: '672px',
     margin: isMobile ? '0 auto 32px' : '0 auto 48px',
     lineHeight: 1.6,
@@ -437,7 +438,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     border: 'none',
     backgroundColor: 'var(--raw-ffffff)',
     color: 'var(--raw-7c3aed)',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+    boxShadow: '0 20px 60px var(--raw-rgba-0-0-0-0p2)',
     transition: 'all 0.2s',
     width: isMobile ? '100%' : 'auto',
   };
@@ -465,7 +466,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '32px',
-    color: 'rgba(255,255,255,0.8)',
+    color: 'var(--raw-rgba-255-255-255-0p8)',
     marginTop: '32px',
   };
 
@@ -473,7 +474,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const modalOverlayStyle: React.CSSProperties = {
     position: 'fixed',
     inset: 0,
-    backgroundColor: 'rgba(0,0,0,0.9)',
+    backgroundColor: 'var(--raw-rgba-0-0-0-0p9)',
     backdropFilter: 'blur(4px)',
     zIndex: 50,
     display: 'flex',
@@ -583,7 +584,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           <div style={modalContentStyle}>
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-              background: 'linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)',
+              background: 'linear-gradient(to bottom, var(--raw-rgba-0-0-0-0p8), transparent)',
               padding: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -596,12 +597,12 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 </div>
                 <div>
                   <h3 style={{ fontWeight: 700, color: 'var(--raw-ffffff)', fontSize: 18 }}>TalentFlow Product Demo</h3>
-                  <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>See how TalentFlow transforms recruiting</p>
+                  <p style={{ fontSize: 14, color: 'var(--raw-rgba-255-255-255-0p8)' }}>See how TalentFlow transforms recruiting</p>
                 </div>
               </div>
-              <button onClick={() => setDemoModalOpen(false)} style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close">
+              <IconButton bare label="Close" onClick={() => setDemoModalOpen(false)} style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer' }}>
                 <X style={{ width: 24, height: 24, color: 'var(--raw-ffffff)' }} />
-              </button>
+              </IconButton>
             </div>
 
             <div style={{
@@ -619,7 +620,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                   <Video style={{ width: 64, height: 64, color: 'var(--raw-ffffff)' }} />
                 </div>
                 <h4 style={{ fontSize: 30, fontWeight: 700, color: 'var(--raw-ffffff)', marginBottom: 12 }}>Product Demo Video</h4>
-                <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.8)', maxWidth: 640, margin: '0 auto 32px' }}>
+                <p style={{ fontSize: 18, color: 'var(--raw-rgba-255-255-255-0p8)', maxWidth: 640, margin: '0 auto 32px' }}>
                   Watch how TalentFlow streamlines your entire recruiting process
                 </p>
                 <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 16, justifyContent: 'center' }}>

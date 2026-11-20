@@ -29,6 +29,7 @@ import { recordPcm16 } from '@/lib/utils/pcmEnroll';
 import { MicWaveform } from '@/components/ai-interview/MicWaveform';
 import { canOpenDevice } from '@/lib/utils/mediaDeviceProbe';
 import { revealAfterPaint, stickyOffset, candidateScrollBehavior } from '@/lib/utils/candidateScroll';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 // ── Component props ──────────────────────────────────────────────────────────
 
@@ -341,7 +342,7 @@ function PracticeTour({
       {ring ? (
         <div
           className="absolute rounded-lg ring-2 ring-white/90 pointer-events-none transition-all duration-200"
-          style={{ top: ring.top, left: ring.left, width: ring.width, height: ring.height, boxShadow: '0 0 0 9999px rgba(2,6,20,0.72)' }}
+          style={{ top: ring.top, left: ring.left, width: ring.width, height: ring.height, boxShadow: '0 0 0 9999px var(--raw-rgba-2-6-20-0p72)' }}
         />
       ) : (
         <div className="absolute inset-0 bg-[var(--raw-020614)]/70 pointer-events-none" />
@@ -356,7 +357,7 @@ function PracticeTour({
       >
         <div className="flex items-center justify-between mb-1">
           <p className="text-sm font-bold text-gray-900">{step.title}</p>
-          <span className="text-2xs font-medium text-gray-400">{stepIndex + 1} / {steps.length}</span>
+          <span className="text-2xs font-medium text-gray-500">{stepIndex + 1} / {steps.length}</span>
         </div>
         <p className="tf-body-secondary leading-relaxed">{step.body}</p>
         <div className="flex items-center justify-end gap-2 mt-3">
@@ -2231,7 +2232,7 @@ export default function StepSamplePractice({
             </div>
             <div
               className={`relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 transition-colors duration-300 ${aiSpeaking ? 'border-[var(--raw-7c3aed)]/70' : 'border-white/15'}`}
-              style={aiSpeaking ? { boxShadow: '0 0 34px 6px rgba(124,58,237,0.35)' } : undefined}
+              style={aiSpeaking ? { boxShadow: '0 0 34px 6px var(--raw-rgba-124-58-237-0p35)' } : undefined}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -2332,11 +2333,11 @@ export default function StepSamplePractice({
                     lineHeight: 1,
                     color: 'transparent',
                     background:
-                      'linear-gradient(110deg, transparent 40%, #ffffff 50%, transparent 60%) 100% 0 / 300% 100% no-repeat, ' +
-                      'linear-gradient(135deg, #7dd3fc 20%, #38bdf8 80%)',
+                      'linear-gradient(110deg, transparent 40%, var(--raw-ffffff) 50%, transparent 60%) 100% 0 / 300% 100% no-repeat, ' +
+                      'linear-gradient(135deg, var(--raw-7dd3fc) 20%, var(--raw-38bdf8) 80%)',
                     WebkitBackgroundClip: 'text',
                     backgroundClip: 'text',
-                    filter: 'drop-shadow(0 2px 12px rgba(56,189,248,0.35))',
+                    filter: 'drop-shadow(0 2px 12px var(--raw-rgba-56-189-248-0p35))',
                     animation: `cdShine ${PRE_TURN_TICK_MS}ms ease-in-out both`,
                   }}
                 >{preTurnCountdown}</span>
@@ -2473,7 +2474,7 @@ export default function StepSamplePractice({
                           <span className="text-emerald-600 text-2xs font-medium">recording…</span>
                         </div>
                         <div className="flex flex-col gap-1.5">
-                          <MicWaveform analyserRef={analyserRef} active={isRecording} color="#059669" quietColor="#6ee7b7" />
+                          <MicWaveform analyserRef={analyserRef} active={isRecording} color="var(--raw-059669)" quietColor="var(--raw-6ee7b7)" />
                           <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300/70">Recording… Your transcript will appear after you finish speaking.</p>
                         </div>
                       </>
@@ -2489,7 +2490,7 @@ export default function StepSamplePractice({
                     ) : (
                       // Waiting for the mic to open (Bina still speaking / not started).
                       <div className="flex flex-col gap-1.5">
-                        <MicWaveform analyserRef={analyserRef} active={false} color="#059669" quietColor="#6ee7b7" />
+                        <MicWaveform analyserRef={analyserRef} active={false} color="var(--raw-059669)" quietColor="var(--raw-6ee7b7)" />
                         <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300/70">
                           {!started ? 'Press Start to begin.' : aiSpeaking ? 'The mic opens when Bina finishes the question.' : 'Getting ready…'}
                         </p>
@@ -2674,7 +2675,7 @@ export default function StepSamplePractice({
                           <span className="text-emerald-600 text-2xs font-medium">recording…</span>
                         </div>
                         <div className="flex flex-col gap-1.5">
-                          <MicWaveform analyserRef={analyserRef} active={isRecording} color="#059669" quietColor="#6ee7b7" />
+                          <MicWaveform analyserRef={analyserRef} active={isRecording} color="var(--raw-059669)" quietColor="var(--raw-6ee7b7)" />
                           <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300/70">Recording… Your transcript will appear after you finish speaking.</p>
                         </div>
                       </>
@@ -2690,7 +2691,7 @@ export default function StepSamplePractice({
                     ) : (
                       // Waiting for the mic to open (Bina still speaking / not started).
                       <div className="flex flex-col gap-1.5">
-                        <MicWaveform analyserRef={analyserRef} active={false} color="#059669" quietColor="#6ee7b7" />
+                        <MicWaveform analyserRef={analyserRef} active={false} color="var(--raw-059669)" quietColor="var(--raw-6ee7b7)" />
                         <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300/70">
                           {!started ? 'Press Start to begin.' : aiSpeaking ? 'The mic opens when Bina finishes the question.' : 'Getting ready…'}
                         </p>
@@ -2918,7 +2919,7 @@ export default function StepSamplePractice({
           interview once practice ends. Dismissible so they can scroll back
           through the practice thread first. */}
       {showStartPopup && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200 p-6 text-center">
             <div className="w-14 h-14 rounded-full bg-success-subtle flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-7 h-7 text-success" />
@@ -2953,7 +2954,7 @@ export default function StepSamplePractice({
               </button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </div>
   );

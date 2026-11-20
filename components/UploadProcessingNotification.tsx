@@ -1,6 +1,7 @@
 'use client'
 
 import { CheckCircle, Clock, Sparkles } from 'lucide-react';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 interface UploadProcessingNotificationProps {
   totalFiles: number;
@@ -9,7 +10,7 @@ interface UploadProcessingNotificationProps {
 
 export default function UploadProcessingNotification({ totalFiles, onClose }: UploadProcessingNotificationProps) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <ModalA11y><div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
         {/* Header with gradient */}
         <div className="bg-gradient-to-r from-green-500 to-green-600 p-8 text-center">
@@ -49,6 +50,6 @@ export default function UploadProcessingNotification({ totalFiles, onClose }: Up
           </button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

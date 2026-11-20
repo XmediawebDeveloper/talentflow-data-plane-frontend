@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ArrowRight, ClipboardList, Info, Video } from 'lucide-react';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 /**
  * Horizontal pan illustration — a LANDSCAPE phone sliding left → right →
@@ -1058,7 +1059,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       )}
 
       {orientationGateActive && (
-        <div className="fixed inset-0 z-[500] bg-[var(--raw-0f1929)] flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[500] bg-[var(--raw-0f1929)] flex flex-col items-center justify-center gap-4 p-6 text-center">
           <span className="text-5xl inline-block animate-[tf-rotate-device_1.6s_ease-in-out_infinite]">📱</span>
           <h1 className="text-lg font-semibold">Rotate your phone to landscape</h1>
           <p className="text-sm text-[var(--raw-94a3b8)] max-w-xs">
@@ -1083,7 +1084,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               50% { transform: rotate(90deg); }
             }
           `}</style>
-        </div>
+        </div></ModalA11y>
       )}
 
       {phase === 'loading' && <p className="text-[var(--raw-94a3b8)]">Loading verification…</p>}

@@ -25,6 +25,7 @@ import {
   UnitTypeIcon,
   type DisputeRecord,
 } from './disputeRecord';
+import { IconButton } from '@/components/ui/icon-button';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 const PAGE_SIZE = 8;
@@ -225,7 +226,7 @@ export default function FileDisputeModal({ open, onClose, onSubmitted, disputeSt
 
       {!loading && !loadError && records.length === 0 && (
         <div className="rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-10 text-center">
-          <Shield className="mx-auto mb-2 h-8 w-8 text-gray-300" />
+          <Shield className="mx-auto mb-2 h-8 w-8 text-muted-foreground dark:text-gray-300" />
           <p className="tf-body-muted">Nothing to dispute here yet. Units show up after they're used.</p>
         </div>
       )}
@@ -271,7 +272,7 @@ export default function FileDisputeModal({ open, onClose, onSubmitted, disputeSt
                   {blockedText ? (
                     <span className="self-center whitespace-nowrap tf-meta">{blockedText}</span>
                   ) : (
-                    <ChevronRight className="h-4 w-4 self-center text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                    <ChevronRight className="h-4 w-4 self-center text-gray-500 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
                   )}
                 </button>
               </li>
@@ -284,16 +285,14 @@ export default function FileDisputeModal({ open, onClose, onSubmitted, disputeSt
         <div className="mt-4 flex items-center justify-between border-t border-gray-100 dark:border-slate-700/60 pt-3">
           <p className="tf-meta">Page {page + 1} of {totalPages}</p>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => load(page - 1, typeFilter)} disabled={page === 0}
-              aria-label="Previous page"
+            <IconButton bare label="Previous page" type="button" onClick={() => load(page - 1, typeFilter)} disabled={page === 0}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 disabled:cursor-not-allowed disabled:opacity-50">
               <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={() => load(page + 1, typeFilter)} disabled={page + 1 >= totalPages}
-              aria-label="Next page"
+            </IconButton>
+            <IconButton bare label="Next page" type="button" onClick={() => load(page + 1, typeFilter)} disabled={page + 1 >= totalPages}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 disabled:cursor-not-allowed disabled:opacity-50">
               <ChevronRight className="h-4 w-4" />
-            </button>
+            </IconButton>
           </div>
         </div>
       )}

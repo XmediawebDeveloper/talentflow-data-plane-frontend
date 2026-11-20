@@ -4,6 +4,7 @@ import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService'
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { markLocalTalentMatch, removeBackgroundTask, upsertBackgroundTask } from '@/lib/backgroundTasks';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 interface AITalentMatchProgressPanelProps {
   jobTitle: string;
@@ -156,7 +157,7 @@ export default function AITalentMatchProgressPanel({
   // Show error state
   if (error) {
     return (
-      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+      <ModalA11y><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
         <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="text-center">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-full flex items-center justify-center mx-auto mb-3">
@@ -172,7 +173,7 @@ export default function AITalentMatchProgressPanel({
             </Button>
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
     );
   }
 
@@ -183,7 +184,7 @@ export default function AITalentMatchProgressPanel({
 
   // Show progress panel
   return (
-    <div className={`fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6 ${minimizing ? 'opacity-0 transition-opacity duration-200 pointer-events-none' : 'animate-in fade-in duration-200'}`}>
+    <ModalA11y><div className={`fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6 ${minimizing ? 'opacity-0 transition-opacity duration-200 pointer-events-none' : 'animate-in fade-in duration-200'}`}>
       <div className={`relative bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-2xl w-full p-4 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto ${minimizing ? 'origin-bottom-right translate-x-[30vw] translate-y-[35vh] scale-[0.12] opacity-0 transition-[translate,scale,opacity] duration-[260ms] ease-in' : 'animate-in zoom-in-95 duration-200'}`}>
         {isLoading && (
           <Button
@@ -286,6 +287,6 @@ export default function AITalentMatchProgressPanel({
           <span>This may take a few moments. You can minimize this window — matching carries on in the background.</span>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

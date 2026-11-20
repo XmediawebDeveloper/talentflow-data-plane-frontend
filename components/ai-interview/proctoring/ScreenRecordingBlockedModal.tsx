@@ -29,6 +29,7 @@ import {
   onScreenRecordingAttempt,
   type ScreenRecordingAttempt,
 } from './ScreenRecordingGuard';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 export function ScreenRecordingBlockedModal() {
   const [current, setCurrent] = useState<ScreenRecordingAttempt | null>(null);
@@ -71,7 +72,7 @@ export function ScreenRecordingBlockedModal() {
   const wasBlocked = current.enforcement === 'blocked';
 
   const modal = (
-    <div
+    <ModalA11y closeOnEscape={false}><div
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
       role="alertdialog"
       aria-modal="true"
@@ -121,7 +122,7 @@ export function ScreenRecordingBlockedModal() {
           </p>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 
   return createPortal(modal, document.body);

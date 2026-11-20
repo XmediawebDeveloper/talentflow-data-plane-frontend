@@ -92,8 +92,8 @@ export default function TabEmptyState({
       )}
       {illustration ? (
         <>
-          <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">{title}</h3>
-          <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">{description}</p>
+          <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[var(--raw-0f1e3d)] dark:text-slate-50">{title}</h3>
+          <p className="max-w-md text-sm sm:text-base leading-relaxed text-[var(--raw-0f1e3d)]/80 dark:text-slate-300">{description}</p>
         </>
       ) : (
         <>

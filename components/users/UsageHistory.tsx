@@ -67,6 +67,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import NameAvatar from '@/components/ui/name-avatar';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { useTableSort, sortRows, ariaSort, SortableHeader, ClearSortChip } from '@/components/ui/sortable-header';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 type BadgeVariant = React.ComponentProps<typeof Badge>['variant'];
 
@@ -81,11 +83,11 @@ function UnitBreakdown({ values }: { values: Record<string, number | undefined> 
         const value = values[column.key];
         return (
           <div key={column.key} title={column.label} className="min-w-0 rounded-lg bg-gray-50 px-2 py-1.5 dark:bg-slate-800/60">
-            <p className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">
+            <p className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
               <Icon className={`h-3 w-3 shrink-0 ${column.iconClass}`} />
               {column.key}
             </p>
-            <p className={`mt-0.5 truncate text-sm font-semibold tabular-nums ${value ? 'text-gray-900 dark:text-slate-100' : 'text-gray-300 dark:text-slate-600'}`}>
+            <p className={`mt-0.5 truncate text-sm font-semibold tabular-nums ${value ? 'text-gray-900 dark:text-slate-100' : 'text-muted-foreground dark:text-slate-600'}`}>
               {value ? value.toLocaleString() : '—'}
             </p>
           </div>
@@ -1057,15 +1059,14 @@ function TeamWiseTab({
                   </>
                 }
                 actions={
-                  <button
+                  <IconButton bare label={isExpanded ? 'Hide team members' : 'Show team members'}
                     type="button"
                     onClick={() => setExpandedTeamId(isExpanded ? null : team.team_id)}
                     aria-expanded={isExpanded}
-                    aria-label={isExpanded ? 'Hide team members' : 'Show team members'}
                     className="tf-icon-btn-outline"
                   >
                     <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-brand-blue' : ''}`} />
-                  </button>
+                  </IconButton>
                 }
               />
               {isExpanded && (
@@ -1141,20 +1142,19 @@ function TeamWiseTab({
               const isExpanded = expandedTeamId === team.team_id;
               return (
                 <React.Fragment key={team.team_id}>
-                  <tr
+                  <tr {...clickableRowProps}
                     className={`hover:bg-brand-blue/[0.03] transition-colors cursor-pointer ${isExpanded ? 'bg-brand-blue/[0.04]' : ''}`}
                     onClick={() => setExpandedTeamId(isExpanded ? null : team.team_id)}
                   >
                     <td className="tf-td tf-caption">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                     <td className="tf-td">
                       <div className="flex items-center gap-2">
-                        <button
+                        <IconButton bare label={isExpanded ? 'Collapse team users' : 'Expand team users'}
                           type="button"
-                          className="text-gray-400 hover:text-brand-blue transition-colors"
-                          aria-label={isExpanded ? 'Collapse team users' : 'Expand team users'}
+                          className="text-gray-500 hover:text-brand-blue transition-colors"
                         >
                           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </button>
+                        </IconButton>
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex-shrink-0">
                           <Users className="w-4 h-4" />
                         </div>

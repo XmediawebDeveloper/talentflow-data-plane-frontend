@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { X, AlertTriangle, Lock, Trash2, FileText } from 'lucide-react';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface QuotaOverage {
   quotaType: string;
@@ -36,7 +38,7 @@ export default function DowngradeWarningModal({
   const hasOverages = overages.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm p-4 sm:p-6">
       <div className="relative w-full max-w-[95vw] sm:max-w-2xl bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-brand-orange/20 bg-gradient-to-r from-brand-orange/5 to-brand-orange-deep/5 flex-shrink-0">
@@ -53,13 +55,12 @@ export default function DowngradeWarningModal({
               </p>
             </div>
           </div>
-          <button
+          <IconButton bare label="Close"
             onClick={onClose}
             disabled={isDowngrading}
-            className="p-1.5 hover:bg-white/50 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
-           aria-label="Close">
+            className="p-1.5 hover:bg-white/50 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0">
             <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Content */}
@@ -228,6 +229,6 @@ export default function DowngradeWarningModal({
         </div>
         )}
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

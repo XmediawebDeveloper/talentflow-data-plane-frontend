@@ -82,7 +82,7 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'var(--raw-ede9fe)',
+    backgroundColor: isDark ? 'var(--raw-rgba-139-92-246-0p2)' : 'var(--raw-ede9fe)',
     color: isDark ? 'var(--raw-c4b5fd)' : 'var(--raw-7c3aed)',
     fontSize: '14px',
     fontWeight: 600,
@@ -129,7 +129,7 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: '24px',
-    boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+    boxShadow: '0 10px 30px var(--raw-rgba-0-0-0-0p1)',
   });
 
   const cardTitleStyle: React.CSSProperties = {
@@ -176,7 +176,7 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
 
   const ctaSubtitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
-    color: 'rgba(255,255,255,0.9)',
+    color: 'var(--raw-rgba-255-255-255-0p9)',
     marginBottom: '32px',
   };
 
@@ -192,7 +192,7 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
     color: 'var(--raw-7c3aed)',
     border: 'none',
     cursor: 'pointer',
-    boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+    boxShadow: '0 10px 40px var(--raw-rgba-0-0-0-0p2)',
   };
 
   const features = [

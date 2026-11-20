@@ -66,10 +66,10 @@ export default function DashboardMenuGrid() {
                         title={item.pending ? undefined : DISABLED_REASON_MESSAGE[item.disabledReason ?? 'permission']}
                         className="flex cursor-not-allowed items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 opacity-70"
                       >
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400 ring-1 ring-gray-200">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 ring-1 ring-gray-200">
                           <Icon className="h-4 w-4" />
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-400">{item.label}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-500">{item.label}</span>
                       </div>
                     </li>
                   );
@@ -104,7 +104,7 @@ export default function DashboardMenuGrid() {
                       </span>
                       <ArrowUpRight
                         className={`h-4 w-4 shrink-0 transition-colors ${
-                          isCurrent ? 'text-brand-blue' : 'text-gray-300 group-hover:text-brand-blue'
+                          isCurrent ? 'text-brand-blue' : 'text-muted-foreground dark:text-gray-300 group-hover:text-brand-blue'
                         }`}
                       />
                     </Link>

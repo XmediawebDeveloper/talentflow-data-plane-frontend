@@ -5,6 +5,7 @@ import { AlertTriangle, CircleCheck, Info, Loader2, SquarePen, Unlink, UserRound
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 /** One link being revoked: its job (ID + name) and the assessment /
  *  interview version it was sent for. */
@@ -148,7 +149,7 @@ export default function RevokeLinkModal({
   const nothingToRevoke = !!bulk && count === 0;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
       <div
         role="alertdialog"
         aria-modal="true"
@@ -221,6 +222,6 @@ export default function RevokeLinkModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

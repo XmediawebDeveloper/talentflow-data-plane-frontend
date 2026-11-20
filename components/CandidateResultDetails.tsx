@@ -37,6 +37,8 @@ import {
 } from '@/lib/utils/assessmentResultScoring';
 import { exportAssessmentReportPDF } from '@/lib/reports/assessmentReportPdf';
 import NameAvatar from '@/components/ui/name-avatar';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -1224,7 +1226,7 @@ export default function CandidateResultDetails({
                       className="group inline-flex items-center gap-1.5 text-gray-700 hover:text-brand-blue hover:underline underline-offset-2 transition-colors"
                     >
                       {jobLabel}
-                      <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-gray-400 group-hover:text-brand-blue" aria-hidden />
+                      <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-gray-500 group-hover:text-brand-blue" aria-hidden />
                     </Link>
                   ) : <span key="job" className="inline-flex items-center gap-1.5 text-gray-700">{jobLabel}</span>);
                   return (
@@ -1594,7 +1596,7 @@ export default function CandidateResultDetails({
                     lands announce that the job has no description at all. */}
                 {!assessmentMeta.jd_id ? (
                   <div className="tf-panel px-3 sm:px-4 lg:px-6 py-8 text-center">
-                    <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <FileText className="w-8 h-8 text-muted-foreground dark:text-gray-300 mx-auto mb-2" />
                     <p className="tf-body-muted">No linked job description found</p>
                   </div>
                 ) : jdError ? (
@@ -1873,11 +1875,11 @@ export default function CandidateResultDetails({
                                   )}
                                 </>
                               ) : (
-                                <span className="text-gray-400">Awaiting scoring…</span>
+                                <span className="text-gray-500">Awaiting scoring…</span>
                               )}
                             </div>
                           </div>
-                          <div className={`shrink-0 text-xl sm:text-2xl font-semibold ${isHR || !scoringDone ? 'text-gray-400' : getScoreColor(section.percentage)}`}>
+                          <div className={`shrink-0 text-xl sm:text-2xl font-semibold ${isHR || !scoringDone ? 'text-gray-500' : getScoreColor(section.percentage)}`}>
                             {isHR || !scoringDone ? '—' : `${section.percentage}%`}
                           </div>
                         </div>
@@ -2168,7 +2170,7 @@ export default function CandidateResultDetails({
                           <div className="tf-body-secondary mb-0.5 sm:mb-1">
                             {isHRRound ? 'Section Type' : 'Section Score'}
                           </div>
-                          <div className={`text-xl sm:text-3xl font-bold tracking-tight ${isHRRound ? 'text-gray-400' : getScoreColor(displayedSectionPercentage)}`}>
+                          <div className={`text-xl sm:text-3xl font-bold tracking-tight ${isHRRound ? 'text-gray-500' : getScoreColor(displayedSectionPercentage)}`}>
                             {isHRRound ? '—' : `${displayedSectionPercentage}%`}
                           </div>
                         </div>
@@ -2299,7 +2301,7 @@ export default function CandidateResultDetails({
                                             <ul className="tf-body space-y-1 bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg">
                                               {q.constraints.map((constraint: string, idx: number) => (
                                                 <li key={idx} className="flex items-start gap-2">
-                                                  <span className="shrink-0 text-gray-400">-</span>
+                                                  <span className="shrink-0 text-gray-500">-</span>
                                                   <code className="min-w-0 [overflow-wrap:anywhere] text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-1 rounded">{constraint}</code>
                                                 </li>
                                               ))}
@@ -2957,7 +2959,7 @@ export default function CandidateResultDetails({
                             <Eye className={`w-4 h-4 ${
                               detailedResult.proctoring_stats.window_blur_count > 0
                                 ? 'text-destructive'
-                                : 'text-gray-400'
+                                : 'text-gray-500'
                             }`} />
                           </div>
                           <div className="min-w-0 tf-label leading-snug">Window Focus Lost</div>
@@ -2966,7 +2968,7 @@ export default function CandidateResultDetails({
                           <div className={`text-2xl font-bold tracking-tight ${
                             detailedResult.proctoring_stats.window_blur_count > 0
                               ? 'text-destructive'
-                              : 'text-gray-400'
+                              : 'text-gray-500'
                           }`}>
                             {detailedResult.proctoring_stats.window_blur_count}
                           </div>
@@ -2989,7 +2991,7 @@ export default function CandidateResultDetails({
                             <MousePointer className={`w-4 h-4 ${
                               (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
                                 ? 'text-destructive'
-                                : 'text-gray-400'
+                                : 'text-gray-500'
                             }`} />
                           </div>
                           <div className="min-w-0 tf-label leading-snug">Mouse Movement</div>
@@ -2998,7 +3000,7 @@ export default function CandidateResultDetails({
                           <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
                               ? 'text-destructive'
-                              : 'text-gray-400'
+                              : 'text-gray-500'
                           }`}>
                             {detailedResult.proctoring_stats.mouse_movement_count || 0}
                           </div>
@@ -3021,7 +3023,7 @@ export default function CandidateResultDetails({
                             <Monitor className={`w-4 h-4 ${
                               detailedResult.proctoring_stats.tab_switch_count > 0
                                 ? 'text-brand-orange-deep'
-                                : 'text-gray-400'
+                                : 'text-gray-500'
                             }`} />
                           </div>
                           <div className="min-w-0 tf-label leading-snug">Tab Switch</div>
@@ -3030,7 +3032,7 @@ export default function CandidateResultDetails({
                           <div className={`text-2xl font-bold tracking-tight ${
                             detailedResult.proctoring_stats.tab_switch_count > 0
                               ? 'text-brand-orange-deep'
-                              : 'text-gray-400'
+                              : 'text-gray-500'
                           }`}>
                             {detailedResult.proctoring_stats.tab_switch_count}
                           </div>
@@ -3053,7 +3055,7 @@ export default function CandidateResultDetails({
                             <Clipboard className={`w-4 h-4 ${
                               (detailedResult.proctoring_stats.copy_count || 0) > 0
                                 ? 'text-brand-orange-deep'
-                                : 'text-gray-400'
+                                : 'text-gray-500'
                             }`} />
                           </div>
                           <div className="min-w-0 tf-label leading-snug">Copy Attempts</div>
@@ -3062,7 +3064,7 @@ export default function CandidateResultDetails({
                           <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.copy_count || 0) > 0
                               ? 'text-brand-orange-deep'
-                              : 'text-gray-400'
+                              : 'text-gray-500'
                           }`}>
                             {detailedResult.proctoring_stats.copy_count || 0}
                           </div>
@@ -3085,7 +3087,7 @@ export default function CandidateResultDetails({
                             <MousePointer className={`w-4 h-4 ${
                               (detailedResult.proctoring_stats.paste_count || 0) > 0
                                 ? 'text-brand-orange-deep'
-                                : 'text-gray-400'
+                                : 'text-gray-500'
                             }`} />
                           </div>
                           <div className="min-w-0 tf-label leading-snug">Paste Attempts</div>
@@ -3094,7 +3096,7 @@ export default function CandidateResultDetails({
                           <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.paste_count || 0) > 0
                               ? 'text-brand-orange-deep'
-                              : 'text-gray-400'
+                              : 'text-gray-500'
                           }`}>
                             {detailedResult.proctoring_stats.paste_count || 0}
                           </div>
@@ -3117,7 +3119,7 @@ export default function CandidateResultDetails({
                             <Eye className={`w-4 h-4 ${
                               (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
                                 ? 'text-destructive'
-                                : 'text-gray-400'
+                                : 'text-gray-500'
                             }`} />
                           </div>
                           <div className="min-w-0 tf-label leading-snug">Camera Obstructed / Off</div>
@@ -3126,7 +3128,7 @@ export default function CandidateResultDetails({
                           <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
                               ? 'text-destructive'
-                              : 'text-gray-400'
+                              : 'text-gray-500'
                           }`}>
                             {detailedResult.proctoring_stats.camera_obstructed_count || 0}
                           </div>
@@ -3149,7 +3151,7 @@ export default function CandidateResultDetails({
                             <UserX className={`w-4 h-4 ${
                               (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
                                 ? 'text-destructive'
-                                : 'text-gray-400'
+                                : 'text-gray-500'
                             }`} />
                           </div>
                           <div className="min-w-0 tf-label leading-snug">Face Not Detected</div>
@@ -3158,7 +3160,7 @@ export default function CandidateResultDetails({
                           <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
                               ? 'text-destructive'
-                              : 'text-gray-400'
+                              : 'text-gray-500'
                           }`}>
                             {detailedResult.proctoring_stats.face_not_visible_count || 0}
                           </div>
@@ -3181,7 +3183,7 @@ export default function CandidateResultDetails({
                             <Volume2 className={`w-4 h-4 ${
                               detailedResult.proctoring_stats.voice_violation_count > 0
                                 ? 'text-brand-orange-deep'
-                                : 'text-gray-400'
+                                : 'text-gray-500'
                             }`} />
                           </div>
                           <div className="min-w-0 tf-label leading-snug">Voice Violations</div>
@@ -3190,7 +3192,7 @@ export default function CandidateResultDetails({
                           <div className={`text-2xl font-bold tracking-tight ${
                             detailedResult.proctoring_stats.voice_violation_count > 0
                               ? 'text-brand-orange-deep'
-                              : 'text-gray-400'
+                              : 'text-gray-500'
                           }`}>
                             {detailedResult.proctoring_stats.voice_violation_count}
                           </div>
@@ -3213,7 +3215,7 @@ export default function CandidateResultDetails({
                             <User className={`w-4 h-4 ${
                               (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
                                 ? 'text-destructive'
-                                : 'text-gray-400'
+                                : 'text-gray-500'
                             }`} />
                           </div>
                           <div className="min-w-0 tf-label leading-snug">Multiple Faces</div>
@@ -3222,7 +3224,7 @@ export default function CandidateResultDetails({
                           <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
                               ? 'text-destructive'
-                              : 'text-gray-400'
+                              : 'text-gray-500'
                           }`}>
                             {detailedResult.proctoring_stats.multiple_faces_count || 0}
                           </div>
@@ -3245,7 +3247,7 @@ export default function CandidateResultDetails({
                             <Maximize className={`w-4 h-4 ${
                               (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
                                 ? 'text-brand-blue'
-                                : 'text-gray-400'
+                                : 'text-gray-500'
                             }`} />
                           </div>
                           <div className="min-w-0 tf-label leading-snug">Fullscreen Exit</div>
@@ -3254,7 +3256,7 @@ export default function CandidateResultDetails({
                           <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
                               ? 'text-brand-blue'
-                              : 'text-gray-400'
+                              : 'text-gray-500'
                           }`}>
                             {detailedResult.proctoring_stats.fullscreen_exit_count || 0}
                           </div>
@@ -3277,7 +3279,7 @@ export default function CandidateResultDetails({
                             <Camera className={`w-4 h-4 ${
                               (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
                                 ? 'text-brand-orange-deep'
-                                : 'text-gray-400'
+                                : 'text-gray-500'
                             }`} />
                           </div>
                           <div className="min-w-0 tf-label leading-snug">Screen Capture Attempt</div>
@@ -3286,7 +3288,7 @@ export default function CandidateResultDetails({
                           <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
                               ? 'text-brand-orange-deep'
-                              : 'text-gray-400'
+                              : 'text-gray-500'
                           }`}>
                             {detailedResult.proctoring_stats.screen_capture_count || 0}
                           </div>
@@ -3518,25 +3520,23 @@ export default function CandidateResultDetails({
                                     className="tf-input tf-input-sm w-12 px-1.5 text-center rounded-md"
                                   />
                                 </div>
-                                <button
+                                <IconButton bare label="Previous page"
                                   onClick={() => setEventsPage(p => Math.max(1, p - 1))}
                                   disabled={eventsPage === 1}
                                   className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                  aria-label="Previous page" title="Previous page"
                                 >
                                   <ChevronLeft className="w-3.5 h-3.5" />
-                                </button>
+                                </IconButton>
                                 <span className="tf-caption px-1 whitespace-nowrap">
                                   <span className="text-brand-blue font-semibold">{eventsPage}</span> / {eventsTotalPages}
                                 </span>
-                                <button
+                                <IconButton bare label="Next page"
                                   onClick={() => setEventsPage(p => Math.min(eventsTotalPages, p + 1))}
                                   disabled={eventsPage === eventsTotalPages}
                                   className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                  aria-label="Next page" title="Next page"
                                 >
                                   <ChevronRight className="w-3.5 h-3.5" />
-                                </button>
+                                </IconButton>
                               </div>
                             </div>
                           )}
@@ -3718,7 +3718,7 @@ function ShareBarImageCard({ attemptId, index, which, label }: {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={url} alt={label} className="w-full h-full object-contain hover:opacity-90 transition-opacity" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+            <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">
               {failed ? 'Image no longer available' : 'Loading…'}
             </div>
           )}
@@ -3728,7 +3728,7 @@ function ShareBarImageCard({ attemptId, index, which, label }: {
         </div>
       </div>
       {enlarged && url && (
-        <div
+        <ModalA11y><div
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
           onClick={() => setEnlarged(false)}
           role="dialog"
@@ -3736,7 +3736,7 @@ function ShareBarImageCard({ attemptId, index, which, label }: {
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt={label} className="max-w-full max-h-full rounded-lg" />
-        </div>
+        </div></ModalA11y>
       )}
     </>
   );
@@ -3780,7 +3780,7 @@ function AssessmentEvidenceCard({ event }: { event: ProctoringEvent }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={url} alt={label} className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>
+            <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">Loading…</div>
           )}
         </button>
         <div className="px-3 py-2.5">
@@ -3789,7 +3789,7 @@ function AssessmentEvidenceCard({ event }: { event: ProctoringEvent }) {
         </div>
       </div>
       {enlarged && url && (
-        <div
+        <ModalA11y><div
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
           onClick={() => setEnlarged(false)}
           role="dialog"
@@ -3797,7 +3797,7 @@ function AssessmentEvidenceCard({ event }: { event: ProctoringEvent }) {
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt={label} className="max-w-full max-h-full rounded-lg" />
-        </div>
+        </div></ModalA11y>
       )}
     </>
   );

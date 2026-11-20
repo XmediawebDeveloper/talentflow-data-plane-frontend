@@ -52,6 +52,7 @@ import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -188,15 +189,14 @@ function SectionCard({
         {badge}
         <div className="ml-auto flex items-center gap-2">
           {action}
-          <button
+          <IconButton bare label={open ? `Hide ${title}` : `Show ${title}`}
             type="button"
             onClick={() => setOpen(o => !o)}
             aria-expanded={open}
-            title={open ? `Hide ${title}` : `Show ${title}`}
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
+            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
           >
             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-          </button>
+          </IconButton>
         </div>
       </div>
       {open && <div className="p-4 sm:p-5">{children}</div>}

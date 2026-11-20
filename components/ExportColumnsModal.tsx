@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Download, FileDown, Info, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 /**
  * The Score Resume tab's Export popup (ScoredResumesExportModal) as a shell
@@ -74,7 +75,7 @@ export default function ExportColumnsModal<F extends string>({
   const setAllExportColumns = (enabled: boolean) => setPicked(new Set(enabled ? columns.map(col => col.id) : []));
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+    <ModalA11y innerDialog><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
       <div
         className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col"
         role="dialog"
@@ -184,6 +185,6 @@ export default function ExportColumnsModal<F extends string>({
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

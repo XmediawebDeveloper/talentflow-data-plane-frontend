@@ -21,6 +21,8 @@ import FilterSelect from '@/components/ui/filter-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { showErrorToast } from '@/lib/utils/errorToast';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -265,13 +267,12 @@ export default function NotificationsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 self-end sm:self-auto">
-          <button
+          <IconButton bare label="Refresh"
             onClick={() => fetchNotifications(true)}
             className="p-2 text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
-            aria-label="Refresh" title="Refresh"
           >
             <RefreshCw className="w-4 h-4" />
-          </button>
+          </IconButton>
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllAsRead}
@@ -343,7 +344,7 @@ export default function NotificationsPage() {
       <div className="tf-card-soft overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-10 tf-loader-center">
-            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+            <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
           </div>
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-14 sm:py-16 text-center px-4">
@@ -373,7 +374,7 @@ export default function NotificationsPage() {
                       <IconComponent className={`w-4 h-4 sm:w-5 sm:h-5 ${style.iconColor}`} />
                     </div>
 
-                    <div
+                    <div {...clickableProps}
                       className="flex-1 min-w-0 cursor-pointer"
                       onClick={() => handleNotificationClick(notification)}
                     >
@@ -401,27 +402,25 @@ export default function NotificationsPage() {
 
                     <div className="flex flex-col sm:flex-row items-start gap-1 flex-shrink-0">
                       {!notification.is_read && (
-                        <button
+                        <IconButton bare label="Mark as read"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleMarkAsRead(notification.id);
                           }}
-                          className="p-1 sm:p-1.5 text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded transition-colors"
-                          aria-label="Mark as read" title="Mark as read"
+                          className="p-1 sm:p-1.5 text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded transition-colors"
                         >
                           <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </button>
+                        </IconButton>
                       )}
-                      <button
+                      <IconButton bare label="Delete"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDelete(notification.id);
                         }}
-                        className="p-1 sm:p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        aria-label="Delete" title="Delete"
+                        className="p-1 sm:p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
+                      </IconButton>
                     </div>
                   </div>
                 </div>

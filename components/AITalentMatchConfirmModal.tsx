@@ -1,9 +1,10 @@
 'use client';
 
-import { FileText, FileSearch, Briefcase, Sparkle, Plus, Loader2 } from 'lucide-react';
+import { Sparkles, Briefcase, FileText, FolderSearch, ListOrdered, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import type { Job } from '@/lib/types/types';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 interface AITalentMatchConfirmModalProps {
   isOpen: boolean;
@@ -16,6 +17,17 @@ interface AITalentMatchConfirmModalProps {
   isLoading?: boolean;
 }
 
+/* What running AI Talent Match does, in order. */
+const STEPS = [
+  { icon: FileText, title: 'Reads this job description', text: 'Its role, skills and experience become the match criteria.' },
+  { icon: FolderSearch, title: 'Scans your Resume Database', text: 'Every résumé you have stored is compared against the job.' },
+  { icon: ListOrdered, title: 'Ranks the closest candidates', text: 'You’ll find them in the job’s AI Talent Match Results tab.' },
+];
+
+/**
+ * Confirm before running AI Talent Match for one job. Content-led: the
+ * question, the job it runs for, and the three steps it takes — no artwork.
+ */
 export default function AITalentMatchConfirmModal({
   isOpen,
   jobTitle,
@@ -27,84 +39,80 @@ export default function AITalentMatchConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-in zoom-in-95 fade-in duration-200 max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
-        <div className="px-6 sm:px-8 pt-8 pb-6 overflow-y-auto">
-          {/* Header: small icon + title */}
-          <div className="flex items-start gap-4 mb-6">
-            <div className="w-11 h-11 shrink-0 bg-brand-blue/10 rounded-full flex items-center justify-center">
-              <FileText className="w-5 h-5 text-brand-blue" />
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
+      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-lg animate-in zoom-in-95 fade-in duration-200 max-h-[calc(100dvh-1.5rem)] flex flex-col tf-round-edges">
+        <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-5 overflow-y-auto">
+          {/* Header: the question, and what AI Talent Match is in one line. */}
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center dark:bg-brand-blue/20">
+              <Sparkles className="w-5 h-5 text-brand-blue dark:text-blue-300" />
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 leading-snug pt-1">
-              Find matching candidates from the Resume Database?
-            </h2>
-          </div>
-
-          {/* Illustration — emboss-effect icon on a decorative disc */}
-          <div className="relative w-40 h-40 mx-auto mb-6 flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-brand-blue/10 to-brand-blue/5" />
-
-            <Sparkle className="absolute top-2 left-5 w-3.5 h-3.5 text-brand-blue/50" />
-            <Plus className="absolute top-3 right-4 w-3 h-3 text-brand-blue/40" strokeWidth={3} />
-            <span className="absolute top-[42%] -left-1 w-1.5 h-1.5 rounded-full bg-brand-blue/30" />
-            <span className="absolute top-[52%] left-1 w-1 h-1 rounded-full bg-brand-blue/30" />
-            <span className="absolute bottom-6 left-3 w-2 h-2 rounded-full ring-1 ring-brand-blue/30" />
-            <span className="absolute bottom-9 -right-1 w-1.5 h-1.5 rounded-full bg-brand-blue/30" />
-            <span className="absolute top-9 -right-2 w-2 h-2 rounded-full ring-1 ring-brand-blue/30" />
-
-            <div className="relative w-16 h-16">
-              {/* Emboss effect: a light highlight offset up-left and a dark shadow
-                  offset down-right behind the true-color icon, giving it a raised,
-                  bevelled/engraved look rather than a flat outline. */}
-              <FileSearch
-                className="absolute inset-0 w-16 h-16 text-white"
-                strokeWidth={1.75}
-                style={{ transform: 'translate(-1.25px, -1.25px)' }}
-              />
-              <FileSearch
-                className="absolute inset-0 w-16 h-16 text-brand-blue-2"
-                strokeWidth={1.75}
-                style={{ transform: 'translate(1.25px, 1.25px)', opacity: 0.55 }}
-              />
-              <FileSearch className="relative w-16 h-16 text-brand-blue" strokeWidth={1.75} />
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-xl font-bold leading-snug text-gray-900 dark:text-slate-50">
+                Find matching candidates?
+              </h2>
+              <p className="mt-1 tf-body-secondary leading-relaxed">
+                <span className="font-semibold text-brand-blue dark:text-blue-300">AI Talent Match</span> scans your
+                Resume Database against this job and ranks the closest candidates.
+              </p>
             </div>
           </div>
 
-          {/* Description */}
-          <p className="text-center tf-body-secondary sm:text-base leading-relaxed mb-5">
-            <span className="font-semibold text-brand-blue">AI Talent Match</span> will scan your resume database
-            against the job description and rank the closest candidates.
-          </p>
-
-          {/* Job pill */}
-          <div className="flex items-center gap-3 bg-brand-blue/5 dark:bg-brand-blue/10 rounded-xl px-4 py-3">
-            <div className="w-8 h-8 shrink-0 bg-brand-blue/15 rounded-lg flex items-center justify-center">
-              <Briefcase className="w-4 h-4 text-brand-blue" />
-            </div>
-            {job ? (
-              <div className="flex flex-wrap items-center gap-2 min-w-0">
-                {job.job_id && <JobIdBadge className="flex-shrink-0">{job.job_id}</JobIdBadge>}
-                <span className="tf-row-name truncate min-w-0" title={job.title}>
-                  {job.title}
-                </span>
-                {/* The Job Openings card's version badge. */}
-                <span className="tf-badge bg-gray-50 text-gray-700 border border-gray-200 flex gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
-                  <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
-                  v{job.versionNumber ?? 1}
-                </span>
+          {/* The job it runs for. */}
+          <div className="mt-5">
+            <div className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Job</div>
+            <div className="flex items-center gap-3 rounded-xl border border-brand-blue/10 bg-brand-blue/5 px-3 py-2.5 dark:bg-brand-blue/10">
+              <div className="w-8 h-8 shrink-0 bg-brand-blue/15 rounded-lg flex items-center justify-center">
+                <Briefcase className="w-4 h-4 text-brand-blue dark:text-blue-300" />
               </div>
-            ) : (
-              <span className="tf-row-name truncate">{jobTitle}</span>
-            )}
+              {job ? (
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                  {job.job_id && <JobIdBadge className="flex-shrink-0">{job.job_id}</JobIdBadge>}
+                  <span className="tf-row-name min-w-0 flex-1 truncate" title={job.title}>
+                    {job.title}
+                  </span>
+                  {/* The Job Openings card's version badge. */}
+                  <span className="tf-badge bg-gray-50 text-gray-700 border border-gray-200 flex gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
+                    v{job.versionNumber ?? 1}
+                  </span>
+                </div>
+              ) : (
+                <span className="tf-row-name min-w-0 truncate" title={jobTitle}>{jobTitle}</span>
+              )}
+            </div>
+          </div>
+
+          {/* What happens next — three steps. */}
+          <div className="mt-5">
+            <div className="mb-2 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">What happens</div>
+            <ol className="space-y-2.5">
+              {STEPS.map(({ icon: Icon, title, text }, i) => (
+                <li key={title} className="flex items-start gap-3">
+                  <span className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300">
+                    <Icon className="h-3.5 w-3.5" />
+                    <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-brand-blue text-[0.5625rem] font-bold leading-none text-white" aria-hidden>
+                      {i + 1}
+                    </span>
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-900 dark:text-slate-100">{title}</span>
+                    <span className="block tf-meta">{text}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
           </div>
         </div>
 
-        {/* Footer — Cancel, then the action, bottom-right at their own width. */}
-        <div className="px-6 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-wrap items-center justify-end gap-3 shrink-0">
+        {/* Footer — Cancel, then the action, bottom-right at their own width;
+            full width and stacked (action on top) on narrow phones. */}
+        <div className="px-5 sm:px-6 py-3.5 border-t border-gray-100 dark:border-slate-700/60 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3 shrink-0">
           <Button
             variant="secondary"
             onClick={onCancel}
             disabled={isLoading}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
@@ -112,6 +120,7 @@ export default function AITalentMatchConfirmModal({
             variant="primary"
             onClick={onConfirm}
             disabled={isLoading}
+            className="w-full sm:w-auto"
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
@@ -124,6 +133,6 @@ export default function AITalentMatchConfirmModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

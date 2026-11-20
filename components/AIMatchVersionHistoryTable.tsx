@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* Same three-dot menu convention as every other list in the app (Job
    Openings, Resume Scoring): Radix `DropdownMenu`, portaled so it isn't
@@ -354,14 +355,12 @@ export default function AIMatchVersionHistoryTable({
                 <td className={`py-2.5 px-3 text-right ${rowDivider}`}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button
+                      <IconButton bare label="Actions"
                         type="button"
-                        aria-label="Actions"
-                        title="Actions"
                         className="p-1.5 bg-white dark:bg-slate-900 rounded-md border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                       >
                         <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />
-                      </button>
+                      </IconButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                       <DropdownMenuItem className={actionsMenuItemClass} onSelect={() => onViewSession(session)}>
@@ -466,14 +465,12 @@ export default function AIMatchVersionHistoryTable({
             actions={
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
+                  <IconButton bare label="Actions"
                     type="button"
-                    aria-label="Actions"
-                    title="Actions"
                     className="tf-icon-btn-outline"
                   >
                     <MoreVertical />
-                  </button>
+                  </IconButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                   <DropdownMenuItem className={actionsMenuItemClass} onSelect={() => onViewSession(session)}>

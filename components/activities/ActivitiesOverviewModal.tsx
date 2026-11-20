@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import JobIdBadge, { JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import ListPagination from '@/components/ListPagination';
 import { useModuleQuota } from '@/contexts/QuotaContext';
+import { IconButton } from '@/components/ui/icon-button';
 
 export type ActivityKind = 'assessment' | 'interview' | 'scoring';
 
@@ -405,23 +406,23 @@ export default function ActivitiesOverviewModal({
                       <td className="tf-td px-3 py-2 whitespace-nowrap">{r.startedAt ? new Date(r.startedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                       <td className="px-3 py-2">
                         <div className="flex justify-end gap-1">
-                          <Button variant="secondary" size="sm" className="!h-7 !w-7 !px-0" title="Open this job's progress" aria-label="Open this job's progress" onClick={() => onOpenRow(r)}>
+                          <IconButton label="Open this job's progress" variant="secondary" size="sm" className="!h-7 !w-7 !px-0" onClick={() => onOpenRow(r)}>
                             <Eye className="h-3.5 w-3.5" />
-                          </Button>
+                          </IconButton>
                           {r.running
                             ? r.canManage && (
-                              <Button variant="secondary" size="sm" className="!h-7 !w-7 !px-0" title="Cancel — what is done stays done" aria-label="Cancel" onClick={() => onCancel([r])}>
+                              <IconButton label="Cancel" tooltip="Cancel — what is done stays done" variant="secondary" size="sm" className="!h-7 !w-7 !px-0" onClick={() => onCancel([r])}>
                                 <Square className="h-3.5 w-3.5" />
-                              </Button>)
+                              </IconButton>)
                             : (<>
                               {r.canManage && r.retryable > 0 && (
-                                <Button variant="secondary" size="sm" className="!h-7 !w-7 !px-0" title={`${m.again} ${n(r.retryable)} failed / cancelled`} aria-label={m.again} onClick={() => setConfirmRetry([r])}>
+                                <IconButton label={m.again} tooltip={`${m.again} ${n(r.retryable)} failed / cancelled`} variant="secondary" size="sm" className="!h-7 !w-7 !px-0" onClick={() => setConfirmRetry([r])}>
                                   <RotateCcw className="h-3.5 w-3.5" />
-                                </Button>
+                                </IconButton>
                               )}
-                              <Button variant="secondary" size="sm" className="!h-7 !w-7 !px-0" title="Remove from My Activities" aria-label="Remove from My Activities" onClick={() => onRemoveRow(r)}>
+                              <IconButton label="Remove from My Activities" variant="secondary" size="sm" className="!h-7 !w-7 !px-0" onClick={() => onRemoveRow(r)}>
                                 <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              </IconButton>
                             </>)}
                         </div>
                       </td>
@@ -478,12 +479,12 @@ export default function ActivitiesOverviewModal({
                     <Button variant="secondary" size="sm" className="!h-7 !px-2" onClick={() => onOpenRow(r)} icon={<Eye className="h-3.5 w-3.5" />}>View</Button>
                     {r.running
                       ? r.canManage && (
-                        <Button variant="secondary" size="sm" className="!h-7 !w-7 !px-0" aria-label="Cancel" onClick={() => onCancel([r])}><Square className="h-3.5 w-3.5" /></Button>)
+                        <IconButton label="Cancel" variant="secondary" size="sm" className="!h-7 !w-7 !px-0" onClick={() => onCancel([r])}><Square className="h-3.5 w-3.5" /></IconButton>)
                       : (<>
                         {r.canManage && r.retryable > 0 && (
-                          <Button variant="secondary" size="sm" className="!h-7 !w-7 !px-0" aria-label={m.again} onClick={() => setConfirmRetry([r])}><RotateCcw className="h-3.5 w-3.5" /></Button>
+                          <IconButton label={m.again} variant="secondary" size="sm" className="!h-7 !w-7 !px-0" onClick={() => setConfirmRetry([r])}><RotateCcw className="h-3.5 w-3.5" /></IconButton>
                         )}
-                        <Button variant="secondary" size="sm" className="!h-7 !w-7 !px-0" aria-label="Remove from My Activities" onClick={() => onRemoveRow(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        <IconButton label="Remove from My Activities" variant="secondary" size="sm" className="!h-7 !w-7 !px-0" onClick={() => onRemoveRow(r)}><Trash2 className="h-3.5 w-3.5" /></IconButton>
                       </>)}
                   </div>
                 </li>

@@ -254,7 +254,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'var(--raw-ede9fe)',
+    backgroundColor: isDark ? 'var(--raw-rgba-139-92-246-0p2)' : 'var(--raw-ede9fe)',
     color: isDark ? 'var(--raw-c4b5fd)' : 'var(--raw-7c3aed)',
     fontSize: '14px',
     fontWeight: 600,
@@ -311,13 +311,13 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     top: '2px',
     left: isYearly ? '30px' : '2px',
     transition: 'left 0.2s',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+    boxShadow: '0 2px 4px var(--raw-rgba-0-0-0-0p2)',
   };
 
   const saveBadgeStyle: React.CSSProperties = {
     padding: '4px 12px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : 'var(--raw-dcfce7)',
+    backgroundColor: isDark ? 'var(--raw-rgba-34-197-94-0p2)' : 'var(--raw-dcfce7)',
     color: isDark ? 'var(--raw-86efac)' : 'var(--raw-16a34a)',
     fontSize: '14px',
     fontWeight: 600,
@@ -341,7 +341,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
     position: 'relative',
     transform: isPopular && !isMobile && !isTablet ? 'scale(1.05)' : 'none',
-    boxShadow: isPopular ? '0 20px 60px rgba(139, 92, 246, 0.2)' : 'none',
+    boxShadow: isPopular ? '0 20px 60px var(--raw-rgba-139-92-246-0p2)' : 'none',
     zIndex: isPopular ? 10 : 1,
   });
 
@@ -495,7 +495,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
         </div>
 
         {error && (
-          <div style={{ textAlign: 'center', marginBottom: '32px', padding: '24px', backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : 'var(--raw-fef2f2)', borderRadius: '12px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '32px', padding: '24px', backgroundColor: isDark ? 'var(--raw-rgba-239-68-68-0p1)' : 'var(--raw-fef2f2)', borderRadius: '12px' }}>
             <p style={{ color: 'var(--raw-ef4444)', marginBottom: '8px' }}>Failed to load pricing plans</p>
             <p style={{ color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)', fontSize: '14px' }}>{error}</p>
           </div>

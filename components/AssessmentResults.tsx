@@ -64,6 +64,8 @@ import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS } from '@/components/ScoredResumesTable';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
+import { clickableProps, clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface AssessmentResultsProps {
   /**
@@ -1597,14 +1599,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const renderRowMenu = (candidate: CandidateResult) => (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button
+          <IconButton bare label={`Actions for ${candidate.name || 'candidate'}`} tooltip="Actions"
             type="button"
             className={portaled ? ROW_ACTION_BUTTON_CLASS : 'h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30'}
-            aria-label={`Actions for ${candidate.name || 'candidate'}`}
-            title="Actions"
           >
             <MoreVertical className="w-4 h-4" />
-          </button>
+          </IconButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
           <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} disabled={candidate.status === 'Pending'} onClick={() => viewCandidateDetails(candidate)}>
@@ -1894,7 +1894,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       ))}
       {timelineEvents(candidate.timelineSource, RESULTS_TIMELINE_LIMIT).length === 0 && (
         <div className="flex min-w-0 items-center gap-2">
-          <Clock className="w-3 h-3 shrink-0 text-gray-400" />
+          <Clock className="w-3 h-3 shrink-0 text-gray-500" />
           <span className="truncate">-</span>
         </div>
       )}
@@ -1902,8 +1902,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           of its own — the AI Interview results' layout. */}
       {candidate.duration && candidate.duration !== '-' && (
         <div className="flex min-w-0 items-center gap-2">
-          <Timer className="w-3 h-3 shrink-0 text-gray-400" />
-          <span className="truncate"><span className="text-gray-400 dark:text-slate-500">Duration:</span> {candidate.duration}</span>
+          <Timer className="w-3 h-3 shrink-0 text-gray-500" />
+          <span className="truncate"><span className="text-gray-500 dark:text-slate-500">Duration:</span> {candidate.duration}</span>
         </div>
       )}
       {/* The two latest events above; the whole trail
@@ -2792,8 +2792,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {emptyStateIllustration
                         ? <div className="mb-4 flex w-full justify-center">{emptyStateIllustration}</div>
                         : <EmptySearchIllustration className="mb-5 w-52 sm:w-60" />}
-                      <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">No Assessment Results Yet</h3>
-                      <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">{emptyStateText ?? 'Share the assessment link to invite candidates'}</p>
+                      <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[var(--raw-0f1e3d)] dark:text-slate-50">No Assessment Results Yet</h3>
+                      <p className="max-w-md text-sm sm:text-base leading-relaxed text-[var(--raw-0f1e3d)]/80 dark:text-slate-300">{emptyStateText ?? 'Share the assessment link to invite candidates'}</p>
                       {emptyStateAction && <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{emptyStateAction}</div>}
                     </>
                   )}
@@ -2907,7 +2907,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   );
                 }
                 return (
-                  <div
+                  <div {...clickableProps}
                     key={candidate.id}
                     onClick={() => viewCandidateDetails(candidate)}
                     className={`rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md ${
@@ -2942,7 +2942,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               {label}{' '}
                               {typeof value === 'number'
                                 ? <span className={`font-semibold ${value >= passingThreshold ? 'text-success' : 'text-destructive'}`}>{value}%</span>
-                                : <span className="text-gray-400">&mdash;</span>}
+                                : <span className="text-gray-500">&mdash;</span>}
                             </span>
                           ))}
                         </div>
@@ -3155,10 +3155,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             {emptyStateIllustration
                               ? <div className="mb-4 flex w-full justify-center">{emptyStateIllustration}</div>
                               : <EmptySearchIllustration className="mb-5 w-52 sm:w-60" />}
-                            <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">
+                            <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[var(--raw-0f1e3d)] dark:text-slate-50">
                               No Assessment Results Yet
                             </h3>
-                            <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">
+                            <p className="max-w-md text-sm sm:text-base leading-relaxed text-[var(--raw-0f1e3d)]/80 dark:text-slate-300">
                               {emptyStateText ?? 'Share the assessment link to invite candidates'}
                             </p>
                             {emptyStateAction && <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{emptyStateAction}</div>}
@@ -3172,7 +3172,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     const isExpanded = expandedRowIds.has(candidate.id);
                     return (
                     <Fragment key={candidate.id}>
-                    <tr
+                    <tr {...clickableRowProps}
                       /* Job Details: the row opens / closes its details, as on
                          the AI Talent Match table; ⋮ › View Details opens it. */
                       onClick={() => (portaled ? toggleRowExpanded(candidate.id) : viewCandidateDetails(candidate))}
@@ -3236,7 +3236,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 was confusing because 69% rendered gray even
                                 though it failed the 70% threshold. Now color
                                 matches the Pass/Fail outcome consistently. */}
-                            <span className={`${SCORE_CELL_TEXT} ${candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
+                            <span className={`${SCORE_CELL_TEXT} ${candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-500'}`}>
                               {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
                             </span>
                             {candidate.tech_score !== undefined && (
@@ -3250,7 +3250,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
                         <td className={`${cellPad} text-right`}>
                           <div className="flex items-center justify-end gap-1.5">
-                            <span className={`${SCORE_CELL_TEXT} ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
+                            <span className={`${SCORE_CELL_TEXT} ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-500'}`}>
                               {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
                             </span>
                             {candidate.coding_score !== undefined && (

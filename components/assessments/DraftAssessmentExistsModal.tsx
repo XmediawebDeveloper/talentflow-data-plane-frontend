@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { formatIST } from '@/lib/utils/dateUtils';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** The draft version the popup points at - the fields it shows. */
 export interface ExistingDraftAssessment {
@@ -45,19 +47,18 @@ export default function DraftAssessmentExistsModal({
   const lastEdited = draft.updated_at || draft.created_at;
   const draftVersion = draft.version ?? 1;
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-fit min-w-[min(95vw,36rem)] max-w-[95vw] max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
         <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
           <div className="flex justify-end">
-            <Button
+            <IconButton label="Close"
               variant="secondary"
               size="sm"
               onClick={onClose}
               className="-mr-1.5 -mt-1"
-              aria-label="Close"
             >
               <X className="w-5 h-5 sm:w-6 sm:h-6" />
-            </Button>
+            </IconButton>
           </div>
 
           <div className="flex flex-col items-center text-center -mt-4">
@@ -139,6 +140,6 @@ export default function DraftAssessmentExistsModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

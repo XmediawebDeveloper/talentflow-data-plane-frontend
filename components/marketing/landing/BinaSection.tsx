@@ -168,7 +168,7 @@ export function BinaSection() {
           >
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute -left-40 -top-40 h-96 w-96 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.25),transparent)] sm:h-[34rem] sm:w-[34rem]"
+              className="pointer-events-none absolute -left-40 -top-40 h-96 w-96 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p25),transparent)] sm:h-[34rem] sm:w-[34rem]"
             />
             <div className="relative grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:gap-16">
               <div>

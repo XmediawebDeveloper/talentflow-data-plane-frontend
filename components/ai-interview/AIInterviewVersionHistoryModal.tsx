@@ -19,6 +19,9 @@ import FilterSelect from '@/components/ui/filter-select';
 import NameAvatar from '@/components/ui/name-avatar';
 import { jobInterviewConfigs } from './JobInterviewVersionPicker';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* ── Status palette for the results donut ─────────────────────────────
    Validated (dataviz validate_palette.js) as a RING — the wrap pair
@@ -29,11 +32,11 @@ import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY 
    Completed are never neighbours. `fill` is a CSS class so it wins over the
    SVG attribute and follows dark mode. */
 const RESULT_SEGMENTS = [
-  { key: 'invited', label: 'Invited', swatch: 'bg-[#2563eb] dark:bg-[#3b82f6]', fill: 'fill-[#2563eb] dark:fill-[#3b82f6]' },
-  { key: 'completed', label: 'Completed', swatch: 'bg-[#16a34a] dark:bg-[#16a34a]', fill: 'fill-[#16a34a] dark:fill-[#16a34a]' },
-  { key: 'in_progress', label: 'In Progress', swatch: 'bg-[#079cc4] dark:bg-[#0891b2]', fill: 'fill-[#079cc4] dark:fill-[#0891b2]' },
-  { key: 'terminated', label: 'Terminated', swatch: 'bg-[#b91c1c] dark:bg-[#e11d48]', fill: 'fill-[#b91c1c] dark:fill-[#e11d48]' },
-  { key: 'expired', label: 'Expired', swatch: 'bg-[#ed881c] dark:bg-[#d97706]', fill: 'fill-[#ed881c] dark:fill-[#d97706]' },
+  { key: 'invited', label: 'Invited', swatch: 'bg-[var(--raw-2563eb)] dark:bg-[var(--raw-3b82f6)]', fill: 'fill-[var(--raw-2563eb)] dark:fill-[var(--raw-3b82f6)]' },
+  { key: 'completed', label: 'Completed', swatch: 'bg-[var(--raw-16a34a)] dark:bg-[var(--raw-16a34a)]', fill: 'fill-[var(--raw-16a34a)] dark:fill-[var(--raw-16a34a)]' },
+  { key: 'in_progress', label: 'In Progress', swatch: 'bg-[var(--raw-079cc4)] dark:bg-[var(--raw-0891b2)]', fill: 'fill-[var(--raw-079cc4)] dark:fill-[var(--raw-0891b2)]' },
+  { key: 'terminated', label: 'Terminated', swatch: 'bg-[var(--raw-b91c1c)] dark:bg-[var(--raw-e11d48)]', fill: 'fill-[var(--raw-b91c1c)] dark:fill-[var(--raw-e11d48)]' },
+  { key: 'expired', label: 'Expired', swatch: 'bg-[var(--raw-ed881c)] dark:bg-[var(--raw-d97706)]', fill: 'fill-[var(--raw-ed881c)] dark:fill-[var(--raw-d97706)]' },
 ] as const;
 type SortKey = 'created' | 'creator' | 'rounds' | 'status';
 /** Version Wise Results value that sums every version. */
@@ -226,7 +229,7 @@ export default function AIInterviewVersionHistoryModal({
   return (
     <>
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 pointer-events-none">
+      <ModalA11y innerDialog onClose={() => onClose()}><div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 pointer-events-none">
         <div
           role="dialog"
           aria-modal="true"
@@ -261,9 +264,9 @@ export default function AIInterviewVersionHistoryModal({
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">Refresh</span>
               </button>
-              <button type="button" onClick={onClose} aria-label="Close" className="p-2 rounded-lg text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5">
+              <IconButton bare label="Close" type="button" onClick={onClose} className="p-2 rounded-lg text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5">
                 <X className="w-5 h-5" />
-              </button>
+              </IconButton>
             </div>
           </div>
 
@@ -283,7 +286,7 @@ export default function AIInterviewVersionHistoryModal({
                     <div className="tf-meta truncate">{label}</div>
                     <div className={`text-xl font-bold tabular-nums leading-tight flex items-center gap-1.5 ${text}`}>
                       {value}
-                      {hint && <span title={hint}><Info className="w-3.5 h-3.5 text-gray-400" /></span>}
+                      {hint && <span title={hint}><Info className="w-3.5 h-3.5 text-gray-500" /></span>}
                     </div>
                   </div>
                 </div>
@@ -384,9 +387,9 @@ export default function AIInterviewVersionHistoryModal({
                         const rounds = (c.rounds_config || []).filter((r) => r.enabled !== false);
                         const isSel = selected?.id === c.id;
                         const pill = pillFor(c.status);
-                        const num = (n: number | undefined) => (st ? n : <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-300 mx-auto" />);
+                        const num = (n: number | undefined) => (st ? n : <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground dark:text-gray-300 mx-auto" />);
                         return (
-                          <tr
+                          <tr {...clickableRowProps}
                             key={c.id}
                             onClick={() => setSelectedId(c.id)}
                             aria-selected={isSel}
@@ -425,15 +428,13 @@ export default function AIInterviewVersionHistoryModal({
                               </span>
                             </td>
                             <td className="tf-td text-center" onClick={(e) => e.stopPropagation()}>
-                              <button
+                              <IconButton bare label={`View interview ${labelOf(c)}`} tooltip="View interview"
                                 type="button"
                                 onClick={() => router.push(`/recruitment/ai-interviews/${c.id}?tab=results`)}
-                                title="View interview"
-                                aria-label={`View interview ${labelOf(c)}`}
                                 className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-500 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
                               >
                                 <Eye className="w-4 h-4" />
-                              </button>
+                              </IconButton>
                             </td>
                           </tr>
                         );
@@ -449,7 +450,7 @@ export default function AIInterviewVersionHistoryModal({
                     const rounds = (c.rounds_config || []).filter((r) => r.enabled !== false);
                     const isSel = selected?.id === c.id;
                     const pill = pillFor(c.status);
-                    const num = (n: number | undefined) => (st ? n : <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-300" />);
+                    const num = (n: number | undefined) => (st ? n : <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground dark:text-gray-300" />);
                     return (
                       <MobileRecordCard
                         key={c.id}
@@ -472,15 +473,13 @@ export default function AIInterviewVersionHistoryModal({
                           </span>
                         }
                         actions={
-                          <button
+                          <IconButton bare label={`View interview ${labelOf(c)}`} tooltip="View interview"
                             type="button"
                             onClick={() => router.push(`/recruitment/ai-interviews/${c.id}?tab=results`)}
-                            title="View interview"
-                            aria-label={`View interview ${labelOf(c)}`}
                             className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-500 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
                           >
                             <Eye className="w-4 h-4" />
-                          </button>
+                          </IconButton>
                         }
                         fields={[
                           { label: 'Created On', value: c.created_at ? `${formatISTDate(c.created_at)} ${formatISTTime(c.created_at)}` : '—' },
@@ -527,12 +526,12 @@ export default function AIInterviewVersionHistoryModal({
                         { label: 'Fail Rate', hint: 'Failed ÷ scored completions (Must-Have < 60%)', value: pct(sel.fail, sel.pass + sel.fail),
                           sub: `${sel.fail} of ${sel.pass + sel.fail} failed`, bar: 'bg-destructive', text: 'text-destructive' },
                         { label: 'Terminated Rate', hint: 'Terminated ÷ all candidates (revoked excluded)', value: pct(sel.terminated, sel.total),
-                          sub: `${sel.terminated} of ${sel.total} terminated`, bar: 'bg-[#b91c1c] dark:bg-[#e11d48]', text: 'text-[#b91c1c] dark:text-[#e11d48]' },
+                          sub: `${sel.terminated} of ${sel.total} terminated`, bar: 'bg-[var(--raw-b91c1c)] dark:bg-[var(--raw-e11d48)]', text: 'text-[var(--raw-b91c1c)] dark:text-[var(--raw-e11d48)]' },
                       ].map((r) => (
                         <div key={r.label}>
                           <div className="flex items-center justify-between">
                             <span className="tf-row-title inline-flex items-center gap-1">
-                              {r.label}<span title={r.hint}><Info className="w-3.5 h-3.5 text-gray-400" /></span>
+                              {r.label}<span title={r.hint}><Info className="w-3.5 h-3.5 text-gray-500" /></span>
                             </span>
                             <span className={`text-base font-bold tabular-nums ${r.text}`}>{r.value}%</span>
                           </div>
@@ -647,7 +646,7 @@ export default function AIInterviewVersionHistoryModal({
           </div>
 
         </div>
-      </div>
+      </div></ModalA11y>
     </>
   );
 }

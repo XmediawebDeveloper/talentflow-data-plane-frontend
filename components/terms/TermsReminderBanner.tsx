@@ -3,6 +3,7 @@
 import { AlertTriangle, Info, AlertCircle, X } from 'lucide-react';
 import { useTerms } from '@/components/providers/TermsProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { IconButton } from '@/components/ui/icon-button';
 
 const urgencyConfig = {
   info: {
@@ -60,13 +61,12 @@ export default function TermsReminderBanner() {
       >
         Review & Accept
       </button>
-      <button
+      <IconButton bare label="Dismiss"
         onClick={dismissReminder}
         className="p-1 rounded hover:bg-black/5 transition-colors flex-shrink-0"
-        aria-label="Dismiss"
       >
         <X className={`w-4 h-4 ${config.iconColor}`} />
-      </button>
+      </IconButton>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import VerifyCodeArt from './VerifyCodeArt';
 import PasswordLockArt from './PasswordLockArt';
 import ResetSuccessArt from './ResetSuccessArt';
 import SuccessAnimation from '@/components/ui/success-animation';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
@@ -343,9 +344,9 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
         aria-label={heading.title}
         className="tf-fp-modal"
       >
-        <button onClick={onClose} className="tf-fp-close" aria-label="Close">
+        <IconButton bare label="Close" onClick={onClose} className="tf-fp-close">
           <X style={{ width: 20, height: 20 }} />
-        </button>
+        </IconButton>
 
         <div className="tf-fp-body">
           {/* Header */}
@@ -586,14 +587,13 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                     className="tf-fp-input"
                     required
                   />
-                  <button
+                  <IconButton bare label={showPassword ? 'Hide password' : 'Show password'}
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="tf-fp-reveal"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff style={{ width: 19, height: 19 }} /> : <Eye style={{ width: 19, height: 19 }} />}
-                  </button>
+                  </IconButton>
                 </div>
               </div>
 
@@ -612,14 +612,13 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                     className="tf-fp-input"
                     required
                   />
-                  <button
+                  <IconButton bare label={showConfirmPassword ? 'Hide password' : 'Show password'}
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     className="tf-fp-reveal"
-                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
                     {showConfirmPassword ? <EyeOff style={{ width: 19, height: 19 }} /> : <Eye style={{ width: 19, height: 19 }} />}
-                  </button>
+                  </IconButton>
                 </div>
               </div>
 

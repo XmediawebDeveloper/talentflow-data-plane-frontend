@@ -5,6 +5,9 @@ import { useState, useRef } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Dynamic import to avoid SSR issues with docx-preview dependency
 const DuplicateResolutionModal = dynamic(() => import('./DuplicateResolutionModal'), {
@@ -143,7 +146,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
 
   return (
     <>
-      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+      <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
           <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
             <div>
@@ -159,12 +162,11 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                 </div>
               </div>
             </div>
-            <button
+            <IconButton bare label="Close"
               onClick={onClose}
-              className="p-1 text-gray-500 dark:text-slate-500 hover:text-brand-blue rounded-md hover:bg-brand-blue/5"
-             aria-label="Close">
+              className="p-1 text-gray-500 dark:text-slate-500 hover:text-brand-blue rounded-md hover:bg-brand-blue/5">
               <X className="w-5 h-5" />
-            </button>
+            </IconButton>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6">
@@ -187,7 +189,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
             </div>
 
             {/* Upload Area */}
-            <div
+            <div {...clickableProps}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -198,7 +200,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                   : 'border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 hover:bg-brand-blue/5 hover:border-brand-blue/30'
               }`}
             >
-              <Upload className={`w-16 h-16 mx-auto mb-4 ${isDragging ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
+              <Upload className={`w-16 h-16 mx-auto mb-4 ${isDragging ? 'text-brand-blue' : 'text-gray-500 dark:text-slate-500'}`} />
               <p className="text-gray-900 dark:text-slate-50 mb-2">
                 Drop updated resumes here or click to browse
               </p>
@@ -247,7 +249,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                         <div className="tf-body truncate">{file.name}</div>
                         <div className="tf-meta">{formatFileSize(file.size)}</div>
                       </div>
-                      <button
+                      <IconButton bare label="Remove file"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleRemoveFile(index);
@@ -255,7 +257,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                         className="p-1 text-gray-500 dark:text-slate-500 hover:text-red-600 rounded flex-shrink-0"
                       >
                         <Trash2 className="w-4 h-4" />
-                      </button>
+                      </IconButton>
                     </div>
                   ))}
                 </div>
@@ -300,7 +302,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
             </button>
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
 
       {/* Resolution Modal */}
       {showResolutionModal && (

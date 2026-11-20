@@ -61,7 +61,7 @@ function Chip({ state, label, note, title, onClick }: {
         {(state === 'on' || state === 'home') && <Check className="h-[11px] w-[11px]" strokeWidth={3.2} />}
       </span>
       <span>{label}</span>
-      {note && <span className={`text-[11.5px] font-semibold ${state === 'off' ? 'text-amber-600 dark:text-amber-400' : 'font-medium text-gray-400'}`}>{note}</span>}
+      {note && <span className={`text-[11.5px] font-semibold ${state === 'off' ? 'text-amber-600 dark:text-amber-400' : 'font-medium text-gray-500'}`}>{note}</span>}
     </span>
   );
 }
@@ -175,7 +175,7 @@ export default function RoleAccessEditor({ codes, onChange, auto = {}, onAutoCha
         </button>
       );
     };
-    const tile = level === 'full' ? 'bg-brand-blue/10 text-brand-blue' : level === 'view' ? 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500';
+    const tile = level === 'full' ? 'bg-brand-blue/10 text-brand-blue' : level === 'view' ? 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-500';
     const needs = missingFullNeeds(codes, m).map((o) => o.name).join(' and ');
     // Switched on automatically: the names of the areas that needed it.
     const autoBy = (auto[m.id] ?? []).map((id) => MODULE_BY_ID[id]?.name).filter((n): n is string => !!n);
@@ -282,7 +282,7 @@ export default function RoleAccessEditor({ codes, onChange, auto = {}, onAutoCha
       )}
       {MODULE_GROUPS.map((group) => (
         <div key={group} className="mb-4">
-          <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group}</div>
+          <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">{group}</div>
           <div className="rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
             {SHOWN_MODULES.filter((m) => m.group === group).map(moduleRow)}
           </div>

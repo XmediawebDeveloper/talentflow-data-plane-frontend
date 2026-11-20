@@ -623,7 +623,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                               {!hasRun ? (
                                 <div className="flex items-center justify-center h-full tf-body-muted">
                                   <div className="text-center">
-                                    <Terminal className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                                    <Terminal className="w-8 h-8 mx-auto mb-2 text-muted-foreground dark:text-gray-300" />
                                     <p>Run your code to see output</p>
                                   </div>
                                 </div>

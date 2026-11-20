@@ -72,6 +72,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** The fields the job list sorts by — one list for the Sort control and the phone Sort menu. */
 const JOB_SORT_OPTIONS: { value: JobSortBy; label: string }[] = [
@@ -1263,7 +1266,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
           <Tooltip content={reason} position="left">
             <span
               aria-label={reason}
-              className="flex w-5 h-5 items-center justify-center rounded-full text-gray-400 hover:text-brand-blue cursor-help"
+              className="flex w-5 h-5 items-center justify-center rounded-full text-gray-500 hover:text-brand-blue cursor-help"
             >
               <Info className="w-3.5 h-3.5" aria-hidden="true" />
             </span>
@@ -1501,17 +1504,16 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     className="w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700"
                     options={JOB_SORT_OPTIONS}
                   />
-                  <button
+                  <IconButton bare label={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
                     }}
                     className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
-                    title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                   >
                     <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
             )
@@ -1960,7 +1962,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                   >
                     <ArrowUpDown className="w-4 h-4 text-brand-blue" />
                     Sort
-                    <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-slate-900">
@@ -2069,7 +2071,13 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     {onEditJob && job.status !== 'Archived' && job.status !== 'Disabled' && (() => {
                       const atMaxVersions = (job.versionNumber ?? 1) >= 5;
                       return (
-                        <Button
+                        <IconButton label="Edit" tooltip={
+                            atMaxVersions
+                              ? 'Maximum of 5 versions reached'
+                              : !canUpdateJd
+                                ? 'You do not have permission to edit job descriptions'
+                                : 'Edit'
+                          }
                           variant="secondary"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -2085,49 +2093,38 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                           }}
                           aria-disabled={!canUpdateJd || atMaxVersions}
                           className={`!h-7 !w-7 !p-0 rounded-md ${!canUpdateJd || atMaxVersions ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          aria-label="Edit"
-                          title={
-                            atMaxVersions
-                              ? 'Maximum of 5 versions reached'
-                              : !canUpdateJd
-                                ? 'You do not have permission to edit job descriptions'
-                                : 'Edit'
-                          }
                         >
                           <Edit className="w-3.5 h-3.5" />
-                        </Button>
+                        </IconButton>
                       );
                     })()}
 
                     {/* View Button - icon only. Shown on every row for a
                         consistent action set. */}
-                    <Button
+                    <IconButton label="View" tooltip={draftLocked ? 'You do not have permission to edit draft job descriptions' : 'View'}
                       variant="secondary"
                       onClick={(e) => { e.stopPropagation(); if (!draftLocked) onViewJob(job); }}
                       aria-disabled={draftLocked || undefined}
                       className={`!h-7 !w-7 !p-0 rounded-md ${draftLocked ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
-                      aria-label="View" title={draftLocked ? 'You do not have permission to edit draft job descriptions' : 'View'}
                     >
                       <Eye className="w-3.5 h-3.5" />
-                    </Button>
+                    </IconButton>
 
                     {/* Three-dot Menu */}
                     <div className="relative">
                       {/* Same Button (secondary, h-9 w-9) as Edit and View, so
                           all three row actions share one border, background,
                           icon color, hover state and shape. */}
-                      <Button
+                      <IconButton label="More actions"
                         variant="secondary"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveDropdown(activeDropdown === job.id ? null : job.id);
                         }}
                         className="!h-7 !w-7 !p-0 rounded-md"
-                        aria-label="More actions"
-                        title="More actions"
                       >
                         <MoreVertical className="w-3.5 h-3.5" />
-                      </Button>
+                      </IconButton>
                       {activeDropdown === job.id && (
                         <div ref={centerMenuOnPhoneRef} className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
                           {/* View Applicants - Hide for Draft */}
@@ -2318,7 +2315,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 );
 
                 return (
-                  <div
+                  <div {...clickableProps}
                     key={job.id}
                     aria-disabled={draftLocked || undefined}
                     title={draftLocked ? 'You do not have permission to edit draft job descriptions' : undefined}
@@ -2334,13 +2331,19 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                         ID / Job Name line; the footer wraps under at full width. */}
                     {/* ── Phones (below md): the JD card ─────────────────────
                         Dense flow, no column gaps:
-                        1. checkbox · JD ID · source · status
-                        2. job name (one line, "…") · version · Edit / View / ⋮ on the right
+                        1. JD ID · source · status · version (the version chip is also the
+                           version-history dropdown); wraps on very narrow phones
+                        2. checkbox · job name (one line, "…" when long)
                         3. experience · industry · type · work mode (flowing)
                         4. Created | Posted / By | Last Updated — two aligned columns
-                        5. divider, then Scored / Assessed / Interviewed — three tiles */}
+                        Lines 1–4 are the left column; Edit / View / ⋮ stand in a
+                        vertical stack in the card's top-right corner beside them.
+                        5. divider, then Scored / Assessed / Interviewed — three tiles,
+                           full width under both columns */}
                     <div className="md:hidden">
-                      <div className="tf-jd-card-top">
+                      <div className="flex items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                      <div className="tf-jd-card-top flex-wrap gap-y-1.5">
                         {job.job_id && <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.job_id}>{job.job_id}</JobIdBadge>}
                         {(() => {
                           const method = getCreationMethodConfig(job.creation_method);
@@ -2359,47 +2362,45 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                             </>
                           );
                         })()}
+                        {job.versionNumber && job.versionNumber >= 1 ? (
+                          hasVersionHistory ? (
+                            /* Version dropdown: opens / closes this job's version history.
+                               A pill like the badges beside it (same height and shape). */
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleVersions(versionKey, job.id); }}
+                              aria-expanded={versionsExpanded}
+                              title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                              className={`tf-jd-card-version tf-jd-card-version-btn !h-5 !rounded-full ${versionsExpanded ? 'tf-jd-card-version-open' : ''}`}
+                            >
+                              <span className="tf-jd-card-dot bg-gray-400" />
+                              v{job.versionNumber}
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+                          ) : (
+                            <span className="tf-jd-card-version !h-5 !rounded-full">
+                              <span className="tf-jd-card-dot bg-gray-400" />
+                              v{job.versionNumber}
+                            </span>
+                          )
+                        ) : null}
                       </div>
 
                       <div className="tf-jd-card-head">
                         <div className="tf-jd-card-name">
                           {/* Checkbox beside the name (same as every module's JD-style card). */}
                           <div className="tf-jdv-name-line">
-                            <button
+                            <IconButton bare label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
                               onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
-                              title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
-                              aria-label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
                               className="tf-jdv-select"
                             >
                               {selectedJobs.has(job.id)
                                 ? <CheckSquare className="w-5 h-5 text-brand-blue" />
-                                : <Square className="w-5 h-5 text-gray-400 hover:text-brand-blue" />}
-                            </button>
-                            <h3 className="tf-jd-card-title" title={job.title}>{job.title}</h3>
+                                : <Square className="w-5 h-5 text-gray-500 hover:text-brand-blue" />}
+                            </IconButton>
+                            <h3 className="tf-jd-card-title truncate" title={job.title}>{job.title}</h3>
                           </div>
-                          {job.versionNumber && job.versionNumber >= 1 ? (
-                            hasVersionHistory ? (
-                              /* Version dropdown: opens / closes this job's version history. */
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); toggleVersions(versionKey, job.id); }}
-                                aria-expanded={versionsExpanded}
-                                title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                                className={`tf-jd-card-version tf-jd-card-version-btn ${versionsExpanded ? 'tf-jd-card-version-open' : ''}`}
-                              >
-                                <span className="tf-jd-card-dot bg-gray-400" />
-                                v{job.versionNumber}
-                                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                              </button>
-                            ) : (
-                              <span className="tf-jd-card-version">
-                                <span className="tf-jd-card-dot bg-gray-400" />
-                                v{job.versionNumber}
-                              </span>
-                            )
-                          ) : null}
                         </div>
-                        <div className="tf-jd-card-actions">{rowActions}</div>
                       </div>
 
                       <div className="tf-jd-card-meta">
@@ -2407,6 +2408,10 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                           <JobOpeningPrimaryItems job={job} hideEmpty breakBeforeType />
                         </div>
                         <JobOpeningDatesGrid job={job} />
+                      </div>
+                      </div>
+                      {/* Edit / View / ⋮ — stacked in the top-right corner. */}
+                      <div className="tf-jd-card-actions [&>div]:!ml-0 [&>div]:!flex-col [&>div]:!gap-1.5">{rowActions}</div>
                       </div>
 
                       {hasCountBadges && (
@@ -2446,15 +2451,14 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                           centers on the same line as the JD-ID / Role / Versions
                           badges instead of sitting a few px higher. */}
                       <div className="flex items-center flex-shrink-0 h-5 sm:h-6">
-                        <button
+                        <IconButton bare label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
                           onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
-                          title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
                         >
                           {selectedJobs.has(job.id)
                             ? <CheckSquare className="w-4 h-4 text-brand-blue" />
-                            : <Square className="w-4 h-4 text-gray-400 hover:text-brand-blue" />
+                            : <Square className="w-4 h-4 text-gray-500 hover:text-brand-blue" />
                           }
-                        </button>
+                        </IconButton>
                       </div>
 
                       {/* Job Info — the shared job-opening summary, so the
@@ -2607,13 +2611,11 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                           renderAction={(versionJob) => (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button
+                                <IconButton bare label="More actions"
                                   className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
-                                  title="More actions"
-                                  aria-label="More actions"
                                 >
                                   <MoreVertical className="w-4 h-4" />
-                                </button>
+                                </IconButton>
                               </DropdownMenuTrigger>
                               {/* Same action options, gates and handlers as the
                                   latest-version row's ⋮ menu, except View
@@ -2867,14 +2869,13 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 </div>
 
                 {/* Previous Button */}
-                <button
+                <IconButton bare label="Previous page"
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
                   className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                  aria-label="Previous page" title="Previous page"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
+                </IconButton>
 
                 {/* Current / total */}
                 <span className="tf-label px-1 whitespace-nowrap">
@@ -2882,14 +2883,13 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 </span>
 
                 {/* Next Button */}
-                <button
+                <IconButton bare label="Next page"
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
                   className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                  aria-label="Next page" title="Next page"
                 >
                   <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
+                </IconButton>
               </div>
             </div>
           </div>
@@ -2946,18 +2946,17 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
 
       {/* Quota Exceeded Modal */}
       {showQuotaModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <ModalA11y><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-2rem)] flex flex-col">
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h3 className="tf-section-title sm:text-lg tracking-tight">Insufficient Units</h3>
-              <button
+              <IconButton bare label="Close"
                 onClick={() => setShowQuotaModal(false)}
-                className="text-gray-400 hover:text-gray-600 p-1"
-                aria-label="Close"
+                className="text-gray-500 hover:text-gray-600 p-1"
               >
                 <X className="w-5 h-5 text-gray-500" />
-              </button>
+              </IconButton>
             </div>
 
             {/* Body */}
@@ -2986,7 +2985,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       <ExportFormatModal

@@ -55,6 +55,7 @@ import { MobileRecordList, MobileRecordCard } from '@/components/ui/mobile-recor
 import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort, type SortDir } from '@/components/ui/sortable-header';
 import type { TeamListSortKey } from '@/components/teams/TeamListTable';
 import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
 
 // Multiples of 6, so every page size fills whole rows in the 2- and 3-column grid.
 const TEAM_PAGE_SIZES = [6, 12, 24, 48];
@@ -1170,7 +1171,7 @@ export default function TeamManagementPage() {
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                             {pagedMembers.map((row) => (
-                              <tr
+                              <tr {...clickableRowProps}
                                 key={row.id}
                                 onClick={() => handleViewDetails(row.teamId)}
                                 title={`Open ${row.teamName}`}

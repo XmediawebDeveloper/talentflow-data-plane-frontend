@@ -2,7 +2,8 @@
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { TrendingUp, Zap, Calendar, Clock, DollarSign, X, AlertCircle, CheckCircle2, Loader2, AlertTriangle, ArrowUpRight, Plus, Minus, Send, Sparkles, ShoppingCart, RefreshCw, BarChart3, Package, CreditCard, Info, Lock, FileText, Target, Users, Briefcase, PieChart, ShieldCheck, Check, type LucideIcon } from 'lucide-react';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useModalA11y } from '@/components/ui/modal-a11y';
 // QuotaDisplay was an earlier inline widget that has since been folded into the
 // Quota Overview cards rendered below. The import is intentionally not
 // reinstated because the component is no longer in the tree.
@@ -24,6 +25,8 @@ import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay
 import { useRouter } from 'next/navigation';
 import { inviteUnitsReturnUrl, useInviteUnitsHandoff } from '@/lib/utils/inviteUnitsHandoff';
 import { getAccessToken } from '@/lib/services/api';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Addon interface
 interface Addon {
@@ -644,6 +647,15 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
   // While the add-on modal is open, lock the dashboard scroll container(s)
   // behind it so no background scrollbar shows next to the dialog.
   const addonModalRef = useRef<HTMLDivElement>(null);
+  // Escape, focus trap and focus return for the add-on modal (a11y §14),
+  // attached while it is open; the overlay keeps its own ref for the scroll lock.
+  const addonModalA11y = useModalA11y();
+  const addonModalOpen = showAddonModal && !!selectedAddon;
+  useLayoutEffect(() => {
+    if (!addonModalOpen) return;
+    addonModalA11y(addonModalRef.current);
+    return () => addonModalA11y(null);
+  }, [addonModalOpen, addonModalA11y]);
   useEffect(() => {
     if (!showAddonModal) return;
     const locked: { el: HTMLElement; overflow: string }[] = [];
@@ -1357,12 +1369,12 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                       className="flex cursor-not-allowed flex-col rounded-xl border border-gray-200 bg-gray-50 p-3 opacity-70 dark:border-slate-700 dark:bg-slate-800/40"
                     >
                       <div className="mb-2 flex items-center gap-2.5">
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-400 dark:text-slate-500">{quota.name}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-500 dark:text-slate-500">{quota.name}</span>
                         <span className="tf-badge bg-gray-100 tf-micro-hint dark:bg-slate-800">
                           Not in plan
                         </span>
                       </div>
-                      <p className="text-2xs font-medium text-gray-400 dark:text-slate-500">{PLAN_LOCKED_MESSAGE}</p>
+                      <p className="text-2xs font-medium text-gray-500 dark:text-slate-500">{PLAN_LOCKED_MESSAGE}</p>
                     </div>
                   );
                 }
@@ -1602,7 +1614,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                       <ul className="mt-2 space-y-1 tf-meta">
                         {[theme.blurb, 'Instant activation', 'Valid till plan expiry'].map(line => (
                           <li key={line} className="flex items-start gap-1.5">
-                            <Check className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${addonNotInPlan ? 'text-gray-300' : 'text-emerald-500'}`} strokeWidth={3} />
+                            <Check className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${addonNotInPlan ? 'text-muted-foreground dark:text-gray-300' : 'text-emerald-500'}`} strokeWidth={3} />
                             <span>{line}</span>
                           </li>
                         ))}
@@ -1613,25 +1625,23 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                       {/* Pack count — pre-fills the purchase modal */}
                       <div className="mt-3 flex items-center justify-between gap-2">
                         <div className={`flex items-center rounded-lg border border-gray-200 dark:border-slate-700 ${disabled ? 'opacity-50' : ''}`}>
-                          <button
+                          <IconButton bare label={`Decrease ${displayName} packs`}
                             type="button"
                             onClick={() => setQty(qty - 1)}
                             disabled={disabled || qty <= 1}
-                            aria-label={`Decrease ${displayName} packs`}
                             className="flex h-8 w-8 items-center justify-center rounded-l-lg text-brand-blue transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300 dark:hover:bg-slate-800"
                           >
                             <Minus className="h-3.5 w-3.5" />
-                          </button>
+                          </IconButton>
                           <span className="w-9 text-center tf-row-title tabular-nums">{qty}</span>
-                          <button
+                          <IconButton bare label={`Increase ${displayName} packs`}
                             type="button"
                             onClick={() => setQty(qty + 1)}
                             disabled={disabled || qty >= 100}
-                            aria-label={`Increase ${displayName} packs`}
                             className="flex h-8 w-8 items-center justify-center rounded-r-lg text-brand-blue transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300 dark:hover:bg-slate-800"
                           >
                             <Plus className="h-3.5 w-3.5" />
-                          </button>
+                          </IconButton>
                         </div>
                         <span className="tf-meta tabular-nums">{(packUnits * qty).toLocaleString()} units</span>
                       </div>
@@ -1680,7 +1690,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
 
       {/* Record Usage Modal */}
       {showRecordModal && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <ModalA11y><div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col">
             <div className="p-6 border-b border-gray-200 dark:border-slate-700 shrink-0">
               <div className="flex items-center justify-between">
@@ -1693,7 +1703,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                     <p className="tf-body-secondary">Track quota consumption</p>
                   </div>
                 </div>
-                <Button
+                <IconButton label="Close"
                   variant="secondary"
                   size="sm"
                   onClick={() => {
@@ -1701,11 +1711,10 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                     setRecordError(null);
                     setRecordSuccess(null);
                   }}
-                  aria-label="Close"
                   className=""
                 >
                   <X className="w-5 h-5" />
-                </Button>
+                </IconButton>
               </div>
             </div>
 
@@ -1820,7 +1829,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
               </div>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Addon Purchase Modal — bottom sheet on mobile, centred dialog on desktop */}
@@ -1834,7 +1843,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
           setAddonPurchaseSuccess(null);
         };
         return (
-        <div ref={addonModalRef} className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 backdrop-blur-sm sm:items-center sm:p-6">
+        <div ref={addonModalRef} role="dialog" aria-modal="true" tabIndex={-1} data-modal-a11y="" className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 backdrop-blur-sm sm:items-center sm:p-6">
           <div className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-gray-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-300 dark:border-slate-700 dark:bg-slate-900 sm:max-h-[calc(100dvh-3rem)] sm:max-w-xl sm:rounded-2xl">
 
             {/* Modal Header */}
@@ -1851,13 +1860,12 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                   <p className="tf-meta">Add units to your quota immediately</p>
                 </div>
               </div>
-              <button
+              <IconButton bare label="Close"
                 onClick={closeAddonModal}
                 className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-slate-800"
-                aria-label="Close"
               >
                 <X className="h-5 w-5 text-gray-500 dark:text-slate-400" />
-              </button>
+              </IconButton>
             </div>
 
             {/* Body — scrolls only on short screens, scrollbar hidden */}

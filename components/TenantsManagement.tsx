@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { Building2, Plus, Search, Edit2, Trash2, Check, X, Users, Calendar } from 'lucide-react';
 import { Tenant } from '@/lib/types/tenant';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface TenantsManagementProps {
   currentTenant?: Tenant;
@@ -118,7 +121,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
       {/* Search Bar */}
       <div className="mb-6">
         <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search tenants..."
@@ -197,7 +200,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-slate-700/60">
             {filteredTenants.map((tenant) => (
-              <tr
+              <tr {...clickableRowProps}
                 key={tenant.id}
                 className="hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer"
                 onClick={() => onSelectTenant && onSelectTenant(tenant as unknown as Tenant)}
@@ -228,7 +231,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                 </td>
                 <td className="tf-td">
                   <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                    <Users className="w-4 h-4 text-gray-500 dark:text-slate-500" />
                     <span className="tf-body">{tenant.userCount}</span>
                   </div>
                 </td>
@@ -255,7 +258,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                 </td>
                 <td className="tf-td">
                   <div className="flex items-center justify-end gap-2">
-                    <button
+                    <IconButton bare label="Edit tenant"
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditingTenant(tenant);
@@ -263,8 +266,8 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                       className="p-2 text-gray-500 dark:text-slate-500 hover:text-gray-800 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
                     >
                       <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
+                    </IconButton>
+                    <IconButton bare label="Delete tenant"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteTenant(tenant.id);
@@ -272,7 +275,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                       className="p-2 text-gray-500 dark:text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </IconButton>
                   </div>
                 </td>
               </tr>
@@ -290,16 +293,15 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
 
       {/* Create Tenant Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <ModalA11y><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
             <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Create New Tenant</h2>
-              <button
+              <IconButton bare label="Close"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="p-2 text-gray-500 dark:text-slate-500 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
-               aria-label="Close">
+                className="p-2 text-gray-500 dark:text-slate-500 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg">
                 <X className="w-5 h-5" />
-              </button>
+              </IconButton>
             </div>
 
             <div className="space-y-4 px-5 sm:px-6 py-4 flex-1 overflow-y-auto">
@@ -338,7 +340,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
               </button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </main>
   );

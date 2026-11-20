@@ -4,6 +4,7 @@ import React, { ReactNode, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { Drawer as DrawerPrimitive } from 'vaul';
 import { Button } from './button';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** Below Tailwind's `sm` (640px) — where `mobileSheet` turns into a bottom sheet. */
 const PHONE_QUERY = '(max-width: 639.98px)';
@@ -265,12 +266,10 @@ export default function AppModal({
           </div>
           {headerExtra && <div className="shrink-0">{headerExtra}</div>}
           {closeButton && (
-            <button
+            <IconButton bare label="Close"
               type="button"
               onClick={onCancel}
               disabled={cancelDisabled}
-              aria-label="Close"
-              title="Close"
               className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 ${
                 lightHeader
                   ? 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus-visible:ring-brand-blue/40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
@@ -278,7 +277,7 @@ export default function AppModal({
               }`}
             >
               <X className="h-5 w-5" />
-            </button>
+            </IconButton>
           )}
         </div>
 

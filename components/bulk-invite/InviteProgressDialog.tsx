@@ -7,6 +7,8 @@ import BulkInviteProgressPanel from '@/components/bulk-invite/BulkInviteProgress
 import { bulkInviteService, isBulkInviteActive, type BulkInviteJob, type BulkInviteKind } from '@/lib/services/bulkInviteService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import FilterSelect from '@/components/ui/filter-select';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * "View Progress" from an assessment / AI interview version's ⋯ menu — the
@@ -71,7 +73,7 @@ export default function InviteProgressDialog({
   return (
     <>
       <div className="fixed inset-0 z-50 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 pointer-events-none">
+      <ModalA11y innerDialog closeOnEscape={false}><div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 pointer-events-none">
         <div
           role="dialog"
           aria-modal="true"
@@ -108,14 +110,13 @@ export default function InviteProgressDialog({
                   {running ? 'Sending' : 'Complete'}
                 </span>
               )}
-              <button
+              <IconButton bare label="Close"
                 type="button"
                 onClick={onClose}
-                aria-label="Close"
                 className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-500 hover:text-gray-800 hover:bg-gray-50 dark:hover:bg-slate-800"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </IconButton>
             </div>
           </div>
 
@@ -140,7 +141,7 @@ export default function InviteProgressDialog({
               <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-brand-blue" /></div>
             ) : !picked ? (
               <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-12 px-4 flex flex-col items-center gap-2 text-center">
-                <Send className="w-6 h-6 text-gray-400" aria-hidden="true" />
+                <Send className="w-6 h-6 text-gray-500" aria-hidden="true" />
                 <p className="tf-label">No invite sends for this version yet</p>
                 <p className="tf-meta">Invites sent from Invite / Invite More show their progress here.</p>
               </div>
@@ -149,7 +150,7 @@ export default function InviteProgressDialog({
             )}
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
     </>
   );
 }

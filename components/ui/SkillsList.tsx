@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface SkillsListProps {
   skills?: string[] | null;
@@ -131,16 +132,16 @@ export default function SkillsList({
           >
             <div className="mb-2 flex items-center justify-between">
               <p className="tf-caption">All skills ({list.length})</p>
-              <button
+              <IconButton bare label="Close"
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setPopover(null);
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-500 hover:text-gray-600"
               >
                 <X className="h-3.5 w-3.5" />
-              </button>
+              </IconButton>
             </div>
             <div className="flex flex-wrap gap-1">
               {list.map((skill, i) => (

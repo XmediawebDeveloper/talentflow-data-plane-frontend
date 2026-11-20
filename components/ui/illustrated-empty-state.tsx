@@ -6,8 +6,8 @@ import { Check, Plus, Search, Send, X } from 'lucide-react';
    mockups' own (a brighter blue than the brand token), so they are fixed hex
    values rather than theme classes. */
 
-export const ILLUSTRATION_ACCENT = '#3B82F6';
-export const ILLUSTRATION_DEEP = '#2F6FEB';
+export const ILLUSTRATION_ACCENT = 'var(--raw-3b82f6)';
+export const ILLUSTRATION_DEEP = 'var(--raw-2f6feb)';
 
 /** Gradient ids an illustration's shapes fill with: `url(#${ids.blue})`. */
 export type IllustrationIds = { blue: string; light: string };
@@ -26,16 +26,16 @@ export function Illustration({ children }: { children: (ids: IllustrationIds) =>
     <svg viewBox="0 0 240 140" className="w-full max-w-[12rem] h-auto" aria-hidden>
       <defs>
         <linearGradient id={ids.blue} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#6AA5FF" />
+          <stop offset="0" stopColor="var(--raw-6aa5ff)" />
           <stop offset="1" stopColor={ILLUSTRATION_DEEP} />
         </linearGradient>
         <linearGradient id={ids.light} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#A9CBFF" />
-          <stop offset="1" stopColor="#6AA5FF" />
+          <stop offset="0" stopColor="var(--raw-a9cbff)" />
+          <stop offset="1" stopColor="var(--raw-6aa5ff)" />
         </linearGradient>
         <radialGradient id={`${id}-cloud`} cx="0.5" cy="0.45" r="0.6">
-          <stop offset="0" stopColor="#D3E3FD" />
-          <stop offset="1" stopColor="#E6EFFE" />
+          <stop offset="0" stopColor="var(--raw-d3e3fd)" />
+          <stop offset="1" stopColor="var(--raw-e6effe)" />
         </radialGradient>
       </defs>
       <path d={CLOUD} fill={`url(#${id}-cloud)`} className="dark:opacity-30" />
@@ -98,14 +98,14 @@ export function IconTileIllustration({
       <div
         className={`absolute left-1/2 top-[14%] -translate-x-1/2 flex items-center justify-center w-[38%] aspect-square rounded-2xl ${
           solid
-            ? 'bg-gradient-to-b from-[#5C9BFF] to-[#1F5BE0] shadow-[0_10px_24px_-8px_rgba(37,99,235,0.6)]'
-            : 'bg-gradient-to-b from-white to-[#E8F0FE] ring-1 ring-white shadow-[0_10px_24px_-10px_rgba(37,99,235,0.35)] dark:from-slate-800 dark:to-slate-900 dark:ring-slate-700'
+            ? 'bg-gradient-to-b from-[var(--raw-5c9bff)] to-[var(--raw-1f5be0)] shadow-[0_10px_24px_-8px_rgba(37,99,235,0.6)]'
+            : 'bg-gradient-to-b from-white to-[var(--raw-e8f0fe)] ring-1 ring-white shadow-[0_10px_24px_-10px_rgba(37,99,235,0.35)] dark:from-slate-800 dark:to-slate-900 dark:ring-slate-700'
         }`}
       >
-        <Icon className={`w-[48%] h-[48%] ${solid ? 'text-white' : 'text-[#1F4FD8] dark:text-blue-400'}`} strokeWidth={2} />
+        <Icon className={`w-[48%] h-[48%] ${solid ? 'text-white' : 'text-[var(--raw-1f4fd8)] dark:text-blue-400'}`} strokeWidth={2} />
         {badge && (
-          <span className="absolute -right-[14%] -bottom-[14%] flex items-center justify-center w-[42%] aspect-square rounded-full bg-white ring-[3px] ring-[#2F6FEB]">
-            <Plus className="w-[60%] h-[60%] text-[#2F6FEB]" strokeWidth={2.5} />
+          <span className="absolute -right-[14%] -bottom-[14%] flex items-center justify-center w-[42%] aspect-square rounded-full bg-white ring-[3px] ring-[var(--raw-2f6feb)]">
+            <Plus className="w-[60%] h-[60%] text-[var(--raw-2f6feb)]" strokeWidth={2.5} />
           </span>
         )}
       </div>
@@ -136,8 +136,8 @@ export function FolderIconIllustration({
             <circle cx="36" cy="70" r="4" fill="none" stroke={ILLUSTRATION_ACCENT} strokeWidth="2.5" />
             <path d="M182 18v12M176 24h12M198 62v10M193 67h10" stroke={ILLUSTRATION_ACCENT} strokeWidth="3" strokeLinecap="round" />
             {/* Dashed draft page */}
-            <path d="M92 6h36l14 14v50H92z" fill="#fff" stroke="#A9CBFF" strokeWidth="2" strokeDasharray="5 4" strokeLinejoin="round" />
-            <path d="M128 6v14h14" fill="#DCE9FF" stroke="#A9CBFF" strokeWidth="2" strokeLinejoin="round" />
+            <path d="M92 6h36l14 14v50H92z" fill="var(--raw-ffffff)" stroke="var(--raw-a9cbff)" strokeWidth="2" strokeDasharray="5 4" strokeLinejoin="round" />
+            <path d="M128 6v14h14" fill="var(--raw-dce9ff)" stroke="var(--raw-a9cbff)" strokeWidth="2" strokeLinejoin="round" />
             {/* Folder */}
             <path d="M66 46a6 6 0 016-6h28l6 6h60a6 6 0 016 6v62a6 6 0 01-6 6H72a6 6 0 01-6-6z" fill={`url(#${ids.blue})`} />
           </>
@@ -148,10 +148,10 @@ export function FolderIconIllustration({
         /* A large magnifier overlapping the folder's right edge, not a disc. */
         <span className="absolute left-[74%] top-[60%] -translate-x-1/2 -translate-y-1/2 w-[27%] aspect-square">
           <span className="absolute left-[8%] top-[8%] w-[62%] aspect-square rounded-full bg-white/70" />
-          <Search className="relative w-full h-full text-[#2F6FEB]" strokeWidth={2.75} />
+          <Search className="relative w-full h-full text-[var(--raw-2f6feb)]" strokeWidth={2.75} />
         </span>
       ) : BadgeIcon && (
-        <span className="absolute left-[68%] top-[76%] -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-[15%] aspect-square rounded-full bg-[#2F6FEB] ring-[3px] ring-white shadow-sm">
+        <span className="absolute left-[68%] top-[76%] -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-[15%] aspect-square rounded-full bg-[var(--raw-2f6feb)] ring-[3px] ring-white shadow-sm">
           <BadgeIcon className="w-[55%] h-[55%] text-white" strokeWidth={3} />
         </span>
       )}
@@ -183,15 +183,15 @@ export function IllustratedEmptyState({
   return (
     <div
       className={`flex flex-col items-center text-center px-4 py-8 sm:py-10 ${
-        bordered ? 'rounded-2xl border border-[#DCE6F7] dark:border-slate-700 bg-white dark:bg-slate-900' : ''
+        bordered ? 'rounded-2xl border border-[var(--raw-dce6f7)] dark:border-slate-700 bg-white dark:bg-slate-900' : ''
       } ${className}`}
     >
       {illustration}
       {title && (
-        <h3 className="mt-4 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">{title}</h3>
+        <h3 className="mt-4 text-base sm:text-lg font-bold tracking-tight text-[var(--raw-0f1e3d)] dark:text-slate-50">{title}</h3>
       )}
       {description && (
-        <p className={`${title ? 'mt-1.5' : 'mt-4'} max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300`}>
+        <p className={`${title ? 'mt-1.5' : 'mt-4'} max-w-md text-sm sm:text-base leading-relaxed text-[var(--raw-0f1e3d)]/80 dark:text-slate-300`}>
           {description}
         </p>
       )}
@@ -199,7 +199,7 @@ export function IllustratedEmptyState({
         <button
           type="button"
           onClick={action.onClick}
-          className="mt-2 text-sm sm:text-base font-semibold text-[#1F4FD8] hover:underline dark:text-blue-400"
+          className="mt-2 text-sm sm:text-base font-semibold text-[var(--raw-1f4fd8)] hover:underline dark:text-blue-400"
         >
           {action.label}
         </button>

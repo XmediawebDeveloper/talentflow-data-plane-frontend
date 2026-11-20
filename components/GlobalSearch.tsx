@@ -9,6 +9,7 @@ import { assessmentService, AssessmentResponse } from '@/lib/services/assessment
 import VersionBadge from '@/components/VersionBadge';
 import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatDateTimeIST } from '@/lib/utils/timezone';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface GlobalSearchProps {
   className?: string;
@@ -165,7 +166,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
   return (
     <div ref={containerRef} className={`relative ${className || ''}`}>
       <div className="relative w-full">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-500" />
         <input
           ref={inputRef}
           type="search"
@@ -198,15 +199,14 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
           </kbd>
         )}
         {isLoading && (
-          <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 animate-spin" />
+          <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 animate-spin" />
         )}
         {!isLoading && query && (
-          <button
+          <IconButton bare label="Close"
             onClick={clearSearch}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-           aria-label="Close">
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
             <X className="w-3.5 h-3.5" />
-          </button>
+          </IconButton>
         )}
       </div>
 

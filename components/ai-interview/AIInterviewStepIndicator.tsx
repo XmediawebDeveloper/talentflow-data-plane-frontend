@@ -93,7 +93,7 @@ export function AIInterviewStepIndicator({ currentStep, topOffset = 0, clickable
                         ? 'bg-brand-blue text-white shadow-sm'
                         : isCurrent
                         ? 'bg-gradient-to-br from-brand-blue to-brand-blue-2 text-white shadow-lg shadow-brand-blue/40 ring-2 ring-brand-blue/10'
-                        : 'bg-gray-100 text-gray-400 ring-1 ring-gray-200'
+                        : 'bg-gray-100 text-gray-500 ring-1 ring-gray-200'
                     }`}
                   >
                     {isCompleted ? (
@@ -117,7 +117,7 @@ export function AIInterviewStepIndicator({ currentStep, topOffset = 0, clickable
                       ? 'text-brand-blue-deep'
                       : isCompleted
                       ? 'text-gray-700'
-                      : 'text-gray-400'
+                      : 'text-gray-500'
                   }`}
                 >
                   {label}

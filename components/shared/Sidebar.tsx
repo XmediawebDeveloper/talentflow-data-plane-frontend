@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { buildMenuSections, DISABLED_REASON_MESSAGE, type NavSection } from '@/lib/navigation/menuSections';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface SidebarProps {
   user?: User;
@@ -185,15 +186,14 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
         </Link>
         {/* Close button for mobile */}
         {onClose && (
-          <button
+          <IconButton bare label="Close menu"
             onClick={onClose}
             className="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
-            aria-label="Close menu"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-          </button>
+          </IconButton>
         )}
       </div>
 
@@ -203,7 +203,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
           <div key={section.id} className="mb-5 px-3">
             {/* Section Header */}
             <div className="px-3 pb-2">
-              <span className="text-2xs font-semibold text-gray-400 uppercase tracking-[0.1em]">
+              <span className="text-2xs font-semibold text-gray-500 uppercase tracking-[0.1em]">
                 {section.label}
               </span>
             </div>
@@ -240,7 +240,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                       className="w-full flex items-center gap-3 px-3 py-2 rounded-lg tf-body-muted cursor-not-allowed opacity-50"
                       title={DISABLED_REASON_MESSAGE.plan}
                     >
-                      <item.icon className="w-4 h-4 flex-shrink-0 text-gray-300" />
+                      <item.icon className="w-4 h-4 flex-shrink-0 text-muted-foreground dark:text-gray-300" />
                       <span>{item.label}</span>
                     </div>
                   );
@@ -257,7 +257,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                       className="w-full flex items-center gap-3 px-3 py-2 rounded-lg tf-body-muted cursor-not-allowed opacity-50"
                       title="Renew your subscription to access this feature"
                     >
-                      <item.icon className="w-4 h-4 flex-shrink-0 text-gray-300" />
+                      <item.icon className="w-4 h-4 flex-shrink-0 text-muted-foreground dark:text-gray-300" />
                       <span>{item.label}</span>
                     </div>
                   );
@@ -294,7 +294,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-gray-100 shrink-0">
-        <p className="text-2xs text-gray-400 text-center font-medium tracking-wide">
+        <p className="text-2xs text-gray-500 text-center font-medium tracking-wide">
           {tenant?.name || 'TalentFlow'} <span className="opacity-60">·</span> v1.0
         </p>
       </div>

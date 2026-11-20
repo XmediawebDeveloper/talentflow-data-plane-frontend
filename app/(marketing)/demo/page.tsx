@@ -10,7 +10,7 @@ import { MarketingPage } from "@/components/marketing/PageShell";
 import { isValidEmailFormat } from "@/lib/utils/email";
 
 const FIELD =
-  "block h-11 w-full rounded-xl border border-slate-900/[0.12] bg-mkt-canvas px-4 text-[15px] text-mkt-ink placeholder:text-slate-400 transition-[border-color,box-shadow,background-color] duration-200 hover:border-slate-900/25 focus:border-mkt-accent focus:bg-mkt-surface focus:outline-none focus:ring-4 focus:ring-mkt-accent/15 dark:border-white/15 dark:placeholder:text-slate-500 sm:h-12";
+  "block h-11 w-full rounded-xl border border-slate-900/[0.12] bg-mkt-canvas px-4 text-[15px] text-mkt-ink placeholder:text-gray-500 transition-[border-color,box-shadow,background-color] duration-200 hover:border-slate-900/25 focus:border-mkt-accent focus:bg-mkt-surface focus:outline-none focus:ring-4 focus:ring-mkt-accent/15 dark:border-white/15 dark:placeholder:text-slate-500 sm:h-12";
 const FIELD_INVALID =
   "border-red-500 hover:border-red-500 focus:border-red-500 focus:ring-red-500/15 dark:border-red-400 dark:hover:border-red-400 dark:focus:border-red-400";
 const FIELD_ERROR = "mt-1.5 text-[13px] text-red-600 dark:text-red-400";
@@ -142,7 +142,7 @@ export default function DemoPage() {
       <section className="relative overflow-hidden">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -left-48 -top-48 h-[520px] w-[520px] rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.14),transparent)] dark:bg-[radial-gradient(closest-side,rgba(76,123,232,0.18),transparent)]"
+          className="pointer-events-none absolute -left-48 -top-48 h-[520px] w-[520px] rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p14),transparent)] dark:bg-[radial-gradient(closest-side,var(--raw-rgba-76-123-232-0p18),transparent)]"
         />
         <div
           className={`${SHELL} relative grid grid-cols-1 items-center gap-10 pb-12 pt-9 sm:pb-24 sm:pt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16 lg:pb-28`}
@@ -271,7 +271,7 @@ export default function DemoPage() {
                   </div>
                   <div>
                     <label htmlFor="phone" className={LABEL}>
-                      Phone <span className="font-normal text-slate-400">(optional)</span>
+                      Phone <span className="font-normal text-slate-500">(optional)</span>
                     </label>
                     <input
                       id="phone"

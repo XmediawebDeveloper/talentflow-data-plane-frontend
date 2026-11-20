@@ -146,7 +146,7 @@ export default function PermissionSectionsView({ codes, renderLockedSection, sho
             className="tf-card-soft overflow-hidden"
           >
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5">
-              <h3 className={`text-base max-sm:text-sm font-semibold ${noneGranted ? 'text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{section.name}</h3>
+              <h3 className={`text-base max-sm:text-sm font-semibold ${noneGranted ? 'text-gray-500 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{section.name}</h3>
             </div>
             <div className="tf-grid-3 p-4">
               {section.items.map((item) => {
@@ -167,12 +167,12 @@ export default function PermissionSectionsView({ codes, renderLockedSection, sho
                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${
                           isGranted
                             ? permissionBadgeClass(permissionActionOf(item.code))
-                            : 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 ring-gray-200 dark:ring-slate-700'
+                            : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-gray-200 dark:ring-slate-700'
                         }`}
                       >
                         <span className="text-xs font-semibold uppercase">{item.label[0] || 'P'}</span>
                       </span>
-                      <p className={`min-w-0 text-sm font-semibold ${isGranted ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`}>
+                      <p className={`min-w-0 text-sm font-semibold ${isGranted ? 'text-gray-900 dark:text-slate-50' : 'text-gray-500 dark:text-slate-500'}`}>
                         {item.label}
                       </p>
                     </div>

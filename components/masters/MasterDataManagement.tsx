@@ -25,6 +25,8 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 type MasterDataType = 'experience' | 'education' | 'industry';
 
@@ -88,6 +90,10 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
   const { isTenantAdmin, hasPermissionCode } = useAuth();
   const canEdit = isTenantAdmin || hasPermissionCode('jd:update') || hasPermissionCode('settings:general');
   const lock = canEdit ? {} : { 'aria-disabled': true, title: "You can view this list, but your role can't change it", style: { opacity: 0.5, cursor: 'not-allowed' } };
+  /* The same lock for the row's icon buttons: <IconButton> shows the reason as
+     its tooltip (hover and keyboard focus), so it takes everything but the title. */
+  const lockTip = canEdit ? undefined : "You can view this list, but your role can't change it";
+  const lockIcon = canEdit ? {} : { 'aria-disabled': true as const, style: { opacity: 0.5, cursor: 'not-allowed' } };
   const [items, setItems] = useState<(ExperienceLevel | EducationLevel | IndustryType)[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -526,33 +532,30 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                           asks first either way — it swaps in the ✓ / ✕ pair. */}
                       {showDeleteConfirm === item.id ? (
                         <div className="flex items-center justify-center lg:justify-start gap-1">
-                          <button
+                          <IconButton bare label="Confirm permanent delete"
                             onClick={() => handleDelete(item.id)}
                             className="tf-btn tf-btn-destructive h-8 w-8 bg-destructive shadow-sm shadow-red-600/25 hover:-translate-y-0.5 hover:bg-destructive whitespace-normal gap-0 font-normal"
-                            aria-label="Confirm permanent delete" title="Confirm permanent delete"
                           >
                             <Check className="h-4 w-4" />
-                          </button>
-                          <button
+                          </IconButton>
+                          <IconButton bare label="Cancel"
                             onClick={() => setShowDeleteConfirm(null)}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-500 transition-all hover:bg-gray-50 dark:hover:bg-slate-800"
-                            aria-label="Cancel" title="Cancel"
                           >
                             <X className="h-4 w-4" />
-                          </button>
+                          </IconButton>
                         </div>
                       ) : (
                         <>
                         <div className="hidden lg:flex items-center gap-1.5">
-                          <button
+                          <IconButton bare label="Edit" tooltip={lockTip}
                             onClick={() => openEditModal(item)}
                             className="tf-btn tf-btn-secondary h-8 w-8 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue whitespace-normal gap-0 font-normal"
-                            aria-label="Edit" title="Edit"
-                            {...lock}
+                            {...lockIcon}
                           >
                             <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button
+                          </IconButton>
+                          <IconButton bare label={item.is_active ? 'Deactivate' : 'Activate'} tooltip={lockTip}
                             onClick={() => handleToggleActive(item)}
                             disabled={togglingId === item.id}
                             className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-[border-color,box-shadow,color,background-color] disabled:cursor-not-allowed disabled:opacity-60 ${
@@ -560,9 +563,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                                 ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 hover:border-gray-300 hover:bg-gray-50'
                                 : 'border-brand-teal/20 bg-brand-teal/[0.05] text-brand-teal hover:bg-brand-teal/[0.1]'
                             }`}
-                            aria-label={item.is_active ? 'Deactivate' : 'Activate'}
-                            title={item.is_active ? 'Deactivate' : 'Activate'}
-                            {...lock}
+                            {...lockIcon}
                           >
                             {togglingId === item.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -571,22 +572,21 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                             ) : (
                               <Power className="h-4 w-4" />
                             )}
-                          </button>
-                          <button
+                          </IconButton>
+                          <IconButton bare label="Delete permanently" tooltip={lockTip}
                             onClick={() => { if (canEdit) setShowDeleteConfirm(item.id); }}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-orange/15 bg-brand-orange/[0.05] text-brand-orange-deep transition-all hover:-translate-y-0.5 hover:bg-brand-orange/[0.1]"
-                            aria-label="Delete permanently" title="Delete permanently"
-                            {...lock}
+                            {...lockIcon}
                           >
                             <Trash2 className="h-4 w-4" />
-                          </button>
+                          </IconButton>
                         </div>
                         <div className="lg:hidden flex justify-center">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild disabled={togglingId === item.id}>
-                            <button type="button" aria-label="Actions" title="Actions" className={`${ROW_ACTION_BUTTON_CLASS} !p-1.5 sm:!p-2.5`}>
+                            <IconButton bare label="Actions" type="button" className={`${ROW_ACTION_BUTTON_CLASS} !p-1.5 sm:!p-2.5`}>
                               {togglingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
-                            </button>
+                            </IconButton>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
                             <DropdownMenuItem disabled={!canEdit} className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => openEditModal(item)}>
@@ -641,27 +641,25 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
               actions={
                 showDeleteConfirm === item.id ? (
                   <div className="flex items-center gap-1">
-                    <button
+                    <IconButton bare label="Confirm permanent delete"
                       onClick={() => handleDelete(item.id)}
                       className="tf-btn tf-btn-destructive h-8 w-8 bg-destructive shadow-sm shadow-red-600/25 hover:-translate-y-0.5 hover:bg-destructive whitespace-normal gap-0 font-normal"
-                      aria-label="Confirm permanent delete" title="Confirm permanent delete"
                     >
                       <Check className="h-4 w-4" />
-                    </button>
-                    <button
+                    </IconButton>
+                    <IconButton bare label="Cancel"
                       onClick={() => setShowDeleteConfirm(null)}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-500 transition-all hover:bg-gray-50 dark:hover:bg-slate-800"
-                      aria-label="Cancel" title="Cancel"
                     >
                       <X className="h-4 w-4" />
-                    </button>
+                    </IconButton>
                   </div>
                 ) : (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild disabled={togglingId === item.id}>
-                      <button type="button" aria-label="Actions" title="Actions" className={`${ROW_ACTION_BUTTON_CLASS} !p-1.5 sm:!p-2.5`}>
+                      <IconButton bare label="Actions" type="button" className={`${ROW_ACTION_BUTTON_CLASS} !p-1.5 sm:!p-2.5`}>
                         {togglingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
-                      </button>
+                      </IconButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
                       <DropdownMenuItem disabled={!canEdit} className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => openEditModal(item)}>
@@ -704,7 +702,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+        <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
           <div className="max-h-[calc(100dvh-2rem)] w-full max-w-[95vw] sm:max-w-md rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5 flex flex-col">
             <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white shrink-0 rounded-t-3xl">
               <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
@@ -722,13 +720,12 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                     </p>
                   </div>
                 </div>
-                <button
+                <IconButton bare label="Close"
                   onClick={closeModal}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-                  aria-label="Close"
                 >
                   <X className="h-5 w-5" />
-                </button>
+                </IconButton>
               </div>
             </div>
 
@@ -749,7 +746,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
 
               <label className="block">
                 <span className="mb-2 block tf-label">
-                  Code <span className="text-gray-400 dark:text-slate-500">(optional, auto-generated)</span>
+                  Code <span className="text-gray-500 dark:text-slate-500">(optional, auto-generated)</span>
                 </span>
                 <input
                   type="text"
@@ -788,7 +785,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
               {type === 'education' && (
                 <label className="block">
                   <span className="mb-2 block tf-label">
-                    Level <span className="text-gray-400 dark:text-slate-500">(numeric ranking)</span>
+                    Level <span className="text-gray-500 dark:text-slate-500">(numeric ranking)</span>
                   </span>
                   <input
                     type="number"
@@ -846,7 +843,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
               </button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </>
   );

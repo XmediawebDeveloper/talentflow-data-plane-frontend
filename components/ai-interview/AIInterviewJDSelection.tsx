@@ -27,6 +27,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 import { cachedList, listCacheKey, listReadOptions, type ListReadOptions } from '@/lib/utils/listCache';
 import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 const JD_RADIO_GROUP = 'ai-interview-jd-version-selection';
 
@@ -413,7 +415,7 @@ export default function AIInterviewJDSelection() {
                       <label className="flex w-full items-center gap-2 md:w-[25rem] lg:w-[29rem]">
                         <span className="tf-meta shrink-0 whitespace-nowrap !font-semibold !text-[var(--text-primary)]">Search Jobs</span>
                         <span className="relative min-w-0 flex-1">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
                           <input
                             type="text"
                             placeholder="Search by JD number, role, department or location..."
@@ -543,7 +545,7 @@ export default function AIInterviewJDSelection() {
                             </label>
 
                             <div className={`flex-1 min-w-0 ${jobArchived && !blockedByOtherPick ? 'opacity-60' : ''}`}>
-                              <div
+                              <div {...clickableProps}
                                 onClick={() => latestSelectable && pickJdVersion(job, versionKey)}
                                 className={latestSelectable ? 'cursor-pointer' : 'cursor-default'}
                               >
@@ -590,7 +592,7 @@ export default function AIInterviewJDSelection() {
 
                             {/* View (eye) — its original place, the card's top-right,
                                 at every width. */}
-                            <button
+                            <IconButton bare label="View version history"
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -598,11 +600,9 @@ export default function AIInterviewJDSelection() {
                                 setVersionHistoryFor({ id: job.id, title: job.title });
                               }}
                               className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                              aria-label="View version history"
-                              title="View version history"
                             >
                               <Eye className="w-3.5 h-3.5" />
-                            </button>
+                            </IconButton>
                           </div>
 
                           {/* Card actions — one right-aligned row at the card's foot:
@@ -726,7 +726,7 @@ export default function AIInterviewJDSelection() {
                                       <span className="hidden sm:inline">Create Config</span>
                                       <ChevronRight className="w-3.5 h-3.5" />
                                     </button>
-                                    <button
+                                    <IconButton bare label={`View v${versionJob.versionNumber ?? 1} details`}
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -734,11 +734,9 @@ export default function AIInterviewJDSelection() {
                                         setVersionHistoryFor({ id: versionJob.id, title: versionJob.title });
                                       }}
                                       className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                                      aria-label={`View v${versionJob.versionNumber ?? 1} details`}
-                                      title={`View v${versionJob.versionNumber ?? 1} details`}
                                     >
                                       <Eye className="w-3.5 h-3.5" />
-                                    </button>
+                                    </IconButton>
                                   </>
                                 );
                               }}

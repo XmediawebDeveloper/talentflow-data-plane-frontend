@@ -315,7 +315,9 @@ input[type="password"]::-ms-clear {
 
   --text-primary: #111827;
   --text-secondary: #4b5563;
-  --text-muted: #9ca3af;
+  /* gray-500: the lightest grey that still reads as text on white (4.8:1,
+     WCAG AA). gray-400 was 2.5:1. Dark mode keeps its own value below. */
+  --text-muted: #6b7280;
 
   --sidebar-bg: #1f2937;
   --sidebar-active: #4b5563;
@@ -478,119 +480,735 @@ input[type="password"]::-ms-clear {
    so this migration changes where the color is DEFINED, not what it
    RENDERS AS — every one is byte-identical to the literal it replaced. ── */
 :root {
+  --raw-000080: #000080;
   --raw-003399: #003399;
   --raw-020614: #020614;
   --raw-020617: #020617;
+  --raw-0284c7: #0284c7;
+  --raw-0369a1: #0369a1;
   --raw-059669: #059669;
+  --raw-066d88: #066d88;
   --raw-06b6d4: #06b6d4;
+  --raw-07123d: #07123d;
   --raw-079cc4: #079cc4;
+  --raw-08132e: #08132e;
+  --raw-0891b2: #0891b2;
   --raw-099ab6: #099ab6;
   --raw-0a1020: #0a1020;
+  --raw-0a1428: #0a1428;
+  --raw-0a2f7a: #0a2f7a;
+  --raw-0a7a99: #0a7a99;
+  --raw-0b1530: #0b1530;
+  --raw-0b1734: #0b1734;
+  --raw-0b6b42: #0b6b42;
+  --raw-0b7047: #0b7047;
+  --raw-0d1a36: #0d1a36;
+  --raw-0d2148: #0d2148;
   --raw-0e3b98: #0e3b98;
   --raw-0f1117: #0f1117;
   --raw-0f172a: #0f172a;
   --raw-0f1929: #0f1929;
+  --raw-0f1b38: #0f1b38;
+  --raw-0f1d40: #0f1d40;
+  --raw-0f1e3d: #0f1e3d;
+  --raw-0f2347: #0f2347;
   --raw-0f3c99: #0f3c99;
+  --raw-101827: #101827;
   --raw-10b981: #10b981;
   --raw-111111: #111111;
   --raw-111827: #111827;
+  --raw-111a2b: #111a2b;
+  --raw-111a33: #111a33;
+  --raw-132244: #132244;
+  --raw-138808: #138808;
+  --raw-14397f: #14397f;
+  --raw-14a06a: #14a06a;
   --raw-14b8a6: #14b8a6;
+  --raw-151f31: #151f31;
   --raw-155dfc: #155dfc;
   --raw-15803d: #15803d;
   --raw-166534: #166534;
+  --raw-16a06a: #16a06a;
   --raw-16a34a: #16a34a;
+  --raw-18243a: #18243a;
   --raw-1a1f2e: #1a1f2e;
+  --raw-1a2544: #1a2544;
+  --raw-1a263b: #1a263b;
+  --raw-1a2b57: #1a2b57;
+  --raw-1c2c4e: #1c2c4e;
+  --raw-1d3a6b: #1d3a6b;
   --raw-1d4ed8: #1d4ed8;
   --raw-1e1b4b: #1e1b4b;
   --raw-1e293b: #1e293b;
+  --raw-1e2a4a: #1e2a4a;
+  --raw-1e3157: #1e3157;
+  --raw-1e3a6e: #1e3a6e;
+  --raw-1e40af: #1e40af;
   --raw-1f2937: #1f2937;
+  --raw-1f4fd8: #1f4fd8;
+  --raw-1f57c8: #1f57c8;
+  --raw-1f5be0: #1f5be0;
   --raw-22c55e: #22c55e;
   --raw-2563eb: #2563eb;
+  --raw-26334a: #26334a;
+  --raw-283651: #283651;
+  --raw-2f6fe0: #2f6fe0;
+  --raw-2f6feb: #2f6feb;
   --raw-334155: #334155;
+  --raw-33415c: #33415c;
+  --raw-344563: #344563;
   --raw-34d399: #34d399;
   --raw-374151: #374151;
+  --raw-38bdf8: #38bdf8;
   --raw-3b82f6: #3b82f6;
+  --raw-3cc48a: #3cc48a;
   --raw-4338ca: #4338ca;
+  --raw-455479: #455479;
   --raw-475569: #475569;
   --raw-4b5563: #4b5563;
+  --raw-4bcf9a: #4bcf9a;
+  --raw-4c7be8: #4c7be8;
   --raw-4f46e5: #4f46e5;
+  --raw-4f8bff: #4f8bff;
+  --raw-4fd49b: #4fd49b;
+  --raw-50648f: #50648f;
   --raw-581c87: #581c87;
+  --raw-5b6779: #5b6779;
   --raw-5b81ea: #5b81ea;
   --raw-5b86ea: #5b86ea;
+  --raw-5c9bff: #5c9bff;
+  --raw-5cc8e6: #5cc8e6;
   --raw-60a5fa: #60a5fa;
   --raw-6288ee: #6288ee;
   --raw-6366f1: #6366f1;
+  --raw-63bf98: #63bf98;
   --raw-64748b: #64748b;
   --raw-666666: #666666;
   --raw-667eea: #667eea;
+  --raw-687492: #687492;
+  --raw-6aa5ff: #6aa5ff;
   --raw-6b7280: #6b7280;
+  --raw-6b7790: #6b7790;
   --raw-6c92f0: #6c92f0;
+  --raw-6ee7b7: #6ee7b7;
+  --raw-6fe0ae: #6fe0ae;
+  --raw-6fe3ff: #6fe3ff;
   --raw-764ba2: #764ba2;
+  --raw-7a869c: #7a869c;
   --raw-7ba1f4: #7ba1f4;
+  --raw-7ba4ff: #7ba4ff;
   --raw-7c3aed: #7c3aed;
+  --raw-7dd3fc: #7dd3fc;
+  --raw-7e8ba2: #7e8ba2;
+  --raw-7fb0ff: #7fb0ff;
+  --raw-7fdcf3: #7fdcf3;
   --raw-818cf8: #818cf8;
   --raw-86efac: #86efac;
   --raw-8b5cf6: #8b5cf6;
+  --raw-8b96ad: #8b96ad;
   --raw-8fb0f7: #8fb0f7;
+  --raw-8fd3b5: #8fd3b5;
+  --raw-912018: #912018;
   --raw-93b0f8: #93b0f8;
+  --raw-93b4ff: #93b4ff;
   --raw-93c5fd: #93c5fd;
   --raw-94a3b8: #94a3b8;
   --raw-991b1b: #991b1b;
+  --raw-99a6bc: #99a6bc;
   --raw-9ca3af: #9ca3af;
   --raw-9d174d: #9d174d;
   --raw-a5b4fc: #a5b4fc;
   --raw-a78bfa: #a78bfa;
+  --raw-a855f7: #a855f7;
+  --raw-a9cbff: #a9cbff;
+  --raw-b23b33: #b23b33;
+  --raw-b42318: #b42318;
   --raw-b45309: #b45309;
+  --raw-b45b0c: #b45b0c;
   --raw-b4c8f5: #b4c8f5;
+  --raw-b91c1c: #b91c1c;
   --raw-b9caf6: #b9caf6;
   --raw-bbf7d0: #bbf7d0;
+  --raw-bfe0ce: #bfe0ce;
+  --raw-c2410c: #c2410c;
+  --raw-c2415a: #c2415a;
   --raw-c4b5fd: #c4b5fd;
+  --raw-c6d1e4: #c6d1e4;
   --raw-c7d6f8: #c7d6f8;
+  --raw-c8d0df: #c8d0df;
   --raw-cbd5e1: #cbd5e1;
   --raw-cccccc: #cccccc;
+  --raw-cfd8e6: #cfd8e6;
   --raw-cfdcfa: #cfdcfa;
   --raw-d1d5db: #d1d5db;
+  --raw-d3e3fd: #d3e3fd;
+  --raw-d6f1ff: #d6f1ff;
+  --raw-d8b05a: #d8b05a;
+  --raw-d8e2f1: #d8e2f1;
   --raw-d97706: #d97706;
   --raw-db2777: #db2777;
   --raw-dbe5fb: #dbe5fb;
   --raw-dbeafe: #dbeafe;
   --raw-dc2626: #dc2626;
+  --raw-dce6f7: #dce6f7;
+  --raw-dce9ff: #dce9ff;
   --raw-dcfce7: #dcfce7;
+  --raw-dde5f2: #dde5f2;
+  --raw-dfa05a: #dfa05a;
   --raw-e0e7ff: #e0e7ff;
+  --raw-e11d48: #e11d48;
   --raw-e1ebed: #e1ebed;
+  --raw-e2453e: #e2453e;
   --raw-e2e8f0: #e2e8f0;
+  --raw-e3e8f1: #e3e8f1;
+  --raw-e3ebf8: #e3ebf8;
   --raw-e5e7eb: #e5e7eb;
+  --raw-e6ecf7: #e6ecf7;
+  --raw-e6effe: #e6effe;
   --raw-e7ecf5: #e7ecf5;
+  --raw-e8eefc: #e8eefc;
+  --raw-e8f0fe: #e8f0fe;
   --raw-ec4899: #ec4899;
   --raw-ed881c: #ed881c;
   --raw-ede9fe: #ede9fe;
   --raw-eef2fb: #eef2fb;
   --raw-eef2fd: #eef2fd;
   --raw-eef2ff: #eef2ff;
+  --raw-eef3fb: #eef3fb;
+  --raw-eef4ff: #eef4ff;
   --raw-ef4444: #ef4444;
   --raw-eff3f9: #eff3f9;
+  --raw-f07a8c: #f07a8c;
+  --raw-f0837a: #f0837a;
+  --raw-f08a1c: #f08a1c;
   --raw-f093fb: #f093fb;
+  --raw-f0a44e: #f0a44e;
   --raw-f0fdf4: #f0fdf4;
   --raw-f1f5f9: #f1f5f9;
+  --raw-f2f9f5: #f2f9f5;
   --raw-f3f4f6: #f3f4f6;
   --raw-f3f5fa: #f3f5fa;
+  --raw-f3fafb: #f3fafb;
+  --raw-f3fafc: #f3fafc;
   --raw-f43f5e: #f43f5e;
+  --raw-f4f7fb: #f4f7fb;
+  --raw-f4f7fd: #f4f7fd;
   --raw-f59e0b: #f59e0b;
+  --raw-f5b5af: #f5b5af;
+  --raw-f5c7c2: #f5c7c2;
+  --raw-f6f8fc: #f6f8fc;
+  --raw-f7f8fb: #f7f8fb;
   --raw-f7f9ff: #f7f9ff;
   --raw-f87171: #f87171;
   --raw-f8fafc: #f8fafc;
   --raw-f97316: #f97316;
   --raw-f9a8d4: #f9a8d4;
   --raw-f9fafb: #f9fafb;
+  --raw-f9fbff: #f9fbff;
   --raw-fafbfc: #fafbfc;
+  --raw-fafbfd: #fafbfd;
   --raw-fbbf24: #fbbf24;
   --raw-fca5a5: #fca5a5;
   --raw-fcd34d: #fcd34d;
+  --raw-fce3c4: #fce3c4;
   --raw-fce7f3: #fce7f3;
   --raw-fecaca: #fecaca;
   --raw-fef2f2: #fef2f2;
+  --raw-fef4f3: #fef4f3;
+  --raw-ff9933: #ff9933;
+  --raw-ffb765: #ffb765;
+  --raw-fff1f3: #fff1f3;
   --raw-ffffff: #ffffff;
+
+  /* rgb()/rgba() literals, same rule: byte-identical values. */
+  --raw-rgb-226-232-240: rgb(226, 232, 240);
+  --raw-rgba-0-0-0-0p08: rgba(0, 0, 0, 0.08);
+  --raw-rgba-0-0-0-0p1: rgba(0, 0, 0, 0.1);
+  --raw-rgba-0-0-0-0p15: rgba(0, 0, 0, 0.15);
+  --raw-rgba-0-0-0-0p2: rgba(0, 0, 0, 0.2);
+  --raw-rgba-0-0-0-0p3: rgba(0, 0, 0, 0.3);
+  --raw-rgba-0-0-0-0p4: rgba(0, 0, 0, 0.4);
+  --raw-rgba-0-0-0-0p45: rgba(0, 0, 0, 0.45);
+  --raw-rgba-0-0-0-0p55: rgba(0, 0, 0, 0.55);
+  --raw-rgba-0-0-0-0p6: rgba(0, 0, 0, 0.6);
+  --raw-rgba-0-0-0-0p62: rgba(0, 0, 0, 0.62);
+  --raw-rgba-0-0-0-0p7: rgba(0, 0, 0, 0.7);
+  --raw-rgba-0-0-0-0p74: rgba(0, 0, 0, 0.74);
+  --raw-rgba-0-0-0-0p8: rgba(0, 0, 0, 0.8);
+  --raw-rgba-0-0-0-0p9: rgba(0, 0, 0, 0.9);
+  --raw-rgba-10-40-30-0p85: rgba(10, 40, 30, 0.85);
+  --raw-rgba-102-126-234-0p1: rgba(102, 126, 234, 0.1);
+  --raw-rgba-102-126-234-0p3: rgba(102, 126, 234, 0.3);
+  --raw-rgba-11-107-66-0p45: rgba(11, 107, 66, 0.45);
+  --raw-rgba-11-112-71-0p18: rgba(11, 112, 71, 0.18);
+  --raw-rgba-111-227-255-0p75: rgba(111, 227, 255, 0.75);
+  --raw-rgba-111-227-255-0p95: rgba(111, 227, 255, 0.95);
+  --raw-rgba-118-75-162-0p1: rgba(118, 75, 162, 0.1);
+  --raw-rgba-123-164-255-0p12: rgba(123, 164, 255, 0.12);
+  --raw-rgba-123-164-255-0p16: rgba(123, 164, 255, 0.16);
+  --raw-rgba-124-58-237-0p35: rgba(124, 58, 237, 0.35);
+  --raw-rgba-139-92-246-0p12: rgba(139, 92, 246, 0.12);
+  --raw-rgba-139-92-246-0p2: rgba(139, 92, 246, 0.2);
+  --raw-rgba-139-92-246-0p25: rgba(139, 92, 246, 0.25);
+  --raw-rgba-147-180-255-0p24: rgba(147, 180, 255, 0.24);
+  --raw-rgba-147-180-255-0p28: rgba(147, 180, 255, 0.28);
+  --raw-rgba-147-51-234-0p1: rgba(147, 51, 234, 0.1);
+  --raw-rgba-147-51-234-0p35: rgba(147, 51, 234, 0.35);
+  --raw-rgba-148-163-184-0p18: rgba(148, 163, 184, 0.18);
+  --raw-rgba-15-23-42-0p06: rgba(15, 23, 42, 0.06);
+  --raw-rgba-15-60-153-0: rgba(15, 60, 153, 0);
+  --raw-rgba-15-60-153-0p05: rgba(15, 60, 153, 0.05);
+  --raw-rgba-15-60-153-0p06: rgba(15, 60, 153, 0.06);
+  --raw-rgba-15-60-153-0p07: rgba(15, 60, 153, 0.07);
+  --raw-rgba-15-60-153-0p08: rgba(15, 60, 153, 0.08);
+  --raw-rgba-15-60-153-0p09: rgba(15, 60, 153, 0.09);
+  --raw-rgba-15-60-153-0p1: rgba(15, 60, 153, 0.1);
+  --raw-rgba-15-60-153-0p14: rgba(15, 60, 153, 0.14);
+  --raw-rgba-15-60-153-0p22: rgba(15, 60, 153, 0.22);
+  --raw-rgba-15-60-153-0p28: rgba(15, 60, 153, 0.28);
+  --raw-rgba-15-60-153-0p34: rgba(15, 60, 153, 0.34);
+  --raw-rgba-15-60-153-0p35: rgba(15, 60, 153, 0.35);
+  --raw-rgba-15-60-153-0p36: rgba(15, 60, 153, 0.36);
+  --raw-rgba-15-60-153-0p55: rgba(15, 60, 153, 0.55);
+  --raw-rgba-15-60-153-0p75: rgba(15, 60, 153, 0.75);
+  --raw-rgba-15-60-153-0p82: rgba(15, 60, 153, 0.82);
+  --raw-rgba-16-185-129-0p15: rgba(16, 185, 129, 0.15);
+  --raw-rgba-16-185-129-0p3: rgba(16, 185, 129, 0.3);
+  --raw-rgba-16-24-40-0p2: rgba(16, 24, 40, 0.2);
+  --raw-rgba-16-24-40-0p28: rgba(16, 24, 40, 0.28);
+  --raw-rgba-16-24-40-0p55: rgba(16, 24, 40, 0.55);
+  --raw-rgba-180-200-255-0p08: rgba(180, 200, 255, 0.08);
+  --raw-rgba-180-35-24-0p16: rgba(180, 35, 24, 0.16);
+  --raw-rgba-2-132-199-0p25: rgba(2, 132, 199, 0.25);
+  --raw-rgba-2-6-20-0p72: rgba(2, 6, 20, 0.72);
+  --raw-rgba-20-160-106-0p12: rgba(20, 160, 106, 0.12);
+  --raw-rgba-20-160-106-0p45: rgba(20, 160, 106, 0.45);
+  --raw-rgba-20-160-106-0p6: rgba(20, 160, 106, 0.6);
+  --raw-rgba-217-119-6-0p12: rgba(217, 119, 6, 0.12);
+  --raw-rgba-22-163-74-0: rgba(22, 163, 74, 0);
+  --raw-rgba-22-163-74-0p6: rgba(22, 163, 74, 0.6);
+  --raw-rgba-22-163-74-0p7: rgba(22, 163, 74, 0.7);
+  --raw-rgba-234-88-12-0p07: rgba(234, 88, 12, 0.07);
+  --raw-rgba-234-88-12-0p22: rgba(234, 88, 12, 0.22);
+  --raw-rgba-236-72-153-0p2: rgba(236, 72, 153, 0.2);
+  --raw-rgba-237-136-28-0: rgba(237, 136, 28, 0);
+  --raw-rgba-237-136-28-0p14: rgba(237, 136, 28, 0.14);
+  --raw-rgba-237-136-28-0p7: rgba(237, 136, 28, 0.7);
+  --raw-rgba-239-68-68-0p1: rgba(239, 68, 68, 0.1);
+  --raw-rgba-239-68-68-0p15: rgba(239, 68, 68, 0.15);
+  --raw-rgba-239-68-68-0p3: rgba(239, 68, 68, 0.3);
+  --raw-rgba-240-131-122-0p3: rgba(240, 131, 122, 0.3);
+  --raw-rgba-240-252-246-0p82: rgba(240, 252, 246, 0.82);
+  --raw-rgba-244-63-94-0p12: rgba(244, 63, 94, 0.12);
+  --raw-rgba-244-63-94-0p25: rgba(244, 63, 94, 0.25);
+  --raw-rgba-245-158-11-0p12: rgba(245, 158, 11, 0.12);
+  --raw-rgba-245-158-11-0p25: rgba(245, 158, 11, 0.25);
+  --raw-rgba-247-248-251-0p58: rgba(247, 248, 251, 0.58);
+  --raw-rgba-247-248-251-0p72: rgba(247, 248, 251, 0.72);
+  --raw-rgba-247-248-251-0p8: rgba(247, 248, 251, 0.8);
+  --raw-rgba-247-248-251-0p86: rgba(247, 248, 251, 0.86);
+  --raw-rgba-249-115-22-0p12: rgba(249, 115, 22, 0.12);
+  --raw-rgba-249-115-22-0p25: rgba(249, 115, 22, 0.25);
+  --raw-rgba-255-255-255-0p03: rgba(255, 255, 255, 0.03);
+  --raw-rgba-255-255-255-0p06: rgba(255, 255, 255, 0.06);
+  --raw-rgba-255-255-255-0p07: rgba(255, 255, 255, 0.07);
+  --raw-rgba-255-255-255-0p08: rgba(255, 255, 255, 0.08);
+  --raw-rgba-255-255-255-0p09: rgba(255, 255, 255, 0.09);
+  --raw-rgba-255-255-255-0p1: rgba(255, 255, 255, 0.1);
+  --raw-rgba-255-255-255-0p12: rgba(255, 255, 255, 0.12);
+  --raw-rgba-255-255-255-0p14: rgba(255, 255, 255, 0.14);
+  --raw-rgba-255-255-255-0p15: rgba(255, 255, 255, 0.15);
+  --raw-rgba-255-255-255-0p16: rgba(255, 255, 255, 0.16);
+  --raw-rgba-255-255-255-0p18: rgba(255, 255, 255, 0.18);
+  --raw-rgba-255-255-255-0p2: rgba(255, 255, 255, 0.2);
+  --raw-rgba-255-255-255-0p22: rgba(255, 255, 255, 0.22);
+  --raw-rgba-255-255-255-0p25: rgba(255, 255, 255, 0.25);
+  --raw-rgba-255-255-255-0p28: rgba(255, 255, 255, 0.28);
+  --raw-rgba-255-255-255-0p35: rgba(255, 255, 255, 0.35);
+  --raw-rgba-255-255-255-0p4: rgba(255, 255, 255, 0.4);
+  --raw-rgba-255-255-255-0p8: rgba(255, 255, 255, 0.8);
+  --raw-rgba-255-255-255-0p85: rgba(255, 255, 255, 0.85);
+  --raw-rgba-255-255-255-0p9: rgba(255, 255, 255, 0.9);
+  --raw-rgba-255-255-255-0p95: rgba(255, 255, 255, 0.95);
+  --raw-rgba-30-41-59-0p5: rgba(30, 41, 59, 0.5);
+  --raw-rgba-34-197-94-0p12: rgba(34, 197, 94, 0.12);
+  --raw-rgba-34-197-94-0p2: rgba(34, 197, 94, 0.2);
+  --raw-rgba-34-197-94-0p25: rgba(34, 197, 94, 0.25);
+  --raw-rgba-37-99-235-0p1: rgba(37, 99, 235, 0.1);
+  --raw-rgba-37-99-235-0p14: rgba(37, 99, 235, 0.14);
+  --raw-rgba-37-99-235-0p15: rgba(37, 99, 235, 0.15);
+  --raw-rgba-37-99-235-0p2: rgba(37, 99, 235, 0.2);
+  --raw-rgba-37-99-235-0p25: rgba(37, 99, 235, 0.25);
+  --raw-rgba-37-99-235-0p3: rgba(37, 99, 235, 0.3);
+  --raw-rgba-56-189-248-0p35: rgba(56, 189, 248, 0.35);
+  --raw-rgba-59-130-246-0p2: rgba(59, 130, 246, 0.2);
+  --raw-rgba-59-130-246-0p4: rgba(59, 130, 246, 0.4);
+  --raw-rgba-6-182-212-0p12: rgba(6, 182, 212, 0.12);
+  --raw-rgba-6-182-212-0p14: rgba(6, 182, 212, 0.14);
+  --raw-rgba-6-182-212-0p25: rgba(6, 182, 212, 0.25);
+  --raw-rgba-67-56-202-0p2: rgba(67, 56, 202, 0.2);
+  --raw-rgba-7-156-196-0: rgba(7, 156, 196, 0);
+  --raw-rgba-7-156-196-0p1: rgba(7, 156, 196, 0.1);
+  --raw-rgba-7-156-196-0p12: rgba(7, 156, 196, 0.12);
+  --raw-rgba-7-156-196-0p13: rgba(7, 156, 196, 0.13);
+  --raw-rgba-7-156-196-0p14: rgba(7, 156, 196, 0.14);
+  --raw-rgba-7-156-196-0p15: rgba(7, 156, 196, 0.15);
+  --raw-rgba-7-156-196-0p16: rgba(7, 156, 196, 0.16);
+  --raw-rgba-7-156-196-0p18: rgba(7, 156, 196, 0.18);
+  --raw-rgba-7-156-196-0p2: rgba(7, 156, 196, 0.2);
+  --raw-rgba-7-156-196-0p22: rgba(7, 156, 196, 0.22);
+  --raw-rgba-7-156-196-0p25: rgba(7, 156, 196, 0.25);
+  --raw-rgba-7-156-196-0p28: rgba(7, 156, 196, 0.28);
+  --raw-rgba-7-156-196-0p4: rgba(7, 156, 196, 0.4);
+  --raw-rgba-7-156-196-0p55: rgba(7, 156, 196, 0.55);
+  --raw-rgba-7-156-196-0p6: rgba(7, 156, 196, 0.6);
+  --raw-rgba-7-156-196-0p7: rgba(7, 156, 196, 0.7);
+  --raw-rgba-7-156-196-0p8: rgba(7, 156, 196, 0.8);
+  --raw-rgba-7-156-196-0p9: rgba(7, 156, 196, 0.9);
+  --raw-rgba-75-207-154-0p08: rgba(75, 207, 154, 0.08);
+  --raw-rgba-75-207-154-0p5: rgba(75, 207, 154, 0.5);
+  --raw-rgba-75-207-154-0p9: rgba(75, 207, 154, 0.9);
+  --raw-rgba-76-123-232-0: rgba(76, 123, 232, 0);
+  --raw-rgba-76-123-232-0p16: rgba(76, 123, 232, 0.16);
+  --raw-rgba-76-123-232-0p18: rgba(76, 123, 232, 0.18);
+  --raw-rgba-76-123-232-0p2: rgba(76, 123, 232, 0.2);
+  --raw-rgba-76-123-232-0p22: rgba(76, 123, 232, 0.22);
+  --raw-rgba-76-123-232-0p3: rgba(76, 123, 232, 0.3);
+  --raw-rgba-8-19-46-0p03: rgba(8, 19, 46, 0.03);
+  --raw-rgba-8-19-46-0p05: rgba(8, 19, 46, 0.05);
+  --raw-rgba-8-19-46-0p07: rgba(8, 19, 46, 0.07);
+  --raw-rgba-8-19-46-0p08: rgba(8, 19, 46, 0.08);
+  --raw-rgba-8-19-46-0p09: rgba(8, 19, 46, 0.09);
+  --raw-rgba-8-19-46-0p1: rgba(8, 19, 46, 0.1);
+  --raw-rgba-8-19-46-0p14: rgba(8, 19, 46, 0.14);
+  --raw-rgba-8-19-46-0p15: rgba(8, 19, 46, 0.15);
+  --raw-rgba-8-19-46-0p16: rgba(8, 19, 46, 0.16);
+  --raw-rgba-8-19-46-0p17: rgba(8, 19, 46, 0.17);
+  --raw-rgba-8-19-46-0p18: rgba(8, 19, 46, 0.18);
+  --raw-rgba-8-19-46-0p2: rgba(8, 19, 46, 0.2);
+  --raw-rgba-8-19-46-0p25: rgba(8, 19, 46, 0.25);
+  --raw-rgba-8-19-46-0p3: rgba(8, 19, 46, 0.3);
+  --raw-rgba-8-19-46-0p32: rgba(8, 19, 46, 0.32);
+  --raw-rgba-8-19-46-0p35: rgba(8, 19, 46, 0.35);
+  --raw-rgba-8-19-46-0p6: rgba(8, 19, 46, 0.6);
+  --raw-rgba-8-31-92-0p16: rgba(8, 31, 92, 0.16);
+  --raw-rgba-8-31-92-0p18: rgba(8, 31, 92, 0.18);
+  --raw-rgba-8-31-92-0p2: rgba(8, 31, 92, 0.2);
+  --raw-rgba-8-31-92-0p35: rgba(8, 31, 92, 0.35);
+  --raw-rgba-8-31-92-0p4: rgba(8, 31, 92, 0.4);
+  --raw-rgba-8-31-92-0p45: rgba(8, 31, 92, 0.45);
+  --raw-rgba-8-31-92-0p5: rgba(8, 31, 92, 0.5);
+  --raw-rgba-8-31-92-0p55: rgba(8, 31, 92, 0.55);
+  --raw-rgba-8-31-92-0p7: rgba(8, 31, 92, 0.7);
+  --raw-rgba-8-31-92-0p72: rgba(8, 31, 92, 0.72);
+  --raw-rgba-8-8-20-0p93: rgba(8, 8, 20, 0.93);
+  --raw-rgba-99-102-241-0p22: rgba(99, 102, 241, 0.22);
+  --raw-rgba-99-102-241-0p3: rgba(99, 102, 241, 0.3);
+  --raw-rgba-99-102-241-0p55: rgba(99, 102, 241, 0.55);
+  --raw-rgba-99-130-246-0p5: rgba(99, 130, 246, 0.5);
+  --raw-rgba-99-191-152-0p28: rgba(99, 191, 152, 0.28);
 }
+
+/* ── Tailwind colour palette (owned here) ─────────────────────────────────
+   Every palette utility in the app — text-gray-500, bg-slate-900,
+   border-blue-200, ring-emerald-500/20, from-sky-50 … — compiles to
+   `var(--color-<name>-<shade>)`. Declaring the palette here makes this file
+   the single place those colours come from: change a value below and every
+   component using that utility follows, in both themes (the .dark layer
+   further down still repaints some of them to theme tokens).
+   Values are byte-identical to Tailwind v4.3.2's defaults
+   (node_modules/tailwindcss/theme.css), so declaring them changes nothing. */
+@theme {
+  --color-red-50: oklch(97.1% 0.013 17.38);
+  --color-red-100: oklch(93.6% 0.032 17.717);
+  --color-red-200: oklch(88.5% 0.062 18.334);
+  --color-red-300: oklch(80.8% 0.114 19.571);
+  --color-red-400: oklch(70.4% 0.191 22.216);
+  --color-red-500: oklch(63.7% 0.237 25.331);
+  --color-red-600: oklch(57.7% 0.245 27.325);
+  --color-red-700: oklch(50.5% 0.213 27.518);
+  --color-red-800: oklch(44.4% 0.177 26.899);
+  --color-red-900: oklch(39.6% 0.141 25.723);
+  --color-red-950: oklch(25.8% 0.092 26.042);
+  --color-orange-50: oklch(98% 0.016 73.684);
+  --color-orange-100: oklch(95.4% 0.038 75.164);
+  --color-orange-200: oklch(90.1% 0.076 70.697);
+  --color-orange-300: oklch(83.7% 0.128 66.29);
+  --color-orange-400: oklch(75% 0.183 55.934);
+  --color-orange-500: oklch(70.5% 0.213 47.604);
+  --color-orange-600: oklch(64.6% 0.222 41.116);
+  --color-orange-700: oklch(55.3% 0.195 38.402);
+  --color-orange-800: oklch(47% 0.157 37.304);
+  --color-orange-900: oklch(40.8% 0.123 38.172);
+  --color-orange-950: oklch(26.6% 0.079 36.259);
+  --color-amber-50: oklch(98.7% 0.022 95.277);
+  --color-amber-100: oklch(96.2% 0.059 95.617);
+  --color-amber-200: oklch(92.4% 0.12 95.746);
+  --color-amber-300: oklch(87.9% 0.169 91.605);
+  --color-amber-400: oklch(82.8% 0.189 84.429);
+  --color-amber-500: oklch(76.9% 0.188 70.08);
+  --color-amber-600: oklch(66.6% 0.179 58.318);
+  --color-amber-700: oklch(55.5% 0.163 48.998);
+  --color-amber-800: oklch(47.3% 0.137 46.201);
+  --color-amber-900: oklch(41.4% 0.112 45.904);
+  --color-amber-950: oklch(27.9% 0.077 45.635);
+  --color-yellow-50: oklch(98.7% 0.026 102.212);
+  --color-yellow-100: oklch(97.3% 0.071 103.193);
+  --color-yellow-200: oklch(94.5% 0.129 101.54);
+  --color-yellow-300: oklch(90.5% 0.182 98.111);
+  --color-yellow-400: oklch(85.2% 0.199 91.936);
+  --color-yellow-500: oklch(79.5% 0.184 86.047);
+  --color-yellow-600: oklch(68.1% 0.162 75.834);
+  --color-yellow-700: oklch(55.4% 0.135 66.442);
+  --color-yellow-800: oklch(47.6% 0.114 61.907);
+  --color-yellow-900: oklch(42.1% 0.095 57.708);
+  --color-yellow-950: oklch(28.6% 0.066 53.813);
+  --color-lime-50: oklch(98.6% 0.031 120.757);
+  --color-lime-100: oklch(96.7% 0.067 122.328);
+  --color-lime-200: oklch(93.8% 0.127 124.321);
+  --color-lime-300: oklch(89.7% 0.196 126.665);
+  --color-lime-400: oklch(84.1% 0.238 128.85);
+  --color-lime-500: oklch(76.8% 0.233 130.85);
+  --color-lime-600: oklch(64.8% 0.2 131.684);
+  --color-lime-700: oklch(53.2% 0.157 131.589);
+  --color-lime-800: oklch(45.3% 0.124 130.933);
+  --color-lime-900: oklch(40.5% 0.101 131.063);
+  --color-lime-950: oklch(27.4% 0.072 132.109);
+  --color-green-50: oklch(98.2% 0.018 155.826);
+  --color-green-100: oklch(96.2% 0.044 156.743);
+  --color-green-200: oklch(92.5% 0.084 155.995);
+  --color-green-300: oklch(87.1% 0.15 154.449);
+  --color-green-400: oklch(79.2% 0.209 151.711);
+  --color-green-500: oklch(72.3% 0.219 149.579);
+  --color-green-600: oklch(62.7% 0.194 149.214);
+  --color-green-700: oklch(52.7% 0.154 150.069);
+  --color-green-800: oklch(44.8% 0.119 151.328);
+  --color-green-900: oklch(39.3% 0.095 152.535);
+  --color-green-950: oklch(26.6% 0.065 152.934);
+  --color-emerald-50: oklch(97.9% 0.021 166.113);
+  --color-emerald-100: oklch(95% 0.052 163.051);
+  --color-emerald-200: oklch(90.5% 0.093 164.15);
+  --color-emerald-300: oklch(84.5% 0.143 164.978);
+  --color-emerald-400: oklch(76.5% 0.177 163.223);
+  --color-emerald-500: oklch(69.6% 0.17 162.48);
+  --color-emerald-600: oklch(59.6% 0.145 163.225);
+  --color-emerald-700: oklch(50.8% 0.118 165.612);
+  --color-emerald-800: oklch(43.2% 0.095 166.913);
+  --color-emerald-900: oklch(37.8% 0.077 168.94);
+  --color-emerald-950: oklch(26.2% 0.051 172.552);
+  --color-teal-50: oklch(98.4% 0.014 180.72);
+  --color-teal-100: oklch(95.3% 0.051 180.801);
+  --color-teal-200: oklch(91% 0.096 180.426);
+  --color-teal-300: oklch(85.5% 0.138 181.071);
+  --color-teal-400: oklch(77.7% 0.152 181.912);
+  --color-teal-500: oklch(70.4% 0.14 182.503);
+  --color-teal-600: oklch(60% 0.118 184.704);
+  --color-teal-700: oklch(51.1% 0.096 186.391);
+  --color-teal-800: oklch(43.7% 0.078 188.216);
+  --color-teal-900: oklch(38.6% 0.063 188.416);
+  --color-teal-950: oklch(27.7% 0.046 192.524);
+  --color-cyan-50: oklch(98.4% 0.019 200.873);
+  --color-cyan-100: oklch(95.6% 0.045 203.388);
+  --color-cyan-200: oklch(91.7% 0.08 205.041);
+  --color-cyan-300: oklch(86.5% 0.127 207.078);
+  --color-cyan-400: oklch(78.9% 0.154 211.53);
+  --color-cyan-500: oklch(71.5% 0.143 215.221);
+  --color-cyan-600: oklch(60.9% 0.126 221.723);
+  --color-cyan-700: oklch(52% 0.105 223.128);
+  --color-cyan-800: oklch(45% 0.085 224.283);
+  --color-cyan-900: oklch(39.8% 0.07 227.392);
+  --color-cyan-950: oklch(30.2% 0.056 229.695);
+  --color-sky-50: oklch(97.7% 0.013 236.62);
+  --color-sky-100: oklch(95.1% 0.026 236.824);
+  --color-sky-200: oklch(90.1% 0.058 230.902);
+  --color-sky-300: oklch(82.8% 0.111 230.318);
+  --color-sky-400: oklch(74.6% 0.16 232.661);
+  --color-sky-500: oklch(68.5% 0.169 237.323);
+  --color-sky-600: oklch(58.8% 0.158 241.966);
+  --color-sky-700: oklch(50% 0.134 242.749);
+  --color-sky-800: oklch(44.3% 0.11 240.79);
+  --color-sky-900: oklch(39.1% 0.09 240.876);
+  --color-sky-950: oklch(29.3% 0.066 243.157);
+  --color-blue-50: oklch(97% 0.014 254.604);
+  --color-blue-100: oklch(93.2% 0.032 255.585);
+  --color-blue-200: oklch(88.2% 0.059 254.128);
+  --color-blue-300: oklch(80.9% 0.105 251.813);
+  --color-blue-400: oklch(70.7% 0.165 254.624);
+  --color-blue-500: oklch(62.3% 0.214 259.815);
+  --color-blue-600: oklch(54.6% 0.245 262.881);
+  --color-blue-700: oklch(48.8% 0.243 264.376);
+  --color-blue-800: oklch(42.4% 0.199 265.638);
+  --color-blue-900: oklch(37.9% 0.146 265.522);
+  --color-blue-950: oklch(28.2% 0.091 267.935);
+  --color-indigo-50: oklch(96.2% 0.018 272.314);
+  --color-indigo-100: oklch(93% 0.034 272.788);
+  --color-indigo-200: oklch(87% 0.065 274.039);
+  --color-indigo-300: oklch(78.5% 0.115 274.713);
+  --color-indigo-400: oklch(67.3% 0.182 276.935);
+  --color-indigo-500: oklch(58.5% 0.233 277.117);
+  --color-indigo-600: oklch(51.1% 0.262 276.966);
+  --color-indigo-700: oklch(45.7% 0.24 277.023);
+  --color-indigo-800: oklch(39.8% 0.195 277.366);
+  --color-indigo-900: oklch(35.9% 0.144 278.697);
+  --color-indigo-950: oklch(25.7% 0.09 281.288);
+  --color-violet-50: oklch(96.9% 0.016 293.756);
+  --color-violet-100: oklch(94.3% 0.029 294.588);
+  --color-violet-200: oklch(89.4% 0.057 293.283);
+  --color-violet-300: oklch(81.1% 0.111 293.571);
+  --color-violet-400: oklch(70.2% 0.183 293.541);
+  --color-violet-500: oklch(60.6% 0.25 292.717);
+  --color-violet-600: oklch(54.1% 0.281 293.009);
+  --color-violet-700: oklch(49.1% 0.27 292.581);
+  --color-violet-800: oklch(43.2% 0.232 292.759);
+  --color-violet-900: oklch(38% 0.189 293.745);
+  --color-violet-950: oklch(28.3% 0.141 291.089);
+  --color-purple-50: oklch(97.7% 0.014 308.299);
+  --color-purple-100: oklch(94.6% 0.033 307.174);
+  --color-purple-200: oklch(90.2% 0.063 306.703);
+  --color-purple-300: oklch(82.7% 0.119 306.383);
+  --color-purple-400: oklch(71.4% 0.203 305.504);
+  --color-purple-500: oklch(62.7% 0.265 303.9);
+  --color-purple-600: oklch(55.8% 0.288 302.321);
+  --color-purple-700: oklch(49.6% 0.265 301.924);
+  --color-purple-800: oklch(43.8% 0.218 303.724);
+  --color-purple-900: oklch(38.1% 0.176 304.987);
+  --color-purple-950: oklch(29.1% 0.149 302.717);
+  --color-fuchsia-50: oklch(97.7% 0.017 320.058);
+  --color-fuchsia-100: oklch(95.2% 0.037 318.852);
+  --color-fuchsia-200: oklch(90.3% 0.076 319.62);
+  --color-fuchsia-300: oklch(83.3% 0.145 321.434);
+  --color-fuchsia-400: oklch(74% 0.238 322.16);
+  --color-fuchsia-500: oklch(66.7% 0.295 322.15);
+  --color-fuchsia-600: oklch(59.1% 0.293 322.896);
+  --color-fuchsia-700: oklch(51.8% 0.253 323.949);
+  --color-fuchsia-800: oklch(45.2% 0.211 324.591);
+  --color-fuchsia-900: oklch(40.1% 0.17 325.612);
+  --color-fuchsia-950: oklch(29.3% 0.136 325.661);
+  --color-pink-50: oklch(97.1% 0.014 343.198);
+  --color-pink-100: oklch(94.8% 0.028 342.258);
+  --color-pink-200: oklch(89.9% 0.061 343.231);
+  --color-pink-300: oklch(82.3% 0.12 346.018);
+  --color-pink-400: oklch(71.8% 0.202 349.761);
+  --color-pink-500: oklch(65.6% 0.241 354.308);
+  --color-pink-600: oklch(59.2% 0.249 0.584);
+  --color-pink-700: oklch(52.5% 0.223 3.958);
+  --color-pink-800: oklch(45.9% 0.187 3.815);
+  --color-pink-900: oklch(40.8% 0.153 2.432);
+  --color-pink-950: oklch(28.4% 0.109 3.907);
+  --color-rose-50: oklch(96.9% 0.015 12.422);
+  --color-rose-100: oklch(94.1% 0.03 12.58);
+  --color-rose-200: oklch(89.2% 0.058 10.001);
+  --color-rose-300: oklch(81% 0.117 11.638);
+  --color-rose-400: oklch(71.2% 0.194 13.428);
+  --color-rose-500: oklch(64.5% 0.246 16.439);
+  --color-rose-600: oklch(58.6% 0.253 17.585);
+  --color-rose-700: oklch(51.4% 0.222 16.935);
+  --color-rose-800: oklch(45.5% 0.188 13.697);
+  --color-rose-900: oklch(41% 0.159 10.272);
+  --color-rose-950: oklch(27.1% 0.105 12.094);
+  --color-slate-50: oklch(98.4% 0.003 247.858);
+  --color-slate-100: oklch(96.8% 0.007 247.896);
+  --color-slate-200: oklch(92.9% 0.013 255.508);
+  --color-slate-300: oklch(86.9% 0.022 252.894);
+  --color-slate-400: oklch(70.4% 0.04 256.788);
+  --color-slate-500: oklch(55.4% 0.046 257.417);
+  --color-slate-600: oklch(44.6% 0.043 257.281);
+  --color-slate-700: oklch(37.2% 0.044 257.287);
+  --color-slate-800: oklch(27.9% 0.041 260.031);
+  --color-slate-900: oklch(20.8% 0.042 265.755);
+  --color-slate-950: oklch(12.9% 0.042 264.695);
+  --color-gray-50: oklch(98.5% 0.002 247.839);
+  --color-gray-100: oklch(96.7% 0.003 264.542);
+  --color-gray-200: oklch(92.8% 0.006 264.531);
+  --color-gray-300: oklch(87.2% 0.01 258.338);
+  --color-gray-400: oklch(70.7% 0.022 261.325);
+  --color-gray-500: oklch(55.1% 0.027 264.364);
+  --color-gray-600: oklch(44.6% 0.03 256.802);
+  --color-gray-700: oklch(37.3% 0.034 259.733);
+  --color-gray-800: oklch(27.8% 0.033 256.848);
+  --color-gray-900: oklch(21% 0.034 264.665);
+  --color-gray-950: oklch(13% 0.028 261.692);
+  --color-zinc-50: oklch(98.5% 0 0);
+  --color-zinc-100: oklch(96.7% 0.001 286.375);
+  --color-zinc-200: oklch(92% 0.004 286.32);
+  --color-zinc-300: oklch(87.1% 0.006 286.286);
+  --color-zinc-400: oklch(70.5% 0.015 286.067);
+  --color-zinc-500: oklch(55.2% 0.016 285.938);
+  --color-zinc-600: oklch(44.2% 0.017 285.786);
+  --color-zinc-700: oklch(37% 0.013 285.805);
+  --color-zinc-800: oklch(27.4% 0.006 286.033);
+  --color-zinc-900: oklch(21% 0.006 285.885);
+  --color-zinc-950: oklch(14.1% 0.005 285.823);
+  --color-neutral-50: oklch(98.5% 0 0);
+  --color-neutral-100: oklch(97% 0 0);
+  --color-neutral-200: oklch(92.2% 0 0);
+  --color-neutral-300: oklch(87% 0 0);
+  --color-neutral-400: oklch(70.8% 0 0);
+  --color-neutral-500: oklch(55.6% 0 0);
+  --color-neutral-600: oklch(43.9% 0 0);
+  --color-neutral-700: oklch(37.1% 0 0);
+  --color-neutral-800: oklch(26.9% 0 0);
+  --color-neutral-900: oklch(20.5% 0 0);
+  --color-neutral-950: oklch(14.5% 0 0);
+  --color-stone-50: oklch(98.5% 0.001 106.423);
+  --color-stone-100: oklch(97% 0.001 106.424);
+  --color-stone-200: oklch(92.3% 0.003 48.717);
+  --color-stone-300: oklch(86.9% 0.005 56.366);
+  --color-stone-400: oklch(70.9% 0.01 56.259);
+  --color-stone-500: oklch(55.3% 0.013 58.071);
+  --color-stone-600: oklch(44.4% 0.011 73.639);
+  --color-stone-700: oklch(37.4% 0.01 67.558);
+  --color-stone-800: oklch(26.8% 0.007 34.298);
+  --color-stone-900: oklch(21.6% 0.006 56.043);
+  --color-stone-950: oklch(14.7% 0.004 49.25);
+  --color-mauve-50: oklch(98.5% 0 0);
+  --color-mauve-100: oklch(96% 0.003 325.6);
+  --color-mauve-200: oklch(92.2% 0.005 325.62);
+  --color-mauve-300: oklch(86.5% 0.012 325.68);
+  --color-mauve-400: oklch(71.1% 0.019 323.02);
+  --color-mauve-500: oklch(54.2% 0.034 322.5);
+  --color-mauve-600: oklch(43.5% 0.029 321.78);
+  --color-mauve-700: oklch(36.4% 0.029 323.89);
+  --color-mauve-800: oklch(26.3% 0.024 320.12);
+  --color-mauve-900: oklch(21.2% 0.019 322.12);
+  --color-mauve-950: oklch(14.5% 0.008 326);
+  --color-olive-50: oklch(98.8% 0.003 106.5);
+  --color-olive-100: oklch(96.6% 0.005 106.5);
+  --color-olive-200: oklch(93% 0.007 106.5);
+  --color-olive-300: oklch(88% 0.011 106.6);
+  --color-olive-400: oklch(73.7% 0.021 106.9);
+  --color-olive-500: oklch(58% 0.031 107.3);
+  --color-olive-600: oklch(46.6% 0.025 107.3);
+  --color-olive-700: oklch(39.4% 0.023 107.4);
+  --color-olive-800: oklch(28.6% 0.016 107.4);
+  --color-olive-900: oklch(22.8% 0.013 107.4);
+  --color-olive-950: oklch(15.3% 0.006 107.1);
+  --color-mist-50: oklch(98.7% 0.002 197.1);
+  --color-mist-100: oklch(96.3% 0.002 197.1);
+  --color-mist-200: oklch(92.5% 0.005 214.3);
+  --color-mist-300: oklch(87.2% 0.007 219.6);
+  --color-mist-400: oklch(72.3% 0.014 214.4);
+  --color-mist-500: oklch(56% 0.021 213.5);
+  --color-mist-600: oklch(45% 0.017 213.2);
+  --color-mist-700: oklch(37.8% 0.015 216);
+  --color-mist-800: oklch(27.5% 0.011 216.9);
+  --color-mist-900: oklch(21.8% 0.008 223.9);
+  --color-mist-950: oklch(14.8% 0.004 228.8);
+  --color-taupe-50: oklch(98.6% 0.002 67.8);
+  --color-taupe-100: oklch(96% 0.002 17.2);
+  --color-taupe-200: oklch(92.2% 0.005 34.3);
+  --color-taupe-300: oklch(86.8% 0.007 39.5);
+  --color-taupe-400: oklch(71.4% 0.014 41.2);
+  --color-taupe-500: oklch(54.7% 0.021 43.1);
+  --color-taupe-600: oklch(43.8% 0.017 39.3);
+  --color-taupe-700: oklch(36.7% 0.016 35.7);
+  --color-taupe-800: oklch(26.8% 0.011 36.5);
+  --color-taupe-900: oklch(21.4% 0.009 43.1);
+  --color-taupe-950: oklch(14.7% 0.004 49.3);
+  --color-black: #000;
+  --color-white: #fff;
+}
+
 
 /* Markdown/Prose Styling for JD Preview */
 .markdown-content {
@@ -1272,9 +1890,50 @@ button:has(.menu-item-label):focus-visible {
   box-shadow: none;
 }
 
-/* The ⋮ trigger itself: closing its menu hands focus back to it, which drew
-   the same ring around the button after every click. */
-[aria-haspopup="menu"]:focus-visible {
+/* …but an option reached from the KEYBOARD (arrow keys / Tab → :focus-visible,
+   never mouse hover) must be unmistakable: a brand tint plus a 2px inset ring.
+   Same-or-higher specificity than the rule above and later in the file, so it
+   wins. The tint is a background-IMAGE because the items' own
+   `focus:!bg-gray-100` utilities are layered !important, which beat any
+   unlayered background-color. Radix also focuses options in script on mouse
+   hover, which browsers can report as :focus-visible, so this is skipped while
+   the last input was a pointer (html[data-input], set in app/layout.tsx). */
+html:not([data-input="pointer"]) [role="menuitem"][tabindex]:focus-visible,
+html:not([data-input="pointer"]) [role="menuitemcheckbox"][tabindex]:focus-visible,
+html:not([data-input="pointer"]) [role="menuitemradio"][tabindex]:focus-visible,
+html:not([data-input="pointer"]) [role="menuitem"]:focus-visible,
+html:not([data-input="pointer"]) [role="menuitemcheckbox"]:focus-visible,
+html:not([data-input="pointer"]) [role="menuitemradio"]:focus-visible,
+html:not([data-input="pointer"]) button:has(.menu-item-label):focus-visible {
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--ring) 12%, transparent),
+    color-mix(in srgb, var(--ring) 12%, transparent)
+  );
+  box-shadow: inset 0 0 0 2px var(--ring);
+}
+
+/* The ⋮ trigger: keyboard focus keeps the standard ring (the button rule
+   above). After a mouse/touch click, closing the menu hands focus back to the
+   trigger in script, which browsers also count as :focus-visible — so the
+   ring is hidden only while the last input was a pointer.
+   html[data-input="pointer"] is set by the inline script in app/layout.tsx. */
+html[data-input="pointer"] [aria-haspopup="menu"]:focus-visible {
+  outline: none;
+}
+
+/* A modal's own container (components/ui/modal-a11y.tsx) takes focus when it
+   opens, so Tab starts inside it — it isn't a control, so no ring. Its buttons
+   and fields still show theirs. */
+[data-modal-a11y]:focus,
+[data-modal-a11y]:focus-visible {
+  outline: none;
+}
+
+/* The dashboard's content area: "Skip to main content" (components/ui/skip-link.tsx)
+   lands focus here so the next Tab starts inside the page. It's a landing
+   spot, not a control — no ring around the whole page. */
+#main-content:focus,
+#main-content:focus-visible {
   outline: none;
 }
 
@@ -3174,9 +3833,9 @@ tbody tr.tf-row-match[data-row-selected="true"]:hover { background-color: color-
   .tf-caption       { @apply text-xs font-semibold text-gray-600 dark:text-[var(--text-secondary)]; }   /* small bold label (same look as tf-th) */
   .tf-body-muted    { @apply text-sm text-gray-500 dark:text-[var(--text-muted)]; }
   .tf-meta          { @apply text-xs text-gray-500 dark:text-[var(--text-muted)]; }                     /* helper, dates, 2nd line */
-  .tf-hint          { @apply text-xs text-gray-400 dark:text-[var(--text-muted)]; }                     /* faint hint, placeholder-like */
+  .tf-hint          { @apply text-xs text-gray-500 dark:text-[var(--text-muted)]; }                     /* faint hint, placeholder-like */
   .tf-micro         { @apply text-2xs font-semibold; }
-  .tf-micro-hint    { @apply text-2xs text-gray-400 dark:text-[var(--text-muted)]; }
+  .tf-micro-hint    { @apply text-2xs text-gray-500 dark:text-[var(--text-muted)]; }
   .tf-stat-value    { @apply text-xl font-bold text-gray-900 dark:text-[var(--text-primary)] tabular-nums; }
 
   /* ── Buttons (same values as components/ui/button.tsx) ── */
@@ -3196,14 +3855,14 @@ tbody tr.tf-row-match[data-row-selected="true"]:hover { background-color: color-
   /* ── Form controls (36px, same as <Input>, <Select>, <DateField>) ── */
   .tf-input {
     @apply h-9 w-full min-w-0 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-sm text-gray-900 dark:text-slate-100
-           placeholder:text-gray-400 dark:placeholder:text-slate-500 transition
+           placeholder:text-gray-500 dark:placeholder:text-slate-500 transition
            focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .tf-input-sm { @apply h-8 text-xs; }            /* dense table filters */
   .tf-textarea {
     @apply w-full min-w-0 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-slate-100
-           placeholder:text-gray-400 dark:placeholder:text-slate-500 transition
+           placeholder:text-gray-500 dark:placeholder:text-slate-500 transition
            focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40;
   }
   /* Native, browser-drawn controls (no forms plugin): light mode keeps the browser accent on purpose,
@@ -4109,7 +4768,7 @@ tbody tr.tf-row-match[data-row-selected="true"]:hover { background-color: color-
   .tf-rs-toolbar .tf-jobs-row2 .tf-jobs-status-tabs { order: 4; flex: 1 1 100%; }
 }
 
-/* ── Header icon buttons (Chat, Notifications, Theme) ─────────────────────
+/* ── Header icon buttons (Quick actions, Chat, Notifications, Theme) ─────────────────────
    components/icons/HeaderAnimatedIcons.tsx. Outline at rest; on hover,
    keyboard focus, or while the button's menu is open (data-active="true")
    the shape fills to solid and each icon plays its own small animation.
@@ -4147,6 +4806,18 @@ tbody tr.tf-row-match[data-row-selected="true"]:hover { background-color: color-
 /* Monitor — lifts a touch. */
 .tf-hicon-monitor { transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
 .tf-hbtn:is(:hover, :focus-visible) .tf-hicon-monitor { transform: translateY(-1.5px); }
+
+/* Quick actions bolt — strikes down a touch and flickers, like a flash. */
+.tf-hicon-zap { transform-origin: 50% 50%; }
+.tf-hbtn:is(:hover, :focus-visible) .tf-hicon-zap { animation: tf-hicon-zap 0.55s ease-out; }
+@keyframes tf-hicon-zap {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  20% { transform: translate(-0.8px, 1.6px) scale(1.12); opacity: 1; }
+  35% { opacity: 0.45; }
+  50% { transform: translate(0.4px, -0.6px) scale(1); opacity: 1; }
+  65% { opacity: 0.6; }
+  100% { transform: translate(0, 0) scale(1); opacity: 1; }
+}
 
 @keyframes tf-hicon-pop {
   0% { transform: scale(1); }
@@ -4216,3 +4887,4 @@ tbody tr.tf-row-match[data-row-selected="true"]:hover { background-color: color-
   [data-active="true"] .tf-mode-star-main, [data-active="true"] .tf-mode-star-a, [data-active="true"] .tf-mode-star-b,
   [data-active="true"] .tf-mode-ink, [data-active="true"] .tf-mode-pencil { animation: none; }
 }
+

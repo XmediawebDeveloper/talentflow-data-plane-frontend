@@ -51,6 +51,8 @@ import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { getAccessToken } from '@/lib/services/api';
+import { clickableLinkProps, clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Module-level cache to prevent duplicate API calls across remounts
 const dashboardCache = {
@@ -456,7 +458,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
     if (action.includes('scoring')) return <Star className="h-4 w-4 text-brand-orange-deep" />;
     if (action.includes('assessment')) return <CheckCircle className="h-4 w-4 text-brand-teal" />;
     if (action.includes('ai_match')) return <Sparkles className="h-4 w-4 text-brand-blue-2" />;
-    return <Activity className="h-4 w-4 text-gray-400" />;
+    return <Activity className="h-4 w-4 text-gray-500" />;
   };
 
   const getActivityAccent = (action: string): string => {
@@ -563,7 +565,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
         <CardContent>
           <div className="tf-grid-4">
             {/* Published JDs */}
-            <div
+            <div {...clickableLinkProps}
               className="group p-4 rounded-xl border border-success-line bg-gradient-to-br from-green-50 to-green-50/40 hover:border-success-line hover:shadow-md hover:shadow-green-100 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=published')}
             >
@@ -582,7 +584,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             </div>
 
             {/* Draft JDs */}
-            <div
+            <div {...clickableLinkProps}
               className="group p-4 rounded-xl border border-brand-orange/20 bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 hover:border-brand-orange/40 hover:shadow-md hover:shadow-brand-orange/10 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=draft')}
             >
@@ -601,7 +603,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             </div>
 
             {/* Disabled JDs */}
-            <div
+            <div {...clickableLinkProps}
               className="group p-4 rounded-xl border border-destructive-line bg-gradient-to-br from-red-50 to-red-50/40 hover:border-destructive-line hover:shadow-md hover:shadow-red-100 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=disabled')}
             >
@@ -620,7 +622,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             </div>
 
             {/* Archived JDs */}
-            <div
+            <div {...clickableLinkProps}
               className="group p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white hover:border-gray-300 hover:shadow-md hover:shadow-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:border-gray-600 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=archived')}
             >
@@ -709,7 +711,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                         border: '1px solid var(--raw-e5e7eb)',
                         borderRadius: 8,
                         fontSize: 12,
-                        boxShadow: '0 4px 14px -2px rgb(15 23 42 / 0.06)',
+                        boxShadow: '0 4px 14px -2px var(--raw-rgba-15-23-42-0p06)',
                       }}
                       labelStyle={{ color: 'var(--raw-0f172a)', fontWeight: 600 }}
                       formatter={(v: number) => [`${v}`, 'Actions']}
@@ -789,7 +791,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                         border: '1px solid var(--raw-e5e7eb)',
                         borderRadius: 8,
                         fontSize: 12,
-                        boxShadow: '0 4px 14px -2px rgb(15 23 42 / 0.06)',
+                        boxShadow: '0 4px 14px -2px var(--raw-rgba-15-23-42-0p06)',
                       }}
                       labelStyle={{ color: 'var(--raw-0f172a)', fontWeight: 600 }}
                       formatter={(v: number) => [`${v}`, 'Jobs']}
@@ -845,7 +847,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             ) : (
               <div className="space-y-3">
                 {publishedJDs.map((jd) => (
-                  <div
+                  <div {...clickableProps}
                     key={jd.id}
                     className="flex items-start justify-between p-3 rounded-xl border border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30 hover:bg-brand-blue/[0.02] hover:shadow-sm hover:shadow-brand-blue/5 transition-all cursor-pointer"
                     onClick={() => handleViewJobDetails(jd)}
@@ -883,7 +885,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                         </span>
                       </div>
                     </div>
-                    <Button
+                    <IconButton label="Run AI Talent Match"
                       variant="ghost"
                       size="sm"
                       onClick={(e) => {
@@ -893,7 +895,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                       className="ml-2 text-brand-orange hover:text-brand-orange-deep hover:bg-brand-orange/10"
                     >
                       <Sparkles className="h-4 w-4" />
-                    </Button>
+                    </IconButton>
                   </div>
                 ))}
               </div>
@@ -968,14 +970,14 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                       </div>
                     </div>
                     {canUpdateJD && (
-                      <Button
+                      <IconButton label="View job details"
                         variant="outline"
                         size="sm"
                         onClick={() => handleViewJobDetails(jd)}
                         className="ml-2 border-brand-blue/30 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50"
                       >
                         <Edit2 className="h-4 w-4" />
-                      </Button>
+                      </IconButton>
                     )}
                   </div>
                 ))}
@@ -1135,7 +1137,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                           )}
                         </div>
                         <time
-                          className="text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap flex-shrink-0 group-hover:text-gray-600 transition-colors"
+                          className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap flex-shrink-0 group-hover:text-gray-600 transition-colors"
                           title={fullTime}
                           dateTime={activity.created_at}
                         >

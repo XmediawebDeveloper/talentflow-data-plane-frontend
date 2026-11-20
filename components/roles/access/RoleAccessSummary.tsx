@@ -21,7 +21,7 @@ import { AccessDot, AccessLevelKey, ModuleIcon } from './AccessDots';
 const listText = (items: string[]) =>
   items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 
-const TONE_TEXT = { full: 'text-brand-blue', exc: 'text-amber-700 dark:text-amber-400', none: 'text-gray-400 dark:text-slate-500' } as const;
+const TONE_TEXT = { full: 'text-brand-blue', exc: 'text-amber-700 dark:text-amber-400', none: 'text-gray-500 dark:text-slate-500' } as const;
 const TONE_TILE = {
   full: 'bg-brand-blue/10 text-brand-blue',
   exc: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400',
@@ -86,14 +86,14 @@ export default function RoleAccessSummary({ codes, roleName, description, eyebro
   return (
     <div>
       <div className="mb-4 min-w-0">
-        <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{eyebrow}</div>
+        <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">{eyebrow}</div>
         <div className="mt-0.5 text-lg font-semibold text-gray-900 dark:text-slate-100">{roleName}</div>
         {description && <div className="max-w-md text-[13px] text-gray-500 dark:text-slate-400">{description}</div>}
       </div>
       <AccessLevelKey counts={counts} />
       {MODULE_GROUPS.map((group) => (
         <div key={group} className="mt-3.5">
-          <div className="mb-0.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group}</div>
+          <div className="mb-0.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">{group}</div>
           {SHOWN_MODULES.filter((m) => m.group === group).map((m) => (
             <ModuleRow
               key={m.id}

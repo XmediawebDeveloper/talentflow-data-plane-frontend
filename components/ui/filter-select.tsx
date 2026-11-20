@@ -83,7 +83,7 @@ export default function FilterSelect({
         className={`w-full sm:w-auto data-[size=default]:h-auto sm:data-[size=default]:h-auto gap-1.5 pl-2.5 sm:pl-3 pr-2 sm:pr-3 py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-gray-900 dark:text-slate-50 cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:border-brand-blue ${className ?? ''}`}
       >
         <span className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-          {Icon && <Icon className="size-3 sm:size-4 text-gray-400 dark:text-slate-500" />}
+          {Icon && <Icon className="size-3 sm:size-4 text-gray-500 dark:text-slate-500" />}
           <span className="truncate"><SelectValue placeholder={placeholder} /></span>
         </span>
       </SelectTrigger>
@@ -91,7 +91,7 @@ export default function FilterSelect({
         {runs.map((run, i) =>
           run.group ? (
             <SelectGroup key={`${run.group}-${i}`}>
-              <SelectLabel className="sticky top-0 z-10 bg-white dark:bg-slate-900 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{run.group}</SelectLabel>
+              <SelectLabel className="sticky top-0 z-10 bg-white dark:bg-slate-900 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">{run.group}</SelectLabel>
               {run.items.map(renderItem)}
             </SelectGroup>
           ) : (

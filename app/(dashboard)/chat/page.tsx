@@ -54,6 +54,8 @@ import ChatAttachmentViewer, { type ChatAttachment } from '@/components/organiza
 import CachedChatImage from '@/components/organization/CachedChatImage';
 import { IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 import TeamChatIllustration from '@/components/teams/TeamChatIllustration';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 const quickEmojis = ['👍', '❤️', '😄', '🎉', '👀', '✅'];
 
@@ -1212,13 +1214,13 @@ export default function TeamChatPage() {
               {conv.name}
             </span>
             {conv.last_message_at && (
-              <span className={`shrink-0 text-xs ${unread ? 'font-medium text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`}>
+              <span className={`shrink-0 text-xs ${unread ? 'font-medium text-brand-blue' : 'text-gray-500 dark:text-slate-500'}`}>
                 {lastMessageLabel(conv.last_message_at)}
               </span>
             )}
           </span>
           <span className="mt-0.5 flex items-center justify-between gap-2">
-            <span className={`truncate text-xs ${unread ? 'text-gray-700 dark:text-slate-300' : 'text-gray-400 dark:text-slate-500'}`}>
+            <span className={`truncate text-xs ${unread ? 'text-gray-700 dark:text-slate-300' : 'text-gray-500 dark:text-slate-500'}`}>
               {preview}
             </span>
             {unread && (
@@ -1235,18 +1237,16 @@ export default function TeamChatPage() {
   const groupHeader = (label: string, onAdd: () => void, canAdd: boolean, addLabel: string, denyTitle?: string) => (
     <div className="flex items-center justify-between px-2.5 pb-1 pt-2">
       <span className="tf-eyebrow tracking-wider">{label}</span>
-      <button
+      <IconButton bare label={addLabel} tooltip={canAdd ? addLabel : denyTitle}
         type="button"
         onClick={onAdd}
         aria-disabled={!canAdd}
-        aria-label={addLabel}
-        title={canAdd ? addLabel : denyTitle}
         className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors ${
-          canAdd ? 'text-gray-400 hover:bg-brand-blue/[0.06] hover:text-brand-blue' : 'cursor-not-allowed text-gray-300 opacity-60'
+          canAdd ? 'text-gray-500 hover:bg-brand-blue/[0.06] hover:text-brand-blue' : 'cursor-not-allowed text-gray-300 opacity-60'
         }`}
       >
         <Plus className="h-4 w-4" />
-      </button>
+      </IconButton>
     </div>
   );
 
@@ -1279,15 +1279,13 @@ export default function TeamChatPage() {
                 </span>
               )}
               {/* Close the drawer (tablet/phone only) */}
-              <button
+              <IconButton bare label="Close conversations" tooltip="Close"
                 type="button"
                 onClick={() => setListOpen(false)}
                 className="-mr-1 ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-brand-blue lg:hidden dark:hover:bg-slate-800"
-                aria-label="Close conversations"
-                title="Close"
               >
                 <X className="h-4 w-4" />
-              </button>
+              </IconButton>
             </div>
 
             <div className="relative">
@@ -1336,7 +1334,7 @@ export default function TeamChatPage() {
                 {groupHeader('Direct messages', openNewDMModal, true, 'New direct message')}
                 {filteredDMs.length === 0 ? (
                   <div className="px-3 py-4 text-center">
-                    {!searchQuery && <MessageCircleMore className="mx-auto mb-1.5 h-7 w-7 text-[#7FB0FF]" strokeWidth={1.75} />}
+                    {!searchQuery && <MessageCircleMore className="mx-auto mb-1.5 h-7 w-7 text-[var(--raw-7fb0ff)]" strokeWidth={1.75} />}
                     <p className="tf-hint">{searchQuery ? 'No conversations match your search' : 'No direct messages yet'}</p>
                   </div>
                 ) : (
@@ -1350,7 +1348,7 @@ export default function TeamChatPage() {
                 {groupHeader('Channels', openCreateModal, permissions.can_create_channel, 'Create channel', 'You do not have permission to create channels')}
                 {filteredChannels.length === 0 ? (
                   <div className="px-3 py-4 text-center">
-                    {!searchQuery && <MessageSquareText className="mx-auto mb-1.5 h-7 w-7 text-[#7FB0FF]" strokeWidth={1.75} />}
+                    {!searchQuery && <MessageSquareText className="mx-auto mb-1.5 h-7 w-7 text-[var(--raw-7fb0ff)]" strokeWidth={1.75} />}
                     <p className="tf-hint">{searchQuery ? 'No channels match your search' : 'No channels yet'}</p>
                   </div>
                 ) : (
@@ -1382,17 +1380,15 @@ export default function TeamChatPage() {
                 <div className="flex min-w-0 items-center gap-2.5">
                   {/* Conversations drawer toggle — tablet/phone only, top-left
                       corner (where the drawer slides in from). */}
-                  <button
+                  <IconButton bare label={listOpen ? 'Close conversations' : 'Open conversations'} tooltip="Conversations"
                     type="button"
                     onClick={() => setListOpen((v) => !v)}
                     className={`-ml-0.5 shrink-0 lg:hidden ${iconButtonClass(listOpen)}`}
-                    aria-label={listOpen ? 'Close conversations' : 'Open conversations'}
                     aria-expanded={listOpen}
                     aria-controls="chat-conversations"
-                    title="Conversations"
                   >
                     <Menu className="h-5 w-5" />
-                  </button>
+                  </IconButton>
                   {partner ? (
                     <span className="relative shrink-0">
                       <NameAvatar name={partner.name} fallback={partner.email} userId={partner.user_id} size="md" />
@@ -1408,7 +1404,7 @@ export default function TeamChatPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <h2 className="truncate tf-section-title max-sm:text-sm">{selectedChannel.name}</h2>
-                      {isMuted && <BellOff className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Muted" />}
+                      {isMuted && <BellOff className="h-3.5 w-3.5 shrink-0 text-gray-500" aria-label="Muted" />}
                     </div>
                     <p className="truncate tf-meta">
                       {connectionStatus === 'closed' && (
@@ -1440,27 +1436,23 @@ export default function TeamChatPage() {
                   )}
                   {/* Delete the selected messages */}
                   {isSelecting && (
-                    <button
+                    <IconButton bare label={`Delete ${selectedMessageIds.size} selected`} tooltip={`Delete selected (${selectedMessageIds.size})`}
                       type="button"
                       onClick={handleDeleteSelected}
                       className={`${iconButtonClass(false)} hover:text-destructive`}
-                      aria-label={`Delete ${selectedMessageIds.size} selected`}
-                      title={`Delete selected (${selectedMessageIds.size})`}
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </IconButton>
                   )}
                   {/* Refresh this chat */}
-                  <button
+                  <IconButton bare label="Refresh chat"
                     type="button"
                     onClick={handleRefreshChat}
                     disabled={isRefreshingChat}
                     className={`${iconButtonClass(false)} disabled:cursor-wait`}
-                    aria-label="Refresh chat"
-                    title="Refresh chat"
                   >
                     <RefreshCw className={`h-4 w-4 ${isRefreshingChat ? 'animate-spin text-brand-blue' : ''}`} />
-                  </button>
+                  </IconButton>
 
                   {/* Pinned messages — the panel anchors to the button from sm up,
                       and to the full header width on phones. */}
@@ -1515,16 +1507,14 @@ export default function TeamChatPage() {
                                   {/* Time, with Unpin under it */}
                                   <div className="flex shrink-0 flex-col items-end gap-1">
                                     <span className="tf-hint">{formatISTTime(m.created_at)}</span>
-                                    <button
+                                    <IconButton bare label="Unpin message" tooltip="Unpin"
                                       type="button"
                                       onClick={() => handleUnpinMessage(m.id)}
                                       disabled={unpinningId === m.id}
-                                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue disabled:cursor-wait"
-                                      aria-label="Unpin message"
-                                      title="Unpin"
+                                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue disabled:cursor-wait"
                                     >
                                       {unpinningId === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PinOff className="h-3.5 w-3.5" />}
-                                    </button>
+                                    </IconButton>
                                   </div>
                                 </div>
                               ))}
@@ -1537,29 +1527,25 @@ export default function TeamChatPage() {
 
                   {/* Members panel (wide screens, channels only) */}
                   {selectedChannel.type === 'channel' && (
-                    <button
+                    <IconButton bare label={showMembersSidebar ? 'Hide members' : 'Show members'}
                       type="button"
                       onClick={() => setShowMembersSidebar(!showMembersSidebar)}
                       className={`hidden lg:inline-flex ${iconButtonClass(showMembersSidebar)}`}
-                      aria-label={showMembersSidebar ? 'Hide members' : 'Show members'}
                       aria-pressed={showMembersSidebar}
-                      title={showMembersSidebar ? 'Hide members' : 'Show members'}
                     >
                       <Users className="h-4 w-4" />
-                    </button>
+                    </IconButton>
                   )}
 
                   {/* More: mute, leave, delete */}
                   <div className="relative">
-                    <button
+                    <IconButton bare label="More options"
                       type="button"
                       onClick={() => { setShowHeaderMenu((v) => !v); setShowPinnedPanel(false); }}
                       className={iconButtonClass(showHeaderMenu)}
-                      aria-label="More options"
-                      title="More options"
                     >
                       <MoreVertical className="h-4 w-4" />
-                    </button>
+                    </IconButton>
                     {showHeaderMenu && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowHeaderMenu(false)} />
@@ -1569,7 +1555,7 @@ export default function TeamChatPage() {
                             onClick={() => { toggleMute(); setShowHeaderMenu(false); }}
                             className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 tf-body transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/60"
                           >
-                            {isMuted ? <Bell className="h-4 w-4 text-gray-400" /> : <BellOff className="h-4 w-4 text-gray-400" />}
+                            {isMuted ? <Bell className="h-4 w-4 text-gray-500" /> : <BellOff className="h-4 w-4 text-gray-500" />}
                             {isMuted ? 'Unmute notifications' : 'Mute notifications'}
                           </button>
                           {selectedChannel.type === 'channel' && (
@@ -1579,14 +1565,14 @@ export default function TeamChatPage() {
                                 onClick={openAddMembersModal}
                                 className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 tf-body transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/60"
                               >
-                                <UserPlus className="h-4 w-4 text-gray-400" /> Add members
+                                <UserPlus className="h-4 w-4 text-gray-500" /> Add members
                               </button>
                               <button
                                 type="button"
                                 onClick={handleLeaveChannel}
                                 className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 tf-body transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/60"
                               >
-                                <LogOut className="h-4 w-4 text-gray-400" /> Leave channel
+                                <LogOut className="h-4 w-4 text-gray-500" /> Leave channel
                               </button>
                               <div className="my-1 h-px bg-gray-100 dark:bg-slate-700/60" />
                               <button
@@ -1684,7 +1670,7 @@ export default function TeamChatPage() {
                       const bubbleClass = isImage
                         ? `overflow-hidden ${bubbleRadius} ring-1 ${isSender ? 'ring-brand-blue/30' : 'ring-gray-200 dark:ring-slate-700'}`
                         : message.is_deleted
-                          ? `px-3.5 py-2 ${bubbleRadius} bg-transparent italic text-gray-400 ring-1 ring-gray-200 dark:ring-slate-700`
+                          ? `px-3.5 py-2 ${bubbleRadius} bg-transparent italic text-gray-500 ring-1 ring-gray-200 dark:ring-slate-700`
                           : `px-3.5 py-2 ${bubbleRadius} ${
                               isSender
                                 ? 'bg-brand-blue text-white'
@@ -1698,17 +1684,15 @@ export default function TeamChatPage() {
                                     >
                                       {!message.is_deleted && (<>
                                       <div className="relative">
-                                        <button
+                                        <IconButton bare label="Add reaction"
                                           type="button"
                                           onClick={() => setShowEmojiPicker(showEmojiPicker === message.id ? null : message.id)}
                                           className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
-                                            showEmojiPicker === message.id ? 'text-brand-blue' : 'text-gray-400'
+                                            showEmojiPicker === message.id ? 'text-brand-blue' : 'text-gray-500'
                                           }`}
-                                          aria-label="Add reaction"
-                                          title="Add reaction"
                                         >
                                           <Smile className="h-3.5 w-3.5" />
-                                        </button>
+                                        </IconButton>
                                         {showEmojiPicker === message.id && (
                                           <>
                                             <div className="fixed inset-0 z-[9]" onClick={() => setShowEmojiPicker(null)} />
@@ -1732,29 +1716,25 @@ export default function TeamChatPage() {
                                         )}
                                       </div>
                                       {!isImage && message.content && (
-                                        <button
+                                        <IconButton bare label="Copy message" tooltip="Copy"
                                           type="button"
                                           onClick={() => handleCopyMessage(message)}
                                           className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
-                                            copiedMessageId === message.id ? 'text-success' : 'text-gray-400'
+                                            copiedMessageId === message.id ? 'text-success' : 'text-gray-500'
                                           }`}
-                                          aria-label="Copy message"
-                                          title="Copy"
                                         >
                                           {copiedMessageId === message.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                                        </button>
+                                        </IconButton>
                                       )}
                                       </>)}
                                       {/* Delete for me / for everyone (also clears a "deleted" placeholder). */}
-                                      <button
+                                      <IconButton bare label="Delete message" tooltip="Delete"
                                         type="button"
                                         onClick={() => handleDeleteMessage(message)}
-                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white hover:text-destructive dark:hover:bg-slate-800"
-                                        aria-label="Delete message"
-                                        title="Delete"
+                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-white hover:text-destructive dark:hover:bg-slate-800"
                                       >
                                         <Trash2 className="h-3.5 w-3.5" />
-                                      </button>
+                                      </IconButton>
                                     </div>
                       );
 
@@ -1791,7 +1771,7 @@ export default function TeamChatPage() {
                                 </span>
                               )}
 
-                              <div
+                              <div {...clickableProps}
                                 className={`${bubbleClass} max-w-full transition-shadow [@media(hover:none)]:select-none [-webkit-touch-callout:none] ${
                                   selectedMessageIds.has(message.id) ? 'ring-2 ring-brand-blue/50 ring-offset-2 ring-offset-slate-50 dark:ring-offset-slate-950' : ''
                                 }`}
@@ -1817,10 +1797,9 @@ export default function TeamChatPage() {
                               >
                                 {isImage ? (
                                   // Opens the in-page viewer (download / open in new tab live there).
-                                  <button
+                                  <IconButton bare label={`View ${message.metadata!.file_name || 'image attachment'}`}
                                     type="button"
                                     className="block cursor-zoom-in"
-                                    aria-label={`View ${message.metadata!.file_name || 'image attachment'}`}
                                     onClick={(e) => {
                                       // Long-press or selection mode: let the bubble handle the tap.
                                       if (longPressFiredRef.current || isSelecting) return;
@@ -1835,7 +1814,7 @@ export default function TeamChatPage() {
                                       alt={message.metadata!.file_name || 'Image attachment'}
                                       className="block max-h-64 max-w-full object-contain"
                                     />
-                                  </button>
+                                  </IconButton>
                                 ) : (
                                   <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                                     {message.is_deleted ? 'This message was deleted' : message.content}
@@ -1914,16 +1893,14 @@ export default function TeamChatPage() {
                     onChange={handleAttachmentSelect}
                     className="hidden"
                   />
-                  <button
+                  <IconButton bare label="Attach image" tooltip="Attach image (PNG, JPG, GIF, WebP · up to 5 MB)"
                     type="button"
                     onClick={() => attachmentInputRef.current?.click()}
                     disabled={isUploadingAttachment}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-slate-800"
-                    aria-label="Attach image"
-                    title="Attach image (PNG, JPG, GIF, WebP · up to 5 MB)"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-slate-800"
                   >
                     {isUploadingAttachment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-                  </button>
+                  </IconButton>
                   <textarea
                     ref={inputRef}
                     value={messageInput}
@@ -1936,20 +1913,18 @@ export default function TeamChatPage() {
                     onKeyDown={handleKeyDown}
                     placeholder={`Message ${selectedChannel.type === 'channel' ? '#' : ''}${selectedChannel.name}`}
                     rows={1}
-                    className="min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-sm text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400 dark:text-slate-100"
+                    className="min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-sm text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-500 dark:text-slate-100"
                   />
                   <div className="relative shrink-0">
-                    <button
+                    <IconButton bare label="Insert emoji"
                       type="button"
                       onClick={() => setShowComposerEmoji((v) => !v)}
                       className={`inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
-                        showComposerEmoji ? 'bg-brand-blue/[0.08] text-brand-blue' : 'text-gray-400 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800'
+                        showComposerEmoji ? 'bg-brand-blue/[0.08] text-brand-blue' : 'text-gray-500 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800'
                       }`}
-                      aria-label="Insert emoji"
-                      title="Insert emoji"
                     >
                       <Smile className="h-4 w-4" />
-                    </button>
+                    </IconButton>
                     {showComposerEmoji && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowComposerEmoji(false)} />
@@ -1968,16 +1943,14 @@ export default function TeamChatPage() {
                       </>
                     )}
                   </div>
-                  <button
+                  <IconButton bare label="Send message" tooltip="Send (Enter)"
                     type="button"
                     onClick={handleSendMessage}
                     disabled={!messageInput.trim() || isSending}
                     className="tf-btn tf-btn-primary h-9 w-9 shrink-0 bg-brand-blue shadow-sm shadow-brand-blue/25 transition-colors hover:bg-brand-blue/90 disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none dark:disabled:bg-slate-700 whitespace-normal gap-0 font-normal"
-                    aria-label="Send message"
-                    title="Send (Enter)"
                   >
                     <Send className="h-4 w-4" />
-                  </button>
+                  </IconButton>
                 </div>
                 <p className="mt-1.5 hidden px-1 tf-hint sm:block">
                   Enter to send · Shift + Enter for a new line
@@ -1987,17 +1960,15 @@ export default function TeamChatPage() {
           ) : (
             <div className="relative flex flex-1 items-center justify-center bg-slate-50/60 p-6 sm:p-8 dark:bg-slate-950/30">
               {/* No conversation open: the same top-left ☰ (tablet/phone) */}
-              <button
+              <IconButton bare label={listOpen ? 'Close conversations' : 'Open conversations'} tooltip="Conversations"
                 type="button"
                 onClick={() => setListOpen((v) => !v)}
                 className={`absolute left-2 top-2.5 lg:hidden ${iconButtonClass(listOpen)}`}
-                aria-label={listOpen ? 'Close conversations' : 'Open conversations'}
                 aria-expanded={listOpen}
                 aria-controls="chat-conversations"
-                title="Conversations"
               >
                 <Menu className="h-5 w-5" />
-              </button>
+              </IconButton>
               <IllustratedEmptyState
                 bordered={false}
                 className="max-w-md"
@@ -2037,15 +2008,13 @@ export default function TeamChatPage() {
                   {selectedChannel.member_count} total · {onlineMembersCount} online
                 </p>
               </div>
-              <button
+              <IconButton bare label="Hide members"
                 type="button"
                 onClick={() => setShowMembersSidebar(false)}
                 className={iconButtonClass(false)}
-                aria-label="Hide members"
-                title="Hide members"
               >
                 <X className="h-4 w-4" />
-              </button>
+              </IconButton>
             </div>
 
             <div className="flex-1 overflow-y-auto p-2">
@@ -2062,7 +2031,7 @@ export default function TeamChatPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate tf-row-name">
                       {member.name}
-                      {member.user_id === currentUser?.id && <span className="font-normal text-gray-400"> (You)</span>}
+                      {member.user_id === currentUser?.id && <span className="font-normal text-gray-500"> (You)</span>}
                     </p>
                     <p className="truncate tf-meta capitalize">{member.role?.replace(/_/g, ' ') || 'Member'}</p>
                   </div>
@@ -2156,14 +2125,14 @@ export default function TeamChatPage() {
                   <span className="mb-2 block tf-label">
                     Channel name <span className="text-brand-orange">*</span>
                   </span>
-                  <div className="flex items-center gap-2 tf-panel px-3 py-2.5 transition-all focus-within:border-brand-blue/30 focus-within:ring-4 focus-within:ring-brand-blue/10">
-                    <Hash className="h-4 w-4 text-gray-400" />
+                  <div className="flex items-center gap-2 tf-panel px-3 py-2.5 transition-all focus-within:border-brand-blue focus-within:ring-2 focus-within:ring-brand-blue/30">
+                    <Hash className="h-4 w-4 text-gray-500" />
                     <input
                       type="text"
                       value={newChannelName}
                       onChange={(e) => setNewChannelName(e.target.value)}
                       placeholder="e.g. engineering-team"
-                      className="flex-1 bg-transparent text-sm text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400"
+                      className="flex-1 bg-transparent text-sm text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-500"
                     />
                   </div>
                 </label>
@@ -2225,7 +2194,7 @@ export default function TeamChatPage() {
                     </div>
                   ) : availableUsers.filter((u) => u.id !== currentUser?.id).length === 0 ? (
                     <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center">
-                      <Users className="mx-auto mb-2 h-6 w-6 text-gray-300" />
+                      <Users className="mx-auto mb-2 h-6 w-6 text-muted-foreground dark:text-gray-300" />
                       <p className="tf-meta">No teammates available</p>
                     </div>
                   ) : (
@@ -2292,7 +2261,7 @@ export default function TeamChatPage() {
                 ) : availableUsers.filter((user) => !selectedChannel?.members.some((m) => m.user_id === user.id))
                   .length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-10 text-center">
-                    <Users className="mx-auto mb-2 h-7 w-7 text-gray-300" />
+                    <Users className="mx-auto mb-2 h-7 w-7 text-muted-foreground dark:text-gray-300" />
                     <p className="tf-body-muted">No teammates left to add.</p>
                   </div>
                 ) : (
@@ -2358,7 +2327,7 @@ export default function TeamChatPage() {
                     </div>
                   ) : availableUsers.filter((u) => u.id !== currentUser?.id).length === 0 ? (
                     <div className="px-4 py-10 text-center text-gray-500">
-                      <Users className="mx-auto mb-2 h-7 w-7 text-gray-300" />
+                      <Users className="mx-auto mb-2 h-7 w-7 text-muted-foreground dark:text-gray-300" />
                       <p className="text-sm">No team members found</p>
                     </div>
                   ) : (

@@ -16,6 +16,7 @@ import {
   getStatusConfig,
   resolveVersionHistoryRows,
 } from '@/lib/utils/jobOpeningDisplay';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
 
 /**
  * The columns every surface shows. Select is prepended and Action appended per
@@ -384,7 +385,7 @@ export default function JobVersionHistoryPanel({
     >
       {isChecked
         ? <CheckSquare className="w-4 h-4 text-brand-blue" />
-        : <Square className="w-4 h-4 text-gray-400 hover:text-brand-blue" />}
+        : <Square className="w-4 h-4 text-gray-500 hover:text-brand-blue" />}
       <span className="sr-only">Select version v{versionJob.versionNumber ?? 1}</span>
     </button>
   );
@@ -444,7 +445,7 @@ export default function JobVersionHistoryPanel({
               ] as [string, ReactNode][]),
               [applicantsLabel, (
                 <span className="inline-flex items-center gap-1">
-                  <Users className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
+                  <Users className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500" />
                   {versionApplicants[version.id] ?? '—'}
                 </span>
               )],
@@ -452,7 +453,7 @@ export default function JobVersionHistoryPanel({
                 'Scored by',
                 scoredInfo
                   ? `${scoredInfo.name}, ${formatIST(scoredInfo.scoredAt)}`
-                  : <span className="text-gray-400 dark:text-slate-500 italic">{scoredLoaded ? 'Not scored yet' : '—'}</span>,
+                  : <span className="text-gray-500 dark:text-slate-500 italic">{scoredLoaded ? 'Not scored yet' : '—'}</span>,
                 true,
               ] as [string, ReactNode, boolean]] : []),
               ...extraColumns.map(({ label, render }) => [label, render(versionJob)] as [string, ReactNode]),
@@ -579,7 +580,7 @@ export default function JobVersionHistoryPanel({
                      the containing block for its cells, which silently kills
                      position:sticky on the pinned Action cell. The hover pop
                      lives on the Job Title text instead (group-hover below). */
-                  <tr
+                  <tr {...((onRowClick) ? clickableRowProps : {})}
                     key={version.id}
                     /* The latest version carries a faint brand tint, so it
                        reads as the live one among the superseded rows. Kept
@@ -807,7 +808,7 @@ export default function JobVersionHistoryPanel({
                     })()}
                     <td className="tf-td whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5 tf-body">
-                        <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                        <Users className="w-4 h-4 text-gray-500 dark:text-slate-500" />
                         {/* Resumes scored against this version. Dash only while
                             the count is still in flight (or if it failed) — a
                             real zero prints as 0. */}

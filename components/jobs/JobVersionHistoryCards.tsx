@@ -14,6 +14,7 @@ import {
   getStatusConfig,
   resolveVersionHistoryRows,
 } from '@/lib/utils/jobOpeningDisplay';
+import { clickableProps } from '@/lib/a11y/clickableProps';
 
 interface JobVersionHistoryCardsProps {
   /** The latest-version row this history hangs off. */
@@ -123,7 +124,7 @@ export default function JobVersionHistoryCards({
             const scoredByInfo = versionScoredBy?.[version.id];
 
             return (
-              <div
+              <div {...((onCardClick) ? clickableProps : {})}
                 key={version.id}
                 onClick={onCardClick ? () => onCardClick(version.id) : undefined}
                 className={`relative rounded-lg border p-3 transition-colors ${
@@ -195,7 +196,7 @@ export default function JobVersionHistoryCards({
                         </div>
                       </>
                     ) : (
-                      <span className="text-gray-400 dark:text-slate-500">
+                      <span className="text-gray-500 dark:text-slate-500">
                         {scoredByLoaded ? 'Not scored yet' : '—'}
                       </span>
                     )}
@@ -205,7 +206,7 @@ export default function JobVersionHistoryCards({
                 {/* Applicants + posted date footer */}
                 <div className="flex items-center justify-between tf-meta">
                   <span className="inline-flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
+                    <Users className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500" />
                     {versionApplicants[version.id] ?? '—'}
                   </span>
                   {(version.published_at || detail?.published_at || version.created_at) && (

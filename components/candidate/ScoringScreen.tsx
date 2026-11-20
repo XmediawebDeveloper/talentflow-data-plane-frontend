@@ -93,25 +93,25 @@ export function ScoringScreen() {
 
         {/* Status Steps */}
         <div className="space-y-3 mb-6">
-          <div className={`flex items-center gap-3 ${waitTime >= 0 ? 'text-success' : 'text-gray-400'}`}>
+          <div className={`flex items-center gap-3 ${waitTime >= 0 ? 'text-success' : 'text-gray-500'}`}>
             <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 0 ? 'bg-success-subtle' : 'bg-gray-100'}`}>
               {waitTime >= 15 ? <CheckCircle className="w-4 h-4" /> : <Loader2 className="w-4 h-4 animate-spin" />}
             </div>
             <span className="text-sm">Responses received</span>
           </div>
-          <div className={`flex items-center gap-3 ${waitTime >= 15 ? 'text-success' : waitTime >= 0 ? 'text-brand-blue' : 'text-gray-400'}`}>
+          <div className={`flex items-center gap-3 ${waitTime >= 15 ? 'text-success' : waitTime >= 0 ? 'text-brand-blue' : 'text-gray-500'}`}>
             <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 30 ? 'bg-success-subtle' : waitTime >= 15 ? 'bg-brand-blue/10' : 'bg-gray-100'}`}>
               {waitTime >= 30 ? <CheckCircle className="w-4 h-4" /> : waitTime >= 15 ? <Loader2 className="w-4 h-4 animate-spin" /> : <div className="w-2 h-2 bg-gray-300 rounded-full" />}
             </div>
             <span className="text-sm">Analyzing responses</span>
           </div>
-          <div className={`flex items-center gap-3 ${waitTime >= 60 ? 'text-success' : waitTime >= 30 ? 'text-brand-blue' : 'text-gray-400'}`}>
+          <div className={`flex items-center gap-3 ${waitTime >= 60 ? 'text-success' : waitTime >= 30 ? 'text-brand-blue' : 'text-gray-500'}`}>
             <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 90 ? 'bg-success-subtle' : waitTime >= 60 ? 'bg-brand-blue/10' : 'bg-gray-100'}`}>
               {waitTime >= 90 ? <CheckCircle className="w-4 h-4" /> : waitTime >= 60 ? <Loader2 className="w-4 h-4 animate-spin" /> : <div className="w-2 h-2 bg-gray-300 rounded-full" />}
             </div>
             <span className="text-sm">Generating feedback & scores</span>
           </div>
-          <div className={`flex items-center gap-3 ${waitTime >= 90 ? 'text-brand-blue' : 'text-gray-400'}`}>
+          <div className={`flex items-center gap-3 ${waitTime >= 90 ? 'text-brand-blue' : 'text-gray-500'}`}>
             <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 90 ? 'bg-brand-blue/10' : 'bg-gray-100'}`}>
               {waitTime >= 90 ? <Loader2 className="w-4 h-4 animate-spin" /> : <div className="w-2 h-2 bg-gray-300 rounded-full" />}
             </div>

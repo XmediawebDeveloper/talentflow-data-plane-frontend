@@ -1,6 +1,8 @@
 'use client';
 
 import { FileText, AlertCircle, Info, Save, Loader2, X } from 'lucide-react';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 export interface UnsavedChangesModalProps {
   isOpen: boolean;
@@ -48,16 +50,15 @@ export default function UnsavedChangesModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-xl animate-scale-in overflow-hidden tf-round-edges">
-        <button
+        <IconButton bare label="Close"
           onClick={onClose}
           disabled={isSaving}
-          aria-label="Close"
-          className="absolute top-5 right-5 z-10 p-1.5 text-gray-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg transition-colors disabled:opacity-50"
+          className="absolute top-5 right-5 z-10 p-1.5 text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg transition-colors disabled:opacity-50"
         >
           <X className="w-5 h-5" />
-        </button>
+        </IconButton>
 
         <div className="p-6 sm:p-8">
           <div className="flex items-center gap-4 pr-10">
@@ -111,6 +112,6 @@ export default function UnsavedChangesModal({
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

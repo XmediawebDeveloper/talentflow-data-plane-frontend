@@ -25,6 +25,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* ───────────────────────────── Model ───────────────────────────── */
 
@@ -309,7 +311,7 @@ function ProgressDialog({ task, onMinimize, onClose, onAskCancel, onUndo, onReru
   ];
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-gray-900/50 p-3 backdrop-blur-sm dark:bg-black/70 sm:p-6">
+    <ModalA11y innerDialog><div className="fixed inset-0 z-[10000] flex items-center justify-center bg-gray-900/50 p-3 backdrop-blur-sm dark:bg-black/70 sm:p-6">
       {/* A DEFINITE height (not max-h): the dialog is the same size whichever
           status pill is picked or however many rows match — the table region
           takes what is left and is the only scroller. */}
@@ -346,7 +348,7 @@ function ProgressDialog({ task, onMinimize, onClose, onAskCancel, onUndo, onReru
               <Button variant="secondary" size="sm" onClick={onMinimize} aria-label="Minimize" title="Minimize — it keeps running. Open it again from Background tasks (bottom-right).">
                 <Minus className="h-4 w-4" /><span className="hidden sm:inline">Minimize</span>
               </Button>
-              {c.finished && <Button variant="secondary" size="sm" onClick={onClose} className="w-8" aria-label="Close" title="Close and remove from Background tasks"><X className="h-4 w-4" /></Button>}
+              {c.finished && <IconButton label="Close" tooltip="Close and remove from Background tasks" variant="secondary" size="sm" onClick={onClose} className="w-8"><X className="h-4 w-4" /></IconButton>}
             </div>
           </div>
           {/* Inset bar — side gutters like the header, the live % above it on the right. */}
@@ -387,7 +389,7 @@ function ProgressDialog({ task, onMinimize, onClose, onAskCancel, onUndo, onReru
                 const state = c.finished && !task.stopped ? 'done' : i < step ? 'done' : i === step ? (task.stopped ? 'stopped' : 'now') : 'todo';
                 return (
                   <li key={s} className="flex items-start gap-3">
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${state === 'done' ? 'bg-success-subtle text-success' : state === 'now' ? 'bg-brand-blue/10 text-brand-blue' : state === 'stopped' ? 'bg-warning-subtle text-warning-strong' : 'bg-gray-100 text-gray-400 dark:bg-slate-800'}`}>
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${state === 'done' ? 'bg-success-subtle text-success' : state === 'now' ? 'bg-brand-blue/10 text-brand-blue' : state === 'stopped' ? 'bg-warning-subtle text-warning-strong' : 'bg-gray-100 text-gray-500 dark:bg-slate-800'}`}>
                       {state === 'done' ? <CheckCircle2 className="h-4 w-4" /> : state === 'now' ? <Loader2 className="h-4 w-4 animate-spin" /> : state === 'stopped' ? <XCircle className="h-4 w-4" /> : <span className="text-xs">{i + 1}</span>}
                     </span>
                     <div>
@@ -441,7 +443,7 @@ function ProgressDialog({ task, onMinimize, onClose, onAskCancel, onUndo, onReru
                   onClear={() => setSelected(new Set())}
                 />
                 <div className="relative w-full sm:w-64">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
                   <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder="Search name or email…" className="tf-input pl-8" />
                 </div>
 
@@ -527,7 +529,7 @@ function ProgressDialog({ task, onMinimize, onClose, onAskCancel, onUndo, onReru
                       </td>
                       {isInvite && <td className="tf-td"><span className="tf-meta tabular-nums">{r.idx + 1}</span></td>}
                       <td className="tf-td">
-                        <span className={`tf-row-name block ${r.state === 'cancelled' ? 'text-gray-400 line-through decoration-gray-300' : ''}`}>{r.name}</span>
+                        <span className={`tf-row-name block ${r.state === 'cancelled' ? 'text-gray-500 line-through decoration-gray-300' : ''}`}>{r.name}</span>
                         <span className={r.state === 'failed' && r.retryable === false ? 'tf-micro-hint !text-destructive' : 'tf-micro-hint'}>{r.state === 'failed' || r.state === 'skipped' ? r.error : r.email}</span>
                       </td>
                       {!isInvite && <td className="tf-td hidden md:table-cell"><span className="tf-meta">{r.source}</span></td>}
@@ -569,7 +571,7 @@ function ProgressDialog({ task, onMinimize, onClose, onAskCancel, onUndo, onReru
                               {/* Same actions, icons and colours as AssessmentInviteActions */}
                               <DropdownMenu modal={false}>
                                 <DropdownMenuTrigger asChild>
-                                  <button className="tf-icon-btn-outline" aria-label={`More actions for ${r.name}`} title="More actions"><MoreVertical /></button>
+                                  <IconButton bare label={`More actions for ${r.name}`} tooltip="More actions" className="tf-icon-btn-outline"><MoreVertical /></IconButton>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="!z-[10070] w-52 !rounded-lg !bg-white !px-0 !py-1 !shadow-lg dark:!bg-slate-900">
                                   <DropdownMenuItem className="!rounded-none !px-3 !py-2 text-sm" disabled title="No result yet — the candidate hasn't taken it">
@@ -599,7 +601,7 @@ function ProgressDialog({ task, onMinimize, onClose, onAskCancel, onUndo, onReru
                               {isInvite ? <><Pencil className="h-3.5 w-3.5 text-menu-icon-edit" />Edit email</> : <><RefreshCw className="h-3.5 w-3.5" />Re-score</>}
                             </Button>
                           )}
-                          {!isInvite && r.state === 'done' && <button onClick={() => onViewScore(r)} className="tf-icon-btn-outline" title="View score — this window minimizes and keeps running" aria-label={`View ${r.name}'s score`}><Eye /></button>}
+                          {!isInvite && r.state === 'done' && <IconButton bare label={`View ${r.name}'s score`} tooltip="View score — this window minimizes and keeps running" onClick={() => onViewScore(r)} className="tf-icon-btn-outline"><Eye /></IconButton>}
                         </div>
                       </td>
                     </tr>
@@ -652,7 +654,7 @@ function ProgressDialog({ task, onMinimize, onClose, onAskCancel, onUndo, onReru
           )}
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }
 
@@ -688,7 +690,7 @@ function BackgroundTasksDock({ tasks, expanded, setExpanded, onOpen, onRemove, o
             <h3 className="tf-row-title flex-1">Background tasks</h3>
             {running.length > 0 && <span className="tf-stat-chip tf-stat-chip-info">{running.length} running</span>}
             {needsLook.length > 0 && <span className="tf-stat-chip tf-stat-chip-warning">{needsLook.length} need a look</span>}
-            <Button variant="secondary" size="sm" className="h-7 w-7 !px-0" onClick={() => setExpanded(false)} aria-label="Minimize" title="Minimize"><ChevronDown className="h-4 w-4" /></Button>
+            <IconButton label="Minimize" variant="secondary" size="sm" className="h-7 w-7 !px-0" onClick={() => setExpanded(false)}><ChevronDown className="h-4 w-4" /></IconButton>
           </header>
           <ul className="min-h-0 flex-1 divide-y divide-gray-100 overflow-y-auto dark:divide-slate-700/60">
             {[...parked].sort((a, b) => Number(counts(a).finished) - Number(counts(b).finished) || b.startedAt - a.startedAt).map((t) => {
@@ -716,7 +718,7 @@ function BackgroundTasksDock({ tasks, expanded, setExpanded, onOpen, onRemove, o
                         {t.paused && !c.finished && <Button variant="primary" size="sm" className="h-7 text-xs" onClick={() => onResume(t.id)}><Play className="h-3 w-3" />Resume</Button>}
                         {!c.finished && <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => onAskCancel(t.id)}>{KIND[t.kind].stop}</Button>}
                         {c.finished && t.kind === 'score' && t.rows.some(canRerun) && <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => onAgain(t.id)}><RefreshCw className="h-3 w-3" />{KIND[t.kind].again} ({fmt(t.rows.filter(canRerun).length)})</Button>}
-                        {c.finished && <Button variant="secondary" size="sm" className="h-7 w-7 !px-0" onClick={() => onRemove(t.id)} aria-label="Remove" title="Remove from this list"><Trash2 className="h-3.5 w-3.5" /></Button>}
+                        {c.finished && <IconButton label="Remove" tooltip="Remove from this list" variant="secondary" size="sm" className="h-7 w-7 !px-0" onClick={() => onRemove(t.id)}><Trash2 className="h-3.5 w-3.5" /></IconButton>}
                       </div>
                     </div>
                   </div>
@@ -738,7 +740,7 @@ function BackgroundTasksDock({ tasks, expanded, setExpanded, onOpen, onRemove, o
         aria-label={`Background tasks: ${running.length} running`}
         title={running.length ? `${running.length} running · ${ring}%` : 'All background tasks finished'}
         className="fixed bottom-6 right-6 z-[10050] h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105"
-        style={{ background: `conic-gradient(var(--brand-blue) ${ring * 3.6}deg, rgb(226 232 240) 0deg)` }}
+        style={{ background: `conic-gradient(var(--brand-blue) ${ring * 3.6}deg, var(--raw-rgb-226-232-240) 0deg)` }}
       >
         <span className="relative flex h-full w-full items-center justify-center rounded-full bg-brand-blue text-white">
           {running.length ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
@@ -1081,7 +1083,7 @@ export default function ProgressPreviewPage() {
                 {CHANGES.map(([before, after]) => (
                   <li key={before} className="grid gap-1 sm:grid-cols-[1fr_auto_1fr] sm:items-start sm:gap-2">
                     <span className="tf-meta line-through decoration-gray-300">{before}</span>
-                    <ArrowRight className="hidden h-4 w-4 text-gray-300 sm:block" />
+                    <ArrowRight className="hidden h-4 w-4 text-muted-foreground dark:text-gray-300 sm:block" />
                     <span className="tf-body">{after}</span>
                   </li>
                 ))}

@@ -31,6 +31,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * Shared invitation-action logic for the Assessment module, ported from (and
@@ -598,13 +600,11 @@ export function InvitationActionsMenu({ actions, extraItems, className }: {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          aria-label="Actions"
-          title="Actions"
+        <IconButton bare label="Actions"
           className="h-8 w-8 shrink-0 inline-flex items-center justify-center text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded-md transition-colors"
         >
           <MoreVertical className="w-4 h-4" />
-        </button>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={className || 'w-44'}>
         {extraItems}
@@ -726,19 +726,18 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
         <div className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
           <h3 className="min-w-0 truncate tf-section-title sm:text-lg tracking-tight">Edit Invitation</h3>
-          <Button
+          <IconButton label="Close"
             variant="secondary"
             size="sm"
             onClick={() => { if (!saving) onClose(); }}
-            aria-label="Close"
             className="shrink-0"
           >
             <X className="w-5 h-5" />
-          </Button>
+          </IconButton>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
           <p className="tf-body-muted">
@@ -787,7 +786,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }
 
@@ -879,7 +878,7 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
           <DialogDescription className="break-words">
             {capitalizedCase(target?.candidate_name) || target?.candidate_email || 'Candidate'}
             {target?.candidate_name && target?.candidate_email && (
-              <span className="text-gray-400 dark:text-slate-500 break-all"> · {target.candidate_email}</span>
+              <span className="text-gray-500 dark:text-slate-500 break-all"> · {target.candidate_email}</span>
             )}
           </DialogDescription>
         </DialogHeader>

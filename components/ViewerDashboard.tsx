@@ -173,7 +173,7 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="tf-caption">{stage.label}</span>
                     <span className="tf-meta tabular-nums">
-                      {stage.count} <span className="text-gray-400 dark:text-slate-500">· {stage.pct}%</span>
+                      {stage.count} <span className="text-gray-500 dark:text-slate-500">· {stage.pct}%</span>
                     </span>
                   </div>
                   <div className="h-2 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">

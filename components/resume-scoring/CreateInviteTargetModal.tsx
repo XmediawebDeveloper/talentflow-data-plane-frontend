@@ -3,6 +3,8 @@
 import { ArrowRight, CheckCircle2, ClipboardList, Info, Send, Undo2, Video, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { InviteHandoffKind } from '@/lib/utils/resumeScoringInviteHandoff';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The step before leaving Resume Scoring (or AI Talent Match — see
@@ -51,7 +53,7 @@ export default function CreateInviteTargetModal({
   ];
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" onClick={onCancel}>
+    <ModalA11y innerDialog><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" onClick={onCancel}>
       <div
         className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -73,9 +75,9 @@ export default function CreateInviteTargetModal({
               </p>
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={onCancel} className="flex-shrink-0" aria-label="Close">
+          <IconButton label="Close" variant="secondary" size="sm" onClick={onCancel} className="flex-shrink-0">
             <X className="w-5 h-5" />
-          </Button>
+          </IconButton>
         </div>
 
         <div className="p-4 sm:p-6 min-h-0 overflow-y-auto flex-1 space-y-4">
@@ -124,6 +126,6 @@ export default function CreateInviteTargetModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

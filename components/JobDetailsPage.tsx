@@ -56,6 +56,7 @@ import remarkBreaks from 'remark-breaks';
 import { User, Tenant } from '@/lib/types/tenant';
 import AssessmentsForJD from './AssessmentsForJD';
 import { Skeleton } from '@/components/ui/skeleton';
+import { IconButton } from '@/components/ui/icon-button';
 
 type TabType = 'overview' | 'scored-resumes' | 'assessment-results';
 
@@ -474,25 +475,22 @@ ${job.certifications?.join(', ') || 'N/A'}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button
+              <IconButton label="Copy"
                 variant="secondary"
                 size="sm"
                 onClick={handleCopy}
-               
-                aria-label="Copy" title="Copy"
               >
                 <Copy className="w-5 h-5" />
-              </Button>
-              <Button
+              </IconButton>
+              <IconButton label="Download" tooltip={canDownloadJd ? 'Download' : "You can view this job description, but your role doesn't allow downloading it"}
                 variant="secondary"
                 size="sm"
                 onClick={handleDownload}
                 className={!canDownloadJd ? 'opacity-50 cursor-not-allowed' : undefined}
                 aria-disabled={!canDownloadJd}
-                aria-label="Download" title={canDownloadJd ? 'Download' : "You can view this job description, but your role doesn't allow downloading it"}
               >
                 <Download className="w-5 h-5" />
-              </Button>
+              </IconButton>
               <Button
                 variant="secondary"
                 onClick={() => router.push(`/recruitment/jd-creation?id=${job.id}&edit=true`)}
@@ -549,7 +547,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                   {/* Experience */}
                   <div className="mb-6">
                     <h3 className="tf-label mb-2 flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-gray-400" />
+                      <Clock className="w-4 h-4 text-gray-500" />
                       Experience
                     </h3>
                     <p className="text-gray-600">
@@ -618,28 +616,28 @@ ${job.certifications?.join(', ') || 'N/A'}
                   <h2 className="tf-section-title mb-4">Job Details</h2>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <Briefcase className="w-5 h-5 text-gray-400" />
+                      <Briefcase className="w-5 h-5 text-gray-500" />
                       <div>
                         <p className="tf-meta">Employment Type</p>
                         <p className="tf-row-name">{job.employment_type || 'Not specified'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <MapPin className="w-5 h-5 text-gray-400" />
+                      <MapPin className="w-5 h-5 text-gray-500" />
                       <div>
                         <p className="tf-meta">Remote Type</p>
                         <p className="tf-row-name">{job.remote_type || 'Not specified'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <TrendingUp className="w-5 h-5 text-gray-400" />
+                      <TrendingUp className="w-5 h-5 text-gray-500" />
                       <div>
                         <p className="tf-meta">Job Level</p>
                         <p className="tf-row-name">{formatExperienceLevelName(job.job_level) || job.job_level || 'Not specified'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <Building2 className="w-5 h-5 text-gray-400" />
+                      <Building2 className="w-5 h-5 text-gray-500" />
                       <div>
                         <p className="tf-meta">Industry</p>
                         <p className="tf-row-name">{job.industry_type || 'Not specified'}</p>
@@ -647,7 +645,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                     </div>
                     {(job.salary_min || job.salary_max) && (
                       <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg col-span-2">
-                        <DollarSign className="w-5 h-5 text-gray-400" />
+                        <DollarSign className="w-5 h-5 text-gray-500" />
                         <div>
                           <p className="tf-meta">Salary Range</p>
                           <p className="tf-row-name">
