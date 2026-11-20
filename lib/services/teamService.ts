@@ -311,12 +311,16 @@ class TeamService {
   /**
    * Get usage summary for all teams (Owner only)
    */
-  async getAllTeamsUsage(fromDate?: string, toDate?: string): Promise<AllTeamsUsageSummary> {
+  async getAllTeamsUsage(fromDate?: string, toDate?: string, period?: 'billing'): Promise<AllTeamsUsageSummary> {
     try {
       const params: Record<string, string> = {};
-      if (fromDate) params.start_date = fromDate;
-      if (toDate) params.end_date = toDate;
-      if (!fromDate && !toDate) params.days = '30';
+      if (period) {
+        params.period = period;
+      } else {
+        if (fromDate) params.start_date = fromDate;
+        if (toDate) params.end_date = toDate;
+        if (!fromDate && !toDate) params.days = '30';
+      }
       const response = await api.get('/unit-pool/teams/usage', { params });
       return response.data.data || response.data;
     } catch (error: any) {
@@ -329,12 +333,16 @@ class TeamService {
    * Get usage summary for current user's teams
    * Available for Viewers and other non-admin users
    */
-  async getMyTeamsUsage(fromDate?: string, toDate?: string): Promise<MyTeamsUsageSummary> {
+  async getMyTeamsUsage(fromDate?: string, toDate?: string, period?: 'billing'): Promise<MyTeamsUsageSummary> {
     try {
       const params: Record<string, string> = {};
-      if (fromDate) params.start_date = fromDate;
-      if (toDate) params.end_date = toDate;
-      if (!fromDate && !toDate) params.days = '30';
+      if (period) {
+        params.period = period;
+      } else {
+        if (fromDate) params.start_date = fromDate;
+        if (toDate) params.end_date = toDate;
+        if (!fromDate && !toDate) params.days = '30';
+      }
       const response = await api.get('/unit-pool/my-teams/usage', { params });
       return response.data.data || response.data;
     } catch (error: any) {
@@ -347,12 +355,16 @@ class TeamService {
    * Get individual member usage within a team
    * Only available for Tenant Admin
    */
-  async getTeamMembersUsage(teamId: string, fromDate?: string, toDate?: string): Promise<TeamMembersUsageSummary> {
+  async getTeamMembersUsage(teamId: string, fromDate?: string, toDate?: string, period?: 'billing'): Promise<TeamMembersUsageSummary> {
     try {
       const params: Record<string, string> = {};
-      if (fromDate) params.start_date = fromDate;
-      if (toDate) params.end_date = toDate;
-      if (!fromDate && !toDate) params.days = '30';
+      if (period) {
+        params.period = period;
+      } else {
+        if (fromDate) params.start_date = fromDate;
+        if (toDate) params.end_date = toDate;
+        if (!fromDate && !toDate) params.days = '30';
+      }
       const response = await api.get(`/unit-pool/teams/${teamId}/members/usage`, { params });
       return response.data.data || response.data;
     } catch (error: any) {
