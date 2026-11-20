@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSingleTabLock } from './useSingleTabLock';
+import { sendSessionLiveness } from '@/lib/services/candidateService';
 import {
   candidateService,
   sessionTokenManager,
@@ -584,6 +585,26 @@ function CandidateAssessmentPortalInner({ token, candidateName, role }: Candidat
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
+
+  // Session liveness: while this browser owns the link, ping the server so it
+  // knows we're alive, and release the link when the page is going away so
+  // another browser can take over once this one is closed.
+  useEffect(() => {
+    if (!token) return;
+    const PING_MS = 20000;
+    const ping = () => sendSessionLiveness(token, false);
+    const release = () => sendSessionLiveness(token, true);
+    const onShow = (e: PageTransitionEvent) => { if (e.persisted) ping(); };
+    ping();
+    const id = setInterval(ping, PING_MS);
+    window.addEventListener('pagehide', release);
+    window.addEventListener('pageshow', onShow);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('pagehide', release);
+      window.removeEventListener('pageshow', onShow);
+    };
+  }, [token]);
 
   useRefreshPrevention({
     enabled: isAssessmentActive,
