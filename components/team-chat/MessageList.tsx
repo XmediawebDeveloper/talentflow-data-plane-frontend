@@ -1,32 +1,37 @@
 'use client';
 
-/* Chat test page — the message list: own right / others left, sender name +
-   avatar in channels, centred system notices and date separators, replies,
-   edits, forwards, @mentions, attachments, reactions, read receipts and the
-   per-message actions. TEST ONLY. */
+/* Team Chat — the message list: own right / others left, sender name +
+   avatar in teams, date separators, replies, edits, forwards, @mentions,
+   attachments, reactions and the per-message actions. */
 
-import { forwardRef, type ReactNode } from 'react';
+import { forwardRef, useState, type ReactNode } from 'react';
 import {
-  AlertCircle, Check, CheckCheck, Clock, Copy, CornerUpLeft, Download, Forward, MoreHorizontal, Pencil, Pin, PinOff,
+  AlertCircle, Check, CheckCheck, ChevronDown, Clock, Copy, CornerUpLeft, Download, Forward, Pencil, Pin, PinOff, Plus,
   Smile, SquareCheck, Trash2,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { Attachment, Conversation, Message, Person } from './types';
-import { PEOPLE } from './testData';
 import { AttachmentIcon, Avatar, IconBtn, MIN, dayKey, dayLabel, kindLabel, timeOf } from './ui';
-import { personById } from './useChatPreview';
+import { allPeople, personById } from './people';
 import { can } from './permissions';
 
 export const QUICK_EMOJIS = ['👍', '❤️', '😄', '🎉', '👀', '✅'];
+/** Everything else on offer under "+". */
+export const MORE_EMOJIS = ['😂', '😊', '😍', '🙏', '🔥', '💯', '🚀', '👏', '🤔', '😮', '😢', '🙌', '💡', '📌', '☕', '⭐'];
+/** When this list opened — messages after it are "new" and flash once. */
+const openedNow = () => Date.now();
 
 /** @Mentions (and a search match) inside a message. */
 function renderText(text: string, meId: string, find: string): ReactNode {
-  const names = PEOPLE.map(p => p.name.split(' ')[0]).sort((a, b) => b.length - a.length);
+  const people = allPeople();
+  const esc = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const names = people.map(p => esc(p.name.split(' ')[0])).filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!names.length) return text;
   const re = new RegExp(`(@(?:${names.join('|')})\\b)`, 'g');
   return text.split(re).map((part, i) => {
     if (re.test(part)) {
       re.lastIndex = 0;
-      const mentioned = PEOPLE.find(p => `@${p.name.split(' ')[0]}` === part);
+      const mentioned = people.find(p => `@${p.name.split(' ')[0]}` === part);
       const isMe = mentioned?.id === meId;
       return <span key={i} className={`rounded px-0.5 font-semibold ${isMe ? 'bg-amber-200/80 text-amber-900' : 'bg-brand-blue/10 text-brand-blue'}`}>{part}</span>;
     }
@@ -57,7 +62,7 @@ function AttachmentCard({ a, mine, onOpen }: { a: Attachment; mine: boolean; onO
         <span className="block truncate text-sm font-medium text-gray-900 dark:text-slate-100">{a.name}</span>
         <span className="block text-[11px] text-gray-500">{kindLabel(a.kind)} · {a.size}</span>
       </span>
-      <IconBtn label={`Download ${a.name} (simulated)`} onClick={() => onOpen(a)}><Download className="h-4 w-4" /></IconBtn>
+      <IconBtn label={`Download ${a.name}`} onClick={() => onOpen(a)}><Download className="h-4 w-4" /></IconBtn>
     </div>
   );
 }
@@ -85,12 +90,19 @@ const MessageList = forwardRef<HTMLDivElement, {
   /** First unread message (the "New messages" divider). */
   unreadStartId?: string | null;
   reactFor: string | null;
+  /** Your favourite emojis (most used first). */
+  favEmojis: string[];
   setReactFor: (id: string | null) => void;
   copiedId: string | null;
   highlightId: string | null;
   onScroll: (atBottom: boolean) => void;
   actions: MessageActions;
-}>(function MessageList({ c, me, messages, find, selected, unreadStartId, reactFor, setReactFor, copiedId, highlightId, onScroll, actions }, ref) {
+  /** Who may delete a message (default: the rules in permissions.ts). */
+  canDelete?: (m: Message) => boolean;
+}>(function MessageList({ c, me, messages, find, selected, unreadStartId, reactFor, setReactFor, favEmojis, copiedId, highlightId, onScroll, actions, canDelete }, ref) {
+  const deletable = (m: Message) => (canDelete ? canDelete(m) : can.delete(me, c, m));
+  const [openedAt] = useState(openedNow);
+  const [moreEmoji, setMoreEmoji] = useState(false);
   const selecting = selected.size > 0;
   const byId = new Map(c.messages.map(m => [m.id, m]));
   const othersCount = c.memberIds.filter(id => id !== me.id).length;
@@ -98,12 +110,14 @@ const MessageList = forwardRef<HTMLDivElement, {
 
   return (
     <div ref={ref} onScroll={e => { const el = e.currentTarget; onScroll(el.scrollHeight - el.scrollTop - el.clientHeight < 80); }}
-      className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 @min-[768px]:px-5" aria-live="polite">
+      className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 @min-[768px]:px-5" aria-live="polite">
+      {/* New messages flash once in the accent colour. */}
+      <style>{'@keyframes chat-fresh{0%{background-color:color-mix(in srgb,var(--brand-blue) 16%,transparent)}100%{background-color:transparent}}'}</style>
       {messages.length === 0 && (
         <div className="flex h-full flex-col items-center justify-center gap-2 py-10 text-center">
           <span className="text-3xl">💬</span>
           <p className="text-sm font-medium text-gray-700">{find ? 'No messages match your search' : 'No messages yet'}</p>
-          {!find && <p className="tf-meta">{c.kind === 'candidate' ? 'Start the conversation with a short, friendly note.' : 'Say hello 👋'}</p>}
+          {!find && <p className="tf-meta">Say hello 👋</p>}
         </div>
       )}
 
@@ -120,9 +134,9 @@ const MessageList = forwardRef<HTMLDivElement, {
         );
         const unreadDivider = m.id === unreadStartId && !find && (
           <div className="my-3 flex items-center gap-3" role="separator" aria-label="New messages">
-            <span className="h-px flex-1 bg-brand-orange/50" />
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-brand-orange-deep">New messages</span>
-            <span className="h-px flex-1 bg-brand-orange/50" />
+            <span className="h-px flex-1 bg-brand-blue/50" />
+            <span className="rounded-full bg-brand-blue px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">New messages</span>
+            <span className="h-px flex-1 bg-brand-blue/50" />
           </div>
         );
 
@@ -162,7 +176,7 @@ const MessageList = forwardRef<HTMLDivElement, {
             <div
               tabIndex={0}
               onClick={() => { if (selecting && !m.deleted) actions.onToggleSelect(m); }}
-              className={`group relative flex gap-2.5 rounded-lg px-1 outline-none transition-colors ${first ? 'mt-3' : 'mt-0.5'} ${mine ? 'flex-row-reverse' : ''} ${selecting && !m.deleted ? 'cursor-pointer' : ''} ${sel ? 'bg-brand-blue/[0.06]' : ''} ${highlightId === m.id ? 'bg-amber-100/70' : ''}`}
+              className={`group relative flex gap-2.5 rounded-lg px-1 outline-none transition-colors ${!mine && m.at > openedAt ? '[animation:chat-fresh_3.5s_ease-out_1]' : ''} ${first ? 'mt-3' : 'mt-0.5'} ${mine ? 'flex-row-reverse' : ''} ${selecting && !m.deleted ? 'cursor-pointer' : ''} ${sel ? 'bg-brand-blue/[0.06]' : ''} ${highlightId === m.id ? 'bg-amber-100/70' : ''}`}
             >
               {selecting && (
                 <span className={`mt-2 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${sel ? 'border-brand-blue bg-brand-blue text-white' : 'border-gray-300 bg-white'}`}>{sel && <Check className="h-3 w-3" />}</span>
@@ -170,12 +184,11 @@ const MessageList = forwardRef<HTMLDivElement, {
               {!mine && <span className="w-8 shrink-0">{first && <Avatar person={author} size="sm" />}</span>}
 
               <div className={`flex min-w-0 max-w-[82%] flex-col @min-[768px]:max-w-[72%] ${mine ? 'items-end' : 'items-start'}`}>
-                {/* Sender line — channels show who; everyone shows when. */}
+                {/* Sender line — teams show who; everyone shows when. */}
                 {first && !mine && (
                   <span className="mb-1 flex flex-wrap items-baseline gap-x-1.5 text-xs">
-                    {c.kind === 'channel' && <span className="font-semibold text-gray-900 dark:text-slate-100">{author.name}</span>}
-                    {c.kind === 'channel' && <span className="text-gray-500">{author.title}</span>}
-                    <span className="text-gray-500">{c.kind === 'channel' ? '· ' : ''}{timeOf(m.at)}</span>
+                    {c.kind === 'team' && <span className="font-semibold text-gray-900 dark:text-slate-100">{author.name}</span>}
+                    <span className="text-gray-500">{c.kind === 'team' ? '· ' : ''}{timeOf(m.at)}</span>
                   </span>
                 )}
 
@@ -184,7 +197,7 @@ const MessageList = forwardRef<HTMLDivElement, {
                 {m.deleted ? (
                   <span className="rounded-2xl border border-dashed border-gray-300 px-3 py-2 text-sm italic text-gray-500">This message was deleted</span>
                 ) : (
-                  <>
+                  <div className={`group/msg relative flex max-w-full flex-col ${mine ? 'items-end' : 'items-start'}`}>
                     {(m.text || reply) && (
                       <div className={`max-w-full break-words px-3.5 py-2 text-sm leading-relaxed ${
                         mine ? `bg-brand-blue text-white ${first ? 'rounded-2xl rounded-tr-md' : 'rounded-2xl rounded-r-md'}`
@@ -205,7 +218,35 @@ const MessageList = forwardRef<HTMLDivElement, {
                         {m.attachments.map(a => <AttachmentCard key={a.id} a={a} mine={mine} onOpen={actions.onOpenAttachment} />)}
                       </div>
                     ) : null}
-                  </>
+
+                    {/* ⌄ — shown only while the message is hovered (or the menu is open) */}
+                    {!selecting && (
+                      <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <button type="button" aria-label="Message options" title="Message options"
+                            className={`absolute right-1 top-1 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full opacity-0 shadow-sm transition-opacity focus-visible:opacity-100 group-hover/msg:opacity-100 data-[state=open]:opacity-100 ${
+                              mine && m.text ? 'bg-brand-blue text-white ring-1 ring-white/30 hover:brightness-110' : 'border border-gray-200 bg-white text-gray-600 hover:text-gray-900 dark:border-slate-700 dark:bg-slate-900'
+                            }`}>
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          {can.send(me, c) && <DropdownMenuItem onSelect={() => actions.onReply(m)}><CornerUpLeft className="h-4 w-4" />Reply</DropdownMenuItem>}
+                          {can.forward() && <DropdownMenuItem onSelect={() => actions.onForward(m)}><Forward className="h-4 w-4" />Forward</DropdownMenuItem>}
+                          {can.edit(me, m) && !c.archived && m.text && <DropdownMenuItem onSelect={() => actions.onEdit(m)}><Pencil className="h-4 w-4" />Edit</DropdownMenuItem>}
+                          {can.pin() && <DropdownMenuItem onSelect={() => actions.onPin(m, !m.pinned)}>{m.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}{m.pinned ? 'Unpin' : 'Pin'}</DropdownMenuItem>}
+                          {m.text && <DropdownMenuItem onSelect={() => actions.onCopy(m)}>{copiedId === m.id ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}{copiedId === m.id ? 'Copied' : 'Copy text'}</DropdownMenuItem>}
+                          <DropdownMenuItem onSelect={() => actions.onToggleSelect(m)}><SquareCheck className="h-4 w-4" />Select</DropdownMenuItem>
+                          {deletable(m) && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive" onSelect={() => actions.onDelete(m)}><Trash2 className="h-4 w-4" />{m.authorId === me.id ? 'Delete' : 'Delete (admin)'}</DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                 )}
 
                 {m.reactions.length > 0 && (
@@ -231,45 +272,36 @@ const MessageList = forwardRef<HTMLDivElement, {
                     {m.editedAt && <span>· edited</span>}
                     {m.pinned && <Pin className="h-3 w-3 text-amber-500" aria-label="Pinned" />}
                     {receipt}
-                    {mine && m.id === lastOwnId && c.kind === 'channel' && readers.length > 0 && (
+                    {mine && m.id === lastOwnId && c.kind === 'team' && readers.length > 0 && (
                       <span title={readers.map(id => personById(id).name).join(', ')}>· Seen by {readAll ? 'everyone' : readers.length}</span>
                     )}
                   </span>
                 )}
               </div>
 
-              {/* Actions — on hover / focus (tap on phones) */}
+              {/* 😊 — beside the message, only while it is hovered: your favourite emojis */}
               {!selecting && !m.deleted && (
-                <div className={`invisible absolute -top-3 z-10 flex items-center gap-0.5 rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm group-hover:visible group-focus-within:visible dark:border-slate-700 dark:bg-slate-900 ${mine ? 'left-1' : 'right-1'}`}>
-                  <div className="relative">
-                    <IconBtn label="Add reaction" onClick={() => setReactFor(reactFor === m.id ? null : m.id)}><Smile className="h-4 w-4" /></IconBtn>
-                    {reactFor === m.id && (
-                      <div className={`absolute top-9 z-20 flex gap-0.5 rounded-full border border-gray-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900 ${mine ? 'left-0' : 'right-0'}`}>
-                        {QUICK_EMOJIS.map(e => (
-                          <button key={e} type="button" onClick={() => { actions.onReact(m, e); setReactFor(null); }} className="flex h-8 w-8 items-center justify-center rounded-full text-lg hover:scale-110 hover:bg-gray-100">{e}</button>
+                <div className={`relative self-center ${reactFor === m.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'} transition-opacity`}>
+                  <IconBtn label="React" active={reactFor === m.id} onClick={() => { setReactFor(reactFor === m.id ? null : m.id); setMoreEmoji(false); }}><Smile className="h-4 w-4" /></IconBtn>
+                  {reactFor === m.id && (
+                    <div className={`absolute bottom-9 z-20 w-max max-w-[16rem] rounded-2xl border border-gray-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900 ${mine ? 'right-0' : 'left-0'}`}>
+                      <div className="flex items-center gap-0.5">
+                        {favEmojis.map(e => (
+                          <button key={e} type="button" onClick={() => { actions.onReact(m, e); setReactFor(null); }} title={`React ${e}`}
+                            className={`flex h-8 w-8 items-center justify-center rounded-full text-lg hover:scale-110 hover:bg-gray-100 ${m.reactions.some(r => r.emoji === e && r.userIds.includes(me.id)) ? 'bg-brand-blue/10' : ''}`}>{e}</button>
                         ))}
+                        <button type="button" onClick={() => setMoreEmoji(v => !v)} aria-expanded={moreEmoji} aria-label="More emojis" title="More emojis"
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"><Plus className="h-4 w-4" /></button>
                       </div>
-                    )}
-                  </div>
-                  {can.send(me, c) && <IconBtn label="Reply" onClick={() => actions.onReply(m)}><CornerUpLeft className="h-4 w-4" /></IconBtn>}
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <button type="button" aria-label="More actions" title="More actions" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"><MoreHorizontal className="h-4 w-4" /></button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align={mine ? 'start' : 'end'} className="w-48">
-                      {can.edit(me, m) && !c.archived && m.text && <DropdownMenuItem onSelect={() => actions.onEdit(m)}><Pencil className="h-4 w-4" />Edit</DropdownMenuItem>}
-                      {can.forward(me) && <DropdownMenuItem onSelect={() => actions.onForward(m)}><Forward className="h-4 w-4" />Forward</DropdownMenuItem>}
-                      {can.pin(me) && <DropdownMenuItem onSelect={() => actions.onPin(m, !m.pinned)}>{m.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}{m.pinned ? 'Unpin' : 'Pin'}</DropdownMenuItem>}
-                      {m.text && <DropdownMenuItem onSelect={() => actions.onCopy(m)}>{copiedId === m.id ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}{copiedId === m.id ? 'Copied' : 'Copy text'}</DropdownMenuItem>}
-                      {me.role !== 'candidate' && <DropdownMenuItem onSelect={() => actions.onToggleSelect(m)}><SquareCheck className="h-4 w-4" />Select</DropdownMenuItem>}
-                      {can.delete(me, c, m) && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive" onSelect={() => actions.onDelete(m)}><Trash2 className="h-4 w-4" />{m.authorId === me.id ? 'Delete' : 'Delete (admin)'}</DropdownMenuItem>
-                        </>
+                      {moreEmoji && (
+                        <div className="mt-1 grid grid-cols-8 gap-0.5 border-t border-gray-100 pt-1 dark:border-slate-700">
+                          {MORE_EMOJIS.map(e => (
+                            <button key={e} type="button" onClick={() => { actions.onReact(m, e); setReactFor(null); }} className="flex h-7 w-7 items-center justify-center rounded-md text-base hover:bg-gray-100">{e}</button>
+                          ))}
+                        </div>
                       )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

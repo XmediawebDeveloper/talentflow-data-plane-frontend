@@ -1,21 +1,19 @@
 'use client';
 
-/* Chat test page — the left sidebar: Messages · Channels · Direct
-   (Employees / Candidates) · Archived. Four looks for four widths:
-   `full` (labels), `rail` (icons), `tabs` (a row above the list) and
-   `bottom` (a phone's bottom bar). TEST ONLY. */
+/* Team Chat — the sections sidebar: Messages · Teams · Direct messages
+   (· Archived). Four looks for four widths: `full` (labels), `rail` (icons),
+   `tabs` (a row above the list) and `bottom` (a phone's bottom bar). */
 
-import { Archive, Hash, MessageSquare, Users, UserRound, type LucideIcon } from 'lucide-react';
+import { Archive, MessageSquare, Users, UsersRound, type LucideIcon } from 'lucide-react';
 
-export type NavSection = 'all' | 'channels' | 'employees' | 'candidates' | 'archived';
+export type NavSection = 'all' | 'teams' | 'direct' | 'archived';
 
-export interface NavCounts { all: number; channels: number; employees: number; candidates: number; archived: number }
+export interface NavCounts { all: number; teams: number; direct: number; archived: number }
 
-const ITEMS: { key: NavSection; label: string; short: string; Icon: LucideIcon; group?: 'direct' }[] = [
+const ITEMS: { key: NavSection; label: string; short: string; Icon: LucideIcon }[] = [
   { key: 'all', label: 'Messages', short: 'All', Icon: MessageSquare },
-  { key: 'channels', label: 'Job channels', short: 'Channels', Icon: Hash },
-  { key: 'employees', label: 'Employees', short: 'Team', Icon: Users, group: 'direct' },
-  { key: 'candidates', label: 'Candidates', short: 'Candidates', Icon: UserRound, group: 'direct' },
+  { key: 'teams', label: 'Teams', short: 'Teams', Icon: UsersRound },
+  { key: 'direct', label: 'Direct messages', short: 'Direct', Icon: Users },
   { key: 'archived', label: 'Archived', short: 'Archived', Icon: Archive },
 ];
 
@@ -24,7 +22,7 @@ export default function ChatNav({ section, onChange, unread, hide = [], variant 
   onChange: (s: NavSection) => void;
   /** Unread per section. */
   unread: NavCounts;
-  /** Sections this role never sees (a candidate has no channels). */
+  /** Sections to leave out. */
   hide?: NavSection[];
   variant: 'full' | 'rail' | 'tabs' | 'bottom';
 }) {
@@ -69,11 +67,8 @@ export default function ChatNav({ section, onChange, unread, hide = [], variant 
   return (
     <nav aria-label="Chat sections" className={`flex h-full shrink-0 flex-col gap-0.5 border-r border-gray-200 bg-gray-50/70 p-2 dark:border-slate-700 dark:bg-slate-900 ${rail ? 'w-14 items-center' : 'w-52'}`}>
       {!rail && <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Chat</p>}
-      {items.map(({ key, label, Icon, group }, i) => (
+      {items.map(({ key, label, Icon }) => (
         <div key={key} className="w-full">
-          {!rail && group === 'direct' && items[i - 1]?.group !== 'direct' && (
-            <p className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Direct</p>
-          )}
           {!rail && key === 'archived' && <div className="my-2 border-t border-gray-200 dark:border-slate-700" />}
           <button type="button" onClick={() => onChange(key)} aria-current={section === key ? 'page' : undefined} title={rail ? label : undefined}
             className={`relative flex w-full items-center gap-2.5 rounded-lg text-sm transition-colors ${rail ? 'h-10 justify-center' : 'h-9 px-2.5'} ${
