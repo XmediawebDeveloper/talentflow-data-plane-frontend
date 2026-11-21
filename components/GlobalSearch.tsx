@@ -15,17 +15,54 @@ interface GlobalSearchProps {
   className?: string;
 }
 
+/**
+ * Finds the query's digits inside the phone number's digits and returns the
+ * [start, end) character range in the original (possibly formatted) string,
+ * so spaces/dashes/+ inside the match are highlighted but nothing outside it.
+ */
+function phoneMatchRange(phone: string, query: string): [number, number] | null {
+  const q = query.replace(/\D/g, '');
+  if (!q) return null;
+  const digitPos: number[] = [];
+  let digits = '';
+  for (let i = 0; i < phone.length; i++) {
+    if (/\d/.test(phone[i])) {
+      digitPos.push(i);
+      digits += phone[i];
+    }
+  }
+  const idx = digits.indexOf(q);
+  if (idx === -1) return null;
+  return [digitPos[idx], digitPos[idx + q.length - 1] + 1];
+}
+
+function renderPhone(phone: string, query: string) {
+  const range = phoneMatchRange(phone, query);
+  if (!range) return phone;
+  const [start, end] = range;
+  return (
+    <>
+      {phone.slice(0, start)}
+      <mark className="bg-yellow-200 dark:bg-yellow-500/40 text-inherit font-semibold rounded-sm px-px">
+        {phone.slice(start, end)}
+      </mark>
+      {phone.slice(end)}
+    </>
+  );
+}
+
 /* ── ID-style queries ("650", "JD-650") ─────────────────────────────────
    Each list endpoint's `search` also matches fields this dropdown never
-   shows: a résumé's phone number, an assessment's internal AS-022 and an AI
-   interview's internal AI-045 (neither is shown anywhere in the app — their
-   tables identify them by the Job ID). So a typed number returned rows with
-   no visible reason to be there. For an ID-style query a row is kept only
-   when the number is in an ID the app shows (the Job ID) or in the name. */
-const ID_QUERY = /^[a-z]{0,4}[-s]?d+$/i;
+   shows: an assessment's internal AS-022 and an AI interview's internal
+   AI-045 (neither is shown anywhere in the app — their tables identify them
+   by the Job ID). So a typed number returned rows with no visible reason to
+   be there. For an ID-style query a row is kept only when the number is in an
+   ID the app shows (the Job ID) or in the name. Résumés are also kept when
+   the digits are in their phone number, which is shown highlighted. */
+const ID_QUERY = /^[a-z]{0,4}[-\s]?\d+$/i;
 /** Phone-style input: digits with spaces, +, -, dots or brackets
- *  ("98765 43210", "+91 98765-43210"). Résumés are never found by phone. */
-const PHONE_QUERY = /^[ds+().-]+$/;
+ *  ("98765 43210", "+91 98765-43210"). */
+const PHONE_QUERY = /^[\d\s+().-]+$/;
 const RESULT_LIMIT = 5;
 
 /** "650" or "JD-650" against an ID such as "JD-650" / "JD-003". */
@@ -33,7 +70,7 @@ function idMatches(id: string | null | undefined, query: string): boolean {
   if (!id) return false;
   const q = query.toLowerCase().replace(/[^a-z0-9]/g, '');
   if (/[a-z]/.test(q)) return id.toLowerCase().replace(/[^a-z0-9]/g, '').includes(q);
-  const digits = id.replace(/D/g, '');
+  const digits = id.replace(/\D/g, '');
   return digits.includes(q) || (digits !== '' && Number(digits) === Number(q));
 }
 
@@ -90,7 +127,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
     setIsLoading(true);
     const q = searchQuery.trim();
     const idQuery = ID_QUERY.test(q);
-    const phoneQuery = /d/.test(q) && PHONE_QUERY.test(q);
+    const phoneQuery = /\d/.test(q) && PHONE_QUERY.test(q);
     // ID / phone style: ask for more, since hidden-field matches are dropped below.
     const pageSize = idQuery || phoneQuery ? 25 : RESULT_LIMIT;
     try {
@@ -106,9 +143,9 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
         (filter ? items.filter(visible) : items).slice(0, RESULT_LIMIT);
 
       setResumes(resumeRes.status === 'fulfilled'
-        // No search by phone number: for a number / phone-style query a résumé
-        // must match by name or email (résumés have no ID in the app).
-        ? keep(resumeRes.value.items, (r) => textMatches([r.candidate_name, r.candidate_email, r.email], q), idQuery || phoneQuery)
+        // For a number / phone-style query a résumé must match by name, email
+        // or the (highlighted) phone number.
+        ? keep(resumeRes.value.items, (r) => textMatches([r.candidate_name, r.candidate_email, r.email], q) || (!!r.phone && !!phoneMatchRange(r.phone, q)), idQuery || phoneQuery)
         : []);
       setFolders(folderRes.status === 'fulfilled' ? flattenFolders(folderRes.value, searchQuery) : []);
       setJds(jdRes.status === 'fulfilled'
@@ -319,6 +356,11 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                           {resume.candidate_name || resume.file_name}
                         </span>
                       </div>
+                      {resume.phone && phoneMatchRange(resume.phone, query) && (
+                        <div className="tf-meta mt-0.5">
+                          {renderPhone(resume.phone, query)}
+                        </div>
+                      )}
                       <div className="tf-meta mt-0.5">
                         {[resume.current_title, resume.current_company, resume.location].filter(Boolean).join(' · ') || resume.candidate_email || resume.file_name}
                       </div>
