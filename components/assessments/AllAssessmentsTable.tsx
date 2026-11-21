@@ -1761,8 +1761,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   {!isLoading &&
                     !error &&
                     pageRows.map((row) => (
-                      <tr {...((opensView(row)) ? clickableRowProps : {})}
-                        key={row.id}
+                      <tr key={row.id}
+                        {...((opensView(row)) ? clickableRowProps : {})}
                         onClick={opensView(row) ? () => openAssessmentDetails(row) : undefined}
                         className={`${opensView(row) ? 'cursor-pointer' : ''} transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 ${selectedIds.has(row.id) ? 'bg-brand-blue/[0.04] dark:bg-brand-blue/10' : ''}`}
                       >

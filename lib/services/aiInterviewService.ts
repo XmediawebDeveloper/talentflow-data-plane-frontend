@@ -547,6 +547,8 @@ export interface AllInvitationsStats {
   completed: number;
   terminated: number;
   revoked: number;
+  /** Bounced invite emails (backend bucket "failed"). Optional: older backends omit it. */
+  failed?: number;
 }
 
 export interface AllInvitationsPage {

@@ -209,6 +209,7 @@ const INVITATION_STATUS_TAB_OPTIONS: InviteStatusOption[] = [
   { value: 'expired', label: 'Expired' },
   { value: 'revoked', label: 'Revoked' },
   { value: 'terminated', label: 'Terminated' },
+  { value: 'failed', label: 'Failed' },
 ];
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 const CONFIG_FETCH_PAGE_SIZE = 100;
@@ -3879,8 +3880,8 @@ export default function AIInterview() {
                           : 'Share the interview to view results';
 
                     return (
-                      <div {...clickableProps}
-                        key={config.id}
+                      <div key={config.id}
+                        {...clickableProps}
                         /* One row = one JOB, as on the Assessments Job List:
                            clicking it opens the job's version history in place,
                            the same thing View Versions does. The interviews
@@ -4374,6 +4375,7 @@ export default function AIInterview() {
                 const completedCount = st?.completed ?? 0;
                 const terminatedCount = st?.terminated ?? 0;
                 const revokedCount = st?.revoked ?? 0;
+                const failedCount = st?.failed ?? 0;
                 const completionRate = totalInvites > 0 ? Math.round((completedCount / totalInvites) * 100) : 0;
 
                 const filtered = inviteStatusRows;
@@ -4775,6 +4777,9 @@ export default function AIInterview() {
                     text: 'text-destructive', hover: 'hover:text-destructive', tint: 'bg-destructive-subtle', ring: 'ring-destructive-line' },
                   { key: 'revoked', label: 'Revoked', Icon: Ban, value: revokedCount,
                     text: 'text-indigo-700', hover: 'hover:text-indigo-700', tint: 'bg-indigo-50', ring: 'ring-indigo-200' },
+                  // Bounced invite emails — same "Failed" card as the Assessments page.
+                  { key: 'failed', label: 'Failed', Icon: AlertTriangle, value: failedCount,
+                    text: 'text-destructive', hover: 'hover:text-destructive', tint: 'bg-destructive-subtle', ring: 'ring-destructive-line' },
                 ] as const);
 
                 return (
