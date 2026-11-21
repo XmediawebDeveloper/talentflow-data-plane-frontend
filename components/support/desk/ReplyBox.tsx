@@ -1,18 +1,21 @@
 'use client';
 
-/* Support tickets design preview — the reply box, with everything the live
-   page's reply has: Use Template (grouped), the reply tip, Attach file (with
-   the live limits: 5 files per upload, 10 MB in total, 25 per ticket, no
-   videos), Bold, Italic, bulleted / numbered list, link, emoji, and the
-   chosen files as removable chips. Ctrl/⌘ + Enter sends. TEST ONLY — the
-   files are only listed, never uploaded. */
+/* Support desk — the reply box: Use Template (grouped), the reply tip,
+   Attach file (5 files per upload, 10 MB in total, 25 per ticket, no
+   videos — lib/supportAttachments), Bold, Italic, bulleted / numbered list,
+   link, emoji, and the chosen files as removable chips. The text is kept as
+   a per-ticket draft (survives switching tickets and a reload). Ctrl/⌘ +
+   Enter sends. */
 
 import { useRef, useState } from 'react';
-import { toast } from 'sonner';
-import { Bold, FileText, Info, Italic, Link2, List, ListOrdered, Paperclip, Send, Smile, X } from 'lucide-react';
+import { Bold, FileText, Info, Italic, Link2, List, ListOrdered, Loader2, Paperclip, Send, Smile, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
-import { REPLY_TEMPLATES, type Scope } from './data';
+import { useReplyDraft } from '@/lib/hooks/useReplyDraft';
+import {
+  ATTACHMENT_ACCEPT, ATTACHMENT_MAX_FILES, ATTACHMENT_MAX_PER_TICKET, acceptAttachmentFiles, formatBytes,
+} from '@/lib/supportAttachments';
+import type { Scope } from './model';
 
 const EMOJI_GROUPS: { group: string; items: string[] }[] = [
   { group: 'Smileys', items: ['😀', '😊', '🙂', '😉', '😅', '😂', '🤔', '😐', '😕', '😟', '😢', '😡'] },
@@ -21,25 +24,84 @@ const EMOJI_GROUPS: { group: string; items: string[] }[] = [
 ];
 const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Segoe UI Symbol", sans-serif';
 
-/* The live page's attachment rules. */
-const MAX_FILES = 5;
-const MAX_BYTES = 10 * 1024 * 1024;
-const MAX_PER_TICKET = 25;
-const VIDEO_EXTS = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.flv', '.m4v', '.mpg', '.mpeg', '.3gp', '.3g2', '.ogv', '.ts', '.mts', '.m2ts', '.vob'];
-const ALLOWED_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.png', '.jpg', '.jpeg', '.webp', '.xlsx', '.csv', '.log', '.json', '.xml', '.yaml', '.yml', '.xls'];
-const ACCEPT = ALLOWED_EXTS.join(',');
-const kb = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / (1024 * 1024)).toFixed(1)} MB`);
+/* The reply templates ("Use Template"). The requester's and the support
+   user's lists are the same; the admin answering a team ticket has its own. */
+const REQUESTER_TEMPLATES = [
+  {
+    group: 'Follow up',
+    items: [
+      { label: 'Request a status update', text: 'Hi team,\n\nFollowing up on this ticket — could you share an update on the status?\n\nThanks' },
+      { label: 'Still facing the issue', text: 'Hi team,\n\nI am still facing this issue. It is affecting our work, so a quick update would be appreciated.\n\nThanks' },
+      { label: 'Ask for an ETA', text: 'Hi team,\n\nCould you let me know the expected timeline for a fix?\n\nThanks' },
+      { label: 'Request a call back', text: 'Hi team,\n\nIt would be easier to explain this on a call. Could someone from support reach out at a convenient time?\n\nThanks' },
+    ],
+  },
+  {
+    group: 'Share details',
+    items: [
+      { label: 'Steps to reproduce', text: 'Additional details:\n- Steps to reproduce:\n  1. \n  2. \n  3. \n- Expected result:\n- Actual result:' },
+      { label: 'Error message', text: 'I am seeing the following error message:\n\n"<paste the error here>"\n\nIt appears when I:' },
+      { label: 'Environment details', text: 'Environment details:\n- Browser and version:\n- Operating system:\n- Device (desktop / mobile):\n- Time the issue occurred:' },
+      { label: 'Affected records', text: 'This issue affects the following records:\n- Job / candidate / assessment name or ID:\n- Number of records affected:' },
+      { label: 'How often it happens', text: 'How often this happens:\n- Every time / sometimes / once:\n- Started on (date):\n- Anything that changed before it started:' },
+    ],
+  },
+  {
+    group: 'Wrap up',
+    items: [
+      { label: 'Issue resolved', text: 'Thanks for the help — the issue is resolved on my side. You can close this ticket.' },
+      { label: 'Workaround is fine', text: 'Thanks — the suggested workaround works for now. Please keep this ticket open until a permanent fix is available.' },
+      { label: 'Thank the team', text: 'Thank you for the quick support. Much appreciated!' },
+    ],
+  },
+];
+const ADMIN_TEMPLATES = [
+  {
+    group: 'Acknowledge',
+    items: [
+      { label: 'Looking into it', text: 'Hi,\n\nThanks for raising this. I am looking into it and will update you shortly.' },
+      { label: 'Assigned to me', text: 'Hi,\n\nI have picked up this ticket and will be handling it from here.' },
+      { label: 'Investigating', text: 'Hi,\n\nWe are still investigating this. I will share an update as soon as I have more information.' },
+    ],
+  },
+  {
+    group: 'Ask for details',
+    items: [
+      { label: 'Need more details', text: 'Hi,\n\nCould you share a few more details?\n- What were you trying to do?\n- What happened instead?\n- When did it start?' },
+      { label: 'Steps to reproduce', text: 'Hi,\n\nCould you list the exact steps that lead to this issue?\n1. \n2. \n3. ' },
+      { label: 'Error message', text: 'Hi,\n\nCould you paste the exact error message you see, if any?' },
+    ],
+  },
+  {
+    group: 'Access & permissions',
+    items: [
+      { label: 'Access granted', text: 'Hi,\n\nThe requested access has been granted. Please sign out and sign back in, then let me know if it works.' },
+      { label: 'Needs approval', text: 'Hi,\n\nThis request needs approval from your manager. I will update you once it is approved.' },
+    ],
+  },
+  {
+    group: 'Wrap up',
+    items: [
+      { label: 'Resolved — please confirm', text: 'Hi,\n\nThis should now be resolved. Please confirm on your side, and reply here if anything is still not working.' },
+      { label: 'Closing (no response)', text: 'Hi,\n\nI have not heard back for a while, so I will close this ticket. Feel free to reopen it if you still need help.' },
+    ],
+  },
+];
 
 const toolBtn = 'flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100';
 
-export default function ReplyBox({ scope, onTicket, onSend }: {
+export default function ReplyBox({ scope, draftKey, onTicket, onSend }: {
   scope: Scope;
+  /** `${userId}:${area}:${ticketId}` — the per-ticket draft. */
+  draftKey: string | null;
   /** Attachments already on the ticket (the 25-per-ticket limit). */
   onTicket: number;
-  onSend: (input: { text: string; files: File[] }) => void;
+  /** Resolves true when it was sent (the box then clears). */
+  onSend: (input: { text: string; files: File[] }) => Promise<boolean>;
 }) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+  const [sending, setSending] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [tip, setTip] = useState(true);
@@ -47,6 +109,8 @@ export default function ReplyBox({ scope, onTicket, onSend }: {
   const picker = useRef<HTMLInputElement | null>(null);
   // Where the caret / selection was, so toolbar inserts land there.
   const sel = useRef<{ start: number; end: number } | null>(null);
+  useReplyDraft(draftKey, text, setText);
+  const templates = scope === 'team' ? ADMIN_TEMPLATES : REQUESTER_TEMPLATES;
 
   const edit = (build: (v: string, s: number, e: number) => { text: string; selStart: number; selEnd: number }) => {
     const len = text.length;
@@ -71,39 +135,25 @@ export default function ReplyBox({ scope, onTicket, onSend }: {
   const insert = (snippet: string) =>
     edit((v, s, e) => ({ text: v.slice(0, s) + snippet + v.slice(e), selStart: s + snippet.length, selEnd: s + snippet.length }));
 
-  const addFiles = (incoming: File[]) => {
-    const accepted: File[] = [];
-    let total = files.reduce((n, f) => n + f.size, 0);
-    if (incoming.length > MAX_FILES) toast.error(`You can upload up to ${MAX_FILES} files at a time — only the first ${MAX_FILES} were considered`);
-    for (const f of incoming) {
-      const ext = f.name.includes('.') ? `.${f.name.split('.').pop()!.toLowerCase()}` : '';
-      const chosen = files.length + accepted.length;
-      if (VIDEO_EXTS.includes(ext) || f.type.startsWith('video/')) toast.error(`${f.name}: video files can't be attached`);
-      else if (!ALLOWED_EXTS.includes(ext)) toast.error(`${f.name}: this file type can't be attached`);
-      else if (onTicket + chosen >= MAX_PER_TICKET) { toast.error(`A ticket can have at most ${MAX_PER_TICKET} attachments`); break; }
-      else if (chosen >= MAX_FILES) { if (incoming.length <= MAX_FILES) toast.error(`You can upload up to ${MAX_FILES} files at a time`); break; }
-      else if (f.size > MAX_BYTES) toast.error(`${f.name} is ${kb(f.size)}. Attachments must be 10 MB or smaller — please choose a smaller file.`);
-      else if (total + f.size > MAX_BYTES) toast.error(`${f.name}: the files together must be 10 MB or smaller`);
-      else { accepted.push(f); total += f.size; }
-    }
-    if (accepted.length) setFiles(prev => [...prev, ...accepted]);
-  };
-
-  const canSend = !!text.trim() || files.length > 0;
-  const send = () => {
+  const canSend = (!!text.trim() || files.length > 0) && !sending;
+  const send = async () => {
     if (!canSend) return;
-    onSend({ text: text.trim(), files });
-    setText('');
-    setFiles([]);
-    sel.current = null;
+    setSending(true);
+    const ok = await onSend({ text: text.trim(), files });
+    setSending(false);
+    if (ok) {
+      setText('');
+      setFiles([]);
+      sel.current = null;
+    }
   };
 
   return (
     <div className="border-t border-gray-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-      {tip && scope === 'support' && (
+      {tip && scope !== 'team' && (
         <div className="mb-3 flex items-start gap-2.5 rounded-lg bg-success-subtle px-3 py-2 text-xs text-success-strong">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-          <span className="flex-1">Keep the conversation updated with additional details to help us resolve the issue faster.</span>
+          <span className="flex-1">Keep the conversation updated with additional details to help {scope === 'support' ? 'us' : 'your administrator'} resolve the issue faster.</span>
           <button type="button" aria-label="Dismiss tip" onClick={() => setTip(false)} className="shrink-0 rounded p-0.5 hover:bg-success/10"><X className="h-4 w-4" /></button>
         </div>
       )}
@@ -119,7 +169,7 @@ export default function ReplyBox({ scope, onTicket, onSend }: {
             <>
               <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setTemplatesOpen(false)} />
               <div className="absolute bottom-full right-0 z-20 mb-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                {REPLY_TEMPLATES[scope].map(g => (
+                {templates.map(g => (
                   <div key={g.group} className="py-1">
                     <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">{g.group}</p>
                     {g.items.map(t => (
@@ -147,10 +197,11 @@ export default function ReplyBox({ scope, onTicket, onSend }: {
         value={text}
         onChange={e => setText(e.target.value)}
         onSelect={e => { sel.current = { start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd }; }}
-        onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } }}
+        onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send(); } }}
         rows={3}
         placeholder="Type your message..."
         aria-label="Reply"
+        disabled={sending}
         className="tf-textarea max-h-48 resize-y text-sm"
       />
 
@@ -161,8 +212,8 @@ export default function ReplyBox({ scope, onTicket, onSend }: {
               <Paperclip className="h-3 w-3 shrink-0 text-brand-blue" />
               <span className="truncate" title={f.name}>{f.name}</span>
               <span className="shrink-0 rounded bg-brand-blue/10 px-1 text-[10px] font-semibold text-brand-blue">{(f.name.split('.').pop() || '').toUpperCase()}</span>
-              <span className="shrink-0 text-gray-500">{kb(f.size)}</span>
-              <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))} className="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700"><X className="h-3 w-3" /></button>
+              <span className="shrink-0 text-gray-500">{formatBytes(f.size)}</span>
+              <button type="button" aria-label={`Remove ${f.name}`} disabled={sending} onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))} className="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700"><X className="h-3 w-3" /></button>
             </li>
           ))}
         </ul>
@@ -171,11 +222,11 @@ export default function ReplyBox({ scope, onTicket, onSend }: {
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-0.5">
-          <input ref={picker} type="file" multiple accept={ACCEPT} className="hidden"
-            onChange={e => { addFiles(Array.from(e.target.files || [])); e.target.value = ''; }} />
-          <Tooltip content={`Up to ${MAX_FILES} files per upload (10 MB in total), ${MAX_PER_TICKET} per ticket · no videos`}>
-            <button type="button" onClick={() => picker.current?.click()}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-brand-blue dark:text-slate-400 dark:hover:bg-slate-800">
+          <input ref={picker} type="file" multiple accept={ATTACHMENT_ACCEPT} className="hidden"
+            onChange={e => { const ok = acceptAttachmentFiles(Array.from(e.target.files || []), files, onTicket); if (ok.length) setFiles(prev => [...prev, ...ok]); e.target.value = ''; }} />
+          <Tooltip content={`Up to ${ATTACHMENT_MAX_FILES} files per upload (10 MB in total), ${ATTACHMENT_MAX_PER_TICKET} per ticket · no videos`}>
+            <button type="button" onClick={() => picker.current?.click()} disabled={sending}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-brand-blue disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800">
               <Paperclip className="h-4 w-4" />Attach file
             </button>
           </Tooltip>
@@ -207,9 +258,12 @@ export default function ReplyBox({ scope, onTicket, onSend }: {
             )}
           </div>
         </div>
-        <Button size="sm" onClick={send} disabled={!canSend} icon={<Send className="h-4 w-4" />} className="w-full sm:w-auto">Send Reply</Button>
+        <Button size="sm" onClick={() => void send()} disabled={!canSend}
+          icon={sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} className="w-full sm:w-auto">
+          {sending ? 'Sending…' : 'Send Reply'}
+        </Button>
       </div>
-      <p className="mt-1.5 text-[11px] text-gray-500">Ctrl + Enter to send · preview only — nothing is sent or uploaded</p>
+      <p className="mt-1.5 text-[11px] text-gray-500">Ctrl + Enter to send</p>
     </div>
   );
 }

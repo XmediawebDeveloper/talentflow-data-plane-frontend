@@ -1,8 +1,8 @@
-/* Support tickets design preview — the light formatting the reply toolbar
+/* Support desk — the light formatting the reply toolbar
    inserts (**bold**, _italic_, [text](https://…), "- " bullets, "1. "
-   numbered lines), rendered as React nodes. Same rules as the live page
-   (components/SupportCenter.tsx): no HTML is injected; only http(s) links
-   become anchors. TEST ONLY. */
+   numbered lines), rendered as React nodes. Same rules as the old Support
+   Center: no HTML is injected; only http(s) links
+   become anchors. */
 
 import type { ReactNode } from 'react';
 
