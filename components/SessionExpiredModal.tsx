@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Lock, ShieldCheck } from 'lucide-react';
 import { SESSION_EXPIRED_EVENT, ACCESS_RESTRICTED_EVENT, performSessionLogout } from '@/lib/services/api';
 import { forceNavigate } from '@/lib/utils/forcedNavigation';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 export default function SessionExpiredModal() {
   const [isVisible, setIsVisible] = useState(false);
@@ -40,7 +41,7 @@ export default function SessionExpiredModal() {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center">
+    <ModalA11y><div className="fixed inset-0 z-[200] flex items-center justify-center">
       {/* Backdrop — no onClick handler, cannot be dismissed by clicking outside */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
@@ -93,6 +94,6 @@ export default function SessionExpiredModal() {
           </button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

@@ -54,6 +54,8 @@ import { TrackerCheckbox, TrackerSelectAll, TrackerStatusTabs, TrackerTabHint, T
 import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { loadJobAssessmentVersions } from '@/components/talent-match-invite/inviteVersions';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* Per-row actions: Resend / Copy Link always, plus Revoke (while an invite is
    still unopened) and Edit (name + email, revoked-only, then Save & Send) when
@@ -760,7 +762,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
 
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
       {/* Height is content-driven with a viewport cap, not a fixed dvh, so a
           short list no longer stretches the dialog down a large monitor. */}
       <div className={`${TRACKER_DIALOG_PANEL_CLASS} ${guided ? TRACKER_LOOK_PANEL_CLASS : paginationBelowTable ? PAGED_PANEL_CLASS : ''}`}>
@@ -1078,15 +1080,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                       actions={
                         <>
                           {effectiveStatus === 'completed' && invitation.attempt_id && (
-                            <button
+                            <IconButton bare label="View"
                               type="button"
                               onClick={(e) => { e.stopPropagation(); openResult(invitation); }}
-                              title="View"
-                              aria-label="View"
                               className="tf-icon-btn-outline"
                             >
                               <Eye />
-                            </button>
+                            </IconButton>
                           )}
                           <InvitationActionButtons
                             actions={buildInvitationRowActions(invitation, {
@@ -1252,11 +1252,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                                 aria-label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
                               />
                             ) : (
-                              <button
+                              <IconButton bare label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
                                 type="button"
                                 role="checkbox"
                                 aria-checked={selectedIds.has(invitation.id)}
-                                aria-label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
                                 onClick={() => toggleSelectOne(invitation.id)}
                                 className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
                                   selectedIds.has(invitation.id)
@@ -1265,7 +1264,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                                 }`}
                               >
                                 {selectedIds.has(invitation.id) && <Check className="w-3 h-3 text-white" />}
-                              </button>
+                              </IconButton>
                             ) : (
                               <span className="inline-block w-5" />
                             )}
@@ -1550,6 +1549,6 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
         onConfirm={handleBulkRevoke}
         isLoading={isBulkRevoking}
       />
-    </div>
+    </div></ModalA11y>
   );
 }

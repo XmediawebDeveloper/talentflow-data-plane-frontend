@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Search, X } from 'lucide-react';
 import { cn } from './utils';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * Consolidated toolbar — search + filters + tabs + sort.
@@ -68,23 +69,22 @@ function ToolbarSearch({
 }: ToolbarSearchProps) {
   return (
     <div className={cn('relative flex-1 min-w-0', className)}>
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500 pointer-events-none" />
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500 pointer-events-none" />
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-9 pr-9 h-9 text-sm text-black dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 transition"
+        className="w-full pl-9 pr-9 h-9 text-sm text-black dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg placeholder:text-gray-500 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 transition"
       />
       {clearable && value && (
-        <button
+        <IconButton bare label="Clear search"
           type="button"
           onClick={() => onChange('')}
-          aria-label="Clear search"
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-400"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400"
         >
           <X className="w-3.5 h-3.5" />
-        </button>
+        </IconButton>
       )}
     </div>
   );

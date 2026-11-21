@@ -143,7 +143,7 @@ export function SummaryYesNo({ value }: { value: boolean }) {
     <p className={`${SUMMARY_FIELD_VALUE} flex items-center gap-1.5`}>
       {value
         ? <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
-        : <X className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />}
+        : <X className="w-4 h-4 text-gray-500 dark:text-slate-500 flex-shrink-0" />}
       {value ? 'Yes' : 'No'}
     </p>
   );

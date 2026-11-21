@@ -32,6 +32,7 @@ import {
   LanguageConfig,
 } from '@/lib/constants/languageTemplates';
 import { isEnglishOnlyText } from '@/lib/utils/englishText';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface MultiLanguageCodeEditorProps {
   question: CurrentQuestion;
@@ -829,7 +830,7 @@ export function MultiLanguageCodeEditor({
                 <ul className="tf-body-secondary space-y-1 bg-gray-50 p-3 rounded-lg">
                   {question.constraints.map((constraint, idx) => (
                     <li key={idx} className="flex items-start gap-2">
-                      <span className="text-gray-400">-</span>
+                      <span className="text-gray-500">-</span>
                       <code className="text-xs bg-gray-200 px-1 rounded">{constraint}</code>
                     </li>
                   ))}
@@ -847,15 +848,14 @@ export function MultiLanguageCodeEditor({
                     <span className="tf-eyebrow tracking-wide">
                       Input
                     </span>
-                    <button
+                    <IconButton bare label="Copy input"
                       onClick={() => copyToClipboard(question.sample_input || '')}
                       /* 32px tap area for touch; the negative margin keeps the
                          icon where it was. */
-                      className="text-gray-400 hover:text-gray-600 p-2.5 -m-1.5"
-                      aria-label="Copy input" title="Copy input"
+                      className="text-gray-500 hover:text-gray-600 p-2.5 -m-1.5"
                     >
                       {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                    </button>
+                    </IconButton>
                   </div>
                   <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto">
                     {question.sample_input}
@@ -1016,7 +1016,7 @@ export function MultiLanguageCodeEditor({
                 )}
               </div>
             ) : (
-              <div className="tf-panel flex items-center justify-center py-6 text-gray-400 border-dashed">
+              <div className="tf-panel flex items-center justify-center py-6 text-gray-500 border-dashed">
                 <div className="text-center">
                   <Play className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">Click "Run" to see output</p>
@@ -1104,27 +1104,25 @@ export function MultiLanguageCodeEditor({
           {/* Editor Controls */}
           <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
             {/* Custom Input Toggle */}
-            <button
+            <IconButton bare label="Custom input"
               onClick={() => setShowInputPanel(!showInputPanel)}
               className={`p-2 rounded-lg text-sm transition-colors ${
                 showInputPanel
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
-              aria-label="Custom input" title="Custom input"
             >
               <Terminal className="w-4 h-4" />
-            </button>
+            </IconButton>
 
             {/* Reset Button */}
-            <button
+            <IconButton bare label={isLocked ? 'Cannot reset after submission' : 'Reset to starter code'}
               onClick={handleResetCode}
               disabled={isLocked}
               className={`p-2 rounded-lg transition-colors ${isLocked ? 'bg-gray-800 text-gray-600 cursor-not-allowed opacity-40' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-              title={isLocked ? 'Cannot reset after submission' : 'Reset to starter code'}
             >
               <RotateCcw className="w-4 h-4" />
-            </button>
+            </IconButton>
 
             {/* Font Size */}
             <FilterSelect

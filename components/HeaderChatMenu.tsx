@@ -10,6 +10,8 @@ import chatService, { type Channel } from '@/lib/services/chatService';
 import NameAvatar from '@/components/ui/name-avatar';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { IconButton } from '@/components/ui/icon-button';
+import { Tooltip } from '@/components/ui/tooltip';
 
 /**
  * The header's chat icon.
@@ -153,6 +155,8 @@ export default function HeaderChatMenu({ unread, onUnreadChanged, onActivate, cu
 
   return (
     <div ref={rootRef} className="relative">
+      {/* Same hover / focus tooltip as the Notifications bell beside it. */}
+      <Tooltip content="Chat" position="bottom">
       <button
         type="button"
         onClick={toggle}
@@ -178,6 +182,7 @@ export default function HeaderChatMenu({ unread, onUnreadChanged, onActivate, cu
           </span>
         )}
       </button>
+      </Tooltip>
 
       {open && (
         <div
@@ -186,7 +191,7 @@ export default function HeaderChatMenu({ unread, onUnreadChanged, onActivate, cu
           aria-label="Unread messages"
           className="absolute right-0 top-full z-50 pt-2 max-sm:fixed max-sm:inset-x-3 max-sm:top-14"
         >
-          <div className="w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg shadow-slate-900/10 animate-in fade-in slide-in-from-top-1 duration-150 motion-reduce:animate-none dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/40 max-sm:w-full">
+          <div className="w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg shadow-slate-900/10 animate-in fade-in zoom-in-90 slide-in-from-top-1 duration-200 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:animate-none origin-top-right max-sm:origin-top dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/40 max-sm:w-full">
             {/* Header */}
             <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2 dark:border-slate-800">
               <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">
@@ -304,17 +309,15 @@ export default function HeaderChatMenu({ unread, onUnreadChanged, onActivate, cu
                                   disabled={sending}
                                   placeholder={`Reply to ${conv.type === 'direct' ? conv.name : `#${conv.name}`}`}
                                   aria-label={`Reply to ${conv.name}`}
-                                  className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2.5 text-xs text-gray-900 placeholder:text-gray-400 focus:border-brand-blue/50 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+                                  className="h-8 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2.5 text-xs text-gray-900 placeholder:text-gray-500 focus:border-brand-blue/50 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                                 />
-                                <button
+                                <IconButton bare label="Send reply" tooltip="Send (Enter)"
                                   type="submit"
                                   disabled={!draft.trim() || sending}
-                                  aria-label="Send reply"
-                                  title="Send (Enter)"
                                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-blue text-white transition-colors hover:bg-brand-blue-2 disabled:opacity-40"
                                 >
                                   {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                                </button>
+                                </IconButton>
                                 <button
                                   type="button"
                                   onClick={() => { setReplyingId(null); setDraft(''); }}

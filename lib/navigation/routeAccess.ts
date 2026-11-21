@@ -81,6 +81,8 @@ export const ROUTE_RULES: RouteRule[] = [
   // ORGANIZATION
   // Chat — its own page (was /organization/team-chat, which redirects here).
   { prefix: '/chat', allowAll: true },
+  // Open to everyone so ticket links never dead-end; the page itself sends
+  // non-admins to their Help Desk (same ?ticket=) and shows admins the screen.
   { prefix: '/organization/internal-tickets', allowAll: true },
   // Teams opens with View Teams only — the backend's /teams list and stats
   // allow just the owner or can_view_teams, so anything wider (User

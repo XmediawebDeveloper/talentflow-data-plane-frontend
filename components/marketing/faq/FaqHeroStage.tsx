@@ -19,16 +19,16 @@ import { useEffect, useRef } from "react";
 const LOOP = "12s";
 
 const CSS = `
-.fqh-stage { --fqh-ink: #08132e; --fqh-guide: rgba(8,19,46,.08); --fqh-line: rgba(8,19,46,.08); --fqh-cap-bg: #fff;
+.fqh-stage { --fqh-ink: var(--raw-08132e); --fqh-guide: var(--raw-rgba-8-19-46-0p08); --fqh-line: var(--raw-rgba-8-19-46-0p08); --fqh-cap-bg: var(--raw-ffffff);
   position: relative; width: 100%; height: 420px; display: flex; align-items: center; justify-content: center; perspective: 1200px; }
-.dark .fqh-stage { --fqh-ink: #e8eefc; --fqh-guide: rgba(255,255,255,.08); --fqh-line: rgba(255,255,255,.12); --fqh-cap-bg: #0f1b38; }
+.dark .fqh-stage { --fqh-ink: var(--raw-e8eefc); --fqh-guide: var(--raw-rgba-255-255-255-0p08); --fqh-line: var(--raw-rgba-255-255-255-0p12); --fqh-cap-bg: var(--raw-0f1b38); }
 .fqh-stage.is-paused * { animation-play-state: paused !important; }
 
 .fqh-halo { position: absolute; inset: 10% 8%; border-radius: 50%; pointer-events: none; filter: blur(10px);
-  background: radial-gradient(closest-side, rgba(7,156,196,.13), transparent 70%), radial-gradient(closest-side, rgba(15,60,153,.07), transparent 82%); }
+  background: radial-gradient(closest-side, var(--raw-rgba-7-156-196-0p13), transparent 70%), radial-gradient(closest-side, var(--raw-rgba-15-60-153-0p07), transparent 82%); }
 .fqh-shadow { position: absolute; left: 50%; bottom: 54px; width: 300px; height: 52px; margin-left: -150px; border-radius: 50%;
-  pointer-events: none; filter: blur(10px); background: radial-gradient(closest-side, rgba(8,19,46,.16), transparent 74%); }
-.dark .fqh-shadow { background: radial-gradient(closest-side, rgba(0,0,0,.45), transparent 74%); }
+  pointer-events: none; filter: blur(10px); background: radial-gradient(closest-side, var(--raw-rgba-8-19-46-0p16), transparent 74%); }
+.dark .fqh-shadow { background: radial-gradient(closest-side, var(--raw-rgba-0-0-0-0p45), transparent 74%); }
 
 .fqh-scene { position: relative; flex: none; width: 420px; height: 300px; transform-style: preserve-3d; will-change: transform;
   transform: scale(var(--fqh-scale, 1)) rotateY(var(--ry, 0deg)) rotateX(var(--rx, 0deg)); }
@@ -73,15 +73,15 @@ const CSS = `
 }
 
 .fqh-seam { position: absolute; left: -6%; width: 112%; height: 2px; top: var(--sy); border-radius: 2px; opacity: 0;
-  background: linear-gradient(90deg, rgba(7,156,196,0), #fff, rgba(7,156,196,0)); animation: fqh-seam ${LOOP} ease-out infinite; }
-.dark .fqh-seam { background: linear-gradient(90deg, rgba(7,156,196,0), #7fdcf3, rgba(7,156,196,0)); }
+  background: linear-gradient(90deg, var(--raw-rgba-7-156-196-0), var(--raw-ffffff), var(--raw-rgba-7-156-196-0)); animation: fqh-seam ${LOOP} ease-out infinite; }
+.dark .fqh-seam { background: linear-gradient(90deg, var(--raw-rgba-7-156-196-0), var(--raw-7fdcf3), var(--raw-rgba-7-156-196-0)); }
 .F .fqh-seam { --sy: 30px; } .A .fqh-seam { --sy: 44px; animation-delay: .1s; } .Q .fqh-seam { --sy: 74px; animation-delay: .2s; }
 @keyframes fqh-seam { 0%, 22.5% { opacity: 0; transform: scaleX(.3); } 24% { opacity: 1; transform: scaleX(1); } 27.5%, 100% { opacity: 0; transform: scaleX(1); } }
 
 .fqh-rule { position: absolute; z-index: 6; left: 50%; top: 50%; width: 300px; height: 5px; margin: 62px 0 0 -150px; border-radius: 999px; opacity: 0;
-  pointer-events: none; background: linear-gradient(90deg, rgba(15,60,153,0), #0f3c99, rgba(7,156,196,0));
+  pointer-events: none; background: linear-gradient(90deg, var(--raw-rgba-15-60-153-0), var(--raw-0f3c99), var(--raw-rgba-7-156-196-0));
   animation: fqh-rule ${LOOP} cubic-bezier(.22,1,.36,1) infinite; }
-.dark .fqh-rule { background: linear-gradient(90deg, rgba(76,123,232,0), #4c7be8, rgba(7,156,196,0)); }
+.dark .fqh-rule { background: linear-gradient(90deg, var(--raw-rgba-76-123-232-0), var(--raw-4c7be8), var(--raw-rgba-7-156-196-0)); }
 @keyframes fqh-rule { 0%, 23% { opacity: 0; transform: scaleX(.1); } 29% { opacity: 1; transform: scaleX(1); } 37% { opacity: 1; transform: scaleX(1); } 41%, 100% { opacity: 0; transform: scaleX(1); } }
 
 /* ---- stage 2: ? + magnifier cross in behind the word, then hold alone ---- */
@@ -114,17 +114,17 @@ const CSS = `
   37.5%, 100% { transform: translate(30px,14px) rotate(16deg) scale(1); }
 }
 .fqh-pair-halo { position: absolute; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px; border-radius: 50%; filter: blur(14px);
-  background: radial-gradient(closest-side, rgba(7,156,196,.2), transparent 72%), radial-gradient(closest-side, rgba(15,60,153,.1), transparent 84%);
+  background: radial-gradient(closest-side, var(--raw-rgba-7-156-196-0p2), transparent 72%), radial-gradient(closest-side, var(--raw-rgba-15-60-153-0p1), transparent 84%);
   animation: fqh-halo ${LOOP} ease-in-out infinite; }
 @keyframes fqh-halo { 0%, 27% { transform: scale(.7); opacity: 0; } 35% { transform: scale(1); opacity: 1; } 53% { transform: scale(1.08); opacity: 1; } 57%, 100% { transform: scale(1.12); opacity: 0; } }
 .fqh-lens { position: absolute; left: 0; top: 0; width: 70px; height: 70px; border-radius: 50%; border: 7px solid var(--fqh-ink); opacity: 0;
-  background: radial-gradient(circle at 34% 30%, rgba(7,156,196,.16), rgba(15,60,153,.05) 64%, rgba(255,255,255,.15));
+  background: radial-gradient(circle at 34% 30%, var(--raw-rgba-7-156-196-0p16), var(--raw-rgba-15-60-153-0p05) 64%, var(--raw-rgba-255-255-255-0p15));
   animation: fqh-lens ${LOOP} cubic-bezier(.22,1,.36,1) infinite; }
 @keyframes fqh-lens { 0%, 30.5% { opacity: 0; transform: scale(.55) rotate(-28deg); } 33.5% { opacity: 1; transform: scale(1.05) rotate(4deg); } 35.5%, 100% { opacity: 1; transform: scale(1) rotate(0); } }
 .fqh-stem { position: absolute; left: 63px; top: 63px; width: 34px; height: 8px; border-radius: 999px; background: var(--fqh-ink);
   transform-origin: 0 50%; transform: rotate(45deg) scaleX(0); animation: fqh-stem ${LOOP} cubic-bezier(.34,1.56,.64,1) infinite; }
 @keyframes fqh-stem { 0%, 33% { transform: rotate(45deg) scaleX(0); } 36.5% { transform: rotate(45deg) scaleX(1.1); } 38.5%, 100% { transform: rotate(45deg) scaleX(1); } }
-.fqh-spark { position: absolute; left: 58px; top: 2px; width: 9px; height: 9px; border-radius: 50%; background: #079cc4; opacity: 0;
+.fqh-spark { position: absolute; left: 58px; top: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--raw-079cc4); opacity: 0;
   animation: fqh-spark ${LOOP} ease-out infinite; }
 @keyframes fqh-spark { 0%, 34% { opacity: 0; transform: translate(0,0) scale(.5); } 35.2% { opacity: 1; transform: translate(6px,-6px) scale(1); } 39%, 100% { opacity: 0; transform: translate(20px,-18px) scale(.3); } }
 
@@ -138,11 +138,11 @@ const CSS = `
   65.5%, 94% { opacity: 1; transform: scale(1); animation-timing-function: ease-in; }
   100% { opacity: 0; transform: scale(1.04); }
 }
-.fqh-tick-circle { position: absolute; width: 150px; height: 150px; border-radius: 50%; border: 1px solid rgba(255,255,255,.12);
-  background: linear-gradient(165deg, #0b1734 0%, #08132e 54%, #0d2148 100%);
-  box-shadow: 0 1px 0 rgba(255,255,255,.16) inset, 0 34px 58px -28px rgba(8,31,92,.7); }
-.dark .fqh-tick-circle { border-color: rgba(255,255,255,.2); box-shadow: 0 1px 0 rgba(255,255,255,.2) inset, 0 0 0 6px rgba(75,207,154,.08), 0 34px 58px -28px rgba(0,0,0,.8); }
-.fqh-ripple { position: absolute; width: 150px; height: 150px; border-radius: 50%; border: 2px solid rgba(75,207,154,.5); opacity: 0;
+.fqh-tick-circle { position: absolute; width: 150px; height: 150px; border-radius: 50%; border: 1px solid var(--raw-rgba-255-255-255-0p12);
+  background: linear-gradient(165deg, var(--raw-0b1734) 0%, var(--raw-08132e) 54%, var(--raw-0d2148) 100%);
+  box-shadow: 0 1px 0 var(--raw-rgba-255-255-255-0p16) inset, 0 34px 58px -28px var(--raw-rgba-8-31-92-0p7); }
+.dark .fqh-tick-circle { border-color: var(--raw-rgba-255-255-255-0p2); box-shadow: 0 1px 0 var(--raw-rgba-255-255-255-0p2) inset, 0 0 0 6px var(--raw-rgba-75-207-154-0p08), 0 34px 58px -28px var(--raw-rgba-0-0-0-0p8); }
+.fqh-ripple { position: absolute; width: 150px; height: 150px; border-radius: 50%; border: 2px solid var(--raw-rgba-75-207-154-0p5); opacity: 0;
   animation: fqh-ripple ${LOOP} ease-out infinite; }
 @keyframes fqh-ripple { 0%, 60.5% { opacity: 0; transform: scale(1); } 61.5% { opacity: .9; } 68%, 100% { opacity: 0; transform: scale(1.55); } }
 .fqh-tick svg { position: relative; }
@@ -150,8 +150,8 @@ const CSS = `
 @keyframes fqh-draw { 0%, 61% { stroke-dashoffset: 60; } 66%, 94% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 60; } }
 .fqh-caption { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px;
   height: 28px; padding: 0 12px; border-radius: 999px; white-space: nowrap; background: var(--fqh-cap-bg); border: 1px solid var(--fqh-line);
-  box-shadow: 0 12px 22px -16px rgba(8,31,92,.5); font-size: 11.5px; font-weight: 700; color: var(--fqh-ink); }
-.fqh-caption i { width: 6px; height: 6px; border-radius: 50%; background: #14a06a; }
+  box-shadow: 0 12px 22px -16px var(--raw-rgba-8-31-92-0p5); font-size: 11.5px; font-weight: 700; color: var(--fqh-ink); }
+.fqh-caption i { width: 6px; height: 6px; border-radius: 50%; background: var(--raw-14a06a); }
 
 @media (max-width: 1279px) { .fqh-stage { height: 400px; } .fqh-scene { --fqh-scale: .92; } }
 @media (max-width: 1023px) { .fqh-stage { height: 360px; } .fqh-scene { --fqh-scale: .86; } }
@@ -262,7 +262,7 @@ export function FaqHeroStage() {
           <span className="fqh-ripple" />
           <span className="fqh-tick-circle" />
           <svg width="82" height="82" viewBox="0 0 48 48" fill="none">
-            <path className="fqh-tick-path" d="M13 25.5 20.5 33 36 16" stroke="#4bcf9a" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round" />
+            <path className="fqh-tick-path" d="M13 25.5 20.5 33 36 16" stroke="var(--raw-4bcf9a)" strokeWidth="4.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span className="fqh-caption"><i /> Answered</span>
         </div>

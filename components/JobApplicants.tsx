@@ -5,6 +5,8 @@ import SkillsList from '@/components/ui/SkillsList';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
 import FilterChips, { FilterChipsHover, type FilterChip } from '@/components/ui/filter-chips';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface Applicant {
   id: string;
@@ -227,7 +229,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
               <input
                 type="text"
                 placeholder="Search by name or email..."
@@ -304,7 +306,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
           const MatchIcon = matchConfig.icon;
 
           return (
-            <div
+            <div {...clickableProps}
               key={applicant.id}
               onClick={() => setSelectedApplicant(applicant)}
               className="tf-card-soft hover:shadow-lg hover:border-gray-300 transition-all overflow-hidden cursor-pointer group"
@@ -339,26 +341,26 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
 
                       <div className="flex items-center gap-6 tf-body-secondary">
                         <div className="flex items-center gap-2">
-                          <Mail className="w-4 h-4 text-gray-400" />
+                          <Mail className="w-4 h-4 text-gray-500" />
                           <span>{applicant.email}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Phone className="w-4 h-4 text-gray-400" />
+                          <Phone className="w-4 h-4 text-gray-500" />
                           <span>{applicant.phone}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4 text-gray-400" />
+                          <MapPin className="w-4 h-4 text-gray-500" />
                           <span>{applicant.location}</span>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-6 tf-body mt-3">
                         <div className="flex items-center gap-2">
-                          <Briefcase className="w-4 h-4 text-gray-400" />
+                          <Briefcase className="w-4 h-4 text-gray-500" />
                           <span>{applicant.experience}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <GraduationCap className="w-4 h-4 text-gray-400" />
+                          <GraduationCap className="w-4 h-4 text-gray-500" />
                           <span>{applicant.education}</span>
                         </div>
                       </div>
@@ -406,12 +408,12 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
                       >
                         Schedule Interview
                       </Button>
-                      <button 
+                      <IconButton bare label="More actions" 
                         onClick={(e) => e.stopPropagation()}
                         className="p-2.5 hover:bg-gray-100 rounded-lg transition-colors"
                       >
-                        <MoreVertical className="w-5 h-5 text-gray-400" />
-                      </button>
+                        <MoreVertical className="w-5 h-5 text-gray-500" />
+                      </IconButton>
                     </div>
                   </div>
                 </div>

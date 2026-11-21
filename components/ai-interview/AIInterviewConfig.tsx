@@ -16,8 +16,15 @@ import { createPortal } from 'react-dom';
 import LeaveInterviewDialog, { type LeaveInterviewBusy } from './LeaveInterviewDialog';
 import InterviewEditLockGate from './InterviewEditLockGate';
 import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams, WizardLayer } from './embeddedWizardNav';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
-import { loadAllInterviewConfigs } from '@/components/talent-match-invite/inviteVersions';
+import {
+  aiInterviewService,
+  isJdDisabled,
+  JD_DISABLED_ACTION_MESSAGE,
+  isLiveConfigForJd,
+  AINotConfiguredError,
+  AI_NOT_CONFIGURED_MESSAGE,
+} from '@/lib/services/aiInterviewService';
+import { cachedList, listCacheKey, listReadOptions } from '@/lib/utils/listCache';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import { Button } from '@/components/ui/button';
 import type {
@@ -60,6 +67,7 @@ import {
   findInvalidSkillPunctuation,
   normalizeSkillName as normalizeSkillNameShared,
 } from '@/lib/skillDuplicates';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Step indicator constants                                               */
@@ -602,27 +610,24 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
           />
           {/* Flexible mode: move skill to the other category */}
           {mode === 'flexible' && onMoveSkill && !isLocked && (
-            <button
-              title={category === 'mth' ? 'Move to Nice-to-Have' : 'Move to Must-Have'}
+            <IconButton bare label={category === 'mth' ? 'Move to Nice-to-Have' : 'Move to Must-Have'}
               onClick={() => onMoveSkill(skill.name)}
-              className="p-1 text-gray-400 hover:text-brand-blue transition-colors flex-shrink-0"
+              className="p-1 text-gray-500 hover:text-brand-blue transition-colors flex-shrink-0"
             >
               <ArrowRightLeft className="w-3.5 h-3.5" />
-            </button>
+            </IconButton>
           )}
           {/* Hide delete when locked in flexible mode.
               Always drawn, never hover-revealed: a control that appears only
               once the pointer is over its row is invisible to anyone scanning
               the list, and on touch there is no hover to reveal it with. */}
           {!(mode === 'flexible' && isLocked) && (
-            <button
+            <IconButton bare label={`Remove ${skill.name}`}
               onClick={() => setSkillToDelete(skill.name)}
-              className="p-1 text-gray-400 hover:text-destructive transition-colors flex-shrink-0"
-              title={`Remove ${skill.name}`}
-              aria-label={`Remove ${skill.name}`}
+              className="p-1 text-gray-500 hover:text-destructive transition-colors flex-shrink-0"
             >
               <Trash2 className="w-4 h-4" />
-            </button>
+            </IconButton>
           )}
         </div>
         {commentOpen === skill.name && (
@@ -634,13 +639,12 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
               placeholder="Add interviewer note for this skill (not shown to candidate)…"
               className="flex-1 px-3 py-1.5 text-xs border border-brand-orange/30 rounded-lg bg-brand-orange/5 focus:outline-none focus:ring-2 focus:ring-brand-orange/40 placeholder-brand-orange/50"
             />
-            <button
+            <IconButton bare label="Clear & close"
               onClick={() => { updateComment(skill.name, ''); setCommentOpen(null); }}
-              aria-label="Clear & close" title="Clear & close"
-              className="p-1 text-gray-400 hover:text-destructive transition-colors flex-shrink-0"
+              className="p-1 text-gray-500 hover:text-destructive transition-colors flex-shrink-0"
             >
               <X className="w-3.5 h-3.5" />
-            </button>
+            </IconButton>
           </div>
         )}
       </div>
@@ -830,8 +834,8 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
                         className="w-full flex items-center gap-2 px-3 py-2.5 bg-slate-50 hover:bg-brand-blue/5 transition-colors text-left"
                       >
                         {isCollapsed
-                          ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                          : <ChevronUp className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                          : <ChevronUp className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                         }
                         <span className="flex-1 min-w-0 tf-label break-words">{cluster.name || 'Unnamed Topic'}</span>
                         <PriorityBadge p={cluster.priority} />
@@ -1179,7 +1183,7 @@ function HRSection({
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-800 leading-relaxed break-words">{q.question_text}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="text-2xs font-semibold uppercase tracking-wide text-gray-400">Ask As</span>
+                        <span className="text-2xs font-semibold uppercase tracking-wide text-gray-500">Ask As</span>
                         <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
                           <button
                             type="button"
@@ -1220,7 +1224,7 @@ function HRSection({
                             Closing
                           </button>
                         </div>
-                        <span className="text-2xs font-semibold uppercase tracking-wide text-gray-400">Answer Type</span>
+                        <span className="text-2xs font-semibold uppercase tracking-wide text-gray-500">Answer Type</span>
                         <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
                           <button
                             type="button"
@@ -1298,7 +1302,7 @@ function HRSection({
                 <p className="text-2xs text-destructive">{questionError}</p>
               )}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-2xs font-semibold uppercase tracking-wide text-gray-400">Answer Type</span>
+                <span className="text-2xs font-semibold uppercase tracking-wide text-gray-500">Answer Type</span>
                 <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
                   <button
                     type="button"
@@ -1411,7 +1415,10 @@ export default function AIInterviewConfig() {
   const inviteOriginQuery = inviteOrigin?.query ?? '';
 
   const [selectedJd, setSelectedJd] = useState<PublishedJD | null>(null);
-  const selectedJdLocations = useJdLocations(selectedJd?.id);
+  /* By the URL's id, not selectedJd's: the JD record's read starts with the
+     page's first wave instead of after the JD list lands (selectedJd is only
+     ever this same id). */
+  const selectedJdLocations = useJdLocations(jdId);
   const [loadingJd, setLoadingJd] = useState(true);
   // Set when loadJD decides to navigate elsewhere, so the loader stays on screen
   // through the handoff instead of flashing an empty page.
@@ -1468,21 +1475,29 @@ export default function AIInterviewConfig() {
    * lost. Same number of round trips as before — one of them is just an update
    * now instead of a second create.
    */
-  const ensureDraftId = async (payload: any): Promise<{ id: string; mine: boolean }> => {
+  const ensureDraftId = async (
+    payload: any,
+    // Next's save: the create also runs the AI-key check (see proceedToClusters).
+    requireAiConfig = false,
+  ): Promise<{ id: string; mine: boolean }> => {
     if (existingDraftIdRef.current) return { id: existingDraftIdRef.current, mine: false };
     let mine = false;
     if (!draftCreateRef.current) {
       mine = true;
+      const track = (created: AIInterviewResponse) => {
+        existingDraftIdRef.current = created.id;
+        // A new interview stays "unsaved" until Save as Draft keeps it.
+        markUnsavedVersion(created.id);
+        setLoadedConfig({ id: created.id, status: 'draft', version: created.interview_version ?? 1, invited: false });
+        return created.id;
+      };
       draftCreateRef.current = aiInterviewService
-        .create(payload)
-        .then((created) => {
-          existingDraftIdRef.current = created.id;
-          // A new interview stays "unsaved" until Save as Draft keeps it.
-          markUnsavedVersion(created.id);
-          setLoadedConfig({ id: created.id, status: 'draft', version: created.interview_version ?? 1, invited: false });
-          return created.id;
-        })
+        .create(payload, { requireAiConfig })
+        .then(track)
         .catch((err) => {
+          // An older backend created the draft before the key check failed:
+          // keep it tracked so the next save updates it instead of making another.
+          if (err instanceof AINotConfiguredError && err.created) track(err.created);
           // Let the next caller retry rather than stranding the wizard with a
           // permanently rejected promise.
           draftCreateRef.current = null;
@@ -1668,18 +1683,25 @@ export default function AIInterviewConfig() {
       try {
         setLoadingJd(true);
 
-        // Load JD; if editing a specific config, fetch it directly instead of
-        // searching drafts. The live-config guard rides along in the same
-        // Promise.all so it costs no extra round trip on the common path.
-        const [jdResult, specificConfig, liveConfig] = await Promise.all([
-          aiInterviewService.getPublishedJDs(),
+        // ONE wave. The JD list is the one the picker just read (reused on
+        // arrival — any write clears it); with a specific config_id it is read
+        // directly; otherwise every config (the default list + the archived
+        // one, one request each) answers all three questions below — the
+        // live-config guard, the one-interview-per-version guard and the draft
+        // to restore — which used to be three serial reads (paged live lookup,
+        // then both full lists, then a draft-only list).
+        const [jdResult, specificConfig, allConfigs] = await Promise.all([
+          aiInterviewService.getPublishedJDs({ reuseRecent: true }),
           // With pending edits overlaid: an existing config is edited as pending
           // edits (lib/utils/aiInterviewEditSession), and this is where they show.
           configId ? aiInterviewService.get(configId, { withPending: true }).catch(() => null) : Promise.resolve(null),
           // A failed lookup must not block configuring — fall through as "no
           // blocker" rather than stranding the recruiter on a transient error.
-          configId ? Promise.resolve(null) : aiInterviewService.findLiveConfigForJd(jdId).catch(() => null),
+          configId ? Promise.resolve(null) : aiInterviewService.listAllConfigsSplit().catch(() => null),
         ]);
+        /* findLiveConfigForJd's answer: the first live config of this JD in the
+           default list's (newest-first) order. */
+        const liveConfig = allConfigs?.live.find((c) => isLiveConfigForJd(c, jdId)) ?? null;
 
         const jd = jdResult.items.find(j => j.id === jdId);
         if (!jd) {
@@ -1743,7 +1765,11 @@ export default function AIInterviewConfig() {
            it is restored below. A failed lookup does not block, like the live
            check above. */
         if (!configId) {
-          const ofJob = (await loadAllInterviewConfigs().catch(() => [] as AIInterviewResponse[]))
+          /* loadAllInterviewConfigs' list (default + archived, de-duplicated),
+             already in hand. */
+          const seen = new Set<string>();
+          const ofJob = [...(allConfigs?.live ?? []), ...(allConfigs?.archived ?? [])]
+            .filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)))
             .filter((c) => c.jd_id === jdId);
           if (ofJob.length > 0 && !ofJob.some((c) => c.status === 'draft')) {
             const latest = ofJob.reduce((best, c) =>
@@ -1767,8 +1793,14 @@ export default function AIInterviewConfig() {
         // Look for an existing config: specific config_id takes priority, then search drafts by jd_id
         let existingDraft: AIInterviewResponse | null = specificConfig;
         if (!existingDraft) {
-          const draftResult = await aiInterviewService.listConfigs({ status: 'draft', page_size: 50, compact: true }).catch(() => null);
-          existingDraft = draftResult?.items?.find(
+          /* This JD's newest draft. The default list holds every draft, in the
+             same newest-first order the draft-only list had, so it is read from
+             there; the draft-only read runs only when that list is not in hand
+             (a config_id that failed to load, or a failed list read). */
+          const drafts = allConfigs
+            ? allConfigs.live
+            : (await aiInterviewService.listConfigs({ status: 'draft', page_size: 50, compact: true }).catch(() => null))?.items;
+          existingDraft = drafts?.find(
             (c: AIInterviewResponse) => c.jd_id === jdId && c.status === 'draft'
           ) ?? null;
           // The list row is the stored draft; with pending edits on it, read
@@ -2235,9 +2267,17 @@ export default function AIInterviewConfig() {
   }, [loadingJd, jdId, mth.skills.length, nth.skills.length]);
 
   /* ── Fetch HR question bank on mount ── */
+  /* `reuseRecent` on arrival — the same 30 s entry the HR Question Bank page
+     and the Assessment wizard read (one key), so a visit moments after either
+     shows the bank without asking again. Any write (e.g. adding a question)
+     clears it. */
   useEffect(() => {
-    api.get('/hr-question-bank').then(res => {
-      const data: any[] = res.data || [];
+    cachedList(
+      listCacheKey('hr-question-bank'),
+      async () => (await api.get('/hr-question-bank')).data,
+      listReadOptions({ reuseRecent: true }),
+    ).then((raw: unknown) => {
+      const data: any[] = Array.isArray(raw) ? raw : [];
       setHrBankQuestions(prev => mergeHRBankQuestions(prev, data.map(q => ({
         id: q.id,
         question_text: q.question_text,
@@ -2735,6 +2775,9 @@ export default function AIInterviewConfig() {
     // decides whether this config's audit trail gets a "Saved as Draft" /
     // "Draft Updated" row, not whether anything here is saved differently.
     isExiting = false,
+    // Next: the save itself runs GET /ai-config-status' check server-side
+    // (refused, nothing written, when the AI key is missing) — one request.
+    requireAiConfig = false,
   ): Promise<boolean> => {
     if (!selectedJd) return false;
     setSavingDraft(true);
@@ -2763,11 +2806,11 @@ export default function AIInterviewConfig() {
         // "Unpublished changes" that change nothing.
         const unchangedPublished = isExiting && loadedStatusRef.current === 'published'
           && !hasUnsavedChanges() && !pendingOnLoadRef.current && !hasPendingThisVisit(existingDraftIdRef.current);
-        if (!unchangedPublished) await aiInterviewService.update(existingDraftIdRef.current, payload);
+        if (!unchangedPublished) await aiInterviewService.update(existingDraftIdRef.current, payload, { requireAiConfig });
       } else {
         // Create the draft once, even if the debounced auto-save is racing this.
-        const { id, mine } = await ensureDraftId(payload);
-        if (!mine) await aiInterviewService.update(id, payload);
+        const { id, mine } = await ensureDraftId(payload, requireAiConfig);
+        if (!mine) await aiInterviewService.update(id, payload, { requireAiConfig });
       }
       // This save carried the exit flag, so the server has just written the
       // visit's checkpoint row — the unmount net must not write a second one.
@@ -2775,6 +2818,11 @@ export default function AIInterviewConfig() {
       if (!silent) toast.success('Draft saved!');
       return true;
     } catch (err: any) {
+      if (err instanceof AINotConfiguredError) {
+        // The message and duration Next showed for GET /ai-config-status.
+        toast.error(AI_NOT_CONFIGURED_MESSAGE, { duration: 9000 });
+        return false;
+      }
       // Always surface the real reason, even for silent (background) saves —
       // "silent" only suppresses the success confirmation, not failures.
       // Swallowing errors here left callers unable to show anything but a
@@ -2872,22 +2920,16 @@ export default function AIInterviewConfig() {
   const proceedToClusters = async () => {
     if (!selectedJd) return;
 
-    // 0. Cluster generation on the next page needs AI_CONFIG_OPENAI_API_KEY.
-    // Check availability BEFORE navigating — failing after the navigation
-    // strands the recruiter on the Clusters page with nothing to fix there.
-    const { available: aiAvailable } = await aiInterviewService.getAIConfigStatus();
-    if (!aiAvailable) {
-      toast.error(
-        'AI is not configured for this workspace (missing OpenAI API key). Contact your admin to configure it before continuing.',
-        { duration: 9000 }
-      );
-      return;
-    }
-
     isNavigatingRef.current = true;
 
     // 1. Save draft first so the Clusters page reads the latest skills.
-    const ok = await saveDraft(true);
+    // Cluster generation on the next page needs AI_CONFIG_OPENAI_API_KEY, so
+    // this save also checks it (`requireAiConfig`) BEFORE navigating — failing
+    // after the navigation strands the recruiter on the Clusters page with
+    // nothing to fix there. Missing key: the save is refused, nothing is
+    // written, and saveDraft shows the same message GET /ai-config-status led
+    // to — one request where the check and the save used to be two in series.
+    const ok = await saveDraft(true, undefined, false, true);
     if (!ok) {
       // saveDraft already surfaced the real failure reason — avoid stacking
       // a second, less specific toast on top of it.
@@ -3461,7 +3503,7 @@ export default function AIInterviewConfig() {
                               key={line}
                               className={`flex items-center gap-1.5 text-2xs ${selected ? 'text-gray-700' : 'text-gray-500'}`}
                             >
-                              <CheckCircle2 className={`w-3.5 h-3.5 flex-shrink-0 ${selected ? 'text-brand-blue' : 'text-gray-400'}`} />
+                              <CheckCircle2 className={`w-3.5 h-3.5 flex-shrink-0 ${selected ? 'text-brand-blue' : 'text-gray-500'}`} />
                               {line}
                             </div>
                           ))}
@@ -3738,7 +3780,7 @@ export default function AIInterviewConfig() {
                       <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
                     ) : (
                       <div className="flex items-center gap-1">
-                        <button
+                        <IconButton bare label="Preview video"
                           onClick={async () => {
                             if (videoPreviewSrc) {
                               setShowVideoPreview(true);
@@ -3753,14 +3795,13 @@ export default function AIInterviewConfig() {
                               }
                             }
                           }}
-                          className="p-1 text-gray-400 hover:text-brand-blue transition-colors"
-                          title="Preview video"
+                          className="p-1 text-gray-500 hover:text-brand-blue transition-colors"
                         >
                           <Play className="w-4 h-4" />
-                        </button>
-                        <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-destructive hover:bg-destructive-subtle rounded transition-colors" aria-label="Remove video" title="Remove video">
+                        </IconButton>
+                        <IconButton bare label="Remove video" onClick={handleRemoveVideo} className="p-1 text-gray-500 hover:text-destructive hover:bg-destructive-subtle rounded transition-colors">
                           <X className="w-4 h-4" />
-                        </button>
+                        </IconButton>
                       </div>
                     )}
                     </div>
@@ -4085,7 +4126,7 @@ export default function AIInterviewConfig() {
                   {mode === 'flexible' && (
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
                       <span className="tf-meta flex-shrink-0">Buffer Time</span>
-                      <span className={`text-xs font-semibold text-right ${bufferEnabled ? 'text-brand-blue' : 'text-gray-400'}`}>
+                      <span className={`text-xs font-semibold text-right ${bufferEnabled ? 'text-brand-blue' : 'text-gray-500'}`}>
                         {bufferEnabled ? 'Enabled (+5 min)' : 'Disabled'}
                       </span>
                     </div>

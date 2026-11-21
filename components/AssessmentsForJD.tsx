@@ -39,6 +39,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface AssessmentsForJDProps {
   jdId: string;
@@ -398,7 +399,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                       </td>
                       <td className="tf-td whitespace-nowrap">
                         <div className="flex items-center gap-2 text-sm whitespace-nowrap">
-                          <Users className="w-4 h-4 text-gray-400 shrink-0" />
+                          <Users className="w-4 h-4 text-gray-500 shrink-0" />
                           <span className="text-gray-900">{assessment.candidates}</span>
                           <span className="text-gray-500">
                             ({assessment.completed} completed)
@@ -412,7 +413,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                               {((assessment.passed / assessment.completed) * 100).toFixed(0)}%
                             </span>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-gray-500">-</span>
                           )}
                         </div>
                       </td>
@@ -423,7 +424,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                               {formatScore(assessment.average_score)}%
                             </span>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-gray-500">-</span>
                           )}
                         </div>
                       </td>
@@ -434,22 +435,21 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                       </td>
                       <td className="tf-td text-right tf-sticky-col">
                         <div className="flex items-center justify-end gap-2">
-                          <Button
+                          <IconButton label="View Results"
                             variant="secondary"
                             size="sm"
                             onClick={() => handleViewResults(assessment)}
-                            aria-label="View Results" title="View Results"
                             className="h-8 w-8 shrink-0"
                           >
                             <Eye className="w-4 h-4" />
-                          </Button>
+                          </IconButton>
                           <div className="relative">
-                            <button
+                            <IconButton bare label="More actions"
                               onClick={() => setOpenMenuId(openMenuId === assessment.id ? null : assessment.id)}
                               className="h-8 w-8 inline-flex items-center justify-center shrink-0 text-gray-600 hover:bg-slate-100 rounded-lg transition-colors"
                             >
                               <MoreVertical className="w-4 h-4" />
-                            </button>
+                            </IconButton>
                             {openMenuId === assessment.id && (
                               <>
                                 <div

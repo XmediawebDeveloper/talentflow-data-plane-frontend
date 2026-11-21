@@ -2826,8 +2826,8 @@ export default function StepSystemCheck({
                           motion. */}
                       <style>{`
                         @keyframes tfRunCheckPulse {
-                          0%, 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.6); }
-                          50%      { box-shadow: 0 0 0 10px rgba(22,163,74,0); }
+                          0%, 100% { box-shadow: 0 0 0 0 var(--raw-rgba-22-163-74-0p6); }
+                          50%      { box-shadow: 0 0 0 10px var(--raw-rgba-22-163-74-0); }
                         }
                         .tf-run-check-pulse { animation: tfRunCheckPulse 1.2s ease-in-out infinite; }
                         @media (prefers-reduced-motion: reduce) { .tf-run-check-pulse { animation: none; } }

@@ -8,6 +8,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import NameAvatar from '@/components/ui/name-avatar';
 import type { VersionChoice } from './SelectedCandidatesPanel';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ResumeVersionRow {
   id: string;
@@ -110,7 +111,7 @@ export default function CandidateVersionPicker({ resume, choice, onChoose }: Can
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                      <FileText className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 flex-shrink-0" />
                       <span className="tf-body truncate">{version.file_name || `Version ${number}`}</span>
                       {isLatest && (
                         <span className="tf-badge bg-success-subtle text-2xs text-success ring-1 ring-success-line flex-shrink-0">
@@ -125,15 +126,13 @@ export default function CandidateVersionPicker({ resume, choice, onChoose }: Can
                       </p>
                     )}
                   </div>
-                  <button
+                  <IconButton bare label={`Preview version ${number}`}
                     type="button"
                     onClick={(e) => { e.preventDefault(); setPreview(version); }}
-                    title={`Preview version ${number}`}
-                    aria-label={`Preview version ${number}`}
-                    className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors"
+                    className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors"
                   >
                     <Eye className="w-4 h-4" />
-                  </button>
+                  </IconButton>
                 </label>
               );
             })}

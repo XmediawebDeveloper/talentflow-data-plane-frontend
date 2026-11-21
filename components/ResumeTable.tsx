@@ -3,7 +3,7 @@
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, Loader2 } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, Loader2 } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -31,6 +31,9 @@ import { MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { NoResumesFoundState } from '@/components/resumes/ResumeEmptyStates';
 import { RESUME_DELETE_OWNER_ONLY_REASON } from '@/lib/permissions/resumeDelete';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 /* Loading placeholder that mirrors THIS table's real structure — the same
    columns in the same order (checkbox, Candidate Name, Role, Email, Phone,
    Skills, Experience, Source, Upload Date, Uploaded By, Files, Actions) and the
@@ -194,7 +197,7 @@ function DraggableResumeRow({ resume, selectedResumes, children, className, onVi
   };
 
   return (
-    <tr
+    <tr {...((onViewDetails) ? clickableRowProps : {})}
       ref={rowRef}
       className={`${className} ${isDragging ? 'opacity-50' : ''} ${
         isOver ? 'ring-2 ring-inset ring-brand-blue/60' : ''
@@ -213,7 +216,7 @@ function DraggableResumeRow({ resume, selectedResumes, children, className, onVi
           }`}
         >
           <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab hover:bg-gray-100 rounded p-1 flex items-center justify-center">
-            <GripVertical className="w-4 h-4 text-gray-400" />
+            <GripVertical className="w-4 h-4 text-gray-500" />
           </div>
         </td>
       )}
@@ -846,13 +849,13 @@ export default function ResumeTable({
               <td className="tf-td whitespace-nowrap tf-body">
                 {resume.title
                   ? (highlightQuery ? highlightText(resume.title, highlightQuery) : resume.title)
-                  : <span className="text-gray-400">-</span>
+                  : <span className="text-gray-500">-</span>
                 }
               </td>
               <td className="tf-td whitespace-nowrap tf-body">
                 {resume.email && resume.email !== 'No email'
                   ? (highlightQuery ? highlightText(resume.email, highlightQuery) : resume.email)
-                  : <span className="text-gray-400">-</span>
+                  : <span className="text-gray-500">-</span>
                 }
               </td>
               <td className="tf-td whitespace-nowrap tf-body">
@@ -861,7 +864,7 @@ export default function ResumeTable({
                   // carries multiple numbers in a single field.
                   const numbers = splitPhoneNumbers(resume.phone, 2);
                   if (numbers.length === 0) {
-                    return <span className="text-gray-400">-</span>;
+                    return <span className="text-gray-500">-</span>;
                   }
                   return (
                     <div className="flex flex-col gap-0.5">
@@ -997,7 +1000,7 @@ export default function ResumeTable({
                   ) : (
                     <>
                       <div className="relative">
-                        <button
+                        <IconButton bare label="More actions"
                           onClick={(e) => {
                             e.stopPropagation();
                             const willOpen = openActionMenu !== resume.id;
@@ -1012,7 +1015,7 @@ export default function ResumeTable({
                           className="h-7 w-7 flex items-center justify-center bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-all"
                         >
                           <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
-                        </button>
+                        </IconButton>
                         {openActionMenu === resume.id && typeof document !== 'undefined' && createPortal(
                           <div
                             ref={actionMenuRef}
@@ -1209,20 +1212,24 @@ export default function ResumeTable({
                 {isBlocked && <TeamMemberEmailBadge />}
               </>
             ) : undefined}
+            /* The role with a briefcase icon (as the AI Interview cards show
+               the role), then labelled lines as on the AI Interview Results
+               card ("Email: name@…"). Empty values are dropped by the card. */
             meta={[
-              { label: resume.title },
-              { icon: <Mail className="w-3.5 h-3.5 flex-shrink-0" />, label: resume.email && resume.email !== 'No email' ? resume.email : '' },
+              { icon: <Briefcase className="w-3.5 h-3.5 flex-shrink-0" />, label: resume.title || null },
+            ]}
+            fields={[
+              { label: 'Email', value: resume.email && resume.email !== 'No email' ? <span className="[overflow-wrap:anywhere]">{resume.email}</span> : null },
               /* Already formatted with its units ("6 years 3 months", "N/A")
-                 — the table cell shows it as-is; appending "years exp."
-                 here read "6 years 3 months years exp." on phones. */
-              { icon: <Briefcase className="w-3.5 h-3.5 flex-shrink-0" />, label: resume.experience },
+                 — shown as-is, as in the table cell. */
+              { label: 'Experience', value: resume.experience || null },
             ]}
             actions={
               /* Apply to Job was dropped here too, to match the desktop ⋮
                  menu — the action lives in the bulk actions bar. */
               isBlocked ? (
                 <span
-                  className="text-xs text-gray-400"
+                  className="text-xs text-gray-500"
                   title="This email belongs to an existing team member — no actions are available."
                 >
                   No actions available
@@ -1241,12 +1248,16 @@ export default function ResumeTable({
               )
             }
           >
+            {/* One skill pill, then "+N more" in the same pill style (its
+                popover lists every skill). One line: a long skill ends in "…"
+                rather than wrapping the pill onto two lines. */}
             {getDisplaySkills(resume).length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex items-center gap-1.5 mt-2 min-w-0">
                 <SkillsList
                   skills={getDisplaySkills(resume)}
-                  chipClassName="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs ring-1 ring-brand-blue/20"
-                  moreClassName="px-2 py-0.5 text-brand-blue text-xs font-medium rounded hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                  max={1}
+                  chipClassName="min-w-0 truncate px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20"
+                  moreClassName="shrink-0 whitespace-nowrap px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-full text-xs font-medium ring-1 ring-brand-blue/20 hover:bg-brand-blue/10 transition-colors cursor-pointer"
                 />
               </div>
             )}
@@ -1316,7 +1327,7 @@ export default function ResumeTable({
 
       {/* Edit Details Modal */}
       {showEditModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] flex flex-col">
             <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
               <div className="flex-1 min-w-0">
@@ -1417,7 +1428,7 @@ export default function ResumeTable({
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Share Resume — the shared dialog, so the table, the cards and the
@@ -1429,7 +1440,7 @@ export default function ResumeTable({
 
       {/* Archive Resume Modal */}
       {showArchiveModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90dvh] flex flex-col">
             <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
               <div className="flex-1 min-w-0">
@@ -1494,7 +1505,7 @@ export default function ResumeTable({
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
     </div>

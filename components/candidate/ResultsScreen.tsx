@@ -108,17 +108,17 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
             in it. */}
         <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
           <div className="bg-gray-50 rounded-xl p-3 sm:p-4 text-center">
-            <FileText className="w-5 h-5 text-gray-400 mx-auto mb-2" />
+            <FileText className="w-5 h-5 text-gray-500 mx-auto mb-2" />
             <p className="tf-body-muted mb-1">Questions</p>
             <p className="tf-section-title sm:text-2xl break-words">{totalQuestions}</p>
           </div>
           <div className="bg-gray-50 rounded-xl p-3 sm:p-4 text-center">
-            <Clock className="w-5 h-5 text-gray-400 mx-auto mb-2" />
+            <Clock className="w-5 h-5 text-gray-500 mx-auto mb-2" />
             <p className="tf-body-muted mb-1">Duration</p>
             <p className="tf-section-title sm:text-2xl break-words">{formatDuration(durationMinutes)}</p>
           </div>
           <div className="bg-gray-50 rounded-xl p-3 sm:p-4 text-center">
-            <CheckSquare className="w-5 h-5 text-gray-400 mx-auto mb-2" />
+            <CheckSquare className="w-5 h-5 text-gray-500 mx-auto mb-2" />
             <p className="tf-body-muted mb-1">Status</p>
             <div className="flex items-center justify-center">
               <CheckCircle className="w-6 h-6 text-success" />

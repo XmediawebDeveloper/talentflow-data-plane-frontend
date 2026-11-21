@@ -11,6 +11,7 @@ import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/compon
 import { buildDashboardData } from '../evaluation-dashboard/adapter';
 import { ExportMenu } from '../evaluation-dashboard/ExportMenu';
 import { COVERAGE_EXPORT_HEADERS, exportCoverage, flattenCoverageRows } from '../evaluation-dashboard/coverageExport';
+import { clickableProps } from '@/lib/a11y/clickableProps';
 
 // ── Shared Types ─────────────────────────────────────────────────────────────
 
@@ -120,12 +121,12 @@ const LEVEL_CONFIG: Record<string, { icon: any; color: string; bg: string; borde
   'High':        { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-200', label: 'High',        dot: 'bg-emerald-500' },
   'Medium':      { icon: AlertCircle,  color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-200',   label: 'Medium',      dot: 'bg-amber-400' },
   'Low':         { icon: MinusCircle,  color: 'text-orange-600',  bg: 'bg-orange-50',   border: 'border-orange-200',  label: 'Low',         dot: 'bg-orange-400' },
-  'Not Covered': { icon: HelpCircle,   color: 'text-gray-400',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Covered', dot: 'bg-gray-300' },
+  'Not Covered': { icon: HelpCircle,   color: 'text-gray-500',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Covered', dot: 'bg-gray-300' },
   covered:     { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-200', label: 'High',        dot: 'bg-emerald-500' },
   medium:      { icon: AlertCircle,  color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-200',   label: 'Medium',      dot: 'bg-amber-400' },
   low:         { icon: MinusCircle,  color: 'text-orange-600',  bg: 'bg-orange-50',   border: 'border-orange-200',  label: 'Low',         dot: 'bg-orange-400' },
   skipped:     { icon: HelpCircle,   color: 'text-red-500',     bg: 'bg-red-50',      border: 'border-red-200',     label: 'Not Covered', dot: 'bg-red-400' },
-  not_started: { icon: HelpCircle,   color: 'text-gray-400',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Covered', dot: 'bg-gray-300' },
+  not_started: { icon: HelpCircle,   color: 'text-gray-500',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Covered', dot: 'bg-gray-300' },
 };
 
 type CovLevel = 'not_covered' | 'low' | 'medium' | 'high';
@@ -246,7 +247,7 @@ function CoverageTrail({ entries }: { entries: TrailEntry[] }) {
                 if (isFu) return <span className="text-2xs font-semibold text-violet-700 bg-violet-100 rounded px-1 py-0.5">F</span>;
                 return null;
               })()}
-              {entry.state === 'asked' && <ArrowRight className="w-3 h-3 text-gray-300" />}
+              {entry.state === 'asked' && <ArrowRight className="w-3 h-3 text-muted-foreground dark:text-gray-300" />}
             </div>
           </div>
         );
@@ -728,7 +729,7 @@ export default function CoverageTab({
   // ─── Not started placeholder ───────────────────────────────────────────────
   if (!isInProgress && !isCompleted) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+      <div className="flex flex-col items-center justify-center py-24 text-gray-500">
         <Activity className="w-10 h-10 mb-3 opacity-40" />
         <p className="tf-label">Interview not yet started</p>
         <p className="tf-hint mt-1">Coverage will appear once the candidate begins the interview</p>
@@ -739,7 +740,7 @@ export default function CoverageTab({
   const hasAnyData = counts.total > 0 || questionGroups.length > 0 || !!liveSkillCoverage;
   if (!hasAnyData) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+      <div className="flex flex-col items-center justify-center py-24 text-gray-500">
         <Layers className="w-10 h-10 mb-3 opacity-40" />
         <p className="text-sm">No coverage data available yet.</p>
       </div>
@@ -933,7 +934,7 @@ export default function CoverageTab({
           <div className="flex items-center justify-between mb-1">
             <Layers className="w-3.5 h-3.5 text-indigo-500" />
             <span className="text-2xl font-bold text-indigo-700 leading-none">
-              {clusterStats.touched}<span className="text-sm text-gray-400 font-normal">/{clusterStats.total || '—'}</span>
+              {clusterStats.touched}<span className="text-sm text-gray-500 font-normal">/{clusterStats.total || '—'}</span>
             </span>
           </div>
           <p className="text-2xs font-semibold text-gray-600 uppercase tracking-wider">Clusters</p>
@@ -1114,7 +1115,7 @@ export default function CoverageTab({
                         onClick={() => toggleCluster(cKey)}
                         className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors text-left"
                       >
-                        {cOpen ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+                        {cOpen ? <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0" />}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="tf-row-title truncate">{cluster.name}</span>
@@ -1138,7 +1139,7 @@ export default function CoverageTab({
                             <span className={`text-2xs font-semibold ${
                               clusterPct >= 70 ? 'text-emerald-600' :
                               clusterPct >= 40 ? 'text-amber-600' :
-                              clusterPct > 0 ? 'text-orange-500' : 'text-gray-400'
+                              clusterPct > 0 ? 'text-orange-500' : 'text-gray-500'
                             }`}>
                               {clusterPct}%
                             </span>
@@ -1171,11 +1172,11 @@ export default function CoverageTab({
 
                               return (
                                 <div key={skill}>
-                                  <div
+                                  <div {...clickableProps}
                                     className={`flex items-center gap-3 px-8 py-2.5 cursor-pointer hover:bg-white/70 transition-colors ${isExpanded ? cfg.bg : ''}`}
                                     onClick={() => toggleSkill(skill)}
                                   >
-                                    {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
+                                    {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-500" />}
                                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_STYLES[status].dot}`} />
                                     <span className="tf-row-name flex-1 min-w-0 truncate">{skill}</span>
                                     <StatusBadge status={status} depth={depth} />

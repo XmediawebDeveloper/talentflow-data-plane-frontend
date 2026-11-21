@@ -14,6 +14,8 @@ import ListPagination from '@/components/ListPagination';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { sanitizeHtml } from '@/lib/utils/sanitizeHtml';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 const TITLE_TO_DOCUMENT_TYPE: Record<string, DocumentType> = {
   'Terms & Conditions': 'TERMS_AND_CONDITIONS',
@@ -170,7 +172,7 @@ export default function LegalCompliancePage() {
             <span>{error}</span>
           </div>
         ) : history.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-slate-500">
+          <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-slate-500">
             <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <ScrollText className="w-6 h-6 text-brand-blue" />
             </span>
@@ -245,9 +247,9 @@ export default function LegalCompliancePage() {
                 title={record.terms_title || '—'}
                 actions={
                   TITLE_TO_DOCUMENT_TYPE[record.terms_title || ''] ? (
-                    <button type="button" onClick={() => handleView(record)} title="View" aria-label={`View ${record.terms_title || 'document'}`} className="tf-icon-btn-outline">
+                    <IconButton bare label={`View ${record.terms_title || 'document'}`} tooltip="View" type="button" onClick={() => handleView(record)} className="tf-icon-btn-outline">
                       <Eye />
-                    </button>
+                    </IconButton>
                   ) : undefined
                 }
                 fields={[
@@ -275,7 +277,7 @@ export default function LegalCompliancePage() {
 
       {/* Document View Modal — same style as TermsAcceptanceModal */}
       {(docLoading || viewingDoc || docError) && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4">
+        <ModalA11y><div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl shadow-brand-blue/20 ring-1 ring-black/[0.03] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden">
             {/* Header */}
             <div className="relative overflow-hidden bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal px-6 py-5 flex items-center justify-between shrink-0">
@@ -289,16 +291,15 @@ export default function LegalCompliancePage() {
                   {viewingDoc && <p className="text-white/85 text-xs">Version {viewingDoc.version}</p>}
                 </div>
               </div>
-              <Button
+              <IconButton label="Close"
                 tone="onColor"
                 variant="secondary"
                 size="sm"
                 onClick={closeModal}
-                aria-label="Close"
                
               >
                 <X className="w-4 h-4" />
-              </Button>
+              </IconButton>
             </div>
 
             {/* Body */}
@@ -331,7 +332,7 @@ export default function LegalCompliancePage() {
               </div>
             )}
           </div>
-        </div>
+        </div></ModalA11y>
       )}
       </div>
       </div>

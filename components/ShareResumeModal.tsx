@@ -7,6 +7,8 @@ import { showErrorToast } from '@/lib/utils/errorToast';
 import { Resume } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * Share Resume — one dialog for every list that offers the action, so a resume
@@ -94,7 +96,7 @@ Best regards`;
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <ModalA11y><div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
@@ -127,16 +129,14 @@ Best regards`;
                       {sizeKb ? <> &middot; {Math.round(sizeKb)} KB</> : null}
                     </div>
                   </div>
-                  <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <button
+                  <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  <IconButton bare label={`View ${resume.name}'s resume`} tooltip="View resume"
                     type="button"
                     onClick={() => setIsPreviewOpen(true)}
-                    className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors"
-                    aria-label={`View ${resume.name}'s resume`}
-                    title="View resume"
+                    className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors"
                   >
                     <Eye className="w-4 h-4" />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
 
@@ -204,7 +204,7 @@ Best regards`;
             </div>
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
 
       {/* After the dialog in the tree, so it sits above it — both are z-50. */}
       {isPreviewOpen && (

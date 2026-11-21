@@ -136,7 +136,7 @@ export default function TeamDetailsModal({
               ) : (
                 <p className="text-sm text-gray-500 dark:text-slate-400">
                   Not assigned
-                  {onEdit && canEdit && <span className="block text-xs text-gray-400 dark:text-slate-500">Pick one with Edit Team.</span>}
+                  {onEdit && canEdit && <span className="block text-xs text-gray-500 dark:text-slate-500">Pick one with Edit Team.</span>}
                 </p>
               )}
             </dd>
@@ -206,7 +206,7 @@ export default function TeamDetailsModal({
             <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-200 bg-gray-50 py-8 text-center text-gray-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
               <Users className="h-5 w-5" />
               <p className="text-sm font-medium">No members yet</p>
-              {onEdit && canEdit && <p className="text-xs text-gray-400 dark:text-slate-500">Add people with Edit Team.</p>}
+              {onEdit && canEdit && <p className="text-xs text-gray-500 dark:text-slate-500">Add people with Edit Team.</p>}
             </div>
           )}
         </div>

@@ -31,6 +31,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * Shared invitation-action logic for the Assessment module, ported from (and
@@ -93,7 +95,7 @@ export const isRevocableInvitation = (inv: any): boolean => {
 /** Edit (name + email) only ever appears once revoked — same rule as AI
  *  Interview. This is distinct from the pre-existing failed/bounced "fix the
  *  address" Edit/Change Email flow, which callers keep wiring separately. */
-export const canEditInvitation = (inv: any): boolean => resolveInviteStatus(inv) === 'revoked';
+export const canEditInvitation = (inv: any): boolean => ['revoked', 'bounced'].includes(resolveInviteStatus(inv));
 
 /** Resend — expired or failed only now; a plain 'sent' row's only path to a
  *  new link is Revoke, then Edit's Save & Send (mirrors AI Interview
@@ -142,6 +144,8 @@ export type TimelineEntry = {
   /** The candidate email the audit row recorded (`details.candidate_email`),
    *  when the API sent one — View History shows it under the event. */
   email?: string;
+  /** Why the email bounced (`details.bounce_reason`, from the NDR). */
+  reason?: string;
 };
 
 /** Epoch ms for a timeline timestamp, read the way the Timeline column prints
@@ -176,6 +180,10 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
       return { label: 'Expired at', Icon: Clock, tone: 'text-brand-orange-deep' };
     case 'assessment_invite_failed':
       return { label: 'Invite Failed', Icon: X, tone: 'text-red-600' };
+    case 'assessment_consent_accepted':
+      return { label: 'Consent Accepted', Icon: CheckCircle, tone: 'text-brand-cyan' };
+    case 'assessment_email_bounced':
+      return { label: 'Bounced', Icon: RefreshCw, tone: 'text-destructive' };
     default:
       return { label: action.replace(/_/g, ' '), Icon: Clock, tone: 'text-gray-500' };
   }
@@ -322,7 +330,9 @@ const buildFullTimeline = (
     .map((log) => {
       const detailEmail = log.details?.candidate_email;
       const email = typeof detailEmail === 'string' ? detailEmail : undefined;
-      return { ...describeTimelineAction(log.action), at: log.created_at as string, ...(email ? { email } : {}) };
+      const detailReason = log.details?.bounce_reason;
+      const reason = typeof detailReason === 'string' && detailReason ? detailReason : undefined;
+      return { ...describeTimelineAction(log.action), at: log.created_at as string, ...(email ? { email } : {}), ...(reason ? { reason } : {}) };
     });
 
   // created_at (row birth, never touched again) rather than sent_at/
@@ -375,7 +385,12 @@ const buildFullTimeline = (
   // IMAP/consent signals, not recruiter or candidate actions) — always
   // synthesized from their own columns.
   if (inv.email_read_at) out.push({ label: 'Email Read', at: inv.email_read_at, Icon: Eye, tone: 'text-brand-cyan' });
-  if (inv.bounced_at) out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-destructive' });
+  // The bounce monitor now also audit-logs each bounce (shown as "Bounced"
+  // above, and kept after a resend clears bounced_at) — synthesize from the
+  // column only when no such row exists, or it would print twice.
+  if (inv.bounced_at && !out.some((e) => e.label === 'Bounced')) {
+    out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-destructive' });
+  }
   if (inv.opened_at) out.push({ label: 'System Check', at: inv.opened_at, Icon: Monitor, tone: 'text-brand-cyan' });
 
   const merged = inferMissingExpiries(out, inv.expires_at && inv.sent_at ? eventMs(inv.expires_at) - eventMs(inv.sent_at) : 0, 'assessment_invitation_expired').sort(
@@ -445,6 +460,13 @@ const TIMELINE_EVENT_DESCRIPTION: Record<string, string> = {
   'Invite Failed': 'Invitation email could not be delivered',
   'Bounced': 'Invitation email bounced',
 };
+/** The event's one-line description, plus the bounce reason when there is one
+ *  ("Invitation email bounced – Email address not found"). */
+const describeEntry = (entry: TimelineEntry): string | undefined => {
+  const base = TIMELINE_EVENT_DESCRIPTION[entry.label];
+  return entry.reason ? `${base ?? entry.label} – ${entry.reason}` : base;
+};
+
 
 /** "View full history" only earns its place once something is actually
  *  hidden by the cap above — at 4 events or fewer the cell already shows
@@ -461,7 +483,7 @@ export const loadInvitationHistory = async (inv: any, assessmentId: string, invi
   return buildFullTimeline(inv, [...(inv.timeline || []), ...logs]).reverse().map((entry) => ({
     ...entry,
     isStatus: isStatusEntry(entry),
-    description: TIMELINE_EVENT_DESCRIPTION[entry.label],
+    description: describeEntry(entry),
   }));
 };
 
@@ -546,10 +568,11 @@ export function buildInvitationRowActions(inv: any, opts: {
       ...noInviteProps,
     });
   }
-  if (opts.onEditEmail && (status === 'failed' || status === 'bounced')) {
+  // Bounced uses the revoked Edit flow below (canEditInvitation), not this one.
+  if (opts.onEditEmail && status === 'failed') {
     actions.push({
       key: 'edit-email',
-      label: status === 'bounced' ? 'Change Email' : 'Edit Email',
+      label: 'Edit Email',
       Icon: Pencil,
       run: () => opts.onEditEmail!(inv),
       iconClassName: 'text-menu-icon-edit',
@@ -598,13 +621,11 @@ export function InvitationActionsMenu({ actions, extraItems, className }: {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          aria-label="Actions"
-          title="Actions"
+        <IconButton bare label="Actions"
           className="h-8 w-8 shrink-0 inline-flex items-center justify-center text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded-md transition-colors"
         >
           <MoreVertical className="w-4 h-4" />
-        </button>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={className || 'w-44'}>
         {extraItems}
@@ -726,19 +747,18 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
         <div className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
           <h3 className="min-w-0 truncate tf-section-title sm:text-lg tracking-tight">Edit Invitation</h3>
-          <Button
+          <IconButton label="Close"
             variant="secondary"
             size="sm"
             onClick={() => { if (!saving) onClose(); }}
-            aria-label="Close"
             className="shrink-0"
           >
             <X className="w-5 h-5" />
-          </Button>
+          </IconButton>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
           <p className="tf-body-muted">
@@ -787,7 +807,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }
 
@@ -879,7 +899,7 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
           <DialogDescription className="break-words">
             {capitalizedCase(target?.candidate_name) || target?.candidate_email || 'Candidate'}
             {target?.candidate_name && target?.candidate_email && (
-              <span className="text-gray-400 dark:text-slate-500 break-all"> · {target.candidate_email}</span>
+              <span className="text-gray-500 dark:text-slate-500 break-all"> · {target.candidate_email}</span>
             )}
           </DialogDescription>
         </DialogHeader>
@@ -920,8 +940,8 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
                           </span>
                         )}
                       </div>
-                      {TIMELINE_EVENT_DESCRIPTION[entry.label] && (
-                        <p className="tf-meta break-words">{TIMELINE_EVENT_DESCRIPTION[entry.label]}</p>
+                      {describeEntry(entry) && (
+                        <p className="tf-meta break-words">{describeEntry(entry)}</p>
                       )}
                     </div>
                   </li>

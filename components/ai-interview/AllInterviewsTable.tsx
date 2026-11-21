@@ -43,6 +43,8 @@ import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from './UnpublishedChangesChip';
 import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** The page-size ladder this screen specifies (same ladder as the Assessments
  *  equivalent, so pagination reads the same across the two products). */
@@ -871,14 +873,12 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
 ) : (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
+        <IconButton bare label={`Actions for ${row.jobName}`} tooltip="Actions"
           type="button"
           className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-          aria-label={`Actions for ${row.jobName}`}
-          title="Actions"
         >
           <MoreVertical className="w-4 h-4" />
-        </button>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={`w-44 ${MENU_PANEL_BORDER_CLASS}`}>
         {rowActions(row).map(({ key, label, icon: Icon, run, disabled, reason }) => (
@@ -1070,7 +1070,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
             filter icon · List / Grid on one line, as the Job Openings list. */}
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
           <div className="tf-tb-search relative flex-1 min-w-0">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
             <input
               value={search}
               onChange={(e) => searchAndReset(e.target.value)}
@@ -1080,13 +1080,12 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               className="tf-input pl-9 pr-9"
             />
             {search && (
-              <button
+              <IconButton bare label="Clear search"
                 onClick={() => searchAndReset('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600"
-                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-500 hover:text-gray-600"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </IconButton>
             )}
           </div>
 
@@ -1116,10 +1115,10 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
             )}
           </button>
           </FilterChipsHover>
+          {/* Reset — immediately after More Filters, as on every list. */}
+          {isNarrowed && <ToolbarResetButton onClick={clearAll} />}
           {/* Sort by lands here — see `useListSortSlot`. */}
           <span data-list-sort-slot className="contents" />
-          {/* Reset — after More Filters and Sort by, as on Job Openings. */}
-          {isNarrowed && <ToolbarResetButton onClick={clearAll} />}
           {/* Actions (N) + Clear — only while rows are ticked. */}
           {selectedRows.length > 0 && (
             <ListBulkActions>
@@ -1179,7 +1178,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                           none ? 'text-gray-400 cursor-not-allowed opacity-60' : kind === 'delete' ? 'cursor-pointer text-destructive' : 'cursor-pointer'
                         }`}
                       >
-                        <Icon className={`w-4 h-4 ${none ? 'text-gray-300' : className}`} />
+                        <Icon className={`w-4 h-4 ${none ? 'text-muted-foreground dark:text-gray-300' : className}`} />
                         <span>{label} ({eligibleCount === total ? total : `${eligibleCount} of ${total}`})</span>
                       </DropdownMenuItem>
                     );
@@ -1398,20 +1397,18 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                   {isLoading ? (
                     <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                   ) : (
-                  <button
+                  <IconButton bare label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
                     type="button"
                     onClick={toggleAllOnPage}
                     disabled={isLoading}
                     className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800 disabled:opacity-40"
-                    aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
-                    title={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
                   >
                     {allOnPageSelected ? (
                       <CheckSquare className="w-4 h-4 text-brand-blue" />
                     ) : (
-                      <Square className="w-4 h-4 text-gray-400" />
+                      <Square className="w-4 h-4 text-gray-500" />
                     )}
-                  </button>
+                  </IconButton>
                   )}
                 </th>
                 {shownColumns.map((col) => {
@@ -1494,7 +1491,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                   const isExpanded = expandableRows && expandedIds.has(row.id);
                   return (
                   <Fragment key={row.id}>
-                  <tr
+                  <tr {...clickableRowProps}
                     ref={(el) => {
                       if (el) rowRefs.current.set(row.id, el);
                       else rowRefs.current.delete(row.id);
@@ -1506,18 +1503,17 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                     }`}
                   >
                     <td className="tf-td pl-3 pr-0 w-10" onClick={(e) => e.stopPropagation()}>
-                      <button
+                      <IconButton bare label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
                         type="button"
                         onClick={() => toggleSelected(row.id)}
                         className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
-                        aria-label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
                       >
                         {selectedIds.has(row.id) ? (
                           <CheckSquare className="w-4 h-4 text-brand-blue" />
                         ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
+                          <Square className="w-4 h-4 text-gray-500" />
                         )}
-                      </button>
+                      </IconButton>
                     </td>
 
                     {/* Job ID stays pinned on the left while the table scrolls sideways. */}
@@ -1534,17 +1530,15 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                       <div className="flex items-center justify-end gap-1">
                       {/* The Resume Scoring list's expand control. */}
                       {expandableRows && (
-                        <Button
+                        <IconButton label={isExpanded ? 'Hide details' : 'Show details'}
                           variant="secondary"
                           size="sm"
                           onClick={() => toggleExpanded(row.id)}
                           aria-expanded={isExpanded}
-                          aria-label={isExpanded ? 'Hide details' : 'Show details'}
-                          title={isExpanded ? 'Hide details' : 'Show details'}
                           className="h-8 w-8"
                         >
                           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                        </Button>
+                        </IconButton>
                       )}
                       {actionsCell(row)}
                       </div>
@@ -1600,18 +1594,17 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               selected={selectedIds.has(row.id)}
               className={flashedRowId === row.id ? 'bg-brand-blue/10 dark:bg-brand-blue/15' : undefined}
               select={
-                <button
+                <IconButton bare label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
                   type="button"
                   onClick={() => toggleSelected(row.id)}
                   className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
-                  aria-label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
                 >
                   {selectedIds.has(row.id) ? (
                     <CheckSquare className="w-4 h-4 text-brand-blue" />
                   ) : (
-                    <Square className="w-4 h-4 text-gray-400" />
+                    <Square className="w-4 h-4 text-gray-500" />
                   )}
-                </button>
+                </IconButton>
               }
               idBadge={row.jobId ? <JobIdBadge>{row.jobId}</JobIdBadge> : undefined}
               /* The job's Disabled / Archived tag sits beside the status on the top

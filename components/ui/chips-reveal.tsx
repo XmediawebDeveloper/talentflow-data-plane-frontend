@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, X } from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** The panel's width in px — matches `w-64` on the panel itself. */
 const REVEAL_PANEL_WIDTH = 256;
@@ -217,14 +218,13 @@ export default function ChipsReveal({
             <p className="tf-caption">
               {label} ({items.length})
             </p>
-            <button
+            <IconButton bare label="Close"
               type="button"
               onClick={close}
-              aria-label="Close"
-              className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+              className="text-gray-500 hover:text-gray-600 flex-shrink-0"
             >
               <X className="h-3.5 w-3.5" />
-            </button>
+            </IconButton>
           </div>
           <div className="mt-2 overflow-y-auto" style={{ maxHeight: placement.listMaxHeight }}>
             <div className="flex flex-wrap gap-1.5">

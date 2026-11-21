@@ -961,11 +961,11 @@ function SkillTable({ title, rows, wide = false }: {
                     <div className="flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
                       <div className={`h-full rounded-full ${scoreColor(s.score).bar}`} style={{ width: `${isNotAssessed(s) ? 0 : Math.max(0, Math.min(100, (s.score / 10) * 100))}%` }} />
                     </div>
-                    <span className={`w-8 text-right font-bold tabular-nums ${isNotAssessed(s) ? 'text-gray-400' : scoreColor(s.score).text}`}>{isNotAssessed(s) ? '—' : formatSkillScore(s.score)}</span>
+                    <span className={`w-8 text-right font-bold tabular-nums ${isNotAssessed(s) ? 'text-gray-500' : scoreColor(s.score).text}`}>{isNotAssessed(s) ? '—' : formatSkillScore(s.score)}</span>
                   </div>
                 </td>
               ) : (
-                <td className={`px-4 py-2 text-right font-bold tabular-nums ${isNotAssessed(s) ? 'text-gray-400' : scoreColor(s.score).text}`}>{isNotAssessed(s) ? '—' : formatSkillScore(s.score)}</td>
+                <td className={`px-4 py-2 text-right font-bold tabular-nums ${isNotAssessed(s) ? 'text-gray-500' : scoreColor(s.score).text}`}>{isNotAssessed(s) ? '—' : formatSkillScore(s.score)}</td>
               )}
               {wide && (() => {
                 const st = skillStatus(s.score, isNotAssessed(s));
@@ -992,7 +992,7 @@ function SkillTable({ title, rows, wide = false }: {
               {
                 label: 'Score',
                 value: (
-                  <span className={`font-bold tabular-nums ${isNotAssessed(s) ? 'text-gray-400' : scoreColor(s.score).text}`}>
+                  <span className={`font-bold tabular-nums ${isNotAssessed(s) ? 'text-gray-500' : scoreColor(s.score).text}`}>
                     {isNotAssessed(s) ? '—' : formatSkillScore(s.score)}
                   </span>
                 ),
@@ -1209,7 +1209,7 @@ export function EvalReportCombined({
           <div className={headerIcon}><Target className="w-4 h-4" /></div>
           <div className={cardTitle}>Section Score Breakdown</div>
           <span title={`Must-Have drives Pass/Fail at ${MHS_THRESHOLD.toFixed(1)}; Nice-to-Have is informational.`}>
-            <Info className="w-4 h-4 text-gray-400" />
+            <Info className="w-4 h-4 text-gray-500" />
           </span>
           <div className="w-full sm:w-auto sm:ml-auto flex items-center gap-x-4 gap-y-1 flex-wrap tf-meta">
             <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-brand-blue" />Score Achieved</span>
@@ -1362,7 +1362,7 @@ export function EvalReportCombined({
                         ? <span className="tf-caption italic">Review only</span>
                         : <>
                             <span className={`text-base font-bold tabular-nums ${sc.text}`}>{formatScore1(q.questionScore)}</span>
-                            {q.notDelivered && <span className="block text-2xs font-semibold text-gray-400 uppercase tracking-wide">Not Delivered</span>}
+                            {q.notDelivered && <span className="block text-2xs font-semibold text-gray-500 uppercase tracking-wide">Not Delivered</span>}
                           </>}
                     </span>
                   </div>
@@ -1379,7 +1379,7 @@ export function EvalReportCombined({
                       Labelled block, as in Question Analysis. */}
                   <div className="border-l-2 border-brand-blue/20 pl-3">
                     <div className="tf-caption mb-1">Candidate&apos;s Answer</div>
-                    <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${ansIsPlaceholder ? 'text-gray-400 italic' : 'text-gray-700 dark:text-slate-300'}`}>
+                    <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${ansIsPlaceholder ? 'text-gray-500 italic' : 'text-gray-700 dark:text-slate-300'}`}>
                       {answerText}
                     </div>
                   </div>
@@ -1408,7 +1408,7 @@ export function EvalReportCombined({
             })}
           </div>
         ) : (
-          <div className="py-10 flex flex-col items-center gap-2 text-gray-400">
+          <div className="py-10 flex flex-col items-center gap-2 text-gray-500">
             <ClipboardList className="w-9 h-9 opacity-50" />
             <div className="text-sm">The candidate exited the interview without answering any questions, so question-level details are not shown here.</div>
           </div>

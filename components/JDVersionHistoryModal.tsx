@@ -15,6 +15,8 @@ import { formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpening
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface JDVersionHistoryModalProps {
   isOpen: boolean;
@@ -545,7 +547,7 @@ export default function JDVersionHistoryModal({
   const openingOne = busy && initialVersionNumber != null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6 animate-in fade-in duration-200 motion-reduce:animate-none" onClick={closeModal}>
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6 animate-in fade-in duration-200 motion-reduce:animate-none" onClick={closeModal}>
       <div
         className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full h-[calc(100dvh-1.5rem)] sm:h-[min(46rem,calc(100dvh-3rem))] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 motion-reduce:animate-none"
         onClick={(e) => e.stopPropagation()}
@@ -631,16 +633,14 @@ export default function JDVersionHistoryModal({
               </Button>
             )}
             {!cancelInFooter && (
-              <Button
+              <IconButton label="Close"
                 type="button"
                 variant="secondary"
                 size="sm"
                 onClick={closeModal}
-               
-                aria-label="Close"
               >
                 <X className="w-5 h-5" />
-              </Button>
+              </IconButton>
             )}
           </div>
         </div>
@@ -763,18 +763,16 @@ export default function JDVersionHistoryModal({
               <VersionHeaderCard
                 version={selectedVersion}
                 action={
-                  <Button
+                  <IconButton label="Download this version as a Word document" tooltip={canDownloadJd ? 'Download this version as a Word document' : "You can view this job description, but your role doesn't allow downloading it"}
                     type="button"
                     variant="secondary"
                     size="sm"
                     onClick={() => handleDownload(selectedVersion)}
                     className={!canDownloadJd ? 'opacity-50 cursor-not-allowed' : ''}
                     aria-disabled={!canDownloadJd}
-                    aria-label="Download this version as a Word document"
-                    title={canDownloadJd ? 'Download this version as a Word document' : "You can view this job description, but your role doesn't allow downloading it"}
                   >
                     <Download className="w-3.5 h-3.5" />
-                  </Button>
+                  </IconButton>
                 }
               />
 
@@ -868,17 +866,15 @@ export default function JDVersionHistoryModal({
                         ) : (
                           <span className="hidden sm:inline tf-hint italic">First version</span>
                         )}
-                        <Button
+                        <IconButton label={`View version ${version.version_number}`} tooltip="View JD"
                           type="button"
                           variant="secondary"
                           size="sm"
                           onClick={() => setSelectedVersion(version)}
                           className=""
-                          aria-label={`View version ${version.version_number}`}
-                          title="View JD"
                         >
                           <Eye className="w-4 h-4" />
-                        </Button>
+                        </IconButton>
                       </div>
                     </div>
                     {/* Phones: the title and meta at the card's full width,
@@ -891,7 +887,7 @@ export default function JDVersionHistoryModal({
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                <FileText className="w-8 h-8 text-gray-400 dark:text-slate-500" />
+                <FileText className="w-8 h-8 text-gray-500 dark:text-slate-500" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Versions Found</h3>
               <p className="tf-body-muted text-center">
@@ -960,6 +956,6 @@ export default function JDVersionHistoryModal({
           />
         </div>
       )}
-    </div>
+    </div></ModalA11y>
   );
 }

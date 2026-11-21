@@ -10,6 +10,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, ExportFileFormat } from '@/lib/utils/exportUtils';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Dynamic import to avoid SSR issues with docx-preview dependency
 const DuplicateResolutionModal = dynamic(() => import('./DuplicateResolutionModal'), {
@@ -247,21 +250,20 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+    <ModalA11y><div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-6xl max-h-[90dvh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-50 to-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex items-start justify-between mb-3 sm:mb-4">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <Button
+              <IconButton label="Back"
                 variant="secondary"
                 size="sm"
                 onClick={onBack}
-                aria-label="Back"
                 className="flex-shrink-0"
               >
                 <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-              </Button>
+              </IconButton>
               <div className="min-w-0">
                 <h2 className="text-lg sm:text-xl lg:text-2xl text-gray-900 mb-0.5 sm:mb-1">Upload Details</h2>
                 <p className="tf-body-secondary truncate">
@@ -269,20 +271,19 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 </p>
               </div>
             </div>
-            <Button
+            <IconButton label="Close"
               variant="secondary"
               size="sm"
               onClick={onClose}
-              aria-label="Close"
               className="flex-shrink-0"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
-            </Button>
+            </IconButton>
           </div>
 
           {/* Summary Cards (Clickable Filters) */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-            <div
+            <div {...clickableProps}
               onClick={() => setActiveFilter(activeFilter === 'completed' ? null : 'completed')}
               className={`bg-gradient-to-br from-green-50 to-green-100/50 border rounded-lg p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
                 activeFilter === 'completed' ? 'border-success-line ring-2 ring-success-line shadow-md' : 'border-success-line'
@@ -297,7 +298,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="text-lg sm:text-xl lg:text-3xl text-success">{completed.length}</div>
             </div>
 
-            <div
+            <div {...clickableProps}
               onClick={() => setActiveFilter(activeFilter === 'duplicated' ? null : 'duplicated')}
               className={`bg-gradient-to-br from-yellow-50 to-yellow-100/50 border rounded-lg p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
                 activeFilter === 'duplicated' ? 'border-warning-line ring-2 ring-warning-line shadow-md' : 'border-warning-line'
@@ -312,7 +313,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="text-lg sm:text-xl lg:text-3xl text-warning">{duplicated.length}</div>
             </div>
 
-            <div
+            <div {...clickableProps}
               onClick={() => setActiveFilter(activeFilter === 'versioned' ? null : 'versioned')}
               className={`bg-gradient-to-br from-purple-50 to-purple-100/50 border rounded-lg p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
                 activeFilter === 'versioned' ? 'border-purple-500 ring-2 ring-purple-300 shadow-md' : 'border-purple-200'
@@ -327,7 +328,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="text-lg sm:text-xl lg:text-3xl text-purple-700">{versioned.length}</div>
             </div>
 
-            <div
+            <div {...clickableProps}
               onClick={() => setActiveFilter(activeFilter === 'error' ? null : 'error')}
               className={`bg-gradient-to-br from-red-50 to-red-100/50 border rounded-lg p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
                 activeFilter === 'error' ? 'border-destructive ring-2 ring-destructive-line shadow-md' : 'border-destructive-line'
@@ -342,7 +343,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="text-lg sm:text-xl lg:text-3xl text-destructive">{errors.length}</div>
             </div>
 
-            <div
+            <div {...clickableProps}
               onClick={() => setActiveFilter(activeFilter === 'pending' ? null : 'pending')}
               className={`bg-gradient-to-br from-gray-50 to-gray-100/50 border rounded-lg p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
                 activeFilter === 'pending' ? 'border-gray-600 ring-2 ring-gray-400 shadow-md' : 'border-gray-300'
@@ -385,12 +386,11 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                  activeFilter === 'error' ? 'Errors' :
                  'Pending'}
               </span>
-              <button
+              <IconButton bare label="Close"
                 onClick={() => setActiveFilter(null)}
-                className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
-               aria-label="Close">
+                className="ml-auto text-xs text-gray-500 hover:text-gray-600 transition-colors">
                 <X className="w-3.5 h-3.5" />
-              </button>
+              </IconButton>
             </div>
           )}
         </div>
@@ -482,9 +482,9 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <span className="tf-badge text-success sm:px-3 sm:py-1 bg-success-subtle">
                           {getStatusText(item.status)}
                         </span>
-                        <Button variant="secondary" size="sm" aria-label="View">
+                        <IconButton label="View" variant="secondary" size="sm">
                           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </Button>
+                        </IconButton>
                       </div>
                     </div>
                   ))}
@@ -546,9 +546,9 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <span className="tf-badge text-warning sm:px-3 sm:py-1 bg-warning-subtle">
                           {getStatusText(item.status)}
                         </span>
-                        <Button variant="secondary" size="sm" aria-label="View">
+                        <IconButton label="View" variant="secondary" size="sm">
                           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </Button>
+                        </IconButton>
                       </div>
                     </div>
                   ))}
@@ -615,9 +615,9 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <span className="tf-badge text-purple-700 sm:px-3 sm:py-1 bg-purple-100">
                           {getStatusText(item.status)}
                         </span>
-                        <Button variant="secondary" size="sm" aria-label="View">
+                        <IconButton label="View" variant="secondary" size="sm">
                           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </Button>
+                        </IconButton>
                       </div>
                     </div>
                   ))}
@@ -934,6 +934,6 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
         columns={UPLOAD_REPORT_HEADERS}
         onExport={exportReport}
       />
-    </div>
+    </div></ModalA11y>
   );
 }

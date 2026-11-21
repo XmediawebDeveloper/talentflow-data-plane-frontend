@@ -1,6 +1,8 @@
 import { Bell, X, CheckCircle, AlertCircle, Info, Clock, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface Notification {
   id: string;
@@ -90,13 +92,12 @@ export default function NotificationCenter({
             <div className="px-4 py-3 border-b border-border flex-shrink-0">
               <div className="flex items-center justify-between mb-1.5">
                 <h3 className="text-foreground font-semibold text-sm">Notifications</h3>
-                <button
+                <IconButton bare label="Close notifications"
                   onClick={() => setIsOpen(false)}
                   className="text-muted-foreground hover:text-foreground hover:bg-accent/60 rounded-md p-1 transition-colors"
-                  aria-label="Close notifications"
                 >
                   <X className="w-4 h-4" />
-                </button>
+                </IconButton>
               </div>
               {notifications.length > 0 && (
                 <div className="flex items-center gap-2 text-xs">
@@ -130,7 +131,7 @@ export default function NotificationCenter({
               ) : (
                 <div className="divide-y divide-border">
                   {notifications.map((notification) => (
-                    <div
+                    <div {...clickableProps}
                       key={notification.id}
                       className={`px-4 py-3 hover:bg-accent/40 transition-colors cursor-pointer ${
                         !notification.read ? 'bg-accent/20' : ''
@@ -165,15 +166,15 @@ export default function NotificationCenter({
                             </div>
 
                             {/* Delete Button */}
-                            <button
+                            <IconButton bare label="Delete notification"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onDelete(notification.id);
                               }}
-                              className="p-1 text-gray-400 hover:text-red-600 rounded"
+                              className="p-1 text-gray-500 hover:text-red-600 rounded"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            </IconButton>
                           </div>
 
                           {/* Action Button */}

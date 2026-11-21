@@ -1,5 +1,6 @@
 import { Activity, Clock, Database, Zap } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface PerformanceMetricsProps {
   position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
@@ -55,7 +56,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
             </div>
             <button
               onClick={() => setIsExpanded(false)}
-              className="text-gray-400 hover:text-gray-600 text-xs"
+              className="text-gray-500 hover:text-gray-600 text-xs"
             >
               Minimize
             </button>
@@ -121,13 +122,12 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
           </div>
         </div>
       ) : (
-        <button
+        <IconButton bare label="Show performance metrics"
           onClick={() => setIsExpanded(true)}
           className="bg-white rounded-lg shadow-lg border border-gray-200 p-3 hover:shadow-xl transition-all group"
-          aria-label="Show performance metrics" title="Show performance metrics"
         >
           <Activity className="w-5 h-5 text-gray-800 group-hover:scale-110 transition-transform" />
-        </button>
+        </IconButton>
       )}
     </div>
   );

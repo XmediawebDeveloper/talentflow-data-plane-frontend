@@ -4,6 +4,7 @@ import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Archive, AlertTriangle, CheckCircle2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 /**
  * What archiving an assessment actually does, spelled out before it happens.
@@ -51,7 +52,7 @@ export default function ArchiveAssessmentModal({ isOpen, target, onConfirm, onCa
   ].filter((part): part is string => !!part);
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-3 sm:p-6">
+    <ModalA11y innerDialog><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-3 sm:p-6">
       <div
         role="dialog"
         aria-modal="true"
@@ -133,7 +134,7 @@ export default function ArchiveAssessmentModal({ isOpen, target, onConfirm, onCa
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }
 

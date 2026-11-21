@@ -90,10 +90,10 @@ export default function ListEmptyState({
   /* With an illustration, the heading and text take the illustrated empty
      states' bolder style, so every illustrated card reads the same. */
   const titleClass = shownIllustration
-    ? 'mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50'
+    ? 'mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[var(--raw-0f1e3d)] dark:text-slate-50'
     : 'tf-section-title mb-1';
   const bodyClass = shownIllustration
-    ? 'mx-auto max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300'
+    ? 'mx-auto max-w-md text-sm sm:text-base leading-relaxed text-[var(--raw-0f1e3d)]/80 dark:text-slate-300'
     : 'tf-body-muted';
 
   return (

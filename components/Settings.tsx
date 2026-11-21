@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { IconButton } from '@/components/ui/icon-button';
 
 // ApiError (handleApiError) carries the backend `detail` as its message.
 const noopSubscribe = () => () => {};
@@ -337,8 +338,8 @@ export default function Settings() {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 6) {
-      toast.error('New password must be at least 6 characters');
+    if (newPassword.length < 8) {
+      toast.error('New password must be at least 8 characters');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -549,7 +550,7 @@ export default function Settings() {
               {shownAdminSettingsLinks.length > 0 && (
                 <>
                   <div className="hidden lg:block my-1.5 border-t border-gray-100 dark:border-slate-700/60" />
-                  <span className="hidden lg:block px-4 pb-1 text-2xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-[0.1em]">
+                  <span className="hidden lg:block px-4 pb-1 text-2xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-[0.1em]">
                     Workspace &amp; Admin
                   </span>
                   {shownAdminSettingsLinks.map((link) => {
@@ -736,7 +737,7 @@ export default function Settings() {
                               refreshed from /auth/me so an edit there shows up. */}
                           <Label className="mb-1.5">Role</Label>
                           <div className="relative">
-                            <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500 z-10 pointer-events-none" />
+                            <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500 dark:text-slate-500 z-10 pointer-events-none" />
                             <Input
                               type="text"
                               value={user?.roleDisplay || prettyRoleName(user?.role)}
@@ -758,15 +759,14 @@ export default function Settings() {
                       <div className="mb-1.5 flex items-center gap-1.5">
                         <Label>Time Zone</Label>
                         <HoverCardTrigger asChild>
-                          <button
+                          <IconButton bare label="How does the time zone work?"
                             type="button"
-                            aria-label="How does the time zone work?"
                             // Hover/focus opens it; a tap toggles it on touch screens (no hover there).
                             onClick={() => setTzInfoOpen(open => !open)}
-                            className="rounded-full p-0.5 text-gray-400 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
+                            className="rounded-full p-0.5 text-gray-500 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
                           >
                             <Info className="h-4 w-4" />
-                          </button>
+                          </IconButton>
                         </HoverCardTrigger>
                       </div>
                       <SearchableSelect
@@ -1277,7 +1277,7 @@ export default function Settings() {
                   <div>
                     <Label className="mb-1.5">Current Password</Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500 z-10 pointer-events-none" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 dark:text-slate-500 z-10 pointer-events-none" />
                       <Input
                         type={showCurrentPassword ? 'text' : 'password'}
                         value={currentPassword}
@@ -1286,14 +1286,13 @@ export default function Settings() {
                         className="pl-10 pr-10"
                         placeholder="Enter current password"
                       />
-                      <button
+                      <IconButton bare label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
                         type="button"
                         onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-brand-blue"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-slate-500 hover:text-brand-blue"
                       >
                         {showCurrentPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
+                      </IconButton>
                     </div>
                   </div>
 
@@ -1301,7 +1300,7 @@ export default function Settings() {
                   <div>
                     <Label className="mb-1.5">New Password</Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500 z-10 pointer-events-none" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 dark:text-slate-500 z-10 pointer-events-none" />
                       <Input
                         type={showNewPassword ? 'text' : 'password'}
                         value={newPassword}
@@ -1310,16 +1309,16 @@ export default function Settings() {
                         className="pl-10 pr-10"
                         placeholder="Enter new password"
                       />
-                      <button
+                      <IconButton bare label={showNewPassword ? 'Hide new password' : 'Show new password'}
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-brand-blue"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-slate-500 hover:text-brand-blue"
                       >
                         {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
+                      </IconButton>
                     </div>
-                    {newPassword.length > 0 && newPassword.length < 6 && (
-                      <p className="tf-error mt-1">Password must be at least 6 characters</p>
+                    {newPassword.length > 0 && newPassword.length < 8 && (
+                      <p className="tf-error mt-1">Password must be at least 8 characters</p>
                     )}
                   </div>
 
@@ -1327,7 +1326,7 @@ export default function Settings() {
                   <div>
                     <Label className="mb-1.5">Confirm New Password</Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500 z-10 pointer-events-none" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 dark:text-slate-500 z-10 pointer-events-none" />
                       <Input
                         type={showConfirmPassword ? 'text' : 'password'}
                         value={confirmPassword}
@@ -1336,18 +1335,18 @@ export default function Settings() {
                         className="pl-10 pr-10"
                         placeholder="Confirm new password"
                       />
-                      <button
+                      <IconButton bare label={showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'}
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-brand-blue"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-slate-500 hover:text-brand-blue"
                       >
                         {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
+                      </IconButton>
                     </div>
                     {confirmPassword.length > 0 && newPassword !== confirmPassword && (
                       <p className="tf-error mt-1">Passwords do not match</p>
                     )}
-                    {confirmPassword.length > 0 && newPassword === confirmPassword && newPassword.length >= 6 && (
+                    {confirmPassword.length > 0 && newPassword === confirmPassword && newPassword.length >= 8 && (
                       <p className="text-xs text-brand-cyan mt-1 flex items-center gap-1 font-semibold">
                         <Check className="w-3 h-3" /> Passwords match
                       </p>
@@ -1360,7 +1359,7 @@ export default function Settings() {
                     disabled={
                       isChangingPassword ||
                       !currentPassword ||
-                      newPassword.length < 6 ||
+                      newPassword.length < 8 ||
                       newPassword !== confirmPassword
                     }
                     className="w-full sm:w-auto"

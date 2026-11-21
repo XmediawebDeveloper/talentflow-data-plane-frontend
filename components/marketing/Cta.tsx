@@ -31,7 +31,7 @@ const VARIANTS: Record<Variant, { button: string; fill: string }> = {
   light: {
     // `bg-[#fff]`, not `bg-white`: globals.css repaints `.dark .bg-white` as a
     // dark surface, which would sink this button into the navy band.
-    button: "bg-[#fff] text-mkt-navy focus-visible:ring-mkt-amber focus-visible:ring-offset-mkt-navy",
+    button: "bg-[var(--raw-ffffff)] text-mkt-navy focus-visible:ring-mkt-amber focus-visible:ring-offset-mkt-navy",
     fill: "bg-mkt-amber",
   },
   outlineLight: {

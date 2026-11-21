@@ -4,6 +4,8 @@ import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, 
 import { User, Tenant } from '@/lib/types/tenant';
 import { authService, type LoginResponse } from '@/lib/services/authService';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface LoginProps {
   onLogin: (user: User, tenant?: Tenant) => void;
@@ -88,8 +90,8 @@ export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: Log
         } catch {
           // Fallback to raw URL if parsing fails
         }
-        console.log('[LOGIN] Tenant has pending payment, redirecting to:', response.pending_payment_redirect);
-        router.push(response.pending_payment_redirect);
+        // Backend-supplied: same-site paths only (security sheet N4).
+        router.push(safeReturnUrl(response.pending_payment_redirect, '/complete-payment'));
         return;
       }
 
@@ -146,7 +148,7 @@ export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: Log
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
+    boxShadow: '0 10px 40px var(--raw-rgba-37-99-235-0p3)',
   };
 
   const brandNameStyle: React.CSSProperties = {
@@ -208,7 +210,7 @@ export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: Log
   const formCardStyle: React.CSSProperties = {
     backgroundColor: 'var(--raw-ffffff)',
     borderRadius: '24px',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+    boxShadow: '0 25px 50px -12px var(--raw-rgba-0-0-0-0p15)',
     padding: isMobile ? '32px' : '40px',
     border: '1px solid var(--raw-f3f4f6)',
   };
@@ -359,7 +361,7 @@ export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: Log
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
+    boxShadow: '0 10px 40px var(--raw-rgba-37-99-235-0p3)',
     transition: 'all 0.2s',
   };
 
@@ -531,9 +533,9 @@ export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: Log
                     required
                     style={{ ...inputStyle, paddingRight: 48 }}
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={eyeButtonStyle}>
+                  <IconButton bare label={showPassword ? 'Hide password' : 'Show password'} type="button" onClick={() => setShowPassword(!showPassword)} style={eyeButtonStyle}>
                     {showPassword ? <EyeOff style={{ width: 20, height: 20 }} /> : <Eye style={{ width: 20, height: 20 }} />}
-                  </button>
+                  </IconButton>
                 </div>
               </div>
 

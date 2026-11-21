@@ -196,7 +196,7 @@ function Row({
 /* Column headings over the rows (desktop only), named per tab. */
 function ColumnHeader({ tab }: { tab: TabKey }) {
   return (
-    <div className={`hidden ${gridFor(tab)} px-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-gray-400`}>
+    <div className={`hidden ${gridFor(tab)} px-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-gray-500`}>
       <span>Details</span>
       {COLUMNS[tab].heads.map(h => <span key={h} className="text-center">{h}</span>)}
       <span className="text-center">View</span>

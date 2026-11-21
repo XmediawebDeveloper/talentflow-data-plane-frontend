@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { gsap, useGSAP, withMotion } from "@/lib/gsap";
 import { Check, ChevronLeft, ChevronRight, ClipboardCheck, FileText, Library, MessagesSquare, Mic, Play, ShieldCheck } from "lucide-react";
+import { IconButton } from '@/components/ui/icon-button';
 
 /* ------------------------------------------------------------------ *
  * Previews — each module shows the artefact it actually produces,
@@ -319,17 +320,16 @@ export function FeatureShowcase() {
       {/* Minimal scroll buttons at both ends (below lg), shown only when tabs are hidden that way. */}
       {(["left", "right"] as const).map((side) =>
         edges[side] ? (
-          <button
+          <IconButton bare label={side === "left" ? "Scroll tabs left" : "Scroll tabs right"}
             key={side}
             type="button"
-            aria-label={side === "left" ? "Scroll tabs left" : "Scroll tabs right"}
             onClick={() => scrollTabs(side === "left" ? -1 : 1)}
             className={`absolute top-1/2 z-10 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full border border-slate-900/10 bg-mkt-surface/45 text-mkt-accent shadow-md backdrop-blur transition-[opacity,transform] duration-200 active:scale-90 dark:border-white/10 lg:hidden ${
               side === "left" ? "left-0" : "right-0"
             }`}
           >
             {side === "left" ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
+          </IconButton>
         ) : null
       )}
       <div

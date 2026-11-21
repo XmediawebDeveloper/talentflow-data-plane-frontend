@@ -7,6 +7,7 @@ import { DateField } from '@/components/ui/date-field';
 import FilterSelect from '@/components/ui/filter-select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
+import { IconButton } from '@/components/ui/icon-button';
 
 export interface InviteFilterState {
   search: string;
@@ -225,7 +226,7 @@ export default function InviteFilterBar({
         <div className={`flex flex-wrap items-center gap-2 ${compact ? 'lg:flex-nowrap' : ''}`}>
           {beforeSearch}
           <div className={`relative flex-1 max-sm:basis-full ${compact ? 'min-w-[8rem]' : 'min-w-[9rem]'}`}>
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={localSearch}
@@ -234,17 +235,16 @@ export default function InviteFilterBar({
               className={`tf-input pl-9 pr-9 ${compact ? 'h-9' : ''}`}
             />
             {localSearch && (
-              <button
+              <IconButton bare label="Clear search"
                 type="button"
                 onClick={() => {
                   setLocalSearch('');
                   onChange({ ...filters, search: '' });
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 rounded"
-                aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-600 dark:hover:text-slate-300 rounded"
               >
                 <X className="w-3.5 h-3.5" />
-              </button>
+              </IconButton>
             )}
           </div>
           <FilterSelect
@@ -322,7 +322,7 @@ export default function InviteFilterBar({
           height the invite table needs. */}
       <div className={`grid grid-cols-2 md:grid-cols-4 ${lgColumns} gap-2 sm:gap-3`}>
         <div className={`relative col-span-2 md:col-span-4 ${searchOwnRow ? 'lg:col-span-full' : 'lg:col-span-1'}`}>
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={localSearch}
@@ -331,17 +331,16 @@ export default function InviteFilterBar({
             className="tf-input pl-9 pr-9"
           />
           {localSearch && (
-            <button
+            <IconButton bare label="Clear search"
               type="button"
               onClick={() => {
                 setLocalSearch('');
                 onChange({ ...filters, search: '' });
               }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 rounded"
-              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-600 dark:hover:text-slate-300 rounded"
             >
               <X className="w-3.5 h-3.5" />
-            </button>
+            </IconButton>
           )}
         </div>
 

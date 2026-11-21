@@ -6,9 +6,10 @@ import { showErrorToast } from '@/lib/utils/errorToast';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { jdService } from '@/lib/services/jdService';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
 import { MiniPagination } from '@/components/ui/mini-pagination';
 import type { ScoredResume } from './ScoredResumesTable';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ScoreTableModalProps {
   resume: ScoredResume;
@@ -138,18 +139,17 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
   return (
     /* Below `sm` this is a full-screen docked page (edge to edge, back arrow,
        slides up from the bottom) rather than a floating card. */
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-0 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-0 sm:p-6">
       <div className="bg-white sm:rounded-2xl sm:shadow-2xl w-full sm:max-w-6xl h-dvh sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden max-sm:animate-in max-sm:fade-in max-sm:slide-in-from-bottom-8 max-sm:duration-200">
         <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 max-sm:pt-[max(0.75rem,env(safe-area-inset-top))] border-b border-gray-100 bg-white sm:bg-gray-50 flex-shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <button
+            <IconButton bare label="Back"
               type="button"
               onClick={onClose}
-              aria-label="Back"
               className="sm:hidden -ml-1.5 flex h-9 w-9 flex-shrink-0 items-center justify-center self-start rounded-full text-gray-700 hover:bg-gray-100 active:bg-gray-200"
             >
               <ArrowLeft className="w-5 h-5" />
-            </button>
+            </IconButton>
             <div className="hidden sm:flex w-10 h-10 rounded-xl bg-brand-blue items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
@@ -216,15 +216,14 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
                 aria-label="Scored jobs"
               />
             )}
-            <Button
+            <IconButton label="Close"
               variant="secondary"
               size="sm"
               onClick={onClose}
               className="flex-shrink-0"
-              aria-label="Close"
             >
               <X className="w-5 h-5 text-gray-500" />
-            </Button>
+            </IconButton>
           </div>
         </div>
         {/* Mobile: the job pager gets its own bar under the header. */}
@@ -324,6 +323,6 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
           )}
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

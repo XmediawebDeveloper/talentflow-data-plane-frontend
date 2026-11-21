@@ -92,7 +92,7 @@ export default function EvaluationReportTab({
 
   if (!isCompleted) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+      <div className="flex flex-col items-center justify-center py-20 text-gray-500">
         <Layers className="w-10 h-10 mb-3 opacity-40" />
         <p className="text-sm">Evaluation report will be available after the interview completes.</p>
       </div>
@@ -101,7 +101,7 @@ export default function EvaluationReportTab({
 
   if (!data) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+      <div className="flex flex-col items-center justify-center py-20 text-gray-500">
         <Layers className="w-10 h-10 mb-3 opacity-40" />
         <p className="text-sm">No evaluation data available yet.</p>
       </div>

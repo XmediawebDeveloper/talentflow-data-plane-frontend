@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User as UserType } from '@/lib/types/tenant';
 import NameAvatar from '@/components/ui/name-avatar';
+import { IconButton } from '@/components/ui/icon-button';
 // import NotificationCenter from './NotificationCenter';
 // import QuickActions from './QuickActions';
 
@@ -48,7 +49,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
       <div className="flex items-center flex-1 max-w-2xl">
         <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
           <input
             type="text"
             placeholder="Search candidates, jobs, assessments..."
@@ -60,13 +61,12 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       <div className="flex items-center gap-3 ml-8">
         {/* Keyboard Shortcuts Button */}
         {onOpenShortcuts && (
-          <button
+          <IconButton bare label="Keyboard Shortcuts (Cmd/Ctrl + /)"
             onClick={onOpenShortcuts}
             className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-300 hover:border-gray-400"
-            aria-label="Keyboard Shortcuts (Cmd/Ctrl + /)" title="Keyboard Shortcuts (Cmd/Ctrl + /)"
           >
             <Command className="w-5 h-5" />
-          </button>
+          </IconButton>
         )}
 
         {/* Quick Tour Button */}
@@ -85,7 +85,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
 
         {/* Help & Support */}
         <div className="relative">
-          <button
+          <IconButton bare label="Help & Support"
             onClick={() => {
               setShowHelpMenu(!showHelpMenu);
               setShowNotifications(false);
@@ -93,10 +93,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
               setShowUserMenu(false);
             }}
             className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            aria-label="Help & Support" title="Help & Support"
           >
             <HelpCircle className="w-5 h-5" />
-          </button>
+          </IconButton>
 
           {showHelpMenu && (
             <>
@@ -144,7 +143,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                     <div className="space-y-2">
                       <button className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group">
                         <div className="flex items-start gap-2">
-                          <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
+                          <FileText className="w-4 h-4 text-gray-500 mt-0.5" />
                           <div>
                             <div className="text-sm text-gray-900 group-hover:text-gray-700">Getting Started with TalentFlow</div>
                             <div className="tf-meta">5 min read</div>
@@ -153,7 +152,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       </button>
                       <button className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group">
                         <div className="flex items-start gap-2">
-                          <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
+                          <FileText className="w-4 h-4 text-gray-500 mt-0.5" />
                           <div>
                             <div className="text-sm text-gray-900 group-hover:text-gray-700">How to Parse Resumes with AI</div>
                             <div className="tf-meta">8 min read</div>
@@ -162,7 +161,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       </button>
                       <button className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group">
                         <div className="flex items-start gap-2">
-                          <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
+                          <FileText className="w-4 h-4 text-gray-500 mt-0.5" />
                           <div>
                             <div className="text-sm text-gray-900 group-hover:text-gray-700">Creating & Managing Assessments</div>
                             <div className="tf-meta">10 min read</div>
@@ -184,7 +183,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           <div className="tf-body">Email Support</div>
                           <div className="tf-meta">support@talentflow.com</div>
                         </div>
-                        <ExternalLink className="w-4 h-4 text-gray-400" />
+                        <ExternalLink className="w-4 h-4 text-gray-500" />
                       </button>
                       <button className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors text-left">
                         <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -194,7 +193,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           <div className="tf-body">Phone Support</div>
                           <div className="tf-meta">+1 (800) 123-4567</div>
                         </div>
-                        <ExternalLink className="w-4 h-4 text-gray-400" />
+                        <ExternalLink className="w-4 h-4 text-gray-500" />
                       </button>
                     </div>
                   </div>
@@ -373,9 +372,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
           )}
         </div>
 
-        <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+        <IconButton bare label="Settings" className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
           <Settings className="w-5 h-5" />
-        </button>
+        </IconButton>
 
         <div className="h-8 w-px bg-gray-200 mx-2" />
 
@@ -392,7 +391,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
               <div className="tf-body">{user.name || user.email || 'User'}</div>
               <div className="tf-meta">{roleLabels[user.role]}</div>
             </div>
-            <ChevronDown className="w-4 h-4 text-gray-400" />
+            <ChevronDown className="w-4 h-4 text-gray-500" />
           </button>
 
           {showUserMenu && (
@@ -438,7 +437,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       </div>
                     )}
                     {!user.permissions.canManageUsers && (
-                      <div className="flex items-center gap-1.5 text-gray-400">
+                      <div className="flex items-center gap-1.5 text-gray-500">
                         <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
                         Admin Features (restricted)
                       </div>

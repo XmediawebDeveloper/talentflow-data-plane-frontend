@@ -5,6 +5,8 @@ import { Team } from '@/lib/services/teamService';
 import { SortableHeader, ariaSort, type SortDir, type TableSort } from '@/components/ui/sortable-header';
 import { MobileRecordList, MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { MemberStack, TeamActionHandlers, formatTeamDateTime, AttentionChip, TeamSizeBar, TeamUnitsSummary, formatTeamUnits } from './TeamCard';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** The page's sort keys ('newest' is the Created column). `sortDir` is the true
  *  direction of the column's values, so newest-first Created is 'desc'. */
@@ -59,9 +61,9 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
               </>
             }
             actions={
-              <button type="button" onClick={() => onViewDetails(team.id)} aria-label={`Open ${team.name}`} className="tf-icon-btn-outline">
+              <IconButton bare label={`Open ${team.name}`} type="button" onClick={() => onViewDetails(team.id)} className="tf-icon-btn-outline">
                 <ChevronRight aria-hidden />
-              </button>
+              </IconButton>
             }
           />
         ))}
@@ -92,7 +94,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
             {teams.map((team) => (
-              <tr
+              <tr {...clickableRowProps}
                 key={team.id}
                 onClick={() => onViewDetails(team.id)}
                 className="group cursor-pointer transition-colors hover:bg-brand-blue/[0.04]"
@@ -154,7 +156,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                 <td className="tf-td pl-4 pr-5 text-right">
                   <ChevronRight
                     aria-hidden
-                    className="ml-auto h-4 w-4 text-gray-300 transition-[color,transform] group-hover:translate-x-0.5 group-hover:text-brand-blue dark:text-slate-600"
+                    className="ml-auto h-4 w-4 text-muted-foreground transition-[color,transform] group-hover:translate-x-0.5 group-hover:text-brand-blue dark:text-slate-600"
                   />
                 </td>
               </tr>

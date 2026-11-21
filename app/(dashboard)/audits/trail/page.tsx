@@ -61,6 +61,9 @@ import { MobileRecordList, MobileRecordCard, MobileStatChip } from '@/components
 import { exportRows } from '@/lib/utils/exportUtils';
 import { toast } from '@/components/ui/enhanced-toast';
 import { showErrorToast } from '@/lib/utils/errorToast';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -295,6 +298,12 @@ const entityIcons: Record<string, React.ElementType> = {
 export default function AuditTrailPage() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [stats, setStats] = useState<AuditStats | null>(null);
+  /* The four summary cards' own figures: the period's standing totals, read
+     WITHOUT the action / entity / user / error-origin filters, so filtering
+     the list never moves a card. `stats` above keeps those filters — the
+     cards' drill-down popups are faceted by them. Both follow the date range,
+     which each card names ("Last N days"). */
+  const [cardStats, setCardStats] = useState<AuditStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -546,12 +555,19 @@ export default function AuditTrailPage() {
       if (entityFilter) statsParams.append('entity_type', entityFilter);
       if (userFilter) statsParams.append('user_id', userFilter);
       if (errorOriginFilter) statsParams.append('error_origin', errorOriginFilter);
-      const response = await fetch(`${API_URL}/audits/stats?${statsParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+      const faceted = !!(actionFilter || entityFilter || userFilter || errorOriginFilter);
+      // The cards' unfiltered totals: a second read only while a filter is on
+      // (with none, the response below already is the unfiltered one).
+      const [response, cardResponse] = await Promise.all([
+        fetch(`${API_URL}/audits/stats?${statsParams}`, { headers }),
+        faceted
+          ? fetch(`${API_URL}/audits/stats?${new URLSearchParams({ days: statsDays })}`, { headers }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
 
       if (response.status === 401) {
         handleUnauthorized();
@@ -560,8 +576,11 @@ export default function AuditTrailPage() {
 
       if (response.ok) {
         const data = await response.json();
+        const cardData = !faceted ? data : cardResponse?.ok ? await cardResponse.json() : null;
         if (isStale()) return;
         setStats(data);
+        // A failed unfiltered read keeps the last totals rather than showing filtered ones.
+        if (cardData) setCardStats(cardData);
       }
     } catch (err) {
       console.error('Error fetching stats:', err);
@@ -1059,7 +1078,7 @@ export default function AuditTrailPage() {
 
         {/* Stats Cards — Total Actions opens the list; the other three open a
             filter popup that lets the user drill into a specific user/action/entity. */}
-        {stats && (
+        {stats && cardStats && (
           <div ref={statsPopupRef} className="relative mb-4 sm:mb-6 lg:mb-8">
             <div className="tf-grid-stats">
               <button
@@ -1072,15 +1091,15 @@ export default function AuditTrailPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate tf-label max-sm:text-xs">Total Actions</p>
-                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{stats.total_actions.toLocaleString()}</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{cardStats.total_actions.toLocaleString()}</p>
                     <p
                       className="tf-meta mt-1 sm:mt-2 flex items-center gap-1"
                       title={isCustomRange && customFrom ? `Summary counts cover ${customFrom} to today` : undefined}
                     >
                       <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       <span>
-                        {isCustomRange && customFrom ? `Since ${customFrom}` : `Last ${stats.period_days} days`}
-                        <span className="text-gray-400 dark:text-slate-500"> · {anyFilterActive ? 'Click to clear filters' : 'Click to view all'}</span>
+                        {isCustomRange && customFrom ? `Since ${customFrom}` : `Last ${cardStats.period_days} days`}
+                        <span className="text-gray-500 dark:text-slate-500"> · {anyFilterActive ? 'Click to clear filters' : 'Click to view all'}</span>
                       </span>
                     </p>
                   </div>
@@ -1097,7 +1116,7 @@ export default function AuditTrailPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate tf-label max-sm:text-xs">Active Users</p>
-                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{stats.active_users_count ?? (totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />)}</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{cardStats.active_users_count ?? (totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />)}</p>
                     <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {userFilter ? 'Filtering by 1 user' : 'Click to filter'}
@@ -1116,7 +1135,7 @@ export default function AuditTrailPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate tf-label max-sm:text-xs">Action Types</p>
-                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{Object.keys(stats.actions_by_type).length}</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{Object.keys(cardStats.actions_by_type).length}</p>
                     <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <Filter className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {actionFilter ? 'Filtering by 1 action' : 'Click to filter'}
@@ -1135,7 +1154,7 @@ export default function AuditTrailPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate tf-label max-sm:text-xs">Entity Types</p>
-                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{Object.keys(stats.actions_by_entity).length}</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{Object.keys(cardStats.actions_by_entity).length}</p>
                     <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <ScrollText className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {entityFilter ? 'Filtering by 1 entity' : 'Click to filter'}
@@ -1169,13 +1188,13 @@ export default function AuditTrailPage() {
                         Clear
                       </button>
                     )}
-                    <button
+                    <IconButton bare label="Close"
                       type="button"
                       onClick={() => setStatsPopup(null)}
-                      className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-800"
+                      className="p-1 rounded-md text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-800"
                     >
                       <X className="w-4 h-4" />
-                    </button>
+                    </IconButton>
                   </div>
                 </div>
                 <div className="max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1290,7 +1309,7 @@ export default function AuditTrailPage() {
             <div className="flex flex-col gap-2 sm:gap-3">
               <div className="w-full">
                 <div className="relative">
-                  <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500 z-10" />
+                  <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 dark:text-slate-500 z-10" />
                   <Input
                     type="text"
                     placeholder="Search this page by user, action, or IP..."
@@ -1356,7 +1375,7 @@ export default function AuditTrailPage() {
                     onChange={(v) => { setCustomFrom(v); setPage(1); }}
                     className="w-full sm:w-[160px]"
                   />
-                  <span className="text-xs font-medium text-gray-400 dark:text-slate-500">to</span>
+                  <span className="text-xs font-medium text-gray-500 dark:text-slate-500">to</span>
                   <DateField
                     aria-label="To date"
                     value={customTo}
@@ -1447,15 +1466,13 @@ export default function AuditTrailPage() {
                        its own bottom row. Same handler; "View" stays as tooltip + label. */
                     className="tf-jdv-actions-inline"
                     actions={
-                      <button
+                      <IconButton bare label="View"
                         type="button"
                         onClick={() => setSelectedLog(log)}
-                        title="View"
-                        aria-label="View"
                         className="tf-icon-btn-outline"
                       >
                         <Eye />
-                      </button>
+                      </IconButton>
                     }
                   />
                 );
@@ -1490,14 +1507,14 @@ export default function AuditTrailPage() {
                     const actionStatus = getActionStatus(log.action, log.error_origin);
                     const impact = getImpactText(log);
                     return (
-                      <tr
+                      <tr {...clickableRowProps}
                         key={log.id}
                         onClick={() => setSelectedLog(log)}
                         className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                       >
                         <td className="tf-td whitespace-nowrap">
                           <div className="flex items-center gap-2 tf-body-secondary">
-                            <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                            <Clock className="w-4 h-4 text-gray-500 dark:text-slate-500" />
                             <span>{formatDate(log.created_at)}</span>
                           </div>
                         </td>
@@ -1592,14 +1609,12 @@ export default function AuditTrailPage() {
                           )}
                         </td>
                         <td className="tf-td whitespace-nowrap tf-sticky-col">
-                          <button
+                          <IconButton bare label="View details"
                             onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
-                            aria-label="View details"
-                            title="View details"
                             className="inline-flex h-8 w-8 items-center justify-center text-gray-600 dark:text-slate-300 hover:text-brand-blue hover:bg-brand-blue/5 dark:hover:bg-slate-700 rounded-lg transition-colors"
                           >
                             <Eye className="w-4 h-4" />
-                          </button>
+                          </IconButton>
                         </td>
                       </tr>
                     );
@@ -1649,27 +1664,25 @@ export default function AuditTrailPage() {
                   />
                 </div>
 
-                <button
+                <IconButton bare label="Previous page"
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
                   className="tf-btn tf-btn-secondary w-7 h-7 sm:w-8 sm:h-8 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                  aria-label="Previous page" title="Previous page"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
+                </IconButton>
 
                 <span className="tf-label px-1 whitespace-nowrap">
                   <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
                 </span>
 
-                <button
+                <IconButton bare label="Next page"
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
                   className="tf-btn tf-btn-secondary w-7 h-7 sm:w-8 sm:h-8 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                  aria-label="Next page" title="Next page"
                 >
                   <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
+                </IconButton>
               </div>
             </div>
           )}
@@ -1681,7 +1694,7 @@ export default function AuditTrailPage() {
 
       {/* Detail Modal */}
       {selectedLog && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+        <ModalA11y><div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-lg md:max-w-2xl w-full flex flex-col max-h-[90dvh] sm:max-h-[85dvh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-5 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white dark:from-slate-800/50 dark:to-slate-900">
@@ -1694,12 +1707,11 @@ export default function AuditTrailPage() {
                   <p className="tf-meta">Complete event information</p>
                 </div>
               </div>
-              <button
+              <IconButton bare label="Close"
                 onClick={() => setSelectedLog(null)}
-                className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg sm:rounded-xl transition-colors flex-shrink-0"
-               aria-label="Close">
+                className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg sm:rounded-xl transition-colors flex-shrink-0">
                 <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 dark:text-slate-500" />
-              </button>
+              </IconButton>
             </div>
 
             {/* Modal Body */}
@@ -1780,7 +1792,7 @@ export default function AuditTrailPage() {
                         <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">Available</p>
                         <div className="flex items-baseline gap-1.5">
                           <span className="tf-body-muted">{modalBalanceBefore}</span>
-                          <span className="text-gray-300 dark:text-slate-500">→</span>
+                          <span className="text-muted-foreground dark:text-slate-500">→</span>
                           <span className="tf-section-title">{modalBalanceAfter ?? 0}</span>
                         </div>
                       </div>
@@ -1912,7 +1924,7 @@ export default function AuditTrailPage() {
 
               {/* AI Generation Audit Section */}
               {isLoadingAiAudit && (
-                <div className="flex items-center gap-2 text-gray-400 dark:text-slate-500">
+                <div className="flex items-center gap-2 text-gray-500 dark:text-slate-500">
                   <Loader2Icon className="w-4 h-4 animate-spin" />
                   <span className="text-sm">Loading AI generation data...</span>
                 </div>
@@ -1985,12 +1997,12 @@ export default function AuditTrailPage() {
             </div>
 
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Export Modal */}
       {exportModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+        <ModalA11y><div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col">
             {/* Header */}
             <div className="px-5 max-sm:px-4 py-4 max-sm:py-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-3 bg-gradient-to-r from-gray-50 to-white dark:from-slate-800/50 dark:to-slate-900">
@@ -2005,9 +2017,9 @@ export default function AuditTrailPage() {
                   <p className="tf-meta">Configure date range and columns</p>
                 </div>
               </div>
-              <button onClick={() => setExportModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors" aria-label="Close">
+              <IconButton bare label="Close" onClick={() => setExportModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
                 <X className="w-4 h-4 text-gray-500 dark:text-slate-500" />
-              </button>
+              </IconButton>
             </div>
 
             {/* Body */}
@@ -2131,7 +2143,7 @@ export default function AuditTrailPage() {
               </div>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </main>
   );

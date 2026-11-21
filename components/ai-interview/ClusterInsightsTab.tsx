@@ -401,8 +401,8 @@ export default function ClusterInsightsTab({
                           </span>
                         </div>
                         {cOpen
-                          ? <ChevronUp className="w-4 h-4 text-gray-400" />
-                          : <ChevronDown className="w-4 h-4 text-gray-400" />
+                          ? <ChevronUp className="w-4 h-4 text-gray-500" />
+                          : <ChevronDown className="w-4 h-4 text-gray-500" />
                         }
                       </button>
 

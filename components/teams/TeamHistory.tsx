@@ -18,6 +18,7 @@ import { toast } from '@/components/ui/enhanced-toast';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 import FilterSelect from '@/components/ui/filter-select';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* FilterSelect trigger sized to the filter row's h-9 band (grid cell on mobile). */
 const FILTER_TRIGGER = 'min-w-0 sm:w-full lg:w-auto py-0 sm:py-0 data-[size=default]:h-9 sm:data-[size=default]:h-9 rounded-lg sm:rounded-lg text-xs sm:text-sm';
@@ -160,7 +161,7 @@ function ChangeList({ changes }: { changes: Change[] }) {
   const known = changes.filter((c) => c.from !== undefined || c.to !== undefined);
   if (known.length === 0) {
     return (
-      <span className="text-gray-400 dark:text-slate-500">
+      <span className="text-gray-500 dark:text-slate-500">
         {' '}· changed {changes.map((c) => humanize(c.field).toLowerCase()).join(', ')}
       </span>
     );
@@ -560,7 +561,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                           )}
                         </td>
                         <td className="tf-td max-w-[12rem] truncate tf-body">
-                          {entry.target_user_name || (memberEvent ? <span className="italic text-gray-400 dark:text-slate-500">{UNKNOWN_USER}</span> : <span className="text-gray-300 dark:text-slate-600">—</span>)}
+                          {entry.target_user_name || (memberEvent ? <span className="italic text-gray-500 dark:text-slate-500">{UNKNOWN_USER}</span> : <span className="text-gray-300 dark:text-slate-600">—</span>)}
                         </td>
                         <td className="tf-td whitespace-nowrap tf-body">
                           {entry.actor_name ? (
@@ -607,7 +608,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
             return (
               <Fragment key={entry.id}>
               {newDay && (
-                <h3 className={`flex items-center gap-2 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500 ${index === 0 ? '' : 'pt-2'}`}>
+                <h3 className={`flex items-center gap-2 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${index === 0 ? '' : 'pt-2'}`}>
                   {dayLabel(entry.event_at)}
                   <span className="h-px flex-1 bg-gray-100 dark:bg-slate-700/60" />
                 </h3>
@@ -645,12 +646,12 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                   <div className="mt-1 tf-meta sm:text-sm">
                     {entry.event_type === 'MEMBER_ADDED' && (
                       <span>
-                        {entry.target_user_name ? <span className="font-medium">{entry.target_user_name}</span> : <span className="italic text-gray-400 dark:text-slate-500">{UNKNOWN_USER}</span>} was added{byActor}
+                        {entry.target_user_name ? <span className="font-medium">{entry.target_user_name}</span> : <span className="italic text-gray-500 dark:text-slate-500">{UNKNOWN_USER}</span>} was added{byActor}
                       </span>
                     )}
                     {entry.event_type === 'MEMBER_REMOVED' && (
                       <span>
-                        {entry.target_user_name ? <span className="font-medium">{entry.target_user_name}</span> : <span className="italic text-gray-400 dark:text-slate-500">{UNKNOWN_USER}</span>} was removed{byActor}
+                        {entry.target_user_name ? <span className="font-medium">{entry.target_user_name}</span> : <span className="italic text-gray-500 dark:text-slate-500">{UNKNOWN_USER}</span>} was removed{byActor}
                       </span>
                     )}
                     {isTeamEvent && (
@@ -660,7 +661,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                         {entry.event_type === 'TEAM_DELETED' && 'Deleted'}
                         {byActor}
                         {entry.event_type === 'TEAM_CREATED' && entry.details?.member_count != null && (
-                          <span className="text-gray-400 dark:text-slate-500">
+                          <span className="text-gray-500 dark:text-slate-500">
                             {' '}· {entry.details.member_count} initial member{entry.details.member_count !== 1 ? 's' : ''}
                           </span>
                         )}
@@ -719,7 +720,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
         {/* Search (wide) + team / person / dates — over the latest activity batch. */}
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
         <div className="relative w-full min-w-0 lg:flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
           <input
             type="search"
             value={search}
@@ -812,7 +813,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                 )}
               </>
             ) : (
-              <span className="text-gray-400 dark:text-slate-500">{batchLoading ? 'Loading activity…' : 'No activity in view'}</span>
+              <span className="text-gray-500 dark:text-slate-500">{batchLoading ? 'Loading activity…' : 'No activity in view'}</span>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2 self-end lg:self-auto">
@@ -834,16 +835,14 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                 </button>
               ))}
             </div>
-            <button
+            <IconButton bare label="Refresh history" tooltip="Refresh"
               type="button"
               onClick={refreshAll}
               disabled={serverLoading}
-              title="Refresh"
-              aria-label="Refresh history"
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-brand-blue disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${serverLoading ? 'animate-spin' : ''}`} />
-            </button>
+            </IconButton>
             <button
               type="button"
               onClick={() => setShowExport(true)}

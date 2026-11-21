@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import FilterSelect from '@/components/ui/filter-select';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ListPaginationProps {
   currentPage: number;
@@ -216,7 +217,7 @@ export default function ListPagination({
             />
           </div>
 
-          <button
+          <IconButton bare label="Previous page"
             onClick={() => handlePageClick(safePage - 1)}
             disabled={safePage === 1}
             className={`inline-flex items-center justify-center ${stepButtonClass} rounded-md border border-gray-200 transition-colors ${
@@ -224,16 +225,15 @@ export default function ListPagination({
                 ? 'text-gray-400 opacity-40 cursor-not-allowed'
                 : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
             }`}
-            aria-label="Previous page" title="Previous page"
           >
             <ChevronLeft className="w-4 h-4" />
-          </button>
+          </IconButton>
 
           <span className={`${labelClass} font-medium text-gray-700 whitespace-nowrap px-1`}>
             <span className="text-brand-blue font-semibold">{safePage}</span> / {totalPages}
           </span>
 
-          <button
+          <IconButton bare label="Next page"
             onClick={() => handlePageClick(safePage + 1)}
             disabled={safePage === totalPages}
             className={`inline-flex items-center justify-center ${stepButtonClass} rounded-md border border-gray-200 transition-colors ${
@@ -241,10 +241,9 @@ export default function ListPagination({
                 ? 'text-gray-400 opacity-40 cursor-not-allowed'
                 : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
             }`}
-            aria-label="Next page" title="Next page"
           >
             <ChevronRight className="w-4 h-4" />
-          </button>
+          </IconButton>
         </div>
       </div>
     </div>

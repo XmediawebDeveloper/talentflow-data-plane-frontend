@@ -29,6 +29,7 @@ import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
 import { useExternalBackgroundTasks } from '@/lib/backgroundTasks';
 import dynamic from 'next/dynamic';
+import { SkipLink } from '@/components/ui/skip-link';
 
 /* Shell pieces that show nothing until their own data says so (banners,
    review/acceptance modals, the floating progress widgets). Loaded as separate
@@ -44,8 +45,13 @@ const PlanChangeReviewBanner = dynamic(() => import('@/components/plan-change/Pl
 const PlanChangeReviewModal = dynamic(() => import('@/components/plan-change/PlanChangeReviewModal'), { ssr: false });
 const AdminAssignedPlanBanner = dynamic(() => import('@/components/admin-assigned-plan/AdminAssignedPlanBanner'), { ssr: false });
 const AdminAssignedPlanModal = dynamic(() => import('@/components/admin-assigned-plan/AdminAssignedPlanModal'), { ssr: false });
+import { useOptionalActivityFeed } from '@/contexts/ActivityFeedContext';
 const GlobalScoringProgressIndicator = dynamic(() => import('@/components/GlobalScoringProgressIndicator'), { ssr: false });
 const BulkInviteProgressIndicator = dynamic(() => import('@/components/bulk-invite/BulkInviteProgressIndicator'), { ssr: false });
+/* Keeps resume uploads in the Background tasks dock after the screen that
+   started them closes (lib/uploadTracker). Renders nothing; idle until an
+   upload is handed over. */
+const GlobalUploadTracker = dynamic(() => import('@/components/resumes/GlobalUploadTracker'), { ssr: false });
 
 /* The two progress widgets render nothing until a task is tracked (scoring
    run, invite send, minimized AI Talent Match run), yet mounting them fetched
@@ -56,13 +62,23 @@ function BackgroundTaskWidgets() {
   const { activeScoringJobs } = useScoringProgress();
   const invite = useOptionalBulkInviteProgress();
   const externalTasks = useExternalBackgroundTasks();
+  /* AI Talent Match runs / upload batches come from the server feed only —
+     without this the corner never mounted when they were the only activity
+     (and appeared late after a refresh). */
+  const feed = useOptionalActivityFeed();
+  const feedRows = (feed?.items ?? []).some(a => !a.dismissed && (a.type === 'talent_match' || a.type === 'resume_upload'));
   const needed = activeScoringJobs.length > 0
+    || feedRows
     || (invite?.jobs.length ?? 0) > 0
     || !!invite?.openResultsFor
     || externalTasks.length > 0;
   const [mounted, setMounted] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (needed) setMounted(true); }, [needed]);
+  // TEMP diagnostics (cross-device icon): why the corner is / is not mounted.
+  useEffect(() => {
+    console.log('[ActivityDock] mount check', { needed, mounted, scoring: activeScoringJobs.length, invites: invite?.jobs.length ?? 0, feedRows, inPage: externalTasks.length });
+  }, [needed, mounted, activeScoringJobs.length, invite?.jobs.length, feedRows, externalTasks.length]);
   if (!mounted && !needed) return null;
   return (
     <>
@@ -475,6 +491,9 @@ export default function DashboardLayout({
             <SearchParamsErrorHandler />
           </Suspense>
           <div className="flex h-[100dvh] bg-gray-50">
+            {/* First thing Tab reaches: jump past the header and banners
+                (a11y §14). Hidden until focused; out of the flex flow. */}
+            <SkipLink />
             <div className="flex-1 flex flex-col overflow-hidden">
               <Header
                 user={user}
@@ -491,7 +510,7 @@ export default function DashboardLayout({
               <AdminAssignedPlanBanner />
               {/* tf-page-scroll: the page's real scroller (not <body>), so
                   globals.css locks it while a modal overlay is open. */}
-              <div className="tf-page-scroll flex-1 overflow-y-auto flex flex-col">
+              <div id="main-content" tabIndex={-1} className="tf-page-scroll flex-1 overflow-y-auto flex flex-col">
                 <RouteGuard><InviteDialogProvider>{children}</InviteDialogProvider></RouteGuard>
               </div>
             </div>
@@ -512,6 +531,7 @@ export default function DashboardLayout({
             <AdminAssignedPlanModal />
 
             <BackgroundTaskWidgets />
+            <GlobalUploadTracker />
 
             {/* Plan change suspended overlay - z-[98], above terms z-[95], below generic suspension z-[100] */}
             <PlanChangeSuspendedOverlay />

@@ -12,12 +12,13 @@ import { getJDUsageModules } from '@/lib/utils/jdUsageModules';
 import { isFreshDraftVersion } from '@/lib/utils/jdDraftVersion';
 import { toast } from '@/components/ui/enhanced-toast';
 import { showErrorToast } from '@/lib/utils/errorToast';
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
 
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 
 /** Modules that can send a recruiter into JD creation mid-flow. */
-type JDFlowOrigin = 'assessment' | 'ai-interview' | 'resume-scoring';
-const JD_FLOW_ORIGINS: JDFlowOrigin[] = ['assessment', 'ai-interview', 'resume-scoring'];
+type JDFlowOrigin = 'assessment' | 'ai-interview' | 'resume-scoring' | 'ai-talent-match';
+const JD_FLOW_ORIGINS: JDFlowOrigin[] = ['assessment', 'ai-interview', 'resume-scoring', 'ai-talent-match'];
 /**
  * Retired key. The origin used to be latched here (and inferred from
  * document.referrer) and was only ever cleared on publish, so one assessment
@@ -50,8 +51,7 @@ function resolveJDFlowOrigin(fromParam: string | null): JDFlowOrigin | null {
  * turn a breadcrumb into an off-site link.
  */
 function resolveJDFlowReturnUrl(raw: string | null): string | null {
-  if (!raw) return null;
-  return raw.startsWith('/') && !raw.startsWith('//') ? raw : null;
+  return safeReturnUrl(raw);
 }
 
 // Error display component for pre-condition failures
@@ -418,6 +418,7 @@ function JDCreationContent() {
   const fromAiInterview = flowOrigin === 'ai-interview';
   const fromAssessment = flowOrigin === 'assessment';
   const fromResumeScoring = flowOrigin === 'resume-scoring';
+  const fromAiTalentMatch = flowOrigin === 'ai-talent-match';
 
   // Which JD this mount is KEYED on (see the `key` prop below). It is not simply
   // `jdId`, because `jdId` appears mid-session: Step 1's extraction saves the new
@@ -679,10 +680,17 @@ function JDCreationContent() {
   /** Same idea for Resume Scoring: its JD picker, not the JD list. */
   const RESUME_SCORING_JD_SELECTION_HREF =
     flowReturnUrl?.startsWith('/recruitment/resume-scoring') ? flowReturnUrl : '/recruitment/resume-scoring/jd-selection';
+  /** AI Talent Match's job picker (its in-page "new" view, opened by `?view=new`). */
+  const AI_TALENT_MATCH_JD_SELECTION_HREF =
+    flowReturnUrl?.startsWith('/recruitment/ai-talent-match') ? flowReturnUrl : '/recruitment/ai-talent-match?view=new';
 
   const handleViewAllJobs = () => {
     if (fromAiInterview) {
       router.push('/recruitment/ai-interviews/jd-selection');
+      return;
+    }
+    if (fromAiTalentMatch) {
+      router.push(AI_TALENT_MATCH_JD_SELECTION_HREF);
       return;
     }
     if (fromResumeScoring) {
@@ -781,6 +789,13 @@ function JDCreationContent() {
             { label: 'Select Job Description', href: RESUME_SCORING_JD_SELECTION_HREF },
             ...jdLeafCrumbs,
           ]
+        : fromAiTalentMatch
+          ? [
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'AI Talent Match', href: '/recruitment/ai-talent-match' },
+              { label: 'Select Job Description', href: AI_TALENT_MATCH_JD_SELECTION_HREF },
+              ...jdLeafCrumbs,
+            ]
         : [
             { label: 'Dashboard', href: '/dashboard' },
             { label: 'Job Descriptions', href: '/recruitment/job-openings' },
@@ -812,6 +827,10 @@ function JDCreationContent() {
     }
     if (fromResumeScoring) {
       router.push(RESUME_SCORING_JD_SELECTION_HREF);
+      return;
+    }
+    if (fromAiTalentMatch) {
+      router.push(AI_TALENT_MATCH_JD_SELECTION_HREF);
     }
   };
 

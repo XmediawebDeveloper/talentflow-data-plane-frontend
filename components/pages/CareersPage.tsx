@@ -60,7 +60,7 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(236, 72, 153, 0.2)' : 'var(--raw-fce7f3)',
+    backgroundColor: isDark ? 'var(--raw-rgba-236-72-153-0p2)' : 'var(--raw-fce7f3)',
     color: isDark ? 'var(--raw-f9a8d4)' : 'var(--raw-db2777)',
     fontSize: '14px',
     fontWeight: 600,
@@ -219,7 +219,7 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
 
   const ctaSubtitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
-    color: 'rgba(255,255,255,0.9)',
+    color: 'var(--raw-rgba-255-255-255-0p9)',
     marginBottom: '32px',
     maxWidth: '600px',
     margin: '0 auto 32px',

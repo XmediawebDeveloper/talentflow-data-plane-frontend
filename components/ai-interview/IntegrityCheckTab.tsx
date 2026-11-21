@@ -30,6 +30,8 @@ import {
 } from './violationTaxonomy';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface IntegrityCheckTabProps {
   violations: ViolationRecord[];
@@ -435,7 +437,7 @@ export default function IntegrityCheckTab({
             return (
               <div key={key} className={`bg-white rounded-xl border border-gray-100 border-l-4 ${CARD_ACCENT[tone]} ring-1 ring-black/[0.02] shadow-sm overflow-hidden`}>
                 <div className="flex items-center gap-3.5 px-4 py-3.5">
-                  <div className={`w-9 h-9 flex-none rounded-lg grid place-items-center ${key === 'advisory' ? 'bg-slate-50 text-slate-400 ring-1 ring-slate-200' : `${SEV_PILL[tone]}`}`}>
+                  <div className={`w-9 h-9 flex-none rounded-lg grid place-items-center ${key === 'advisory' ? 'bg-slate-50 text-slate-500 ring-1 ring-slate-200' : `${SEV_PILL[tone]}`}`}>
                     {CATEGORY_ICON[key]}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -443,22 +445,20 @@ export default function IntegrityCheckTab({
                     <p className="tf-meta mt-0.5">{def.description}</p>
                   </div>
                   <div className="text-right flex-none">
-                    <div className={`text-xl font-bold leading-none ${tone === 'critical' ? 'text-destructive' : tone === 'warning' ? 'text-brand-orange-deep' : tone === 'info' ? 'text-brand-blue' : 'text-slate-400'}`}>{count}</div>
+                    <div className={`text-xl font-bold leading-none ${tone === 'critical' ? 'text-destructive' : tone === 'warning' ? 'text-brand-orange-deep' : tone === 'info' ? 'text-brand-blue' : 'text-slate-500'}`}>{count}</div>
                     <div className="tf-micro-hint uppercase tracking-wide mt-1">{key === 'advisory' ? 'hints' : 'flags'}</div>
                   </div>
                 </div>
                 {key === 'advisory' && (
                   <div className="flex justify-center -mt-2 pb-1">
-                    <button
+                    <IconButton bare label={showAdvisory ? 'Hide quality signals' : 'Show quality signals'} tooltip={showAdvisory ? 'Hide' : 'Show'}
                       type="button"
                       onClick={() => setShowAdvisory(o => !o)}
                       aria-expanded={showAdvisory}
-                      aria-label={showAdvisory ? 'Hide quality signals' : 'Show quality signals'}
-                      title={showAdvisory ? 'Hide' : 'Show'}
-                      className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                      className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                     >
                       {showAdvisory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
+                    </IconButton>
                   </div>
                 )}
                 {(key !== 'advisory' || showAdvisory) && (
@@ -646,10 +646,10 @@ export default function IntegrityCheckTab({
                     <tr className="hover:bg-brand-blue/[0.02] transition-colors">
                       <td className="tf-td align-top">
                         {canExpand ? (
-                          <button onClick={() => toggle(g.key)} aria-label={isOpen ? 'Collapse' : 'Expand'}
-                            className="text-gray-400 hover:text-brand-blue">
+                          <IconButton bare label={isOpen ? 'Collapse' : 'Expand'} onClick={() => toggle(g.key)}
+                            className="text-gray-500 hover:text-brand-blue">
                             {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                          </button>
+                          </IconButton>
                         ) : null}
                       </td>
                       <td className="tf-td align-top">
@@ -728,13 +728,13 @@ export default function IntegrityCheckTab({
                 );
               })}
               {(logView === 'type' ? shownGroups.length === 0 : chronoRows.length === 0) && (
-                <tr><td colSpan={6} className="p-0"><div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-400`}>No events in this category.</div></td></tr>
+                <tr><td colSpan={6} className="p-0"><div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500`}>No events in this category.</div></td></tr>
               )}
             </tbody>
           </table>
         </div>
         <MobileRecordList
-          empty={<div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-400 bg-white rounded-xl border border-gray-100`}>No events in this category.</div>}
+          empty={<div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 bg-white rounded-xl border border-gray-100`}>No events in this category.</div>}
         >
           {logView === 'time' && chronoRows.map(({ g, r }, i) => {
             const sev = recruiterSeverity(r);
@@ -808,10 +808,10 @@ export default function IntegrityCheckTab({
                   </span>
                 }
                 actions={canExpand ? (
-                  <button onClick={() => toggle(g.key)} aria-label={isOpen ? 'Collapse' : 'Expand'}
-                    className="text-gray-400 hover:text-brand-blue">
+                  <IconButton bare label={isOpen ? 'Collapse' : 'Expand'} onClick={() => toggle(g.key)}
+                    className="text-gray-500 hover:text-brand-blue">
                     {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                  </button>
+                  </IconButton>
                 ) : undefined}
                 fields={[
                   {
@@ -1000,7 +1000,7 @@ function VoiceEnrollmentSection({ interviewId }: { interviewId: string }) {
   return (
     <div>
       <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Voice enrollment</h3>
-      <p className="text-2xs text-gray-400 mb-3">
+      <p className="text-2xs text-gray-500 mb-3">
         What the candidate said before the interview. This voiceprint is compared with the voice heard during the interview.
       </p>
       {data.expired ? (
@@ -1042,15 +1042,15 @@ function VoiceClipCard({ interviewId, clip }: { interviewId: string; clip: Voice
       <div className="flex items-baseline justify-between gap-2 mb-2">
         <span className="text-xs font-semibold text-gray-700">{clip.label}</span>
         {clip.speech_seconds != null && (
-          <span className="text-2xs text-gray-400">{clip.speech_seconds.toFixed(1)}s of speech</span>
+          <span className="text-2xs text-gray-500">{clip.speech_seconds.toFixed(1)}s of speech</span>
         )}
       </div>
       {failed ? (
-        <p className="text-2xs text-gray-400">Audio not available</p>
+        <p className="text-2xs text-gray-500">Audio not available</p>
       ) : url ? (
         <audio controls preload="metadata" src={url} className="w-full h-9" />
       ) : (
-        <p className="text-2xs text-gray-400">Loading…</p>
+        <p className="text-2xs text-gray-500">Loading…</p>
       )}
     </div>
   );
@@ -1072,7 +1072,7 @@ function ImageLightbox({ url, alt, downloadName, onClose }: {
   }, [onClose]);
 
   return (
-    <div
+    <ModalA11y closeOnEscape={false}><div
       className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6 cursor-zoom-out"
       onClick={onClose}
     >
@@ -1086,14 +1086,13 @@ function ImageLightbox({ url, alt, downloadName, onClose }: {
         >
           <Download className="w-5 h-5" />
         </a>
-        <button
+        <IconButton bare label="Close"
           type="button"
           onClick={(e) => { e.stopPropagation(); onClose(); }}
           className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-          aria-label="Close"
         >
           <X className="w-5 h-5" />
-        </button>
+        </IconButton>
       </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -1102,7 +1101,7 @@ function ImageLightbox({ url, alt, downloadName, onClose }: {
         onClick={(e) => e.stopPropagation()}
         className="max-w-full max-h-full rounded-lg shadow-2xl cursor-default"
       />
-    </div>
+    </div></ModalA11y>
   );
 }
 
@@ -1238,7 +1237,7 @@ function GlanceTile({ label, value, tone, sub, dot }: {
     : tone === 'info' ? 'text-brand-blue' : 'text-gray-900';
   return (
     <div className="tf-card-soft px-4 py-3.5">
-      <div className="text-2xs uppercase tracking-wide text-gray-400 font-semibold flex items-center gap-1.5">
+      <div className="text-2xs uppercase tracking-wide text-gray-500 font-semibold flex items-center gap-1.5">
         {dot && <span className={`w-2 h-2 rounded-full ${TONE_DOT[tone]}`} />}{label}
       </div>
       <div className={`text-3xl font-bold tracking-tight mt-1.5 tabular-nums ${valColor}`}>{value}</div>

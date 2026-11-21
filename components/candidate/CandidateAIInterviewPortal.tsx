@@ -53,6 +53,7 @@ import {
   isBina3DAvatarEnabled,
   type DeviceCapability,
 } from '@/lib/utils/deviceCapability';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 type Step =
   | 'loading'
@@ -79,7 +80,6 @@ interface Props {
 // Minimum bytes to buffer before flushing a non-final screen-recording segment.
 // S3 multipart upload requires every part except the last to be >= 5 MiB; the
 // margin keeps a slightly-undersized flush from failing CompleteMultipartUpload.
-const SCREEN_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
 // Screen recorder with no data this long after start is stalled — see
 // armScreenStallWatchdog. Two 5 s timeslices plus slack.
 const SCREEN_STALL_CHECK_MS = 12_000;
@@ -454,6 +454,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   };
   const screenStreamRef = useRef<MediaStream | null>(null);
   const screenCheckpointInProgressRef = useRef(false);
+  // Latest screen checkpoint (set when the recorder is armed) so the interview
+  // start / termination / pagehide paths can force an upload right away.
+  const screenCheckpointRef = useRef<(() => Promise<void>) | null>(null);
   const isFinalizingScreenUploadRef = useRef(false);
   // Audio mixing for screen recording (Bina's TTS tap + candidate mic)
   const recordingAudioCtxRef = useRef<AudioContext | null>(null);
@@ -1046,6 +1049,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     const sr = screenRecorderRef.current;
     if (sr && sr.state === 'inactive') {
       try { sr.start(5000); armScreenStallWatchdog(sr); } catch { /* already started / not startable */ }
+      // One early upload 5 s in, so an interview closed before the first 30 s
+      // checkpoint still has screen footage on the server.
+      const t = window.setTimeout(() => { void screenCheckpointRef.current?.(); }, 5000);
+      return () => window.clearTimeout(t);
     }
   }, [step, armScreenStallWatchdog]);
 
@@ -1172,8 +1179,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         details: { reason, message, action: 'interview_terminated' },
       });
     } catch { /* non-blocking */ }
-    // Keep the entire-screen recorder running briefly so the footage captures
-    // whatever was on screen when the violation happened, then upload.
+    // Upload everything recorded so far right now (a tab closed during the
+    // post-violation window below would otherwise lose it), then keep the
+    // entire-screen recorder running briefly so the footage captures whatever
+    // was on screen when the violation happened, then upload the tail.
+    void screenCheckpointRef.current?.();
     window.setTimeout(() => { stopAndUploadScreenRecording(); }, POST_VIOLATION_RECORD_MS);
     if (isFullscreen()) exitFullscreen().catch(() => {});
     setStep('terminated');
@@ -1868,13 +1878,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             try { recorder.requestData(); } catch { finish(); return; }
             setTimeout(finish, 1500); // safety net for throttled tabs
           });
-          // Only flush once we have enough bytes for a valid non-final S3
-          // multipart part (>= SCREEN_MIN_SEGMENT_BYTES). S3 forbids sub-5-MiB
-          // intermediate parts, so a smaller buffer is held back for the next
-          // tick; the trailing remainder ships as the final (any-size) part from
-          // stopAndUploadScreenRecording.
+          // Ship whatever is buffered, however small: the backend STAGES
+          // sub-5-MiB segments (recording_staging) and folds them into the next
+          // valid S3 part. Waiting for 5 MiB meant a short interview closed
+          // abruptly had uploaded nothing and lost the whole screen recording.
           const buffered = screenChunksRef.current.reduce((sum, c) => sum + c.size, 0);
-          if (buffered < SCREEN_MIN_SEGMENT_BYTES) return;
+          if (buffered === 0) return;
           // Atomically snapshot the buffered chunks and clear the ref so
           // subsequent ondataavailable pushes go into a fresh array.
           // Single-threaded JS guarantees no chunk push can race between
@@ -1900,15 +1909,20 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           screenCheckpointInProgressRef.current = false;
         }
       };
+      screenCheckpointRef.current = screenCheckpoint;
       // 30s periodic; also fire on visibility hidden (tab switch / minimize)
+      // and on pagehide (tab closing — best effort, the browser may cancel it).
       const screenCheckpointTimer = setInterval(() => { screenCheckpoint(); }, 30000);
       const screenVisHandler = () => { if (document.visibilityState === 'hidden') screenCheckpoint(); };
+      const screenPageHideHandler = () => { void screenCheckpoint(); };
       document.addEventListener('visibilitychange', screenVisHandler);
+      window.addEventListener('pagehide', screenPageHideHandler);
       // Cleanup when recorder stops (track ended handler below already stops it)
       const originalOnStop = sr.onstop;
       sr.onstop = (ev) => {
         clearInterval(screenCheckpointTimer);
         document.removeEventListener('visibilitychange', screenVisHandler);
+        window.removeEventListener('pagehide', screenPageHideHandler);
         if (originalOnStop) (originalOnStop as any).call(sr, ev);
       };
       // If candidate stops sharing manually — record as severe malpractice and block the interview.
@@ -2860,8 +2874,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   if (preInterviewBlocked && step !== 'interview' && step !== 'completed' && step !== 'terminated' && step !== 'error') {
     const laptop = (tone: 'blue' | 'red') => {
       const c = tone === 'blue'
-        ? { frame: 'border-[#1e3a6e]', screen: 'bg-[#eef4ff]', icon: 'text-[#2f6fe0]', glow: 'bg-[#3b82f6]/25' }
-        : { frame: 'border-[#f07a8c]', screen: 'bg-[#fff1f3]', icon: 'text-[#c2415a]', glow: 'bg-[#f43f5e]/25' };
+        ? { frame: 'border-[var(--raw-1e3a6e)]', screen: 'bg-[var(--raw-eef4ff)]', icon: 'text-[var(--raw-2f6fe0)]', glow: 'bg-[var(--raw-3b82f6)]/25' }
+        : { frame: 'border-[var(--raw-f07a8c)]', screen: 'bg-[var(--raw-fff1f3)]', icon: 'text-[var(--raw-c2415a)]', glow: 'bg-[var(--raw-f43f5e)]/25' };
       return (
         <div className="relative shrink-0 flex flex-col items-center">
           <div className={`absolute -inset-3 sm:-inset-6 rounded-full blur-xl sm:blur-2xl ${c.glow}`} aria-hidden />
@@ -2874,23 +2888,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     };
 
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-[#0f2347] via-[#1d3a6b] to-[#0f2347] flex items-center justify-center px-4 py-6 sm:p-6">
+      <div className="min-h-[100dvh] bg-gradient-to-br from-[var(--raw-0f2347)] via-[var(--raw-1d3a6b)] to-[var(--raw-0f2347)] flex items-center justify-center px-4 py-6 sm:p-6">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[720px] px-4 py-6 sm:px-8 sm:py-8 text-center">
           {/* Illustration: this device ←→ lock ←→ the other active device */}
           <div className="relative flex items-center justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 overflow-hidden py-3 sm:py-4" aria-hidden>
             {laptop('blue')}
-            <div className="hidden xs:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#1e3a6e] -mt-2 sm:-mt-4" />
+            <div className="hidden xs:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[var(--raw-1e3a6e)] -mt-2 sm:-mt-4" />
             <div className="relative shrink-0 w-[72px] h-[72px] sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full border border-amber-200 dark:border-amber-500/30 flex items-center justify-center">
               <div className="w-[54px] h-[54px] sm:w-[72px] sm:h-[72px] md:w-24 md:h-24 rounded-full bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center">
                 <Lock className="w-7 h-7 sm:w-9 sm:h-9 md:w-11 md:h-11 text-gray-900 fill-amber-400" strokeWidth={2} />
               </div>
               <span className="absolute bottom-0 sm:bottom-1 md:bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-500 text-white text-sm font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-700">!</span>
             </div>
-            <div className="hidden xs:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#f07a8c] -mt-2 sm:-mt-4" />
+            <div className="hidden xs:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[var(--raw-f07a8c)] -mt-2 sm:-mt-4" />
             {laptop('red')}
           </div>
 
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight text-[#0f1d40] mb-2 sm:mb-3">Already open on another device</h1>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight text-[var(--raw-0f1d40)] mb-2 sm:mb-3">Already open on another device</h1>
           <p className="text-gray-600 text-base leading-relaxed mb-5 sm:mb-6 max-w-xl mx-auto">
             This interview is currently active in another browser window or device.
             For security, only one device can access the interview at a time.
@@ -2906,7 +2920,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <Clock className="hidden md:block w-11 h-11 shrink-0 text-amber-500" strokeWidth={2.25} />
               <div className="hidden md:block self-stretch w-px bg-amber-300" />
               <div className="flex-1 min-w-0">
-                <p className="flex items-center justify-center sm:justify-start gap-1.5 text-base font-semibold text-[#0f1d40] mb-1">
+                <p className="flex items-center justify-center sm:justify-start gap-1.5 text-base font-semibold text-[var(--raw-0f1d40)] mb-1">
                   <Clock className="md:hidden w-4 h-4 shrink-0 text-amber-500" strokeWidth={2.5} />
                   Session releases automatically
                 </p>
@@ -2925,7 +2939,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
           <button
             onClick={() => window.location.reload()}
-            className="w-full flex items-center justify-center gap-2 sm:gap-3 bg-[#0f1d40] hover:bg-[#1a2b57] text-white font-semibold text-sm sm:text-base py-3 sm:py-3.5 rounded-xl transition-all"
+            className="w-full flex items-center justify-center gap-2 sm:gap-3 bg-[var(--raw-0f1d40)] hover:bg-[var(--raw-1a2b57)] text-white font-semibold text-sm sm:text-base py-3 sm:py-3.5 rounded-xl transition-all"
           >
             <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
             Check again now
@@ -3149,7 +3163,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           </p>
 
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6 flex items-center gap-3">
-            <Mail className="w-5 h-5 text-gray-400 shrink-0" />
+            <Mail className="w-5 h-5 text-gray-500 shrink-0" />
             <div>
               <p className="tf-meta">Sending OTP to</p>
               <p className="tf-label">{maskedEmail}</p>
@@ -3559,7 +3573,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             {/* Two lines: the headline, then the consequence. */}
             <p className="flex items-start gap-3 sm:pl-[17px] tf-meta leading-relaxed">
               <span className="w-7 flex justify-center flex-shrink-0 pt-px">
-                <Info className="w-4 h-4 text-gray-400" />
+                <Info className="w-4 h-4 text-gray-500" />
               </span>
               <span className="min-w-0">
                 <span className="block font-semibold text-gray-600">These actions are monitored.</span>
@@ -3826,7 +3840,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // now WITH screen sharing + fullscreen, and nothing ran unpaused underneath.
     if (screenReshareOnResume) {
       return (
-        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-5">
               <Monitor className="w-8 h-8 text-blue-600 dark:text-blue-400" />
@@ -3848,7 +3862,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               )}
             </button>
           </div>
-        </div>
+        </div></ModalA11y>
       );
     }
 
@@ -3875,7 +3889,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         />
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (
-          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
+          <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <div className="w-16 h-16 bg-destructive-subtle rounded-full flex items-center justify-center mx-auto mb-5">
                 <AlertTriangle className="w-8 h-8 text-destructive" />
@@ -3902,12 +3916,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 If you continue to decline, the interview will be marked as suspicious.
               </p>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
         {/* Grace-period countdown — shown while candidate has 10s to return
             before the hard-pause overlay kicks in. Silent otherwise. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && fullscreenGraceRemaining !== null && isFullscreenActive && (
-          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
+          <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
@@ -3931,12 +3945,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 Return Now
               </button>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
         {/* Hard-pause overlay (STAGING) — shown after the fullscreen grace expires.
             Production uses the unified "return to the interview" pause below. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && !isFullscreenActive && (
-          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
+          <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
@@ -3948,11 +3962,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               {timerSnapshot && (
                 <div className="mb-6">
                   <div className="flex flex-col items-center gap-1 rounded-xl bg-gray-50 border border-gray-200 px-3 py-3">
-                    <span className="text-2xs font-semibold text-gray-400 uppercase tracking-widest">Interview Time</span>
+                    <span className="text-2xs font-semibold text-gray-500 uppercase tracking-widest">Interview Time</span>
                     <span className={`font-mono font-bold text-xl tabular-nums ${timerSnapshot.remainingSeconds <= 60 ? 'text-destructive' : 'text-gray-900'}`}>
                       {formatTime(timerSnapshot.remainingSeconds)}
                     </span>
-                    <span className="text-2xs text-gray-400 font-medium">remaining</span>
+                    <span className="text-2xs text-gray-500 font-medium">remaining</span>
                   </div>
                 </div>
               )}
@@ -3967,7 +3981,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 This event has been recorded
               </p>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
       </>
     );

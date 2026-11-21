@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, ClipboardList, FilePlus2, Lock, Upload, Video, Zap, type LucideIcon } from 'lucide-react';
+import { ClipboardList, FilePlus2, HelpCircle, History, Lock, Upload, Video, type LucideIcon } from 'lucide-react';
+import { ZapAnimatedIcon } from '@/components/icons/HeaderAnimatedIcons';
 import { Tooltip } from '@/components/ui/tooltip';
 import { ResumeScoringIcon, TalentMatchIcon } from '@/components/icons/nav-icons';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -87,6 +88,24 @@ const QUICK_ACTIONS: QuickAction[] = [
     permissions: ['canCreateAIInterviews', 'canRunAiInterviews'],
     planFeature: 'ai_interview',
   },
+  {
+    id: 'usage-history',
+    label: 'Usage History',
+    description: 'Units used across the organisation',
+    icon: History,
+    href: () => '/organization/usage-history',
+    // Account owner only (routeAccess adminOnly) — no permission opens it, so
+    // everyone else sees the tile locked.
+    permissions: [],
+  },
+  {
+    id: 'support-tickets',
+    label: 'Support Tickets',
+    description: 'Help & support requests',
+    icon: HelpCircle,
+    href: () => '/support-tickets',
+    permissions: ['canViewSupport'],
+  },
 ];
 
 const SUBSCRIPTION_LOCKED_MESSAGE = 'Your subscription is inactive. Renew your plan to use this.';
@@ -138,12 +157,15 @@ export default function QuickActions({ open, onOpenChange, subscriptionExpired }
         <button
           ref={triggerRef}
           onClick={() => onOpenChange(!open)}
-          className="relative p-1.5 sm:p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/25"
+          data-active={open || undefined}
+          className={`tf-hbtn relative p-1.5 sm:p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/25 ${
+            open ? 'bg-brand-blue/5 text-brand-blue' : 'text-gray-500'
+          }`}
           aria-label="Quick actions"
           aria-haspopup="menu"
           aria-expanded={open}
         >
-          <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
+          <ZapAnimatedIcon className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
       </Tooltip>
 
@@ -151,53 +173,53 @@ export default function QuickActions({ open, onOpenChange, subscriptionExpired }
         <>
           {/* Same z-band as the other header dropdowns (see the plan menu). */}
           <div className="fixed inset-0 z-[80]" onClick={() => onOpenChange(false)} />
-          {/* Phones: full-width sheet under the header. md+: anchored to the bolt. */}
+          {/* Compact grid: icon over title, four per row (the description,
+              or the lock reason, is the tile's tooltip). The whole box pops
+              out of the bolt — scales up from its top-right corner
+              (tailwindcss-animate utilities). */}
           <div
             ref={panelRef}
             role="menu"
             aria-label="Quick actions"
-            className="fixed left-3 right-3 top-[4.25rem] md:absolute md:left-auto md:right-0 md:top-full md:mt-2 md:w-[340px] max-h-[calc(100dvh-5rem)] overflow-y-auto bg-white rounded-xl shadow-xl border border-gray-200 z-[85]"
+            /* Phones: a compact box centred under the header (the bolt sits
+               too far left for a box anchored to it) — fixed width, centred by
+               left-3 right-3 + mx-auto, so it never stretches across a wide
+               phone. md+: anchored to the bolt. */
+            className="animate-in fade-in zoom-in-90 slide-in-from-top-1 duration-200 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:animate-none origin-top md:origin-top-right fixed left-3 right-3 mx-auto w-[21rem] max-w-[calc(100vw-1.5rem)] top-[4.25rem] md:absolute md:left-auto md:right-0 md:mx-0 md:top-full md:mt-2 md:w-[24rem] max-h-[calc(100dvh-5rem)] overflow-y-auto p-1.5 md:p-2 grid grid-cols-4 gap-0.5 md:gap-1 bg-white dark:bg-slate-900 rounded-xl shadow-xl shadow-slate-900/10 ring-1 ring-gray-200/80 dark:ring-slate-700 z-[85]"
           >
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-brand-blue" />
-              <span className="tf-row-name">Quick actions</span>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {QUICK_ACTIONS.map((action) => {
-                const reason = lockReason(action);
-                const locked = reason !== null;
-                const Icon = action.icon;
-                return (
-                  <button
-                    key={action.id}
-                    role="menuitem"
-                    onClick={() => {
-                      if (locked) return;
-                      onOpenChange(false);
-                      router.push(action.href());
-                    }}
-                    aria-disabled={locked}
-                    title={reason ?? undefined}
-                    className={`w-full px-4 py-2.5 text-left flex items-center gap-2.5 transition-colors focus-visible:outline-none focus-visible:bg-brand-blue/[0.06] ${
-                      locked ? 'opacity-60 cursor-not-allowed' : 'group hover:bg-brand-blue/[0.04]'
-                    }`}
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 transition-colors group-hover:bg-brand-blue/15">
-                      <Icon className="w-4 h-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block tf-row-name truncate">{action.label}</span>
-                      <span className="block tf-meta truncate">{locked ? reason : action.description}</span>
-                    </span>
-                    {locked ? (
-                      <Lock className="w-3.5 h-3.5 shrink-0 text-gray-400" />
-                    ) : (
-                      <ChevronRight className="w-3.5 h-3.5 shrink-0 text-gray-300 transition-colors group-hover:text-brand-blue" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            {QUICK_ACTIONS.map((action) => {
+              const reason = lockReason(action);
+              const locked = reason !== null;
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.id}
+                  role="menuitem"
+                  onClick={() => {
+                    if (locked) return;
+                    onOpenChange(false);
+                    router.push(action.href());
+                  }}
+                  aria-disabled={locked}
+                  title={reason ?? action.description}
+                  className={`relative flex flex-col items-center justify-start gap-1 md:gap-1.5 px-1 md:px-1.5 pt-2 pb-1.5 md:pt-3 md:pb-2.5 rounded-lg text-center text-xs font-medium leading-tight transition-colors focus-visible:outline-none focus-visible:bg-brand-blue/[0.1] dark:focus-visible:bg-blue-400/15 ${
+                    locked
+                      ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                      : 'group text-gray-700 dark:text-slate-200 hover:bg-brand-blue/[0.1] hover:text-brand-blue dark:hover:bg-blue-400/15 dark:hover:text-blue-300'
+                  }`}
+                >
+                  <span className={`flex h-8 w-8 md:h-9 md:w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                    locked
+                      ? 'bg-gray-100 dark:bg-slate-800'
+                      : 'bg-brand-blue/10 text-brand-blue dark:bg-blue-400/15 dark:text-blue-300 group-hover:bg-brand-blue group-hover:text-white dark:group-hover:bg-blue-400 dark:group-hover:text-slate-900'
+                  }`}>
+                    <Icon className="w-[18px] h-[18px]" />
+                  </span>
+                  <span className="line-clamp-2">{action.label}</span>
+                  {locked && <Lock className="absolute top-1.5 right-1.5 w-3 h-3" />}
+                </button>
+              );
+            })}
           </div>
         </>
       )}

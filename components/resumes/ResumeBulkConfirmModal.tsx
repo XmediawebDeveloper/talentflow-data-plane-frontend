@@ -1,6 +1,7 @@
 'use client';
 
 import { Archive, Download, FileArchive, Info, Loader2, Users } from 'lucide-react';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 /**
  * The My Resumes bulk confirms — "Download as ZIP" and "Archive Resumes" —
@@ -70,7 +71,7 @@ export default function ResumeBulkConfirmModal({
       />
 
       {/* Modal */}
-      <div className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4`}>
+      <ModalA11y><div className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4`}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
           {/* Header */}
           <div className="flex items-start justify-between gap-4 p-6 border-b border-gray-200">
@@ -135,7 +136,7 @@ export default function ResumeBulkConfirmModal({
             </button>
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
     </>
   );
 }

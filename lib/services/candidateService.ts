@@ -546,6 +546,28 @@ export const sendPauseBeacon = (token: string, reason: string): boolean => {
   }
 };
 
+/**
+ * Tell the server this browser still owns the assessment session (`release`
+ * false) or is going away (`release` true), so another browser can take over
+ * once this one is closed. Uses fetch keepalive (not sendBeacon) because the
+ * request must carry the X-Session-Token header. Best-effort; never throws.
+ */
+export const sendSessionLiveness = (token: string, release: boolean): void => {
+  if (typeof window === 'undefined') return;
+  const sessionToken = sessionTokenManager.getToken(token);
+  if (!sessionToken) return;
+  const action = release ? 'session-release' : 'session-ping';
+  try {
+    void fetch(`${API_BASE_URL}/candidate/assessment/${token}/${action}`, {
+      method: 'POST',
+      keepalive: true,
+      headers: { 'X-Session-Token': sessionToken },
+    }).catch(() => undefined);
+  } catch {
+    /* best-effort */
+  }
+};
+
 export interface ProctorEvent {
   event_type:
     | 'tab_switch'

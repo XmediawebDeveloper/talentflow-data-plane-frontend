@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import FilterSelect from '@/components/ui/filter-select';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 export default function ApiManagementPage() {
   const { hasPermission } = useAuth();
@@ -272,15 +274,14 @@ export default function ApiManagementPage() {
                       <code className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 rounded-lg text-sm font-mono">
                         {apiKey.key_prefix}
                       </code>
-                      <Button
+                      <IconButton label="Copy key prefix"
                         variant="secondary"
                         size="sm"
                         onClick={() => copyKey(apiKey.key_prefix)}
                         className=""
-                        aria-label="Copy key prefix" title="Copy key prefix"
                       >
                         <Copy className="w-4 h-4" />
-                      </Button>
+                      </IconButton>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-body-muted">
                       <span className="flex items-center gap-1">
@@ -294,7 +295,7 @@ export default function ApiManagementPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Button
+                    <IconButton label="Regenerate key" tooltip={!canManage ? 'You do not have permission to regenerate API keys' : 'Regenerate key'}
                       variant="secondary"
                       size="sm"
                       onClick={() => {
@@ -303,11 +304,10 @@ export default function ApiManagementPage() {
                       }}
                       disabled={regeneratingId === apiKey.id || !canManage}
                       className=""
-                      aria-label="Regenerate key" title={!canManage ? 'You do not have permission to regenerate API keys' : 'Regenerate key'}
                     >
                       <RefreshCw className={`w-4 h-4 ${regeneratingId === apiKey.id ? 'animate-spin' : ''}`} />
-                    </Button>
-                    <Button
+                    </IconButton>
+                    <IconButton label="Delete key" tooltip={!canManage ? 'You do not have permission to delete API keys' : 'Delete key'}
                       variant="destructive"
                       size="sm"
                       onClick={() => {
@@ -316,14 +316,13 @@ export default function ApiManagementPage() {
                       }}
                       disabled={deletingId === apiKey.id || !canManage}
                       className=""
-                      aria-label="Delete key" title={!canManage ? 'You do not have permission to delete API keys' : 'Delete key'}
                     >
                       {deletingId === apiKey.id ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
                         <Trash2 className="w-4 h-4" />
                       )}
-                    </Button>
+                    </IconButton>
                   </div>
                 </div>
               </div>
@@ -353,7 +352,7 @@ export default function ApiManagementPage() {
 
       {/* Create API Key Modal — only renders if user has Manage permission */}
       {showCreateModal && canManage && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <ModalA11y><div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="rounded-xl bg-white dark:bg-slate-900 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.03] dark:ring-white/[0.02] border border-gray-100 dark:border-slate-700/60 max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
             {/* Modal Header */}
             <div className="relative flex-shrink-0 overflow-hidden bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 px-6 py-5">
@@ -366,9 +365,9 @@ export default function ApiManagementPage() {
                     {newlyCreatedKey ? 'API Key Created' : 'Create API Key'}
                   </h2>
                 </div>
-                <Button variant="secondary" size="sm" onClick={closeCreateModal} aria-label="Close">
+                <IconButton label="Close" variant="secondary" size="sm" onClick={closeCreateModal}>
                   <X className="w-4 h-4" />
-                </Button>
+                </IconButton>
               </div>
             </div>
 
@@ -388,9 +387,9 @@ export default function ApiManagementPage() {
                     <code className="flex-1 px-3 py-2 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 rounded-lg text-sm font-mono break-all">
                       {newlyCreatedKey}
                     </code>
-                    <Button variant="secondary" size="sm" onClick={() => copyKey(newlyCreatedKey)} className="flex-shrink-0" aria-label="Copy API key">
+                    <IconButton label="Copy API key" variant="secondary" size="sm" onClick={() => copyKey(newlyCreatedKey)} className="flex-shrink-0">
                       <Copy className="w-4 h-4" />
-                    </Button>
+                    </IconButton>
                   </div>
                 </div>
                 <Button variant="primary" onClick={closeCreateModal} className="w-full">
@@ -444,7 +443,7 @@ export default function ApiManagementPage() {
             )}
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       <ConfirmationDialog

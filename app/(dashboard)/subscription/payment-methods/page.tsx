@@ -11,6 +11,8 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface PaymentMethod {
   id: string;
@@ -447,7 +449,7 @@ export default function PaymentMethodsPage() {
                         Set as Default
                       </button>
                     )}
-                    <button
+                    <IconButton bare label="Delete payment method" tooltip={!canDelete ? 'You do not have permission to delete payment methods' : 'Delete payment method'}
                       onClick={() => {
                         if (!canDelete) return;
                         deleteMethod(method.id);
@@ -458,14 +460,13 @@ export default function PaymentMethodsPage() {
                           ? 'border-brand-orange/15 bg-brand-orange/[0.05] text-brand-orange-deep hover:-translate-y-0.5 hover:bg-brand-orange/[0.1] disabled:opacity-50'
                           : 'border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-gray-400 cursor-not-allowed opacity-60'
                       }`}
-                      aria-label="Delete payment method" title={!canDelete ? 'You do not have permission to delete payment methods' : 'Delete payment method'}
                     >
                         {deleting === method.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <Trash2 className="h-4 w-4" />
                         )}
-                      </button>
+                      </IconButton>
                   </div>
                 </div>
               </div>
@@ -492,7 +493,7 @@ export default function PaymentMethodsPage() {
 
       {/* Add Payment Method Modal — only renders if user has Add permission */}
       {showAddModal && canAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+        <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
           <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
             {/* Modal Header */}
             <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
@@ -507,13 +508,12 @@ export default function PaymentMethodsPage() {
                     <p className="mt-0.5 text-sm text-white/75">Enter your card details to save it for future billing.</p>
                   </div>
                 </div>
-                <button
+                <IconButton bare label="Close"
                   onClick={() => { setShowAddModal(false); resetForm(); }}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-                  aria-label="Close"
                 >
                   <X className="h-5 w-5" />
-                </button>
+                </IconButton>
               </div>
             </div>
 
@@ -533,7 +533,7 @@ export default function PaymentMethodsPage() {
                     value={formData.cardholderName}
                     onChange={(e) => setFormData({ ...formData, cardholderName: e.target.value })}
                     placeholder="Name as it appears on the card"
-                    className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                    className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-500 focus:ring-4 ${
                       formErrors.cardholderName ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                     }`}
                   />
@@ -550,14 +550,14 @@ export default function PaymentMethodsPage() {
                   <div className={`flex items-center gap-2 rounded-xl border bg-white dark:bg-slate-900 px-3 py-2.5 transition-all focus-within:ring-4 ${
                     formErrors.cardNumber ? 'border-destructive-line focus-within:border-destructive-line focus-within:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus-within:border-brand-blue/30 focus-within:ring-brand-blue/10'
                   }`}>
-                    <CreditCard className="h-4 w-4 text-gray-400 dark:text-slate-500" />
+                    <CreditCard className="h-4 w-4 text-gray-500 dark:text-slate-500" />
                     <input
                       type="text"
                       value={formData.cardNumber}
                       onChange={(e) => setFormData({ ...formData, cardNumber: formatCardNumber(e.target.value) })}
                       placeholder="•••• •••• •••• ••••"
                       maxLength={19}
-                      className="flex-1 bg-transparent text-sm text-gray-900 dark:text-slate-50 outline-none placeholder:text-gray-400"
+                      className="flex-1 bg-transparent text-sm text-gray-900 dark:text-slate-50 outline-none placeholder:text-gray-500"
                     />
                   </div>
                   {formErrors.cardNumber && (
@@ -577,7 +577,7 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, expiryMonth: e.target.value.replace(/\D/g, '').slice(0, 2) })}
                       placeholder="MM"
                       maxLength={2}
-                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-500 focus:ring-4 ${
                         formErrors.expiryMonth ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
@@ -595,7 +595,7 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, expiryYear: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                       placeholder="YYYY"
                       maxLength={4}
-                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-500 focus:ring-4 ${
                         formErrors.expiryYear ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
@@ -613,7 +613,7 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                       placeholder="•••"
                       maxLength={4}
-                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-500 focus:ring-4 ${
                         formErrors.cvv ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
@@ -729,7 +729,7 @@ export default function PaymentMethodsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </main>
   );

@@ -28,6 +28,7 @@ import {
   unitLabel,
   type DisputeRecord,
 } from '@/components/subscription/unit-disputes/disputeRecord';
+import { IconButton } from '@/components/ui/icon-button';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -500,7 +501,7 @@ export default function UnitDisputesView({ embedded = false }: { embedded?: bool
           {/* 1 col on phones, 2 on tablets, 3 on laptops / zoomed-in, all 5 in one row on wide screens */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
             <div className="relative min-w-0 sm:col-span-2 lg:col-span-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-slate-500" />
               <input
                 type="text"
                 placeholder="Search candidate, email, CID, job"
@@ -734,13 +735,12 @@ export default function UnitDisputesView({ embedded = false }: { embedded?: bool
 
               <div className="flex items-center justify-between gap-3 tf-meta">
                 <span>Reference <span className="font-mono">{shortRef(selectedDispute.id)}</span> — quote this if you contact support</span>
-                <button
+                <IconButton bare label="Copy reference"
                   onClick={() => copyRef(selectedDispute.id)}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
-                  aria-label="Copy reference" title="Copy reference"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
                 >
                   <Copy className="h-3.5 w-3.5" />
-                </button>
+                </IconButton>
               </div>
             </div>
           )}

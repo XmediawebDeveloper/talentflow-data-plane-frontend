@@ -2,6 +2,7 @@
 
 import { Sparkles, X } from 'lucide-react';
 import { useAdminAssignedPlan } from '@/components/providers/AdminAssignedPlanProvider';
+import { IconButton } from '@/components/ui/icon-button';
 
 export default function AdminAssignedPlanBanner() {
   const {
@@ -36,13 +37,12 @@ export default function AdminAssignedPlanBanner() {
         >
           Complete Payment
         </button>
-        <button
+        <IconButton bare label="Dismiss"
           onClick={dismissReminder}
           className="p-1 rounded hover:bg-black/5 transition-colors flex-shrink-0"
-          aria-label="Dismiss"
         >
           <X className="w-4 h-4 text-indigo-500" />
-        </button>
+        </IconButton>
       </div>
     </div>
   );

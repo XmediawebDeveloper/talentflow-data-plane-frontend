@@ -73,6 +73,8 @@ import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
 import { useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { getAccessToken } from '@/lib/services/api';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -507,7 +509,7 @@ function RecordingTabContent({
           {/* Hint for the collapsed violation strip under the player. */}
           {(markers ?? []).some(m => m.kind === 'violation') && (
             <div className="flex items-center justify-center gap-1 whitespace-nowrap tf-meta">
-              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+              <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
               <span>under the video shows violations on the timeline</span>
             </div>
           )}
@@ -1912,7 +1914,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     <span className="w-2 h-2 rounded-full bg-white tf-step-pulse-dot" />
                   ) : null}
                 </span>
-                <span className={`text-xs leading-tight text-center transition-colors duration-500 ${done || current ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>
+                <span className={`text-xs leading-tight text-center transition-colors duration-500 ${done || current ? 'text-brand-blue font-medium' : 'text-gray-500'}`}>
                   {label}
                 </span>
               </div>
@@ -2238,7 +2240,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           className="group inline-flex items-center gap-1 text-gray-700 hover:text-brand-blue hover:underline underline-offset-2 transition-colors"
                         >
                           {jobName}
-                          <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-gray-400 group-hover:text-brand-blue" aria-hidden />
+                          <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-gray-500 group-hover:text-brand-blue" aria-hidden />
                         </Link>
                       ) : <span key="job">{jobName}</span>);
                       return (
@@ -2674,7 +2676,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
               <div className="space-y-4 sm:space-y-5">
                 {!resultJdId ? (
                   <div className="px-3 sm:px-4 lg:px-6 py-8 text-center">
-                    <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <FileText className="w-8 h-8 text-muted-foreground dark:text-gray-300 mx-auto mb-2" />
                     <p className="tf-body-muted">No linked job description found</p>
                   </div>
                 ) : resultJdError ? (
@@ -3191,7 +3193,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   const truncated = answerText.length > 200;
                   return (
                     <div className="mt-1.5">
-                      <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
+                      <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-500 italic' : 'text-gray-700'}`}>
                         <span className="font-semibold text-gray-900">Candidate Answer: </span>
                         {isExpanded || !truncated ? answerText : `${answerText.slice(0, 200)}...`}
                       </div>
@@ -3410,7 +3412,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 <div className="tf-micro-hint uppercase tracking-wider">Final Score</div>
                               </div>
                             )}
-                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400 mt-1" /> : <ChevronDown className="w-5 h-5 text-gray-400 mt-1" />}
+                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-500 mt-1" /> : <ChevronDown className="w-5 h-5 text-gray-500 mt-1" />}
                           </div>
                         </div>
                       </button>
@@ -3423,7 +3425,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               <div className="tf-caption uppercase tracking-wider">Candidate Answer</div>
                               {item.response_type !== 'not_asked' && watchQuestion(item.question, item.timestamp)}
                             </div>
-                            <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
+                            <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-500 italic' : 'text-gray-700'}`}>
                               {item.answer || '—'}
                             </div>
                           </div>
@@ -3554,7 +3556,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             <p className="tf-row-name leading-snug">{item.question}</p>
                           </div>
                           <div className="flex-shrink-0">
-                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
                           </div>
                         </div>
                       </button>
@@ -3565,7 +3567,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               <div className="tf-caption uppercase tracking-wider">Candidate Answer</div>
                               {item.response_type !== 'not_asked' && watchQuestion(item.question, item.timestamp)}
                             </div>
-                            <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
+                            <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-500 italic' : 'text-gray-700'}`}>
                               {item.answer || '—'}
                             </div>
                           </div>
@@ -3763,41 +3765,38 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
             )}
 
             {envFrameViewer && (
-              <div
+              <ModalA11y closeOnEscape={false}><div
                 className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6"
                 onClick={() => setEnvFrameViewer(null)}
               >
-                <button
+                <IconButton bare label="Close"
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setEnvFrameViewer(null); }}
-                  aria-label="Close"
                   className="absolute top-4 right-4 sm:top-6 sm:right-6 text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
                 >
                   <X className="w-6 h-6" />
-                </button>
-                <button
+                </IconButton>
+                <IconButton bare label="Previous frame"
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setEnvFrameViewer(prev => prev && prev.index > 0 ? { ...prev, index: prev.index - 1 } : prev); }}
                   disabled={envFrameViewer.index === 0}
-                  title="Previous frame"
                   className="absolute left-2 sm:left-6 text-white/80 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed p-2"
                 >
                   <ChevronLeft className="w-8 h-8" />
-                </button>
+                </IconButton>
                 <div className="flex flex-col items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <img src={envFrameViewer.urls[envFrameViewer.index]} alt="Frame preview" className="max-w-full max-h-[80vh] rounded-lg" />
                   <span className="text-white/70 text-xs font-mono">{envFrameViewer.index + 1} / {envFrameViewer.urls.length}</span>
                 </div>
-                <button
+                <IconButton bare label="Next frame"
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setEnvFrameViewer(prev => prev && prev.index < prev.urls.length - 1 ? { ...prev, index: prev.index + 1 } : prev); }}
                   disabled={envFrameViewer.index === envFrameViewer.urls.length - 1}
-                  title="Next frame"
                   className="absolute right-2 sm:right-6 text-white/80 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed p-2"
                 >
                   <ChevronRight className="w-8 h-8" />
-                </button>
-              </div>
+                </IconButton>
+              </div></ModalA11y>
             )}
 
             {/* Transcript Tab — use liveSession so evaluation_ready refresh populates
@@ -4273,7 +4272,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                                 {isAssistant ? (
                                   <>
-                                    <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-2xl text-[13px] sm:text-sm leading-relaxed bg-[#08132e]/5 text-[#08132e] rounded-tl-sm whitespace-pre-line">
+                                    <div className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-2xl text-[13px] sm:text-sm leading-relaxed bg-[var(--raw-08132e)]/5 text-[var(--raw-08132e)] rounded-tl-sm whitespace-pre-line">
                                       {content}
                                     </div>
                                     {skipNote && (
@@ -4326,7 +4325,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 )}
 
                                 {ts && (
-                                  <div className={`text-2xs text-gray-400 mt-1 ${isAssistant ? 'pl-1' : 'pr-1 text-right'}`}>
+                                  <div className={`text-2xs text-gray-500 mt-1 ${isAssistant ? 'pl-1' : 'pr-1 text-right'}`}>
                                     {ts}
                                   </div>
                                 )}
@@ -4659,7 +4658,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                   // Sticky cells need an opaque fill — the row tints are
                                   // translucent (brand-teal/5, brand-cyan/5), so these are
                                   // the same tints pre-blended over white.
-                                  const stickyBg = isDd ? 'bg-[#f3fafb]' : isFu ? 'bg-[#f3fafc]' : 'bg-white';
+                                  const stickyBg = isDd ? 'bg-[var(--raw-f3fafb)]' : isFu ? 'bg-[var(--raw-f3fafc)]' : 'bg-white';
                                   return (
                                     <tr key={idx} className={`align-top ${isDd ? 'bg-brand-teal/5' : isFu ? 'bg-brand-cyan/5' : 'bg-white'}`}>
                                       <td className={`px-3 py-3 align-top sticky left-0 z-10 ${stickyBg} shadow-[inset_-1px_0_0_#e5e7eb]`}>
@@ -4992,7 +4991,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
               };
 
               const scoreColor = (score: number | null) => {
-                if (score == null) return 'text-gray-400';
+                if (score == null) return 'text-gray-500';
                 if (score >= 80) return 'text-success';
                 if (score >= 60) return 'text-blue-600';
                 if (score >= 40) return 'text-warning';
@@ -5194,18 +5193,17 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={`text-2xl font-bold ${risk.color}`}>{totalViolations}</span>
-                      <Button
+                      <IconButton label="Configure risk thresholds"
                         variant="secondary"
                         size="sm"
                         onClick={() => setShowThresholdEditor(p => !p)}
-                        aria-label="Configure risk thresholds" title="Configure risk thresholds"
                         className=""
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
-                      </Button>
+                      </IconButton>
                     </div>
                   </div>
 
@@ -5223,7 +5221,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             onChange={e => setViolationThresholds(t => ({ ...t, lowMax: Math.max(1, Math.min(t.medMax - 1, Number(e.target.value))) }))}
                             className="tf-input h-auto w-14 px-2 py-1 rounded-md text-xs text-center"
                           />
-                          <span className="text-gray-400">violations</span>
+                          <span className="text-gray-500">violations</span>
                         </label>
                         <label className="flex items-center gap-2 tf-meta">
                           <span className="text-brand-orange-deep font-medium">Medium Risk</span>
@@ -5234,7 +5232,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             onChange={e => setViolationThresholds(t => ({ ...t, medMax: Math.max(t.lowMax + 1, Number(e.target.value)) }))}
                             className="tf-input h-auto w-14 px-2 py-1 rounded-md text-xs text-center"
                           />
-                          <span className="text-gray-400">violations</span>
+                          <span className="text-gray-500">violations</span>
                         </label>
                         <span className="text-xs text-destructive font-medium">{violationThresholds.medMax + 1}+ = High Risk</span>
                         <button
@@ -5276,14 +5274,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             count > 0 ? `${cfg.bg} ${cfg.border} ring-black/[0.02] shadow-brand-blue/5` : 'bg-white border-gray-100 ring-black/[0.02] shadow-brand-blue/5'
                           }`}
                         >
-                          <span className={count > 0 ? cfg.color : 'text-gray-300'}>{cfg.icon}</span>
+                          <span className={count > 0 ? cfg.color : 'text-muted-foreground dark:text-gray-300'}>{cfg.icon}</span>
                           <div className="min-w-0 flex-1">
-                            <p className={`text-xs font-medium truncate ${count > 0 ? cfg.color : 'text-gray-400'}`}>
+                            <p className={`text-xs font-medium truncate ${count > 0 ? cfg.color : 'text-gray-500'}`}>
                               {cfg.label}
                             </p>
                             <div className="flex items-center gap-2">
                               <span className={`text-lg font-bold ${
-                                count > 0 ? 'text-gray-900' : 'text-gray-300'
+                                count > 0 ? 'text-gray-900' : 'text-muted-foreground dark:text-gray-300'
                               }`}>
                                 {count}
                               </span>

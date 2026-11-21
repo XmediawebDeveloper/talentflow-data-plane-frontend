@@ -5,6 +5,7 @@ import { Fragment, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil, Check,
   MoreVertical, Monitor, History, XCircle, FileText, Timer, ChevronDown,
+  KeyRound, ScanFace, Mic, Languages, GraduationCap, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
@@ -21,7 +22,6 @@ import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { type ListDisplayMode } from '@/components/ui/list-view-toggle';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dialog';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { invitedViaResume, useInviteResumePreview } from '@/components/ai-interview/useInviteResumePreview';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The candidate list for an AI interview's invite tracker.
@@ -111,7 +112,7 @@ export const isRevocableInvite = (inv: any): boolean =>
  * revoked invite gets corrected and sent again (Save and Send), so there is
  * nothing to edit before that.
  */
-const canEdit = (inv: any): boolean => inv.status === 'revoked';
+const canEdit = (inv: any): boolean => inv.status === 'revoked' || inv.status === 'bounced';
 
 /**
  * Resend only ever covers an expired row now — a live "invited" row has no
@@ -200,7 +201,7 @@ const copyInterviewLink = async (inv: any) => {
   toast.success('Interview link copied!');
 };
 
-type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string };
+type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string; reason?: string };
 
 /** Milestones oldest-first, every one on its own line. Delegates to
  *  buildFullTimeline (below) over the invitation's own embedded `timeline`
@@ -249,8 +250,8 @@ export const InviteTimelineLines = ({ inv, duration, limit }: { inv: any; durati
       ))}
       {duration && (
         <div className="flex items-center gap-2 whitespace-nowrap">
-          <Timer className="w-3 h-3 flex-shrink-0 text-gray-400" />
-          <span><span className="text-gray-400 dark:text-slate-400">Duration:</span> {duration}</span>
+          <Timer className="w-3 h-3 flex-shrink-0 text-gray-500" />
+          <span><span className="text-gray-500 dark:text-slate-400">Duration:</span> {duration}</span>
         </div>
       )}
     </div>
@@ -265,18 +266,25 @@ export const hasMoreTimelineHistory = (inv: any, limit?: number): boolean =>
 
 /** Timeline labels that are a status of the invitation (Edited only records
  *  a change to it) — View History's Status column. */
-const TIMELINE_STATUS_LABELS = new Set(['Invited', 'Revoked', 'System Check', 'Started', 'Completed', 'Terminated', 'Expired at']);
+const TIMELINE_STATUS_LABELS = new Set(['Invited', 'Revoked', 'Bounced', 'System Check', 'Started', 'Completed', 'Terminated', 'Expired at']);
 
 /** One line under each event in View History, saying what it means. */
 const TIMELINE_EVENT_DESCRIPTION: Record<string, string> = {
   'Invited': 'Invitation sent to candidate',
   'Revoked': 'Invitation revoked',
+  'Bounced': 'Invitation email bounced',
   'Edited': 'Invitation details edited',
   'System Check': 'Candidate accepted consent and began the system check',
   'Started': 'Candidate started the AI interview',
   'Completed': 'Candidate completed the AI interview',
   'Terminated': 'AI interview ended before it was completed',
   'Expired at': 'Invitation link expired',
+  'OTP Verified': 'Candidate verified their email with a one-time code',
+  'Identity Verified': 'Candidate passed the identity check',
+  'Voice Enrolled': 'Candidate recorded a voice sample',
+  'Device Check': 'Candidate ran the camera, microphone and network check',
+  'Practice Completed': 'Candidate finished the practice question',
+  'Proctoring Violation': 'Proctoring flagged suspicious activity',
 };
 
 /** View History on the Job Details AI Interview Result tab: the session's
@@ -286,7 +294,9 @@ export const loadInterviewHistory = async (inv: any): Promise<TimelineHistoryRow
   return collapseRepeatedSystemChecks(buildFullTimeline(inv, logs)).map((entry) => ({
     ...entry,
     isStatus: TIMELINE_STATUS_LABELS.has(entry.label),
-    description: TIMELINE_EVENT_DESCRIPTION[entry.label],
+    description: entry.reason
+      ? `${TIMELINE_EVENT_DESCRIPTION[entry.label] ?? entry.label} – ${entry.reason}`
+      : TIMELINE_EVENT_DESCRIPTION[entry.label],
   }));
 };
 
@@ -315,8 +325,38 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
       return { label: 'Terminated', Icon: Ban, tone: 'text-destructive' };
     case 'ai_interview_invite_expired':
       return { label: 'Expired at', Icon: Clock, tone: 'text-brand-orange-deep' };
+    // Candidate pre-interview steps — printed their raw action names before.
+    case 'ai_interview_otp_sent':
+      return { label: 'OTP Sent', Icon: KeyRound, tone: 'text-brand-cyan' };
+    case 'ai_interview_otp_verified':
+      return { label: 'OTP Verified', Icon: KeyRound, tone: 'text-brand-cyan' };
+    case 'ai_interview_otp_failed':
+      return { label: 'OTP Failed', Icon: KeyRound, tone: 'text-destructive' };
+    case 'ai_interview_identity_verified':
+      return { label: 'Identity Verified', Icon: ScanFace, tone: 'text-brand-cyan' };
+    case 'ai_interview_identity_failed':
+      return { label: 'Identity Check Failed', Icon: ScanFace, tone: 'text-destructive' };
+    case 'ai_interview_email_bounced':
+      return { label: 'Bounced', Icon: RefreshCw, tone: 'text-destructive' };
+    case 'ai_interview_voice_enrolled':
+      return { label: 'Voice Enrolled', Icon: Mic, tone: 'text-brand-cyan' };
+    case 'ai_interview_voice_enroll_failed':
+      return { label: 'Voice Enrollment Failed', Icon: Mic, tone: 'text-destructive' };
+    case 'ai_interview_system_check':
+      return { label: 'Device Check', Icon: Monitor, tone: 'text-brand-cyan' };
+    case 'ai_interview_language_selected':
+      return { label: 'Language Selected', Icon: Languages, tone: 'text-brand-cyan' };
+    case 'ai_interview_practice_completed':
+      return { label: 'Practice Completed', Icon: GraduationCap, tone: 'text-brand-cyan' };
+    case 'proctoring_violation':
+      return { label: 'Proctoring Violation', Icon: AlertTriangle, tone: 'text-brand-orange-deep' };
     default:
-      return { label: action, Icon: Clock, tone: 'text-gray-500 dark:text-slate-400' };
+      // Never print a raw action name: "ai_interview_foo_bar" -> "Foo Bar".
+      return {
+        label: action.replace(/^ai_interview_/, '').split('_').filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' '),
+        Icon: Clock,
+        tone: 'text-gray-500 dark:text-slate-400',
+      };
   }
 };
 
@@ -418,7 +458,7 @@ const collapseRepeatedEvents = (sorted: TimelineEntry[]): TimelineEntry[] =>
   });
 const buildFullTimeline = (
   inv: any,
-  auditLogs: Array<{ action: string; created_at: string | null }>
+  auditLogs: Array<{ action: string; created_at: string | null; details?: Record<string, unknown> | null }>
 ): TimelineEntry[] => {
   // Defensive: collapse exact duplicates — same action, same millisecond —
   // rather than every occurrence of an action. The real fix is upstream
@@ -437,7 +477,12 @@ const buildFullTimeline = (
 
   const out: TimelineEntry[] = dedupedLogs
     .filter((log) => !!log.created_at)
-    .map((log) => ({ ...describeTimelineAction(log.action), at: log.created_at as string }));
+    .map((log) => {
+      // Why the email bounced (`details.bounce_reason`, from the NDR).
+      const detailReason = log.details?.bounce_reason;
+      const reason = typeof detailReason === 'string' && detailReason ? detailReason : undefined;
+      return { ...describeTimelineAction(log.action), at: log.created_at as string, ...(reason ? { reason } : {}) };
+    });
 
   // created_at (row birth, never touched again) rather than
   // invitation_sent_at/expires_at (both overwritten by a later resend) —
@@ -490,7 +535,10 @@ const buildFullTimeline = (
     compareTimelineEntries
   );
   // Ascending — oldest event first, the order it happened in.
-  return collapseRepeatedExpiries(collapseRepeatedEvents(merged));
+  // Milestones only (Invited, System Check, Started, Completed + the
+  // Revoked/Expired/Terminated end states) — candidate pre-check steps and
+  // proctoring violations are left to the Activity Log.
+  return collapseRepeatedExpiries(collapseRepeatedEvents(merged)).filter((e) => TIMELINE_STATUS_LABELS.has(e.label));
 };
 
 /** Badge wording and colours kept in one place so a recruiter reads the same
@@ -564,7 +612,7 @@ export const inviteStatusLabel = (inv: {
     case 'expired': return 'Expired';
     case 'revoked': return 'Revoked';
     case 'failed': return 'Invite Failed';
-    case 'bounced': return 'Bounced';
+    case 'bounced': return 'Failed';
     default: return inv.status ? String(inv.status) : 'Pending';
   }
 };
@@ -928,11 +976,10 @@ export default function AIInterviewInviteTable({
     // Same round pill checkbox the Assessments tracker uses, so the select
     // column looks the same wherever it appears.
     return (
-      <button
+      <IconButton bare label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
         type="button"
         role="checkbox"
         aria-checked={checked}
-        aria-label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
         onClick={(e) => { e.stopPropagation(); onToggleSelect?.(inv.id); }}
         className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
           checked
@@ -941,7 +988,7 @@ export default function AIInterviewInviteTable({
         }`}
       >
         {checked && <Check className="w-3 h-3 text-white" />}
-      </button>
+      </IconButton>
     );
   };
 
@@ -1056,7 +1103,7 @@ export default function AIInterviewInviteTable({
                       <ResultBadge result={inviteResult(inv, score)} />
                     </>
                   ) : (
-                    <span className="text-gray-400 dark:text-slate-400">No score</span>
+                    <span className="text-gray-500 dark:text-slate-400">No score</span>
                   )}
                 </span>
                 {inviteSourceLabel(inv) && <InviteSourceValue inv={inv} iconClassName="w-3 h-3" />}
@@ -1263,12 +1310,10 @@ export default function AIInterviewInviteTable({
                     />
                   )}
                   {onToggleSelectAll && !trackerLook && (
-                    <button
+                    <IconButton bare label={allSelected ? 'Deselect all on this page' : 'Select all on this page'}
                       type="button"
                       role="checkbox"
                       aria-checked={allSelected}
-                      aria-label={allSelected ? 'Deselect all on this page' : 'Select all on this page'}
-                      title={allSelected ? 'Deselect all on this page' : 'Select all on this page'}
                       onClick={onToggleSelectAll}
                       className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
                         allSelected
@@ -1277,7 +1322,7 @@ export default function AIInterviewInviteTable({
                       }`}
                     >
                       {allSelected && <Check className="w-3 h-3 text-white" />}
-                    </button>
+                    </IconButton>
                   )}
                 </th>
               )}
@@ -1473,30 +1518,26 @@ export default function AIInterviewInviteTable({
                     <div className={`flex items-center gap-1.5 ${trackerLook ? 'justify-center' : ''}`}>
                     {/* The Resume Scoring list's expand control. */}
                     {expandableRows && (
-                      <Button
+                      <IconButton label={isExpanded ? 'Hide details' : 'Show details'}
                         variant="secondary"
                         size="sm"
                         onClick={() => toggleExpanded(inv.id)}
                         aria-expanded={isExpanded}
-                        aria-label={isExpanded ? 'Hide details' : 'Show details'}
-                        title={isExpanded ? 'Hide details' : 'Show details'}
                         className="h-8 w-8"
                       >
                         <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                      </Button>
+                      </IconButton>
                     )}
                     {actions.length === 0 ? (
                       <span className="tf-hint">—</span>
                     ) : (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button
-                            aria-label="Actions"
-                            title="Actions"
+                          <IconButton bare label="Actions"
                             className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
                           >
                             <MoreVertical className="w-4 h-4" />
-                          </button>
+                          </IconButton>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className={`w-44 ${MENU_PANEL_BORDER_CLASS}`}>
                           {actions.map(({ key, label, Icon, run, disabled, destructive, busy, iconClassName }) => (
@@ -1558,7 +1599,7 @@ export default function AIInterviewInviteTable({
             <DialogDescription className="break-words">
               {capitalizedCase(timelineTarget?.candidate_name) || timelineTarget?.candidate_email || 'Candidate'}
               {timelineTarget?.candidate_name && timelineTarget?.candidate_email && (
-                <span className="text-gray-400 dark:text-slate-400"> · {timelineTarget.candidate_email}</span>
+                <span className="text-gray-500 dark:text-slate-400"> · {timelineTarget.candidate_email}</span>
               )}
             </DialogDescription>
           </DialogHeader>

@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Building2,
   Check,
   CircleHelp,
   Copy,
   CreditCard,
+  Loader2,
   LifeBuoy,
   Mail,
   MessageSquareText,
+  Phone,
   Presentation,
   Send,
   User,
@@ -21,6 +23,8 @@ import { DISPLAY } from "@/components/marketing/fonts";
 import { RevealGroup } from "@/components/marketing/motion";
 import { SECTION, SHELL } from "@/components/marketing/layout";
 import { MarketingPage, PageHero } from "@/components/marketing/PageShell";
+import { IconButton } from '@/components/ui/icon-button';
+import { isValidEmailFormat } from "@/lib/utils/email";
 
 /* ------------------------------------------------------------------ */
 
@@ -36,9 +40,17 @@ const EMAILS = [
   { label: "Support", address: "support@talentflow.com" },
 ];
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 const MAX_MESSAGE = 1000;
-const EMPTY = { name: "", email: "", company: "", message: "" };
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMPTY = { name: "", email: "", company: "", phone: "", message: "" };
+const PHONE_MAX_DIGITS = 10;
+
+// Phone is optional and numbers only (the input drops anything else). It may not
+// have more than 10 digits; a leading +91 country code is not counted.
+function validatePhone(value: string): string | null {
+  const digits = value.trim().replace(/^\+91/, "").replace(/\D/g, "");
+  return digits.length > PHONE_MAX_DIGITS ? `Phone number cannot be more than ${PHONE_MAX_DIGITS} digits.` : null;
+}
 
 /* ------------------------------------------------------------------ */
 
@@ -63,18 +75,18 @@ function Field({
     <div>
       <label htmlFor={id} className="mb-1.5 flex items-baseline gap-1.5 text-sm font-semibold text-mkt-ink">
         {label}
-        {optional && <span className="text-xs font-normal text-slate-400">Optional</span>}
+        {optional && <span className="text-xs font-normal text-slate-500">Optional</span>}
       </label>
       <div className="group/field relative">
         <Icon
           aria-hidden="true"
-          className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400 transition-colors duration-200 group-focus-within/field:text-mkt-accent"
+          className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-500 transition-colors duration-200 group-focus-within/field:text-mkt-accent"
         />
         <input
           id={id}
           aria-invalid={!!error || undefined}
           aria-describedby={error ? `${id}-error` : undefined}
-          className={`block h-12 w-full rounded-2xl border bg-mkt-canvas pl-11 pr-11 text-[15px] text-mkt-ink placeholder:text-slate-400 transition-[border-color,box-shadow,background-color] duration-200 hover:border-slate-900/25 focus:bg-mkt-surface focus:outline-none focus:ring-4 dark:placeholder:text-slate-500 ${
+          className={`block h-12 w-full rounded-2xl border bg-mkt-canvas pl-11 pr-11 text-[15px] text-mkt-ink placeholder:text-gray-500 transition-[border-color,box-shadow,background-color] duration-200 hover:border-slate-900/25 focus:bg-mkt-surface focus:outline-none focus:ring-4 dark:placeholder:text-slate-500 ${
             error
               ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15"
               : "border-slate-900/[0.12] focus:border-mkt-accent focus:ring-mkt-accent/15 dark:border-white/15"
@@ -121,14 +133,13 @@ function CopyEmail({ label, address }: { label: string; address: string }) {
           {address}
         </a>
       </div>
-      <button
+      <IconButton bare label={copied ? `${address} copied` : `Copy ${address}`}
         type="button"
         onClick={copy}
-        aria-label={copied ? `${address} copied` : `Copy ${address}`}
         className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-900/10 text-slate-500 transition-[color,border-color,background-color,scale] duration-200 hover:border-mkt-accent/40 hover:text-mkt-accent active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid dark:border-white/15"
       >
         {copied ? <Check className="h-4 w-4 text-emerald-600" strokeWidth={3} /> : <Copy className="h-4 w-4" />}
-      </button>
+      </IconButton>
     </div>
   );
 }
@@ -140,12 +151,32 @@ export default function ContactPage() {
   const [topic, setTopic] = useState(TOPICS[0].id);
   const [emailTouched, setEmailTouched] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const set = (key: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setFormData({ ...formData, [key]: e.target.value });
+    setFormData({
+      ...formData,
+      // Phone accepts numbers only; a "+" is allowed only at the start (for +91)
+      [key]: key === "phone" ? e.target.value.replace(/[^0-9+]/g, "").replace(/(?!^)\+/g, "") : e.target.value,
+    });
 
-  const emailValid = EMAIL_RE.test(formData.email);
-  const emailError = emailTouched && formData.email && !emailValid ? "Enter a valid email address." : null;
+  // Checked on every keystroke, so the "more than 10 digits" error shows at once
+  const phoneError = validatePhone(formData.phone);
+
+  // Same check as the Book a Demo page: one @, no spaces or stray dots, a real
+  // domain ending, and no misspelt provider such as "gmail.om" or "gmial.com".
+  const email = formData.email.trim();
+  const emailValid = email.length <= 254 && isValidEmailFormat(email);
+  const emailError = emailTouched && email && !emailValid ? "Enter a valid email address, like john@company.com." : null;
+
+  // Show the red error shortly after the visitor stops typing an invalid address
+  // (not on every keystroke). It is also checked on leaving the field and on submit.
+  useEffect(() => {
+    if (!email) return;
+    const id = window.setTimeout(() => setEmailTouched(true), 600);
+    return () => window.clearTimeout(id);
+  }, [email]);
   const activeTopic = TOPICS.find((t) => t.id === topic) ?? TOPICS[0];
 
   // Glide down to the form (instant for reduced motion), then put the
@@ -156,15 +187,53 @@ export default function ContactPage() {
     window.setTimeout(() => document.getElementById("name")?.focus({ preventScroll: true }), reduce ? 0 : 700);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Sent to the Control Plane (Demo Enquiries), together with Book a Demo requests.
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     if (!emailValid) {
       setEmailTouched(true);
       return;
     }
-    setSentTo(formData.name.trim().split(" ")[0] || "there");
-    setFormData(EMPTY);
-    setEmailTouched(false);
+    if (phoneError) {
+      document.getElementById("phone")?.focus();
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch(`${API_URL}/public/contact-messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: formData.name.trim(),
+          email: formData.email.trim(),
+          company: formData.company.trim() || null,
+          phone: formData.phone.trim() || null,
+          topic,
+          message: formData.message.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        const detail = typeof body?.detail === "string" ? body.detail : null;
+        throw new Error(
+          res.status === 429
+            ? "Too many messages. Please try again later."
+            : res.status === 422
+              ? detail || "Please check the details you entered."
+              : detail || "We couldn't send your message. Please try again.",
+        );
+      }
+      const first = formData.name.trim().split(" ")[0];
+      setSentTo(first ? first.charAt(0).toUpperCase() + first.slice(1) : "there");
+      setFormData(EMPTY);
+      setEmailTouched(false);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "We couldn't send your message. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -201,7 +270,7 @@ export default function ContactPage() {
               <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-mkt-accent-solid via-mkt-accent to-mkt-cyan max-sm:hidden" />
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.14),transparent)] max-sm:hidden"
+                className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p14),transparent)] max-sm:hidden"
               />
 
               {sentTo ? (
@@ -315,17 +384,33 @@ export default function ContactPage() {
                       />
                     </div>
 
-                    <Field
-                      id="company"
-                      label="Company"
-                      icon={Building2}
-                      optional
-                      placeholder="Your company"
-                      autoComplete="organization"
-                      value={formData.company}
-                      onChange={set("company")}
-                      valid={formData.company.trim().length > 1}
-                    />
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                      <Field
+                        id="company"
+                        label="Company"
+                        icon={Building2}
+                        optional
+                        placeholder="Your company"
+                        autoComplete="organization"
+                        value={formData.company}
+                        onChange={set("company")}
+                        valid={formData.company.trim().length > 1}
+                      />
+                      <Field
+                        id="phone"
+                        label="Phone"
+                        icon={Phone}
+                        optional
+                        type="tel"
+                        inputMode="tel"
+                        placeholder="+91"
+                        autoComplete="tel"
+                        value={formData.phone}
+                        onChange={set("phone")}
+                        valid={!phoneError && formData.phone.replace(/^\+91/, "").replace(/\D/g, "").length === PHONE_MAX_DIGITS}
+                        error={phoneError}
+                      />
+                    </div>
 
                     <div>
                       <div className="mb-1.5 flex items-baseline justify-between gap-3">
@@ -335,7 +420,7 @@ export default function ContactPage() {
                         <span
                           aria-live="polite"
                           className={`text-xs tabular-nums ${
-                            formData.message.length > MAX_MESSAGE * 0.9 ? "text-amber-600" : "text-slate-400"
+                            formData.message.length > MAX_MESSAGE * 0.9 ? "text-amber-600" : "text-slate-500"
                           }`}
                         >
                           {formData.message.length}/{MAX_MESSAGE}
@@ -344,7 +429,7 @@ export default function ContactPage() {
                       <div className="group/field relative">
                         <MessageSquareText
                           aria-hidden="true"
-                          className="pointer-events-none absolute left-4 top-3.5 h-[18px] w-[18px] text-slate-400 transition-colors duration-200 group-focus-within/field:text-mkt-accent"
+                          className="pointer-events-none absolute left-4 top-3.5 h-[18px] w-[18px] text-slate-500 transition-colors duration-200 group-focus-within/field:text-mkt-accent"
                         />
                         <textarea
                           id="message"
@@ -354,10 +439,16 @@ export default function ContactPage() {
                           placeholder={activeTopic.hint}
                           value={formData.message}
                           onChange={set("message")}
-                          className="block w-full resize-y rounded-2xl border border-slate-900/[0.12] bg-mkt-canvas py-3 pl-11 pr-4 text-[15px] leading-relaxed text-mkt-ink placeholder:text-slate-400 transition-[border-color,box-shadow,background-color] duration-200 hover:border-slate-900/25 focus:border-mkt-accent focus:bg-mkt-surface focus:outline-none focus:ring-4 focus:ring-mkt-accent/15 dark:border-white/15 dark:placeholder:text-slate-500"
+                          className="block w-full resize-y rounded-2xl border border-slate-900/[0.12] bg-mkt-canvas py-3 pl-11 pr-4 text-[15px] leading-relaxed text-mkt-ink placeholder:text-gray-500 transition-[border-color,box-shadow,background-color] duration-200 hover:border-slate-900/25 focus:border-mkt-accent focus:bg-mkt-surface focus:outline-none focus:ring-4 focus:ring-mkt-accent/15 dark:border-white/15 dark:placeholder:text-slate-500"
                         />
                       </div>
                     </div>
+
+                    {submitError && (
+                      <p role="alert" className="text-sm font-medium text-rose-600 dark:text-rose-400">
+                        {submitError}
+                      </p>
+                    )}
 
                     <div className="flex flex-col-reverse items-stretch gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -365,15 +456,19 @@ export default function ContactPage() {
                       </p>
                       <button
                         type="submit"
-                        disabled={!formData.name.trim() || !formData.message.trim() || !formData.email}
+                        disabled={submitting || !formData.name.trim() || !formData.message.trim() || !formData.email || !!phoneError}
                         className="group relative isolate inline-flex h-12 items-center justify-center gap-2 overflow-hidden rounded-full bg-mkt-ink px-7 text-[15px] font-semibold text-mkt-canvas transition-[box-shadow,opacity] duration-300 hover:shadow-[0_14px_32px_-12px_rgba(15,60,153,0.6)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-surface active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none"
                       >
                         <span
                           aria-hidden="true"
                           className="absolute inset-0 -z-10 translate-y-[101%] rounded-[inherit] bg-mkt-accent transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-enabled:group-hover:translate-y-0"
                         />
-                        Send message
-                        <Send className="h-4 w-4 transition-transform duration-300 ease-out group-enabled:group-hover:-translate-y-0.5 group-enabled:group-hover:translate-x-1" />
+                        {submitting ? "Sending…" : "Send message"}
+                        {submitting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4 transition-transform duration-300 ease-out group-enabled:group-hover:-translate-y-0.5 group-enabled:group-hover:translate-x-1" />
+                        )}
                       </button>
                     </div>
                   </form>

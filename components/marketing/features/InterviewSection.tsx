@@ -56,7 +56,7 @@ const WAVE = [30, 55, 80, 45, 95, 60, 35, 70, 100, 50, 75, 40, 85, 55, 30, 65, 4
 function BinaMock() {
   return (
     <MockFrame title="AI Interview · Senior Backend Developer" icon={<AudioLines className="h-3.5 w-3.5 text-mkt-accent" />} onSurface>
-      <div className="flex flex-col items-center rounded-2xl bg-[radial-gradient(120%_90%_at_50%_0%,rgba(7,156,196,0.12),transparent)] px-3 pb-4 pt-6 text-center">
+      <div className="flex flex-col items-center rounded-2xl bg-[radial-gradient(120%_90%_at_50%_0%,var(--raw-rgba-7-156-196-0p12),transparent)] px-3 pb-4 pt-6 text-center">
         <span className="relative grid h-24 w-24 place-items-center sm:h-28 sm:w-28">
           <span className="absolute inset-0 rounded-full border border-mkt-cyan/25 motion-safe:animate-pulse" />
           <span className="absolute inset-2.5 rounded-full border border-mkt-accent/25" />
@@ -199,7 +199,7 @@ export function InterviewSection() {
     >
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute -left-40 top-10 h-[520px] w-[520px] rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.10),transparent)]"
+        className="pointer-events-none absolute -left-40 top-10 h-[520px] w-[520px] rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p1),transparent)]"
       />
       <div className={`${SHELL} relative`}>
         <div className="max-w-3xl">

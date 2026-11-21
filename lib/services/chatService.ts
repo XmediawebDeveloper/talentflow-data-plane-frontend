@@ -16,6 +16,8 @@ export interface ChannelMember {
   initials: string;
   role: string;
   is_online: boolean;
+  /** Last heartbeat of any of the user's app sockets (null when unknown). */
+  last_seen_at?: string | null;
   joined_at: string;
 }
 
@@ -31,6 +33,8 @@ export interface Channel {
   unread_count: number;
   last_message: string | null;
   last_message_by: string | null;
+  /** Author of last_message — match on this, not the name (names can repeat). */
+  last_message_user_id?: string | null;
   last_message_at: string | null;
   members: ChannelMember[];
   is_active: boolean;
@@ -55,6 +59,8 @@ export interface Message {
   message_type: string;
   reply_to_id: string | null;
   reply_to_preview: string | null;
+  reply_to_user_name?: string | null;
+  reply_to_user_id?: string | null;
   is_pinned: boolean;
   is_edited: boolean;
   is_deleted: boolean;
@@ -256,6 +262,21 @@ class ChatService {
   }
 
   /**
+   * Forward a message (text or image) into one or more conversations. The
+   * server labels each copy "Forwarded from <original author>" and gives an
+   * image its own file copy. Returns the new messages (one per target).
+   */
+  async forwardMessage(messageId: string, channelIds: string[]): Promise<Message[]> {
+    try {
+      const response = await api.post(`/chat/messages/${messageId}/forward`, { channel_ids: channelIds });
+      return response.data;
+    } catch (error) {
+      console.error('Error forwarding message:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Upload an image attachment to a channel (delivered as a 'file' message).
    * Images only — the backend re-validates MIME type/extension/size regardless
    * of what the browser reports.
@@ -437,7 +458,7 @@ class ChatService {
       return 'ws://localhost:8001';
     };
 
-    const wsUrl = `${getWsBaseUrl()}/api/v1/chat/ws/${channelId}?token=${token}`;
+    const wsUrl = `${getWsBaseUrl()}/api/v1/chat/ws/${encodeURIComponent(channelId)}?token=${encodeURIComponent(token)}`;
     const socket = new WebSocket(wsUrl);
     this.ws = socket;
     this.setStatus('connecting');
@@ -467,6 +488,11 @@ class ChatService {
       // Keep reconnecting while this channel is still open in the UI — idle
       // connections get dropped by proxies, and giving up after a few tries
       // left the chat silently stale until a page refresh. Backoff caps at 30s.
+      // 4001 (unauthorized) / 4003 (no access, e.g. removed from the team):
+      // retrying can't succeed, so stop instead of looping every 30s.
+      if (event.code === 4001 || event.code === 4003) {
+        return;
+      }
       if (event.code !== 1000 && this.currentChannelId === channelId) {
         const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
         console.log(`[ChatService] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1})`);

@@ -1,7 +1,8 @@
 'use client';
 
 import { CreditCard, Check, Loader2, Users, Building2, Zap, AlertCircle, Lock, Clock, CheckCircle, XCircle, X, Database, Layers, Package, Sparkles, ArrowRight, ArrowLeft, ArrowUpRight, Crown, FileText, Mail, ChevronDown, ChevronUp, Shield, BarChart3, Wallet, Receipt, RefreshCw, AlertTriangle, Briefcase, Gauge, ClipboardCheck, Video } from 'lucide-react';
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, Suspense } from 'react';
+import { useModalA11y } from '@/components/ui/modal-a11y';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api, { handleUnauthorized, getAccessToken } from '@/lib/services/api';
@@ -31,6 +32,8 @@ import BillingHistoryPage from '@/app/(dashboard)/subscription/billing-history/p
 import RefundHistoryPage from '@/app/(dashboard)/subscription/refund-history/page';
 import DisputeHistoryPage from '@/app/(dashboard)/subscription/dispute-history/page';
 import UnitDisputesView from '@/components/subscription/unit-disputes/UnitDisputesView';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -850,6 +853,15 @@ function CurrentPlanContent() {
     }
     return () => locked.forEach(({ el, overflow }) => { el.style.overflowY = overflow; });
   }, [showPaymentModal]);
+  // Escape, focus trap and focus return for the payment modal (a11y §14),
+  // attached while it is open; the overlay keeps its own ref for the scroll lock.
+  const paymentModalA11y = useModalA11y();
+  const paymentModalOpen = showPaymentModal && !!selectedPlanForPayment;
+  useLayoutEffect(() => {
+    if (!paymentModalOpen) return;
+    paymentModalA11y(paymentModalRef.current);
+    return () => paymentModalA11y(null);
+  }, [paymentModalOpen, paymentModalA11y]);
   const [showAdminMeta, setShowAdminMeta] = useState(false);
 
   // Use ref to track if data has been fetched to prevent duplicate calls
@@ -2504,7 +2516,7 @@ function CurrentPlanContent() {
                       {f.is_enabled ? (
                         <Check className="h-3.5 w-3.5 shrink-0 text-brand-teal" strokeWidth={3} />
                       ) : (
-                        <X className="h-3.5 w-3.5 shrink-0 text-gray-300 dark:text-slate-600" />
+                        <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-slate-600" />
                       )}
                       {f.feature_name}
                     </span>
@@ -3106,7 +3118,7 @@ function CurrentPlanContent() {
                             return (
                               <div key={row.label} className="flex items-center justify-between gap-2">
                                 <span className="text-gray-500 dark:text-slate-400">{row.label}</span>
-                                <span className={`font-semibold ${formatted === 'Unlimited' ? 'text-brand-teal' : formatted === '—' ? 'text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{formatted}</span>
+                                <span className={`font-semibold ${formatted === 'Unlimited' ? 'text-brand-teal' : formatted === '—' ? 'text-gray-500 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{formatted}</span>
                               </div>
                             );
                           })}
@@ -3294,7 +3306,7 @@ function CurrentPlanContent() {
       {/* Plan Selection Modal — bottom sheet on mobile, centred two-column dialog on desktop.
           Body scrolls only when the viewport is too short, with the scrollbar hidden. */}
       {showPaymentModal && selectedPlanForPayment && (
-        <div ref={paymentModalRef} className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
+        <div ref={paymentModalRef} role="dialog" aria-modal="true" tabIndex={-1} data-modal-a11y="" className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
           <div className={`flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-slate-900 sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl ${
             modalStep === 'result' ? 'sm:max-w-4xl' : 'sm:max-w-5xl'
           }`}>
@@ -3327,13 +3339,12 @@ function CurrentPlanContent() {
                       )}
                     </div>
                   </div>
-                  <button
+                  <IconButton bare label="Close"
                     onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); setIsDowngradePayment(false); setShowAllModalFeatures(false); }}
                     className="shrink-0 rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-slate-700"
-                    aria-label="Close"
                   >
                     <X className="h-5 w-5 text-gray-500 dark:text-slate-500" />
-                  </button>
+                  </IconButton>
                 </div>
               );
             })()}
@@ -3825,7 +3836,7 @@ function CurrentPlanContent() {
           selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
         ) === -1;
         return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <ModalA11y><div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-4xl w-full max-h-[90dvh] overflow-y-auto">
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-200 dark:border-slate-700">
@@ -3838,16 +3849,15 @@ function CurrentPlanContent() {
                     {isQueuedDowngrade ? 'Downgrade' : 'Upgrade'} to {selectedQueuedUpgrade.new_plan_name}
                   </p>
                 </div>
-                <button
+                <IconButton bare label="Close"
                   onClick={() => {
                     setShowTCModal(false);
                     setSelectedQueuedUpgrade(null);
                     setTcAccepted(false);
                   }}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                 aria-label="Close">
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
                   <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                </button>
+                </IconButton>
               </div>
             </div>
 
@@ -3943,7 +3953,7 @@ function CurrentPlanContent() {
               </div>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
         );
       })()}
 
