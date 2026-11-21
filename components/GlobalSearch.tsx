@@ -79,6 +79,40 @@ function textMatches(fields: (string | null | undefined)[], query: string): bool
   return fields.some((f) => !!f && f.toLowerCase().includes(q));
 }
 
+const MARK_CLASS = 'bg-yellow-200 dark:bg-yellow-500/40 text-inherit font-semibold rounded-sm px-px';
+
+/** Highlights every case-insensitive occurrence of the query inside any text field. */
+function highlightText(text: string | null | undefined, query: string) {
+  if (!text) return text ?? null;
+  const q = query.trim().toLowerCase();
+  if (!q) return text;
+  const lower = text.toLowerCase();
+  const out: React.ReactNode[] = [];
+  let pos = 0;
+  let idx = lower.indexOf(q);
+  while (idx !== -1) {
+    if (idx > pos) out.push(text.slice(pos, idx));
+    out.push(<mark key={idx} className={MARK_CLASS}>{text.slice(idx, idx + q.length)}</mark>);
+    pos = idx + q.length;
+    idx = lower.indexOf(q, pos);
+  }
+  if (pos === 0) return text;
+  if (pos < text.length) out.push(text.slice(pos));
+  return <>{out}</>;
+}
+
+/** Joins non-empty fields with " · ", highlighting the query in each. */
+function highlightJoin(parts: (string | null | undefined)[], query: string) {
+  return parts
+    .filter(Boolean)
+    .map((p, i) => (
+      <span key={i}>
+        {i > 0 && ' · '}
+        {highlightText(p, query)}
+      </span>
+    ));
+}
+
 export default function GlobalSearch({ className }: GlobalSearchProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -324,11 +358,11 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                           Folder
                         </span>
                         <span className="tf-row-name truncate">
-                          {folder.name}
+                          {highlightText(folder.name, query)}
                         </span>
                       </div>
                       <div className="tf-meta mt-0.5 truncate">
-                        {path}
+                        {highlightText(path, query)}
                       </div>
                     </button>
                   ))}
@@ -355,12 +389,24 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                         <span className="tf-row-name truncate">
                           {resume.phone && phoneMatchRange(resume.phone, query)
                             ? renderPhone(resume.phone, query)
-                            : resume.candidate_name || resume.file_name}
+                            : highlightText(resume.candidate_name || resume.file_name, query)}
                         </span>
                       </div>
                       <div className="tf-meta mt-0.5">
-                        {[resume.current_title, resume.current_company, resume.location].filter(Boolean).join(' · ') || resume.candidate_email || resume.file_name}
+                        {highlightJoin(
+                          [resume.current_title, resume.current_company, resume.location].some(Boolean)
+                            ? [resume.current_title, resume.current_company, resume.location]
+                            : [resume.candidate_email || resume.file_name],
+                          query,
+                        )}
                       </div>
+                      {(resume.candidate_email || resume.email) &&
+                        (resume.candidate_email || resume.email || '').toLowerCase().includes(query.trim().toLowerCase()) &&
+                        [resume.current_title, resume.current_company, resume.location].some(Boolean) && (
+                          <div className="tf-meta mt-0.5 truncate">
+                            {highlightText(resume.candidate_email || resume.email, query)}
+                          </div>
+                        )}
                     </button>
                   ))}
                 </div>
@@ -380,16 +426,16 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="tf-row-name">{jd.title}</span>
+                        <span className="tf-row-name">{highlightText(jd.title, query)}</span>
                         {jd.job_id && (
-                          <span className="tf-hint">{jd.job_id}</span>
+                          <span className="tf-hint">{highlightText(jd.job_id, query)}</span>
                         )}
                         {!!(jd as any).version_number && (
                           <VersionBadge version={(jd as any).version_number} size="sm" variant="secondary" />
                         )}
                       </div>
                       <div className="tf-meta mt-0.5">
-                        {[jd.department, jd.location, jd.status].filter(Boolean).join(' · ')}
+                        {highlightJoin([jd.department, jd.location, jd.status], query)}
                       </div>
                     </button>
                   ))}
@@ -410,11 +456,11 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="tf-row-name">{assessment.title}</span>
+                        <span className="tf-row-name">{highlightText(assessment.title, query)}</span>
                         {/* The Job ID, as the Assessments table shows it — the
                             assessment's own AS-xxx is not shown in the app. */}
                         {assessment.jd_short_id && (
-                          <span className="tf-hint">{assessment.jd_short_id}</span>
+                          <span className="tf-hint">{highlightText(assessment.jd_short_id, query)}</span>
                         )}
                         {/* Every version of an assessment shares one AS-XXX, so
                             the version is what tells two results apart here. */}
@@ -423,7 +469,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                         )}
                       </div>
                       <div className="tf-meta mt-0.5">
-                        {assessment.jd_title} · {assessment.status}
+                        {highlightJoin([assessment.jd_title, assessment.status], query)}
                       </div>
                     </button>
                   ))}
@@ -445,16 +491,16 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                     >
                       <div className="flex items-center gap-2">
                         <span className="tf-row-name">
-                          {interview.candidate_name || interview.position || 'AI Interview'}
+                          {highlightText(interview.candidate_name || interview.position || 'AI Interview', query)}
                         </span>
                         {/* The Job ID, as the AI Interviews table shows it — the
                             interview's own AI-xxx is not shown in the app. */}
                         {interview.jd_short_id && (
-                          <span className="tf-hint">{interview.jd_short_id}</span>
+                          <span className="tf-hint">{highlightText(interview.jd_short_id, query)}</span>
                         )}
                       </div>
                       <div className="tf-meta mt-0.5">
-                        {[interview.position, interview.jd_title, interview.status].filter(Boolean).join(' · ')}
+                        {highlightJoin([interview.position, interview.jd_title, interview.status], query)}
                       </div>
                     </button>
                   ))}
