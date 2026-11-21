@@ -95,6 +95,13 @@ const ts = (iso?: string | null) => {
 };
 const prettyRole = (role?: string) => (role ?? '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (s) => s.toUpperCase());
 const isImageMessage = (m: LiveMessage) => m.message_type === 'file' && !m.is_deleted && !!m.metadata?.file_url;
+/** Conversation-list fields for a newly arrived/sent message ("📷 Photo" for images, as the server does). */
+const previewFields = (m: LiveMessage) => ({
+  last_message: m.message_type === 'file' ? '📷 Photo' : m.content,
+  last_message_by: m.user_name,
+  last_message_user_id: m.user_id,
+  last_message_at: m.created_at,
+});
 
 /** A live message in the UI's shape. */
 function toUiMessage(m: LiveMessage): Message {
@@ -109,6 +116,9 @@ function toUiMessage(m: LiveMessage): Message {
       ? [{ id: `att-${m.id}`, kind: 'image', name: m.metadata?.file_name || 'Image', size: '', url: m.metadata?.file_url }]
       : undefined,
     replyToId: m.reply_to_id ?? undefined,
+    replyQuote: m.reply_to_id && m.reply_to_preview != null
+      ? { authorId: m.reply_to_user_id ?? undefined, authorName: m.reply_to_user_name || 'Unknown', text: m.reply_to_preview }
+      : undefined,
     editedAt: m.is_edited ? ts(m.updated_at) || 1 : undefined,
     forwardedFrom: m.metadata?.forwarded_from || undefined,
     pinned: m.is_pinned,
@@ -156,6 +166,8 @@ export default function TeamChatPage() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editing, setEditing] = useState<Message | null>(null);
   const [forwarding, setForwarding] = useState<Message | null>(null);
+  // Set once leaveOpenConversation is defined (the socket handler is declared above it).
+  const leaveOpenConversationRef = useRef<(channelId: string) => Promise<void>>(async () => {});
   const [openDialog, setOpenDialog] = useState<DialogKind>(null);
   const [atBottom, setAtBottom] = useState(true);
   const [dragOver, setDragOver] = useState(false);
@@ -450,7 +462,7 @@ export default function TeamChatPage() {
             const bump = (list: Channel[]) =>
               list.map((ch) =>
                 ch.id === msgChannelId
-                  ? { ...ch, last_message: data.message.content, last_message_by: data.message.user_name, last_message_at: data.message.created_at }
+                  ? { ...ch, ...previewFields(data.message) }
                   : ch,
               );
             setChannels(bump);
@@ -479,7 +491,27 @@ export default function TeamChatPage() {
         }
         case 'reaction_add':
         case 'reaction_remove': {
-          fetchMessages(channelId, { silent: true });
+          if (data.message_id && Array.isArray(data.reactions)) {
+            setMessages((prev) => prev.map((m) => (m.id === data.message_id ? { ...m, reactions: data.reactions } : m)));
+          } else {
+            fetchMessages(channelId, { silent: true });
+          }
+          break;
+        }
+        case 'member_removed': {
+          if (data.user_id && data.user_id === currentUser?.id) {
+            toast.info('You were removed from this team');
+            // A private team is gone for them; a public one stays readable.
+            if (selectedChannel.is_private) void leaveOpenConversationRef.current(channelId);
+            else void refreshChannelsSilently();
+          } else {
+            void refreshChannelsSilently();
+          }
+          break;
+        }
+        case 'members_added':
+        case 'channel_update': {
+          void refreshChannelsSilently();
           break;
         }
         case 'typing': {
@@ -751,6 +783,9 @@ export default function TeamChatPage() {
     setOpenDialog(null);
     await fetchChannels({ initial: false, selectFirst: true });
   };
+  useEffect(() => {
+    leaveOpenConversationRef.current = leaveOpenConversation;
+  });
 
   const handleLeaveChannel = async () => {
     if (!selectedChannel) return;
@@ -819,7 +854,7 @@ export default function TeamChatPage() {
     const bump = (list: Channel[]) =>
       list.map((c) =>
         c.id === channelId
-          ? { ...c, last_message: msg.content, last_message_by: msg.user_name, last_message_at: msg.created_at }
+          ? { ...c, ...previewFields(msg) }
           : c,
       );
     setChannels(bump);
@@ -970,26 +1005,19 @@ export default function TeamChatPage() {
     const source = forwarding ? messages.find((m) => m.id === forwarding.id) : undefined;
     setForwarding(null);
     if (!source || targetIds.length === 0) return;
-    const from = source.user_id === currentUser?.id ? currentUser?.name || 'You' : source.user_name;
-    const results = await Promise.allSettled(
-      targetIds.map((id) =>
-        chatService.sendMessage(id, {
-          content: source.content,
-          message_type: source.message_type,
-          metadata: { ...(source.metadata ?? {}), forwarded_from: from },
-        }),
-      ),
-    );
-    let done = 0;
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled') {
-        done += 1;
-        addSent(targetIds[i], r.value);
+    // One call for all targets: the server checks access, labels each copy
+    // "Forwarded from <original author>" and gives an image its own file copy
+    // (re-posting the metadata was refused, and a shared file broke on delete).
+    try {
+      const sent = await chatService.forwardMessage(source.id, targetIds);
+      sent.forEach((msg) => addSent(msg.channel_id, msg));
+      if (sent.length > 0) toast.success(`Forwarded to ${sent.length}`);
+      if (sent.length < targetIds.length) {
+        toast.error(`Couldn't forward to ${targetIds.length - sent.length} conversation(s)`);
       }
-    });
-    if (done > 0) toast.success(`Forwarded to ${done}`);
-    const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-    if (firstError) showErrorToast(firstError.reason, "Couldn't forward message");
+    } catch (error) {
+      showErrorToast(error, "Couldn't forward message");
+    }
   };
 
   /* ── Teams & people ── */
@@ -1115,6 +1143,15 @@ export default function TeamChatPage() {
 
   const peopleMap = new Map<string, Person>();
   // Only active users from User Management can be picked (new message, teams).
+  // last_seen_at comes on channel members (any conversation the person is in).
+  const lastSeenById = new Map<string, string>();
+  allChannels.forEach((c) =>
+    c.members.forEach((m) => {
+      if (!m.last_seen_at) return;
+      const prev = lastSeenById.get(m.user_id);
+      if (!prev || m.last_seen_at > prev) lastSeenById.set(m.user_id, m.last_seen_at);
+    }),
+  );
   const directory: Person[] = availableUsers
     .filter((u) => u.is_active !== false)
     .map((u) => ({
@@ -1124,7 +1161,8 @@ export default function TeamChatPage() {
       roleName: prettyRole(u.role),
       isAdmin: /admin/i.test(u.role ?? ''),
       avatarUrl: u.avatar_url,
-      lastSeen: ts(u.last_login) || undefined,
+      // Real "last seen" (socket heartbeat) when the server has it; else last login.
+      lastSeen: ts(lastSeenById.get(u.id)) || ts(u.last_login) || undefined,
       presence: onlineIds.has(u.id) ? 'online' : undefined,
     }));
   directory.forEach((p) => peopleMap.set(p.id, p));
@@ -1157,6 +1195,14 @@ export default function TeamChatPage() {
   });
   // Who wrote a conversation's last message (for the list preview).
   const authorOf = (c: Channel) => {
+    // By id when the server sends it — two people can share a name.
+    if (c.last_message_user_id) {
+      const id = c.last_message_user_id;
+      if (id !== meId && !peopleMap.has(id)) {
+        peopleMap.set(id, { id, name: c.last_message_by || 'Former user', email: '', roleName: '', isAdmin: false });
+      }
+      return id;
+    }
     const by = c.last_message_by;
     if (!by) return 'system';
     if (by === currentUser?.name) return meId;

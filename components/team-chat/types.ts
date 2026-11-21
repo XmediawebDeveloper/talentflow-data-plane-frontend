@@ -43,6 +43,8 @@ export interface Message {
   reactions: Reaction[];
   attachments?: Attachment[];
   replyToId?: string;
+  /** Server-side quote of the replied-to message, used when it isn't among the loaded messages. */
+  replyQuote?: { authorId?: string; authorName: string; text: string };
   editedAt?: number;
   forwardedFrom?: string;
   pinned?: boolean;
