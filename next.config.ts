@@ -112,6 +112,9 @@ const nextConfig: NextConfig = {
          lives in the (auth) route group, i.e. at /handoff. The #fragment with
          the tokens stays in the browser across the redirect. */
       { source: '/auth/handoff', destination: '/handoff', permanent: false },
+      /* Subscription/unit notifications created before the backend fix stored
+         action_url=/organization/subscription, which has no page. */
+      { source: '/organization/subscription', destination: '/subscription/current-plan', permanent: false },
     ];
   },
 
