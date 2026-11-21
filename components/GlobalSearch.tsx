@@ -32,7 +32,7 @@ interface GlobalSearchProps {
    when the number is in an ID the app shows (the Job ID) or in the name. */
 const ID_QUERY = /^[a-z]{0,4}[-\s]?\d+$/i;
 /** Phone-style input: digits with spaces, +, -, dots or brackets
- *  ("98765 43210", "+91 98765-43210"). Résumés are never found by phone. */
+ *  ("98765 43210", "+91 98765-43210"). */
 const PHONE_QUERY = /^[\d\s+().-]+$/;
 /** Rows a category shows at first, and how many each "Load more" adds. */
 const SHOW_STEP = 10;
@@ -59,6 +59,41 @@ function idMatches(id: string | null | undefined, query: string): boolean {
 function textMatches(fields: (string | null | undefined)[], query: string): boolean {
   const q = query.trim().toLowerCase();
   return fields.some((f) => !!f && f.toLowerCase().includes(q));
+}
+
+/**
+ * Finds the query's digits inside the phone number's digits and returns the
+ * [start, end) character range in the original (possibly formatted) string,
+ * so spaces/dashes/+ inside the match are highlighted but nothing outside it.
+ */
+function phoneMatchRange(phone: string, query: string): [number, number] | null {
+  const q = query.replace(/\D/g, '');
+  if (!q) return null;
+  const digitPos: number[] = [];
+  let digits = '';
+  for (let i = 0; i < phone.length; i++) {
+    if (/\d/.test(phone[i])) {
+      digitPos.push(i);
+      digits += phone[i];
+    }
+  }
+  const idx = digits.indexOf(q);
+  if (idx === -1) return null;
+  return [digitPos[idx], digitPos[idx + q.length - 1] + 1];
+}
+
+/** The phone number with only the matching digits highlighted. */
+function renderPhone(phone: string, query: string): ReactNode {
+  const range = phoneMatchRange(phone, query);
+  if (!range) return phone;
+  const [start, end] = range;
+  return (
+    <>
+      {phone.slice(0, start)}
+      <mark className="rounded-sm bg-brand-blue/10 font-semibold text-inherit dark:bg-brand-blue/30">{phone.slice(start, end)}</mark>
+      {phone.slice(end)}
+    </>
+  );
 }
 
 /** True for a number / ID-style or phone-style query. */
@@ -224,10 +259,10 @@ const FETCHERS = {
     const q = search.trim();
     const { idQuery, phoneQuery } = classifyQuery(q);
     const res = await resumeService.list({ search, page, page_size: idQuery || phoneQuery ? FILTERED_PAGE_SIZE : SHOW_STEP });
-    // No search by phone number: for a number / phone-style query a résumé
-    // must match by name or email (résumés have no ID in the app).
+    // For a number / phone-style query a résumé must match by name, email or
+    // the phone number (shown, with the matching digits highlighted).
     const items = idQuery || phoneQuery
-      ? res.items.filter((r) => textMatches([r.candidate_name, r.candidate_email, r.email], q))
+      ? res.items.filter((r) => textMatches([r.candidate_name, r.candidate_email, r.email], q) || (!!r.phone && !!phoneMatchRange(r.phone, q)))
       : res.items;
     return { items, totalPages: res.total_pages ?? 1, total: idQuery || phoneQuery ? null : res.total ?? null };
   },
@@ -281,6 +316,8 @@ interface ResultItem {
   leadId?: string;
   /** Shown right after the title as "Name - email" (résumé rows). */
   titleNote?: string;
+  /** Replaces the highlighted title (résumé rows matched by phone number). */
+  titleNode?: ReactNode;
   extra?: ReactNode;
   meta: string;
   /** Why the row matched, when the match is in a field the row doesn't show
@@ -898,7 +935,7 @@ export default function GlobalSearch({ className, variant = 'bar' }: GlobalSearc
                       {item.leadId && (
                         <JobIdBadge className="flex-shrink-0 !px-1.5 !py-px !text-2xs"><Highlight text={item.leadId} query={trimmed} /></JobIdBadge>
                       )}
-                      <span className={`tf-row-name !text-[0.8125rem] max-sm:!text-[12px] truncate ${item.titleNote ? 'shrink-0 max-w-[60%]' : ''}`}><Highlight text={item.title} query={trimmed} /></span>
+                      <span className={`tf-row-name !text-[0.8125rem] max-sm:!text-[12px] truncate ${item.titleNote ? 'shrink-0 max-w-[60%]' : ''}`}>{item.titleNode ?? <Highlight text={item.title} query={trimmed} />}</span>
                       {item.titleNote && (
                         // Both can shorten: the name keeps at least its share,
                         // the email takes the rest and ends in "…".
