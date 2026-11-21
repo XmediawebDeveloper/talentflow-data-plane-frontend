@@ -9,6 +9,8 @@ import { Folder as FolderType, Resume } from '@/lib/types/types';
 import { toast } from 'sonner';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { SidebarNoFoldersState } from '@/components/resumes/ResumeEmptyStates';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Folder-actions (⋮) menu item styling — same neutral hover-changes-only-the-
 // background convention as every other ⋮ menu in the app (ResumeTable,
@@ -146,7 +148,7 @@ function DroppableFolderItem({
   const isDropTarget = isOver && canDrop;
 
   return (
-    <div
+    <div {...clickableProps}
       ref={drop as unknown as React.Ref<HTMLDivElement>}
       // `relative` so the row paints over the tree guide lines behind it — both
       // are positioned, so DOM order wins and the elbow passes under the icon
@@ -162,7 +164,7 @@ function DroppableFolderItem({
       onClick={() => onSelectFolder(folder.id)}
     >
       {hasChildren && (
-        <span
+        <span {...clickableProps}
           onClick={(e) => {
             e.stopPropagation();
             onToggleFolder(folder.id);
@@ -203,7 +205,7 @@ function DroppableFolderItem({
         && folder.id !== 'all'
         && !(folder.name.toLowerCase() === 'root' && !folder.parentId)
         && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
-        <button
+        <IconButton bare label="Folder actions"
           type="button"
           onClick={(e) => {
             e.preventDefault();
@@ -218,13 +220,12 @@ function DroppableFolderItem({
           className={`flex-shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 rounded hover:bg-blue-100 text-blue-600 transition-opacity ${
             hasMenu ? 'lg:opacity-100 bg-blue-100' : ''
           }`}
-          aria-label="Folder actions" title="Folder actions"
           aria-haspopup="menu"
           aria-expanded={hasMenu}
           data-folder-menu-trigger={folder.id}
         >
           <MoreVertical className="w-4 h-4" />
-        </button>
+        </IconButton>
       )}
       {children}
     </div>
@@ -371,6 +372,36 @@ export default function FolderTree({
     window.addEventListener('resize', measure);
     return () => {
       ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+
+  /* Phones / small tablets (below md, where the tree is a band above the
+     list): My Folders shows SIX folder rows by default and scrolls the rest.
+     Measured from the rendered rows (expanded subfolders count as rows), so
+     it stays exact when a name or the zoom changes the row height. From md
+     the list takes the panel's height instead, so the cap is removed. */
+  useEffect(() => {
+    const list = folderListRef.current;
+    if (!list) return;
+    const VISIBLE_FOLDER_ROWS = 6;
+    const measure = () => {
+      const rows = list.querySelectorAll<HTMLElement>('[data-folder-row]');
+      if (window.innerWidth >= 768 || rows.length <= VISIBLE_FOLDER_ROWS) {
+        list.style.removeProperty('max-height');
+        return;
+      }
+      const last = rows[VISIBLE_FOLDER_ROWS - 1].getBoundingClientRect();
+      const top = list.getBoundingClientRect().top;
+      const cap = `${Math.ceil(last.bottom - top + list.scrollTop)}px`;
+      if (list.style.maxHeight !== cap) list.style.maxHeight = cap;
+    };
+    measure();
+    const mo = new MutationObserver(measure);
+    mo.observe(list, { childList: true, subtree: true });
+    window.addEventListener('resize', measure);
+    return () => {
       mo.disconnect();
       window.removeEventListener('resize', measure);
     };
@@ -663,7 +694,7 @@ export default function FolderTree({
       <div key={folder.id} className="relative">
         {/* Row-level wrapper: the guides span this row only, never the
             children rendered below it. */}
-        <div className="relative">
+        <div className="relative" data-folder-row>
           {level > 0 && (
             <>
               {/* Ancestor trunks passing this row on their way further down. */}

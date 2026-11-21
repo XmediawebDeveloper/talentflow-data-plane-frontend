@@ -55,6 +55,7 @@ export const inviteStateOf = (j: TrackedBulkInvite): { label: string; tone: 'run
 export default function BulkInviteProgressIndicator() {
   const {
     jobs, inPopupIds, openResultsFor, openResultsTab, openResultsBack, setOpenResultsFor, widget, setWidget, setIconShown,
+    serverSyncedFor,
   } = useBulkInviteProgress();
 
   // Sends in the background: not removed, and not shown in their own popup.
@@ -66,11 +67,21 @@ export default function BulkInviteProgressIndicator() {
      (25 sends finishing together are one toast, not 25). Not while the
      dock's list is open: it shows them already. */
   const lastStatus = useRef<Record<string, string>>({});
+  /* Nothing is compared until the first server read is in (`serverSyncedFor`):
+     the copy saved in this browser may say "running" for a send that finished
+     meanwhile — here or on another device — and that is not a finish this
+     browser watched. The first server state is the baseline. */
+  const baselineFor = useRef<string | null>(null);
   const pending = useRef<string[]>([]);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef({ shown, widget });
   useEffect(() => { latest.current = { shown, widget }; });
   useEffect(() => {
+    if (!serverSyncedFor) return;
+    if (baselineFor.current !== serverSyncedFor) {
+      baselineFor.current = serverSyncedFor;
+      lastStatus.current = {};
+    }
     for (const j of shown) {
       const before = lastStatus.current[j.job_id];
       lastStatus.current[j.job_id] = j.status;
@@ -123,7 +134,7 @@ export default function BulkInviteProgressIndicator() {
         });
       }
     }, TOAST_BATCH_MS);
-  }, [shown, setOpenResultsFor, setWidget]);
+  }, [shown, setOpenResultsFor, setWidget, serverSyncedFor]);
   useEffect(() => () => { if (flushTimer.current) clearTimeout(flushTimer.current); }, []);
 
   /* The corner belongs to the dock now. */

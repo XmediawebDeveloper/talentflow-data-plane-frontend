@@ -28,6 +28,7 @@ import {
 } from '@/lib/utils/jobOpeningDisplay';
 import { jdService, type JDLineageVersion, type JobOpeningsFilters, type JobOpeningsStats, type JobOpeningsTab } from '@/lib/services/jdService';
 import { usePagedList } from '@/lib/hooks/usePagedList';
+import { cachedList, listCacheKey, LIST_CACHE_TTL_MS } from '@/lib/utils/listCache';
 import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
@@ -71,6 +72,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** The fields the job list sorts by — one list for the Sort control and the phone Sort menu. */
 const JOB_SORT_OPTIONS: { value: JobSortBy; label: string }[] = [
@@ -322,6 +326,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
       datePostedTo: '',
       createdBy: 'all',
       workMode: 'all',
+      version: 'all',
     },
     countFilters: (f) =>
       [
@@ -338,6 +343,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
         f.datePostedTo !== '',
         f.createdBy !== 'all',
         f.workMode !== 'all',
+        f.version !== 'all',
       ].filter(Boolean).length,
   });
   const searchQuery = search.appliedQuery;
@@ -355,6 +361,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     datePostedTo: datePostedToFilter,
     createdBy: createdByFilter,
     workMode: workModeFilter,
+    version: versionFilter,
   } = search.filters;
 
   // All / AI Generated / Manual: one white chip that slides to the active
@@ -489,7 +496,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     {
       searchQuery, statusFilter, creationMethodFilter, locationFilter,
       departmentFilter, industryFilter, experienceFilter, employmentTypeFilter,
-      applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter,
+      applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter, versionFilter,
       sortBy, sortOrder, currentPage, itemsPerPage, pageView,
     },
     (s) => {
@@ -529,6 +536,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
         datePostedTo: typeof s.datePostedToFilter === 'string' ? s.datePostedToFilter : '',
         createdBy: typeof s.createdByFilter === 'string' ? s.createdByFilter : 'all',
         workMode: typeof s.workModeFilter === 'string' ? s.workModeFilter : 'all',
+        version: typeof s.versionFilter === 'string' ? s.versionFilter : 'all',
       });
       if (typeof s.sortBy === 'string') setSortBy(s.sortBy as JobSortBy);
       if (s.sortOrder === 'asc' || s.sortOrder === 'desc') setSortOrder(s.sortOrder);
@@ -559,7 +567,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     applicants: applicantsFilter,
     date_from: datePostedFromFilter || undefined,
     date_to: datePostedToFilter || undefined,
-  }), [searchQuery, creationMethodFilter, locationFilter, departmentFilter, industryFilter, employmentTypeFilter, workModeFilter, createdByFilter, experienceFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter]);
+    version: versionFilter,
+  }), [searchQuery, creationMethodFilter, locationFilter, departmentFilter, industryFilter, employmentTypeFilter, workModeFilter, createdByFilter, experienceFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, versionFilter]);
   const hasCriteria = Object.values(serverFilters).some((v) => v !== undefined && v !== null && v !== '' && v !== 'all');
   const listQuery = useMemo(() => ({
     ...serverFilters,
@@ -590,15 +599,31 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
         total: res.total ?? 0,
       };
     },
-    // Each card is a tab, so the tab is not a stats filter.
-    fetchStats: (f) => {
-      const { status_tab: _tab, ...filters } = f as typeof f & { status_tab?: string };
-      void _tab;
-      return jdService.getJobStats(filters as JobOpeningsFilters);
-    },
+    // Each card is a tab, so the tab is not a stats filter: switching tabs
+    // re-reads the list only (it used to re-ask /jd/stats with the same filters).
+    statsIgnore: ['status_tab'],
+    fetchStats: (f) => jdService.getJobStats(f as JobOpeningsFilters),
   });
   refreshListRef.current = paged.refresh;
   const serverStats = paged.stats;
+
+  /* The four overview cards are the tenant's standing totals: they never move
+     with search, the dropdowns, More Filters, AI / Manual or the status tab.
+     So they read GET /jd/stats with NO filters, apart from `serverStats` above
+     (which follows the filters, for the tab badges). Re-read whenever the
+     filtered stats are (`serverStats` is a new object after every read); the
+     list cache answers it unless a write has cleared it, so changing a filter
+     costs no extra request, and a publish / archive / delete still updates the
+     cards. The last totals stay on screen while a re-read is in flight. */
+  const [cardStats, setCardStats] = useState<JobOpeningsStats | null>(null);
+  useEffect(() => {
+    if (!listStateRestored) return;
+    let cancelled = false;
+    cachedList(listCacheKey('job-openings:card-stats'), () => jdService.getJobStats({}), { ttlMs: LIST_CACHE_TTL_MS })
+      .then((s) => { if (!cancelled) setCardStats(s); })
+      .catch((err) => { if (!cancelled) console.warn('[JobsListing] card stats failed', err); });
+    return () => { cancelled = true; };
+  }, [listStateRestored, serverStats]);
 
   useEffect(() => {
     if (paged.error) showErrorToast(paged.error, "Couldn't load job openings", { id: 'jobs-list-load', retry: () => refreshListRef.current?.() });
@@ -1050,12 +1075,11 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   const uniqueCreators = serverStats?.facets?.creators ?? [];
   const uniqueWorkModes = serverStats?.facets?.work_modes ?? [];
 
-  /* Each status card IS its tab — clicking it opens that tab — so its number
-     is exactly the row count that tab lists for the current search/filters
-     (GET /jd/stats builds it from the same server-side filter as the list).
-     The versions pill counts the versions that HAVE the card's status.
-     With no search/filter these are the same numbers the page showed when it
-     computed them from every JD version in the browser. */
+  /* The tab badges follow the current search/filters (GET /jd/stats builds
+     them from the same server-side filter as the list), so a badge is the row
+     count its tab lists. The four cards above do NOT: they are the unfiltered
+     totals (`cardStats`), and their versions pill counts the versions that
+     HAVE the card's status. */
   const statusPillCount = (pill: string): number | null =>
     serverStats ? serverStats.jobs?.[pill.toLowerCase() as JobOpeningsTab] ?? 0 : null;
   const methodPillCount = (method: 'ai' | 'manual' | null): number | null => {
@@ -1071,20 +1095,20 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     </span>
   );
   const stats = {
-    total: serverStats?.total ?? 0,
-    published: serverStats?.published ?? 0,
-    draft: serverStats?.draft ?? 0,
-    archived: serverStats?.archived ?? 0,
-    totalVersions: serverStats?.versions?.all ?? 0,
-    publishedVersions: serverStats?.versions?.published ?? 0,
-    draftVersions: serverStats?.versions?.draft ?? 0,
-    archivedVersions: serverStats?.versions?.archived ?? 0,
+    total: cardStats?.total ?? 0,
+    published: cardStats?.published ?? 0,
+    draft: cardStats?.draft ?? 0,
+    archived: cardStats?.archived ?? 0,
+    totalVersions: cardStats?.versions?.all ?? 0,
+    publishedVersions: cardStats?.versions?.published ?? 0,
+    draftVersions: cardStats?.versions?.draft ?? 0,
+    archivedVersions: cardStats?.versions?.archived ?? 0,
   };
 
   /* The stat cards show a placeholder until the counts land — never a
    * partial tally that would then jump. */
-  const statValue = (count: number) => (serverStats ? count : <StatValuePlaceholder />);
-  const statVersions = (count: number) => (serverStats ? <StatVersions count={count} /> : <StatVersionsPlaceholder />);
+  const statValue = (count: number) => (cardStats ? count : <StatValuePlaceholder />);
+  const statVersions = (count: number) => (cardStats ? <StatVersions count={count} /> : <StatVersionsPlaceholder />);
 
   const activeFiltersCount = search.activeFilterCount;
   const filtersActive = search.filtersApplied;
@@ -1126,6 +1150,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     experienceFilter !== 'all' && { key: 'experience', label: 'Experience', value: EXPERIENCE_LABELS[experienceFilter] ?? String(experienceFilter), onRemove: () => search.setFilter('experience', 'all') },
     datePostedFromFilter !== '' && { key: 'datePostedFrom', label: 'Posted From', value: formatChipDate(datePostedFromFilter), onRemove: () => search.setFilter('datePostedFrom', '') },
     datePostedToFilter !== '' && { key: 'datePostedTo', label: 'Posted To', value: formatChipDate(datePostedToFilter), onRemove: () => search.setFilter('datePostedTo', '') },
+    versionFilter !== 'all' && { key: 'version', label: 'Version', value: `v${versionFilter}`, onRemove: () => search.setFilter('version', 'all') },
     // No control on this page sets these, but a restored saved view can — and they count.
     departmentFilter !== 'all' && { key: 'department', label: 'Department', value: String(departmentFilter), onRemove: () => search.setFilter('department', 'all') },
     applicantsFilter !== 'all' && { key: 'applicants', label: 'Applicants', value: String(applicantsFilter), onRemove: () => search.setFilter('applicants', 'all') },
@@ -1241,7 +1266,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
           <Tooltip content={reason} position="left">
             <span
               aria-label={reason}
-              className="flex w-5 h-5 items-center justify-center rounded-full text-gray-400 hover:text-brand-blue cursor-help"
+              className="flex w-5 h-5 items-center justify-center rounded-full text-gray-500 hover:text-brand-blue cursor-help"
             >
               <Info className="w-3.5 h-3.5" aria-hidden="true" />
             </span>
@@ -1258,7 +1283,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   useEffect(() => {
     if (skipPageResetRef.current) { skipPageResetRef.current = false; return; }
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter, sortBy, sortOrder]);
+  }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter, versionFilter, sortBy, sortOrder]);
 
   // Keep the current page in range when the list shrinks (e.g. after deleting the
   // jobs on the last page), so the view never gets stuck on an empty page past
@@ -1459,9 +1484,10 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
             activeFilterCount={activeFiltersCount}
             filtersApplied={filtersActive}
             onClearFilters={clearAllFilters}
-            // Sort by sits right after More Filters, in the search row.
+            // Sort by sits after More Filters (and its Reset), in the search row.
+            // Always shown — an empty or filtered-to-nothing list keeps it.
             afterFiltersActions={
-            totalMatching > 0 ? (
+            (
               <div className="tf-jobs-sort flex items-center gap-2">
                 <span className="tf-body">Sort by</span>
                 {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
@@ -1478,20 +1504,19 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     className="w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700"
                     options={JOB_SORT_OPTIONS}
                   />
-                  <button
+                  <IconButton bare label={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
                     }}
                     className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
-                    title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                   >
                     <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
-            ) : null
+            )
             }
           />
 
@@ -1553,6 +1578,18 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     placeholder="All Levels"
                     searchPlaceholder="Search level..."
                     ariaLabel="Filter by experience level"
+                  />
+                </div>
+                <div>
+                  <label className="block tf-label mb-1.5">Version</label>
+                  <SearchableSelect
+                    value={versionFilter === 'all' ? '' : versionFilter}
+                    onChange={(v) => search.setFilter('version', v || 'all')}
+                    options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `v${n}` }))}
+                    allLabel="All Versions"
+                    placeholder="All Versions"
+                    searchPlaceholder="Search version..."
+                    ariaLabel="Filter by JD version"
                   />
                 </div>
                 <div>
@@ -1914,7 +1951,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
 
             {/* Phones: one "Sort" button that opens a menu — the fields, then the order
                 (worded for the field). From sm the inline Sort control above is used. */}
-            {pageRows.length > 0 && (
+            {/* Always shown, an empty list included. */}
+            {(
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -1924,7 +1962,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                   >
                     <ArrowUpDown className="w-4 h-4 text-brand-blue" />
                     Sort
-                    <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-slate-900">
@@ -2033,7 +2071,13 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     {onEditJob && job.status !== 'Archived' && job.status !== 'Disabled' && (() => {
                       const atMaxVersions = (job.versionNumber ?? 1) >= 5;
                       return (
-                        <Button
+                        <IconButton label="Edit" tooltip={
+                            atMaxVersions
+                              ? 'Maximum of 5 versions reached'
+                              : !canUpdateJd
+                                ? 'You do not have permission to edit job descriptions'
+                                : 'Edit'
+                          }
                           variant="secondary"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -2049,49 +2093,38 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                           }}
                           aria-disabled={!canUpdateJd || atMaxVersions}
                           className={`!h-7 !w-7 !p-0 rounded-md ${!canUpdateJd || atMaxVersions ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          aria-label="Edit"
-                          title={
-                            atMaxVersions
-                              ? 'Maximum of 5 versions reached'
-                              : !canUpdateJd
-                                ? 'You do not have permission to edit job descriptions'
-                                : 'Edit'
-                          }
                         >
                           <Edit className="w-3.5 h-3.5" />
-                        </Button>
+                        </IconButton>
                       );
                     })()}
 
                     {/* View Button - icon only. Shown on every row for a
                         consistent action set. */}
-                    <Button
+                    <IconButton label="View" tooltip={draftLocked ? 'You do not have permission to edit draft job descriptions' : 'View'}
                       variant="secondary"
                       onClick={(e) => { e.stopPropagation(); if (!draftLocked) onViewJob(job); }}
                       aria-disabled={draftLocked || undefined}
                       className={`!h-7 !w-7 !p-0 rounded-md ${draftLocked ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
-                      aria-label="View" title={draftLocked ? 'You do not have permission to edit draft job descriptions' : 'View'}
                     >
                       <Eye className="w-3.5 h-3.5" />
-                    </Button>
+                    </IconButton>
 
                     {/* Three-dot Menu */}
                     <div className="relative">
                       {/* Same Button (secondary, h-9 w-9) as Edit and View, so
                           all three row actions share one border, background,
                           icon color, hover state and shape. */}
-                      <Button
+                      <IconButton label="More actions"
                         variant="secondary"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveDropdown(activeDropdown === job.id ? null : job.id);
                         }}
                         className="!h-7 !w-7 !p-0 rounded-md"
-                        aria-label="More actions"
-                        title="More actions"
                       >
                         <MoreVertical className="w-3.5 h-3.5" />
-                      </Button>
+                      </IconButton>
                       {activeDropdown === job.id && (
                         <div ref={centerMenuOnPhoneRef} className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
                           {/* View Applicants - Hide for Draft */}
@@ -2282,7 +2315,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 );
 
                 return (
-                  <div
+                  <div {...clickableProps}
                     key={job.id}
                     aria-disabled={draftLocked || undefined}
                     title={draftLocked ? 'You do not have permission to edit draft job descriptions' : undefined}
@@ -2298,13 +2331,19 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                         ID / Job Name line; the footer wraps under at full width. */}
                     {/* ── Phones (below md): the JD card ─────────────────────
                         Dense flow, no column gaps:
-                        1. checkbox · JD ID · source · status
-                        2. job name (one line, "…") · version · Edit / View / ⋮ on the right
+                        1. JD ID · source · status · version (the version chip is also the
+                           version-history dropdown); wraps on very narrow phones
+                        2. checkbox · job name (one line, "…" when long)
                         3. experience · industry · type · work mode (flowing)
                         4. Created | Posted / By | Last Updated — two aligned columns
-                        5. divider, then Scored / Assessed / Interviewed — three tiles */}
+                        Lines 1–4 are the left column; Edit / View / ⋮ stand in a
+                        vertical stack in the card's top-right corner beside them.
+                        5. divider, then Scored / Assessed / Interviewed — three tiles,
+                           full width under both columns */}
                     <div className="md:hidden">
-                      <div className="tf-jd-card-top">
+                      <div className="flex items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                      <div className="tf-jd-card-top flex-wrap gap-y-1.5">
                         {job.job_id && <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.job_id}>{job.job_id}</JobIdBadge>}
                         {(() => {
                           const method = getCreationMethodConfig(job.creation_method);
@@ -2323,47 +2362,45 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                             </>
                           );
                         })()}
+                        {job.versionNumber && job.versionNumber >= 1 ? (
+                          hasVersionHistory ? (
+                            /* Version dropdown: opens / closes this job's version history.
+                               A pill like the badges beside it (same height and shape). */
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleVersions(versionKey, job.id); }}
+                              aria-expanded={versionsExpanded}
+                              title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                              className={`tf-jd-card-version tf-jd-card-version-btn !h-5 !rounded-full ${versionsExpanded ? 'tf-jd-card-version-open' : ''}`}
+                            >
+                              <span className="tf-jd-card-dot bg-gray-400" />
+                              v{job.versionNumber}
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+                          ) : (
+                            <span className="tf-jd-card-version !h-5 !rounded-full">
+                              <span className="tf-jd-card-dot bg-gray-400" />
+                              v{job.versionNumber}
+                            </span>
+                          )
+                        ) : null}
                       </div>
 
                       <div className="tf-jd-card-head">
                         <div className="tf-jd-card-name">
                           {/* Checkbox beside the name (same as every module's JD-style card). */}
                           <div className="tf-jdv-name-line">
-                            <button
+                            <IconButton bare label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
                               onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
-                              title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
-                              aria-label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
                               className="tf-jdv-select"
                             >
                               {selectedJobs.has(job.id)
                                 ? <CheckSquare className="w-5 h-5 text-brand-blue" />
-                                : <Square className="w-5 h-5 text-gray-400 hover:text-brand-blue" />}
-                            </button>
-                            <h3 className="tf-jd-card-title" title={job.title}>{job.title}</h3>
+                                : <Square className="w-5 h-5 text-gray-500 hover:text-brand-blue" />}
+                            </IconButton>
+                            <h3 className="tf-jd-card-title truncate" title={job.title}>{job.title}</h3>
                           </div>
-                          {job.versionNumber && job.versionNumber >= 1 ? (
-                            hasVersionHistory ? (
-                              /* Version dropdown: opens / closes this job's version history. */
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); toggleVersions(versionKey, job.id); }}
-                                aria-expanded={versionsExpanded}
-                                title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                                className={`tf-jd-card-version tf-jd-card-version-btn ${versionsExpanded ? 'tf-jd-card-version-open' : ''}`}
-                              >
-                                <span className="tf-jd-card-dot bg-gray-400" />
-                                v{job.versionNumber}
-                                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                              </button>
-                            ) : (
-                              <span className="tf-jd-card-version">
-                                <span className="tf-jd-card-dot bg-gray-400" />
-                                v{job.versionNumber}
-                              </span>
-                            )
-                          ) : null}
                         </div>
-                        <div className="tf-jd-card-actions">{rowActions}</div>
                       </div>
 
                       <div className="tf-jd-card-meta">
@@ -2371,6 +2408,10 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                           <JobOpeningPrimaryItems job={job} hideEmpty breakBeforeType />
                         </div>
                         <JobOpeningDatesGrid job={job} />
+                      </div>
+                      </div>
+                      {/* Edit / View / ⋮ — stacked in the top-right corner. */}
+                      <div className="tf-jd-card-actions [&>div]:!ml-0 [&>div]:!flex-col [&>div]:!gap-1.5">{rowActions}</div>
                       </div>
 
                       {hasCountBadges && (
@@ -2410,15 +2451,14 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                           centers on the same line as the JD-ID / Role / Versions
                           badges instead of sitting a few px higher. */}
                       <div className="flex items-center flex-shrink-0 h-5 sm:h-6">
-                        <button
+                        <IconButton bare label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
                           onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
-                          title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
                         >
                           {selectedJobs.has(job.id)
                             ? <CheckSquare className="w-4 h-4 text-brand-blue" />
-                            : <Square className="w-4 h-4 text-gray-400 hover:text-brand-blue" />
+                            : <Square className="w-4 h-4 text-gray-500 hover:text-brand-blue" />
                           }
-                        </button>
+                        </IconButton>
                       </div>
 
                       {/* Job Info — the shared job-opening summary, so the
@@ -2571,13 +2611,11 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                           renderAction={(versionJob) => (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button
+                                <IconButton bare label="More actions"
                                   className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
-                                  title="More actions"
-                                  aria-label="More actions"
                                 >
                                   <MoreVertical className="w-4 h-4" />
-                                </button>
+                                </IconButton>
                               </DropdownMenuTrigger>
                               {/* Same action options, gates and handlers as the
                                   latest-version row's ⋮ menu, except View
@@ -2831,14 +2869,13 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 </div>
 
                 {/* Previous Button */}
-                <button
+                <IconButton bare label="Previous page"
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
                   className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                  aria-label="Previous page" title="Previous page"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
+                </IconButton>
 
                 {/* Current / total */}
                 <span className="tf-label px-1 whitespace-nowrap">
@@ -2846,14 +2883,13 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 </span>
 
                 {/* Next Button */}
-                <button
+                <IconButton bare label="Next page"
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
                   className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                  aria-label="Next page" title="Next page"
                 >
                   <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
+                </IconButton>
               </div>
             </div>
           </div>
@@ -2910,18 +2946,17 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
 
       {/* Quota Exceeded Modal */}
       {showQuotaModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <ModalA11y><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-2rem)] flex flex-col">
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h3 className="tf-section-title sm:text-lg tracking-tight">Insufficient Units</h3>
-              <button
+              <IconButton bare label="Close"
                 onClick={() => setShowQuotaModal(false)}
-                className="text-gray-400 hover:text-gray-600 p-1"
-                aria-label="Close"
+                className="text-gray-500 hover:text-gray-600 p-1"
               >
                 <X className="w-5 h-5 text-gray-500" />
-              </button>
+              </IconButton>
             </div>
 
             {/* Body */}
@@ -2950,7 +2985,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       <ExportFormatModal

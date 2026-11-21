@@ -1,4 +1,6 @@
 import { X, AlertCircle, FileX } from 'lucide-react';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ErrorModalProps {
   isOpen: boolean;
@@ -16,7 +18,7 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
       <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-4 sm:p-5 border-b border-red-200 bg-gradient-to-r from-red-50 to-rose-50 rounded-t-xl">
@@ -35,12 +37,11 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
               )}
             </div>
           </div>
-          <button
+          <IconButton bare label="Close"
             onClick={onClose}
-            className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 rounded-md hover:bg-white/50 flex-shrink-0"
-           aria-label="Close">
+            className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 rounded-md hover:bg-white/50 flex-shrink-0">
             <X className="w-5 h-5" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Body */}
@@ -82,6 +83,6 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
         </div>
 
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

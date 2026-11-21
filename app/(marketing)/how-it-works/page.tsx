@@ -132,7 +132,7 @@ export default function HowItWorksPage() {
             >
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.28),transparent)] sm:h-[28rem] sm:w-[28rem]"
+                className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p28),transparent)] sm:h-[28rem] sm:w-[28rem]"
               />
               <div className="relative max-w-2xl">
                 <h2 className={`${DISPLAY} text-[clamp(1.5rem,3.8vw,2.75rem)] font-bold leading-[1.08] tracking-[-0.035em] text-balance`}>

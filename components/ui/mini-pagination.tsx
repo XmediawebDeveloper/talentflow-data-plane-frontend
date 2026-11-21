@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from './utils';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * Compact pager — `‹ 1 2 3 ›` — showing at most three page numbers
@@ -88,15 +89,14 @@ export function MiniPagination({
 
   return (
     <nav aria-label={ariaLabel} className={cn('inline-flex items-center gap-1 select-none', className)}>
-      <button
+      <IconButton bare label="Previous page"
         type="button"
         onClick={() => go(current - 1)}
         disabled={current <= 1}
-        aria-label="Previous page"
         className={arrowClass}
       >
         <ChevronLeft className="h-4 w-4" />
-      </button>
+      </IconButton>
 
       {showEnds ? (
         <div className="flex items-center">
@@ -172,15 +172,14 @@ export function MiniPagination({
       </>
       )}
 
-      <button
+      <IconButton bare label="Next page"
         type="button"
         onClick={() => go(current + 1)}
         disabled={current >= total}
-        aria-label="Next page"
         className={arrowClass}
       >
         <ChevronRight className="h-4 w-4" />
-      </button>
+      </IconButton>
     </nav>
   );
 }

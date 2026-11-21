@@ -192,7 +192,7 @@ export function usePermissionChangeDialog() {
                 return (
                   <div key={g.heading} className="space-y-2.5">
                     <p className="tf-eyebrow tracking-wide">
-                      {g.heading} <span className="text-gray-400 dark:text-slate-600">· {g.codes.length}</span>
+                      {g.heading} <span className="text-gray-500 dark:text-slate-600">· {g.codes.length}</span>
                     </p>
                     {Array.from(bySection.entries()).map(([section, codes]) => (
                       <div key={section}>

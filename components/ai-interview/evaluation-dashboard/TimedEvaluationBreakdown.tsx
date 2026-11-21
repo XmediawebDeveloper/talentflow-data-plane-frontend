@@ -290,7 +290,7 @@ function QuestionTable({
                   <td className="tf-td text-right">{s.weight}</td>
                   <td className="tf-td text-right">
                     <span className="inline-flex items-center gap-1">
-                      <span className={s.is_skipped ? 'text-gray-400' : ''}>{formatSkillScore(s.score)}</span>
+                      <span className={s.is_skipped ? 'text-gray-500' : ''}>{formatSkillScore(s.score)}</span>
                       {s.is_skipped ? (
                         <span
                           className="inline-flex items-center px-1 py-0 rounded text-2xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"
@@ -343,7 +343,7 @@ function QuestionTable({
                     <span>Priority: {s.priority ?? '—'}</span>
                     <span>Weight: {s.weight}</span>
                     <span className="inline-flex items-center gap-1">
-                      Score: <span className={s.is_skipped ? 'text-gray-400' : ''}>{formatSkillScore(s.score)}</span>
+                      Score: <span className={s.is_skipped ? 'text-gray-500' : ''}>{formatSkillScore(s.score)}</span>
                       {s.is_skipped ? (
                         <span
                           className="inline-flex items-center px-1 py-0 rounded text-2xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"

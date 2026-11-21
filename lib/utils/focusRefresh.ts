@@ -6,8 +6,9 @@
  * fires it twice — on staging that was four ~0.6 s round trips at 0 s, 3.8 s,
  * 31 s, 46 s for nothing. Each fetch stamps its key (`markRefreshed`); a
  * visibility handler then asks `focusRefreshDue` and skips while the last read
- * is younger than the window. Explicit refreshes (WebSocket pushes, after a
- * write, the 5-minute fallback polls) never consult this.
+ * is younger than the window. The 5-minute fallback polls consult it too (a
+ * poll landing just after a focus re-check read the same thing twice).
+ * Explicit refreshes (WebSocket pushes, after a write) never consult this.
  *
  * Memory only: a hard reload starts fresh, which is right — the page's own
  * first load reads everything anyway.

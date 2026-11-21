@@ -9,6 +9,7 @@ import { gsap, useGSAP, withMotion } from "@/lib/gsap";
 import { Cta } from "./Cta";
 import { DASHBOARD_HREF, useSignedIn } from "./session";
 import { display, DISPLAY } from "./fonts";
+import { IconButton } from '@/components/ui/icon-button';
 
 const TRIAL_LINK = `https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`;
 
@@ -182,20 +183,17 @@ export function SiteHeader() {
   if (isOrgLogin) return null;
 
   const themeButton = (
-    <button
+    <IconButton bare label={!mounted ? "Toggle theme" : resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
       type="button"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       className="grid h-9 w-9 place-items-center rounded-full text-slate-500 transition-colors hover:bg-slate-900/5 hover:text-mkt-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid dark:text-slate-400 dark:hover:bg-white/10"
-      // Theme is only known in the browser; until mounted, render the same
-      // neutral label the server did so hydration matches (like the icon below).
-      aria-label={!mounted ? "Toggle theme" : resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
     >
       {mounted ? (
         resolvedTheme === "dark" ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />
       ) : (
         <span className="h-[18px] w-[18px]" />
       )}
-    </button>
+    </IconButton>
   );
 
   return (
@@ -274,16 +272,15 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-1 lg:hidden">
           {themeButton}
-          <button
+          <IconButton bare label={menuOpen ? "Close menu" : "Open menu"}
             type="button"
             className="grid h-10 w-10 place-items-center rounded-full text-mkt-ink transition-colors hover:bg-slate-900/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid dark:hover:bg-white/10"
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
             aria-controls="site-menu"
             onClick={() => setMenuOpen((open) => !open)}
           >
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          </IconButton>
         </div>
       </div>
 

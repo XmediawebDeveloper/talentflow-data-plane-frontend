@@ -27,6 +27,7 @@ import { formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { getStatusVariant, getStatusLabel } from './AIInterviewResults';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * A read-only rendering of AIInterviewPreview.tsx's "Review & Publish" (step
@@ -100,15 +101,14 @@ function SectionCard({
         </div>
         <h3 className="tf-row-title tracking-tight">{title}</h3>
         {badge}
-        <button
+        <IconButton bare label={open ? `Hide ${title}` : `Show ${title}`}
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
-          title={open ? `Hide ${title}` : `Show ${title}`}
-          className="ml-auto flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors flex-shrink-0"
+          className="ml-auto flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors flex-shrink-0"
         >
           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-        </button>
+        </IconButton>
       </div>
       {open && <div className="p-4 sm:p-5">{children}</div>}
     </div>

@@ -55,6 +55,11 @@ interface BulkActionsBarProps {
   onAIInterview?: () => void;
   onAIInterviewDisabled?: boolean;
   onAIInterviewDisabledReason?: string;
+  /** `bar` (default): the blue actions row. `menu`: the same actions as a
+   *  vertical menu, for a dropdown (e.g. the Resume Database's Select All). */
+  variant?: 'bar' | 'menu';
+  /** Menu variant: called after an action runs (e.g. to close the dropdown). */
+  onAction?: () => void;
 }
 
 export default function BulkActionsBar({
@@ -84,8 +89,12 @@ export default function BulkActionsBar({
   onAIInterview,
   onAIInterviewDisabled,
   onAIInterviewDisabledReason,
+  variant = 'bar',
+  onAction,
 }: BulkActionsBarProps) {
   const [showFolderMenu, setShowFolderMenu] = useState(false);
+  /* Menu variant: Move to Folder's folder list, open inside the menu. */
+  const [showMoveList, setShowMoveList] = useState(false);
   /* The currently open chain of flyout submenus, root first — e.g. hovering
      "Engineering" then its child "2026" holds [{Engineering, rect}, {2026,
      rect}]. Cascading submenus are inherently linear (one branch open at a
@@ -262,7 +271,7 @@ export default function BulkActionsBar({
       <button
         key={folder.id}
         onClick={() => {
-          onMoveToFolder(folder.id);
+          onMoveToFolder(folder.id); onAction?.();
           closeFolderMenu();
         }}
         onMouseEnter={(e) => {
@@ -297,6 +306,278 @@ export default function BulkActionsBar({
     );
   };
 
+  const toggleFolderMenu = (e: React.MouseEvent<HTMLElement>) => {
+    if (onMoveToFolderDisabled) return;
+    if (showFolderMenu) {
+      closeFolderMenu();
+      return;
+    }
+    const trigger = e.currentTarget as HTMLElement;
+    setFolderMenuAnchor(trigger.getBoundingClientRect());
+    setFolderMenuPosition(null);
+    setShowFolderMenu(true);
+  };
+
+  /* The Move to Folder picker and its cascading flyouts (portalled). */
+  const folderMenuPortals = (
+    <>
+                {showFolderMenu && folderMenuAnchor && typeof document !== 'undefined' && createPortal(
+                  <>
+                    {/* Backdrop to close menu */}
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={closeFolderMenu}
+                    />
+                    {/* Dropdown menu — fixed + portalled out of the card's
+                        `overflow-hidden` boundary, so it's never clipped and
+                        never runs off a narrow viewport. */}
+                    <div
+                      ref={folderMenuRef}
+                      data-move-folder-menu
+                      /* `flex flex-col` + `overflow-hidden` here (not
+                         `overflow-y-auto`), with the My Folders rows as the
+                         only `flex-1 min-h-0` child below: that child's
+                         rendered height is then whatever the flex layout
+                         actually leaves it, so its own `overflow-y-auto` can
+                         never claim more room than truly exists. A fixed
+                         190px on that child alone (no flex-shrink guarantee)
+                         let System Folders + the header eat into that 190px
+                         on short viewports — the rows below the cut were
+                         laid out past this panel's own clipped edge, so they
+                         were there but the mouse could never reach them to
+                         scroll to them. */
+                      className="fixed w-56 max-w-[calc(100vw-16px)] bg-popover text-popover-foreground rounded-lg shadow-2xl border border-border py-1.5 flex flex-col overflow-hidden z-50"
+                      style={{
+                        top: folderMenuPosition?.top ?? folderMenuAnchor.bottom + FOLDER_MENU_GAP,
+                        left: folderMenuPosition?.left ?? folderMenuAnchor.left,
+                        maxHeight: folderMenuPosition?.maxHeight ?? 256,
+                        visibility: folderMenuPosition ? 'visible' : 'hidden',
+                      }}
+                    >
+                      {systemFolders.length === 0 && myFolders.length === 0 ? (
+                        <div className="px-3 py-2.5 text-sm text-muted-foreground text-center">
+                          No folders available
+                        </div>
+                      ) : (
+                        /* System Folders and My Folders share ONE scroll
+                           region and one 7-row budget — System Folders no
+                           longer stays pinned above it. `flex-initial`
+                           (grow:0, shrink:1) rather than `flex-1` (grow:1):
+                           flex-1 was stretching this box to fill the outer
+                           panel's full computed ceiling even with only a
+                           couple of rows in it, leaving dead empty space
+                           below the list. `flex-initial` + `min-h-0` keeps
+                           both fixes — sized to its own content when there's
+                           room, but still free to shrink (and stay fully
+                           scrollable, not clipped) when the outer panel is
+                           too short for it. */
+                        <div className="flex-initial min-h-0 max-h-[338px] overflow-y-auto overscroll-contain">
+                          {systemFolders.length > 0 && (
+                            <>
+                              <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                System Folders
+                              </div>
+                              {systemFolders.map(folder => (
+                                <button
+                                  key={folder.id}
+                                  onClick={() => {
+                                    onMoveToFolder(folder.id); onAction?.();
+                                    closeFolderMenu();
+                                  }}
+                                  className="w-full text-left px-3 mx-1 py-2 text-sm text-foreground hover:bg-accent/50 rounded-md transition-colors flex items-center gap-2"
+                                  style={{ width: 'calc(100% - 8px)' }}
+                                >
+                                  {folder.name === 'Archived Resumes' ? (
+                                    <Archive className="w-4 h-4 text-amber-600" />
+                                  ) : (
+                                    <FolderRoot className="w-4 h-4 text-brand-cyan" />
+                                  )}
+                                  <span className="flex-1 truncate text-left">
+                                    {folder.name.toLowerCase() === 'root' ? 'Root (Default)' : folder.name}
+                                  </span>
+                                  <span className="flex-shrink-0 text-xs text-muted-foreground">({folder.count})</span>
+                                </button>
+                              ))}
+                            </>
+                          )}
+                          {systemFolders.length > 0 && myFolders.length > 0 && (
+                            <div className="border-t border-border my-1" />
+                          )}
+                          {myFolders.length > 0 && (
+                            <>
+                              <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                My Folders
+                              </div>
+                              {myFolders.map(folder => renderFolderRow(folder, 0, []))}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </>,
+                  document.body,
+                )}
+  
+                {/* Cascading flyouts, one portal per open depth — each sits
+                    beside its trigger row rather than pushing content inline,
+                    so opening a subfolder never resizes (or clips inside) the
+                    panel that owns it. */}
+                {showFolderMenu && openPath.map((entry, i) => {
+                  const ancestors = openPath.slice(0, i + 1);
+                  const pos = computeFlyoutPosition(entry.anchor);
+                  return typeof document !== 'undefined' && createPortal(
+                    <div
+                      key={entry.folder.id}
+                      data-move-folder-menu
+                      className="fixed w-56 max-w-[calc(100vw-16px)] bg-popover text-popover-foreground rounded-lg shadow-2xl border border-border py-1.5 overflow-y-auto overscroll-contain z-50"
+                      style={{ top: pos.top, left: pos.left, maxHeight: pos.maxHeight }}
+                      onMouseEnter={cancelScheduledClose}
+                      onMouseLeave={() => scheduleOpenPath(openPath.slice(0, i))}
+                    >
+                      {entry.folder.children!.map(child => renderFolderRow(child, i + 1, ancestors))}
+                    </div>,
+                    document.body,
+                  );
+                })}
+    </>
+  );
+
+  /* Menu variant — the same actions as a vertical list for a dropdown. Same
+     handlers, permissions and disabled reasons as the bar. */
+  if (variant === 'menu') {
+    /* The Resume Scoring "Select Applicants to Score" popup's Actions menu
+       (components/SelectSourceModal.tsx): px-3 py-2 rows, 16px icons in the
+       row ⋮ menu colours, grey + 60% when not allowed (the tooltip says why),
+       Move to Folder opening its folder list inside the menu, and Delete in
+       the destructive colour after a divider. */
+    const row = (enabled: boolean, danger = false) =>
+      `w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+        !enabled
+          ? 'text-gray-400 cursor-not-allowed opacity-60'
+          : danger ? 'text-destructive hover:bg-destructive-subtle' : 'text-gray-700 hover:bg-gray-50 dark:text-slate-200 dark:hover:bg-slate-800'
+      }`;
+    const run = (disabled: boolean | undefined, fn?: () => void) => () => {
+      if (disabled || !fn) return; // Locked: tooltip only.
+      fn();
+      onAction?.();
+    };
+    /* Every folder, subfolders indented under their parent. */
+    const moveTargets: { folder: Folder; depth: number }[] = [];
+    const walk = (list: Folder[], depth: number) => list.forEach(folder => {
+      if (folder.id === 'all') return;
+      moveTargets.push({ folder, depth });
+      if (folder.children?.length) walk(folder.children, depth + 1);
+    });
+    walk([...systemFolders, ...myFolders], 0);
+    const moveOk = !onMoveToFolderDisabled;
+    return (
+      <div role="menu" aria-label="Actions">
+        {folders && onMoveToFolder && (
+          <>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { if (!moveOk) return; setShowMoveList(v => !v); }}
+              aria-disabled={!moveOk}
+              aria-expanded={showMoveList}
+              title={!moveOk ? (onMoveToFolderDisabledReason || 'You do not have permission to move resumes to a folder') : ''}
+              className={row(moveOk)}
+            >
+              <FolderInput className={`w-4 h-4 ${moveOk ? 'text-brand-orange' : ''}`} />
+              <span className="flex-1">Move to Folder</span>
+              <ChevronRight className={`w-4 h-4 transition-transform ${showMoveList ? 'rotate-90' : ''}`} />
+            </button>
+            {showMoveList && (
+              <div className="max-h-56 overflow-y-auto border-y border-gray-100 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-800/40 py-1">
+                {moveTargets.length === 0 ? (
+                  <p className="px-3 py-2 tf-meta">No folders available</p>
+                ) : moveTargets.map(({ folder, depth }) => {
+                  const isRoot = !folder.parentId && folder.name.toLowerCase() === 'root';
+                  const isArchived = folder.name === 'Archived Resumes' && !folder.parentId;
+                  return (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      onClick={() => { onMoveToFolder(folder.id); setShowMoveList(false); onAction?.(); }}
+                      className="w-full py-1.5 pr-3 text-left text-sm text-foreground hover:bg-accent/50 transition-colors flex items-center gap-2"
+                      style={{ paddingLeft: `${1.75 + Math.min(depth, 3) * 0.75}rem` }}
+                      title={folder.name}
+                    >
+                      {/* Root cyan, Archived amber, folders orange, count muted. */}
+                      {isRoot
+                        ? <FolderRoot className="w-4 h-4 shrink-0 text-brand-cyan" />
+                        : isArchived
+                          ? <Archive className="w-4 h-4 shrink-0 text-amber-600" />
+                          : <FolderInput className="w-4 h-4 shrink-0 text-brand-orange" />}
+                      <span className="truncate flex-1">{isRoot ? 'Root (Default)' : folder.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">({folder.count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+        {onApplyToJob && (
+          <button type="button" role="menuitem" onClick={run(onApplyToJobDisabled, onApplyToJob)} aria-disabled={!!onApplyToJobDisabled}
+            title={onApplyToJobDisabled ? (onApplyToJobDisabledReason || 'You do not have permission to score resumes') : ''}
+            className={row(!onApplyToJobDisabled)}>
+            <ClipboardList className={`w-4 h-4 ${onApplyToJobDisabled ? '' : 'text-menu-icon-score'}`} />Score Resume
+          </button>
+        )}
+        {onResumeScoring && (
+          <button type="button" role="menuitem" onClick={run(false, onResumeScoring)} className={row(true)}>
+            <ClipboardList className="w-4 h-4 text-menu-icon-score" />Resume Scoring
+          </button>
+        )}
+        {onAssessment && (
+          <button type="button" role="menuitem" onClick={run(onAssessmentDisabled, onAssessment)} aria-disabled={!!onAssessmentDisabled}
+            title={onAssessmentDisabled ? (onAssessmentDisabledReason || 'You do not have permission to invite candidates to an assessment') : ''}
+            className={row(!onAssessmentDisabled)}>
+            <ClipboardList className={`w-4 h-4 ${onAssessmentDisabled ? '' : 'text-menu-icon-share'}`} />Invite Assessment
+          </button>
+        )}
+        {onAIInterview && (
+          <button type="button" role="menuitem" onClick={run(onAIInterviewDisabled, onAIInterview)} aria-disabled={!!onAIInterviewDisabled}
+            title={onAIInterviewDisabled ? (onAIInterviewDisabledReason || 'You do not have permission to invite candidates to an AI interview') : ''}
+            className={row(!onAIInterviewDisabled)}>
+            <Video className={`w-4 h-4 ${onAIInterviewDisabled ? '' : 'text-menu-icon-ai'}`} />Invite AI Interview
+          </button>
+        )}
+        {onDownload && (
+          <button type="button" role="menuitem" onClick={run(onDownloadDisabled, onDownload)} aria-disabled={!!onDownloadDisabled}
+            title={onDownloadDisabled ? (onDownloadDisabledReason || "Your role doesn't allow downloading resumes") : ''}
+            className={row(!onDownloadDisabled)}>
+            <Download className={`w-4 h-4 ${onDownloadDisabled ? '' : 'text-menu-icon-download'}`} />Download Selected
+          </button>
+        )}
+        {onUnarchive ? (
+          <button type="button" role="menuitem" onClick={run(onUnarchiveDisabled, onUnarchive)} aria-disabled={!!onUnarchiveDisabled}
+            title={onUnarchiveDisabled ? (onUnarchiveDisabledReason || 'You do not have permission to unarchive resumes') : ''}
+            className={row(!onUnarchiveDisabled)}>
+            <ArchiveRestore className={`w-4 h-4 ${onUnarchiveDisabled ? '' : 'text-menu-icon-archive'}`} />Unarchive Selected
+          </button>
+        ) : onArchive && (
+          <button type="button" role="menuitem" onClick={run(onArchiveDisabled, onArchive)} aria-disabled={!!onArchiveDisabled}
+            title={onArchiveDisabled ? (onArchiveDisabledReason || 'You do not have permission to archive resumes') : ''}
+            className={row(!onArchiveDisabled)}>
+            <Archive className={`w-4 h-4 ${onArchiveDisabled ? '' : 'text-menu-icon-archive'}`} />Archive Selected
+          </button>
+        )}
+        {onDelete && (
+          <>
+            <div className="border-t border-gray-200 dark:border-slate-700 my-2" />
+            <button type="button" role="menuitem" onClick={run(onDeleteDisabled, onDelete)} aria-disabled={!!onDeleteDisabled}
+              title={onDeleteDisabled ? (onDeleteDisabledReason || RESUME_DELETE_OWNER_ONLY_REASON) : ''}
+              className={row(!onDeleteDisabled, true)}>
+              <Trash2 className="w-4 h-4" />Delete Selected
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     /* top: --crumb-h, the page's measured sticky-breadcrumb height (set by
        the Resume Database page), so a stuck bar sits below the breadcrumb
@@ -312,17 +593,7 @@ export default function BulkActionsBar({
           {folders && onMoveToFolder && (
             <div className="relative shrink-0">
               <button
-                onClick={(e) => {
-                  if (onMoveToFolderDisabled) return;
-                  if (showFolderMenu) {
-                    closeFolderMenu();
-                    return;
-                  }
-                  const trigger = e.currentTarget as HTMLElement;
-                  setFolderMenuAnchor(trigger.getBoundingClientRect());
-                  setFolderMenuPosition(null);
-                  setShowFolderMenu(true);
-                }}
+                onClick={toggleFolderMenu}
                 data-move-folder-trigger
                 aria-disabled={!!onMoveToFolderDisabled}
                 className={`${actionBtn} ${onMoveToFolderDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -333,124 +604,7 @@ export default function BulkActionsBar({
                 <span className="lg:hidden">Move</span>
               </button>
 
-              {showFolderMenu && folderMenuAnchor && typeof document !== 'undefined' && createPortal(
-                <>
-                  {/* Backdrop to close menu */}
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={closeFolderMenu}
-                  />
-                  {/* Dropdown menu — fixed + portalled out of the card's
-                      `overflow-hidden` boundary, so it's never clipped and
-                      never runs off a narrow viewport. */}
-                  <div
-                    ref={folderMenuRef}
-                    data-move-folder-menu
-                    /* `flex flex-col` + `overflow-hidden` here (not
-                       `overflow-y-auto`), with the My Folders rows as the
-                       only `flex-1 min-h-0` child below: that child's
-                       rendered height is then whatever the flex layout
-                       actually leaves it, so its own `overflow-y-auto` can
-                       never claim more room than truly exists. A fixed
-                       190px on that child alone (no flex-shrink guarantee)
-                       let System Folders + the header eat into that 190px
-                       on short viewports — the rows below the cut were
-                       laid out past this panel's own clipped edge, so they
-                       were there but the mouse could never reach them to
-                       scroll to them. */
-                    className="fixed w-56 max-w-[calc(100vw-16px)] bg-popover text-popover-foreground rounded-lg shadow-2xl border border-border py-1.5 flex flex-col overflow-hidden z-50"
-                    style={{
-                      top: folderMenuPosition?.top ?? folderMenuAnchor.bottom + FOLDER_MENU_GAP,
-                      left: folderMenuPosition?.left ?? folderMenuAnchor.left,
-                      maxHeight: folderMenuPosition?.maxHeight ?? 256,
-                      visibility: folderMenuPosition ? 'visible' : 'hidden',
-                    }}
-                  >
-                    {systemFolders.length === 0 && myFolders.length === 0 ? (
-                      <div className="px-3 py-2.5 text-sm text-muted-foreground text-center">
-                        No folders available
-                      </div>
-                    ) : (
-                      /* System Folders and My Folders share ONE scroll
-                         region and one 7-row budget — System Folders no
-                         longer stays pinned above it. `flex-initial`
-                         (grow:0, shrink:1) rather than `flex-1` (grow:1):
-                         flex-1 was stretching this box to fill the outer
-                         panel's full computed ceiling even with only a
-                         couple of rows in it, leaving dead empty space
-                         below the list. `flex-initial` + `min-h-0` keeps
-                         both fixes — sized to its own content when there's
-                         room, but still free to shrink (and stay fully
-                         scrollable, not clipped) when the outer panel is
-                         too short for it. */
-                      <div className="flex-initial min-h-0 max-h-[338px] overflow-y-auto overscroll-contain">
-                        {systemFolders.length > 0 && (
-                          <>
-                            <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
-                              System Folders
-                            </div>
-                            {systemFolders.map(folder => (
-                              <button
-                                key={folder.id}
-                                onClick={() => {
-                                  onMoveToFolder(folder.id);
-                                  closeFolderMenu();
-                                }}
-                                className="w-full text-left px-3 mx-1 py-2 text-sm text-foreground hover:bg-accent/50 rounded-md transition-colors flex items-center gap-2"
-                                style={{ width: 'calc(100% - 8px)' }}
-                              >
-                                {folder.name === 'Archived Resumes' ? (
-                                  <Archive className="w-4 h-4 text-amber-600" />
-                                ) : (
-                                  <FolderRoot className="w-4 h-4 text-brand-cyan" />
-                                )}
-                                <span className="flex-1 truncate text-left">
-                                  {folder.name.toLowerCase() === 'root' ? 'Root (Default)' : folder.name}
-                                </span>
-                                <span className="flex-shrink-0 text-xs text-muted-foreground">({folder.count})</span>
-                              </button>
-                            ))}
-                          </>
-                        )}
-                        {systemFolders.length > 0 && myFolders.length > 0 && (
-                          <div className="border-t border-border my-1" />
-                        )}
-                        {myFolders.length > 0 && (
-                          <>
-                            <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
-                              My Folders
-                            </div>
-                            {myFolders.map(folder => renderFolderRow(folder, 0, []))}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </>,
-                document.body,
-              )}
-
-              {/* Cascading flyouts, one portal per open depth — each sits
-                  beside its trigger row rather than pushing content inline,
-                  so opening a subfolder never resizes (or clips inside) the
-                  panel that owns it. */}
-              {showFolderMenu && openPath.map((entry, i) => {
-                const ancestors = openPath.slice(0, i + 1);
-                const pos = computeFlyoutPosition(entry.anchor);
-                return typeof document !== 'undefined' && createPortal(
-                  <div
-                    key={entry.folder.id}
-                    data-move-folder-menu
-                    className="fixed w-56 max-w-[calc(100vw-16px)] bg-popover text-popover-foreground rounded-lg shadow-2xl border border-border py-1.5 overflow-y-auto overscroll-contain z-50"
-                    style={{ top: pos.top, left: pos.left, maxHeight: pos.maxHeight }}
-                    onMouseEnter={cancelScheduledClose}
-                    onMouseLeave={() => scheduleOpenPath(openPath.slice(0, i))}
-                  >
-                    {entry.folder.children!.map(child => renderFolderRow(child, i + 1, ancestors))}
-                  </div>,
-                  document.body,
-                );
-              })}
+              {folderMenuPortals}
             </div>
           )}
 

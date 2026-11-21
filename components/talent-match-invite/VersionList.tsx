@@ -28,6 +28,7 @@ import {
   type VersionPermissions,
   type VersionStatus,
 } from './inviteVersions';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* The version cards' status pill (JobAssessmentVersionPicker / JobInterviewVersionPicker). */
 export const STATUS_PILL: Record<VersionStatus, string> = {
@@ -317,14 +318,13 @@ export default function VersionList({
                     interview Draft is still published from its ⋯ menu. */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button
+                    <IconButton bare label={`Actions for ${v.name} v${v.version}`}
                       type="button"
                       disabled={busyId === v.id}
-                      aria-label={`Actions for ${v.name} v${v.version}`}
                       className="shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-500 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 disabled:opacity-50"
                     >
                       {busyId === v.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
-                    </button>
+                    </IconButton>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
                     {actions.map((item) => {

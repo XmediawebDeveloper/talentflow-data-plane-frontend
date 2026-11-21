@@ -64,9 +64,14 @@ export function useResumeSelection(visibleRows: readonly Resume[]) {
   visibleRows.forEach((r) => rowMap.set(r.id, r));
 
   const rowById = useCallback((id: string): Resume | undefined => rowMap.get(id), [rowMap]);
+  /** Remember rows that were fetched but never shown (e.g. "Select all
+   *  resumes" across every page), so bulk actions can still read them. */
+  const rememberRows = useCallback((rows: readonly Resume[]) => {
+    rows.forEach((r) => rowMap.set(r.id, r));
+  }, [rowMap]);
   const selectedRows: Resume[] = selectedResumes
     .map((id) => rowMap.get(id))
     .filter((r): r is Resume => !!r);
 
-  return { selectedResumes, setSelectedResumes, rowById, selectedRows };
+  return { selectedResumes, setSelectedResumes, rowById, selectedRows, rememberRows };
 }

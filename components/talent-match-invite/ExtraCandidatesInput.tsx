@@ -11,6 +11,7 @@ import ListPagination from '@/components/ListPagination';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { Button } from '@/components/ui/button';
 import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** The most candidates one send may carry — the backend's BULK_INVITE_MAX_ROWS
  *  default. The real cap is usually lower: the host passes `maxRows` from the
@@ -18,7 +19,7 @@ import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
 export const MAX_EXTRA_CANDIDATES = 10000;
 
 const PAGE_SIZE = 10;
-const INPUT = 'h-9 min-w-0 px-3 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent disabled:opacity-60';
+const INPUT = 'h-9 min-w-0 px-3 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent disabled:opacity-60';
 const CHIP = 'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-medium border whitespace-nowrap max-w-full';
 const CHIP_ON = 'border-brand-blue bg-brand-blue/10 text-brand-blue';
 const CHIP_OFF = 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800';
@@ -723,9 +724,9 @@ export default function ExtraCandidatesInput({
                     {upload.open ? 'Hide' : 'View'} invalid rows
                   </button>
                 )}
-                <button type="button" onClick={() => setUpload(null)} aria-label="Dismiss" className="ml-auto inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800">
+                <IconButton bare label="Dismiss" type="button" onClick={() => setUpload(null)} className="ml-auto inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800">
                   <X className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
+                </IconButton>
               </div>
               {upload.open && upload.invalid.length > 0 && (
                 <>
@@ -738,7 +739,7 @@ export default function ExtraCandidatesInput({
                       {upload.invalid.map((r) => (
                         <tr key={`${r.row}-${r.email}`}>
                           <td className="tf-td tabular-nums">{r.row}</td>
-                          <td className="tf-td"><span className="block truncate" title={r.email}>{r.email || <i className="text-gray-400">empty</i>}</span></td>
+                          <td className="tf-td"><span className="block truncate" title={r.email}>{r.email || <i className="text-gray-500">empty</i>}</span></td>
                           <td className="tf-td">{r.problem}</td>
                         </tr>
                       ))}
@@ -750,7 +751,7 @@ export default function ExtraCandidatesInput({
                     <MobileRecordCard
                       key={`${r.row}-${r.email}`}
                       idBadge={<span className="tf-meta tabular-nums">Row {r.row}</span>}
-                      title={<span className="block truncate" title={r.email}>{r.email || <i className="text-gray-400">empty</i>}</span>}
+                      title={<span className="block truncate" title={r.email}>{r.email || <i className="text-gray-500">empty</i>}</span>}
                       fields={[{ label: 'Problem', value: r.problem }]}
                     />
                   ))}
@@ -780,7 +781,7 @@ export default function ExtraCandidatesInput({
               </button>
             </span>
             <label className="relative w-full sm:w-56">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" aria-hidden="true" />
               <input
                 type="search"
                 value={query}
@@ -797,7 +798,7 @@ export default function ExtraCandidatesInput({
                 <button key={c.key} type="button" aria-pressed={fileOrigin === c.key} onClick={() => { setOrigin(c.key); setPage(1); }} className={`${CHIP} ${fileOrigin === c.key ? CHIP_ON : CHIP_OFF}`}>
                   {c.key !== 'all' && <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}
                   <span className="truncate">{c.label}</span>
-                  <span className="tabular-nums text-gray-400">{c.n.toLocaleString()}</span>
+                  <span className="tabular-nums text-gray-500">{c.n.toLocaleString()}</span>
                 </button>
               ))}
               {files.length > 1 && fileOrigin !== 'all' && (
@@ -922,26 +923,22 @@ export default function ExtraCandidatesInput({
                                   : r.linked ? <><CheckCircle className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy link</>}
                               </button>
                             )}
-                            <button
+                            <IconButton bare label={`Edit ${r.name}`} tooltip={r.linked ? 'Invited by link — the invitation already uses this name and email' : 'Edit'}
                               type="button"
                               onClick={() => startEdit(r)}
                               disabled={disabled || !!r.linked || linking === r.id}
-                              aria-label={`Edit ${r.name}`}
-                              title={r.linked ? 'Invited by link — the invitation already uses this name and email' : 'Edit'}
-                              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400"
                             >
                               <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-                            </button>
-                            <button
+                            </IconButton>
+                            <IconButton bare label={`Remove ${r.name}`} tooltip="Remove"
                               type="button"
                               onClick={() => remove(r.id)}
                               disabled={disabled}
-                              aria-label={`Remove ${r.name}`}
-                              title="Remove"
-                              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-destructive hover:bg-destructive-subtle disabled:opacity-50"
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 hover:text-destructive hover:bg-destructive-subtle disabled:opacity-50"
                             >
                               <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                            </button>
+                            </IconButton>
                           </>
                         )}
                       </span>

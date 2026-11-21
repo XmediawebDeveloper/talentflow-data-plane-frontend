@@ -55,6 +55,7 @@ import { MobileRecordList, MobileRecordCard } from '@/components/ui/mobile-recor
 import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort, type SortDir } from '@/components/ui/sortable-header';
 import type { TeamListSortKey } from '@/components/teams/TeamListTable';
 import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
 
 // Multiples of 6, so every page size fills whole rows in the 2- and 3-column grid.
 const TEAM_PAGE_SIZES = [6, 12, 24, 48];
@@ -67,9 +68,12 @@ async function fetchAllActiveUsers(): Promise<ApiUser[]> {
 
 /** Units per team over `range` — the current billing period, see
  *  useTeamUnitsPeriod (all teams for admins, own teams otherwise). */
-async function fetchTeamUnits(isAdmin: boolean, range: { from: string; to: string }): Promise<Record<string, TeamUnits>> {
+async function fetchTeamUnits(isAdmin: boolean, range: { from: string; to: string }, isBilling?: boolean): Promise<Record<string, TeamUnits>> {
   const { from, to } = range;
-  const res = isAdmin ? await teamService.getAllTeamsUsage(from, to) : await teamService.getMyTeamsUsage(from, to);
+  // 'billing' resolves server-side to the exact billing-period-start instant
+  // rather than midnight of `from`'s date, matching Usage History's User-Wise tab.
+  const period = isBilling ? 'billing' : undefined;
+  const res = isAdmin ? await teamService.getAllTeamsUsage(from, to, period) : await teamService.getMyTeamsUsage(from, to, period);
   const out: Record<string, TeamUnits> = {};
   for (const t of (res.teams ?? []) as TeamUsageSummary[]) {
     const row = { total: 0 } as TeamUnits;
@@ -154,7 +158,7 @@ export default function TeamManagementPage() {
   useEffect(() => {
     if (!canSeeTeamUnits || !unitsPeriod.ready) return;
     let live = true;
-    fetchTeamUnits(isTenantAdmin, unitsPeriod.range)
+    fetchTeamUnits(isTenantAdmin, unitsPeriod.range, unitsPeriod.label === 'billing period')
       .then((u) => { if (live) setUnitsByTeam(u); })
       .catch(() => { /* column stays hidden */ });
     return () => { live = false; };
@@ -556,7 +560,7 @@ export default function TeamManagementPage() {
         fetchTeamCreators().then(setCreatedBy).catch(() => { /* keep the last names */ });
       }
       if (unitsByTeam !== null) {
-        fetchTeamUnits(isTenantAdmin, unitsPeriod.range).then(setUnitsByTeam).catch(() => { /* keep the last numbers */ });
+        fetchTeamUnits(isTenantAdmin, unitsPeriod.range, unitsPeriod.label === 'billing period').then(setUnitsByTeam).catch(() => { /* keep the last numbers */ });
       }
       return true;
     } catch (error) {
@@ -1167,7 +1171,7 @@ export default function TeamManagementPage() {
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                             {pagedMembers.map((row) => (
-                              <tr
+                              <tr {...clickableRowProps}
                                 key={row.id}
                                 onClick={() => handleViewDetails(row.teamId)}
                                 title={`Open ${row.teamName}`}

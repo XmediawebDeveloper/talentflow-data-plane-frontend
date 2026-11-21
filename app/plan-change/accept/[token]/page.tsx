@@ -22,7 +22,7 @@ export default function PlanChangeAcceptPage() {
 
     const acceptViaToken = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/plan-changes/accept/${token}`);
+        const response = await fetch(`${API_BASE_URL}/plan-changes/accept/${token}`, { method: 'POST' });
         const data = await response.json();
 
         if (response.ok) {

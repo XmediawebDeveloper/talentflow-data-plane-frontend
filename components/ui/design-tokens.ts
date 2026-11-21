@@ -31,7 +31,7 @@ export const tokens = {
 
   // Inputs — apply alongside w-full, height utilities, etc.
   input:
-    'bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-sm text-black dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 transition',
+    'bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-sm text-black dark:text-slate-100 placeholder:text-gray-500 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 transition',
 
   // ── Buttons ──────────────────────────────────────────────────────────────
   // Per UI–UX Guidelines §4 the app uses only THREE button types. Prefer the

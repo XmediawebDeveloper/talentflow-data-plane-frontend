@@ -12,6 +12,8 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import type { PlanChangeSummary } from '@/lib/types/planChanges';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 const changeTypeLabels: Record<string, { title: string; icon: IconComponent; color: string }> = {
   price_increase: { title: 'Price Change', icon: DollarSign, color: 'text-amber-600' },
@@ -266,7 +268,7 @@ export default function PlanChangeReviewModal() {
     (summary.features_added && summary.features_added.length > 0);
 
   return (
-    <div className="fixed inset-0 z-[88] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 z-[88] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
       <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 flex items-center justify-between shrink-0">
@@ -280,13 +282,12 @@ export default function PlanChangeReviewModal() {
             </div>
           </div>
           {isInAcceptancePeriod && (
-            <button
+            <IconButton bare label="Close"
               onClick={closeReviewModal}
               className="p-2 rounded-lg hover:bg-white/20 transition-colors"
-              aria-label="Close"
             >
               <X className="w-5 h-5 text-white" />
-            </button>
+            </IconButton>
           )}
         </div>
 
@@ -391,6 +392,6 @@ export default function PlanChangeReviewModal() {
           )}
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

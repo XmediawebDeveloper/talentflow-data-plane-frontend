@@ -8,6 +8,9 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import { Skeleton } from '@/components/ui/skeleton';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ResumeVersion {
   id: string;
@@ -177,7 +180,7 @@ export default function ResumeVersionsModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6" onClick={onClose}>
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6" onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
@@ -215,13 +218,12 @@ export default function ResumeVersionsModal({
                 {compareChecked.length === 2 ? 'Compare selected' : 'Select 2 versions to compare'}
               </button>
             )}
-            <button
+            <IconButton bare label="Close"
               onClick={onClose}
               className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors"
-              aria-label="Close"
             >
               <X className="w-5 h-5" />
-            </button>
+            </IconButton>
           </div>
         </div>
 
@@ -268,7 +270,7 @@ export default function ResumeVersionsModal({
                 </div>
               )}
               {versions.map((version, index) => (
-                <div
+                <div {...clickableProps}
                   key={version.id}
                   onClick={() => selectionMode && onSelectVersion?.(version)}
                   /* The row in use is the one that stands out — not simply the
@@ -366,19 +368,18 @@ export default function ResumeVersionsModal({
                         ) : (
                           <span className="hidden sm:inline tf-hint italic">First version</span>
                         )}
-                        <button
+                        <IconButton bare label="Preview"
                           onClick={(e) => {
                             e.stopPropagation();
                             handlePreview(version);
                           }}
                           className="p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                          aria-label="Preview" title="Preview"
                         >
                           <Eye className="w-4 h-4" />
-                        </button>
+                        </IconButton>
                         {/* Read it, then act on it — the eye leads. */}
                         {onApplyToJob && (
-                          <button
+                          <IconButton bare label="Apply to Job" tooltip={onApplyToJobDisabled ? (onApplyToJobDisabledReason || 'You do not have permission to score resumes') : 'Apply to Job'}
                             onClick={(e) => {
                               e.stopPropagation();
                               if (onApplyToJobDisabled) return;
@@ -390,11 +391,9 @@ export default function ResumeVersionsModal({
                                 ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
                                 : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue'
                             }`}
-                            aria-label="Apply to Job"
-                            title={onApplyToJobDisabled ? (onApplyToJobDisabledReason || 'You do not have permission to score resumes') : 'Apply to Job'}
                           >
                             <Briefcase className="w-4 h-4" />
-                          </button>
+                          </IconButton>
                         )}
                         {/* Which version goes forward. The one in use says so;
                             the others offer to take its place. */}
@@ -421,17 +420,16 @@ export default function ResumeVersionsModal({
                             carries its own Download for anyone who wants the
                             file. */}
                         {!canChoose && (
-                          <button
+                          <IconButton bare label="Download" tooltip={canDownload ? 'Download' : DOWNLOAD_BLOCKED_MESSAGE}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDownload(version);
                             }}
                             aria-disabled={!canDownload}
                             className={`p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors ${!canDownload ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            aria-label="Download" title={canDownload ? 'Download' : DOWNLOAD_BLOCKED_MESSAGE}
                           >
                             <Download className="w-4 h-4" />
-                          </button>
+                          </IconButton>
                         )}
                       </div>
                     )}
@@ -442,7 +440,7 @@ export default function ResumeVersionsModal({
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                <FileText className="w-8 h-8 text-gray-400 dark:text-slate-500" />
+                <FileText className="w-8 h-8 text-gray-500 dark:text-slate-500" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Versions Found</h3>
               <p className="tf-body-muted text-center">
@@ -503,6 +501,6 @@ export default function ResumeVersionsModal({
           />
         </div>
       )}
-    </div>
+    </div></ModalA11y>
   );
 }

@@ -77,6 +77,9 @@ function CompletePaymentContent() {
     billingIntervalParam === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'
   );
   const [planDetails, setPlanDetails] = useState<PlanDetails | null>(null);
+  // Set only when the plan came from the CP pending-payment record (private/CUSTOM
+  // plan of an admin-created tenant): amounts are the CP invoice, not base_price + GST.
+  const [invoiceAmounts, setInvoiceAmounts] = useState<{ subtotal: number; gst: number; total: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -92,6 +95,7 @@ function CompletePaymentContent() {
         return;
       }
 
+      let found = false;
       try {
         const response = await fetch(`${API_URL}/subscription/public/plans`);
         if (response.ok) {
@@ -131,8 +135,50 @@ function CompletePaymentContent() {
                   features: planVariant.features,
                   quotas: planVariant.quotas,
                 });
+                found = true;
               }
               break;
+            }
+          }
+        }
+
+        // Fallback: plan is not public (e.g. private/CUSTOM plan picked by a CP admin
+        // when creating the tenant). Load it from the tenant's pending-payment record.
+        if (!found && tenantId) {
+          const pendingRes = await fetch(`${API_URL}/signup/pending-payment/${encodeURIComponent(tenantId)}`);
+          if (pendingRes.status === 409) {
+            toast.info('Payment already completed', { description: 'Please log in to continue.' });
+            router.push('/login');
+            return;
+          }
+          if (pendingRes.ok) {
+            const pending = await pendingRes.json();
+            const plan = pending?.plan;
+            if (plan && pending.plan_id === parseInt(planId)) {
+              if (pending.billing_interval === 'ANNUAL' || pending.billing_interval === 'MONTHLY') {
+                setBillingInterval(pending.billing_interval);
+              }
+              setPlanDetails({
+                id: plan.id,
+                plan_name: plan.plan_name,
+                plan_tier: plan.plan_tier,
+                description: plan.description,
+                base_price: plan.base_price,
+                monthly_price: plan.monthly_price,
+                currency: pending.currency || plan.currency,
+                billing_period: plan.billing_period,
+                included_seats: plan.included_seats,
+                discount_percentage: plan.discount_percentage ?? undefined,
+                features: plan.features,
+                quotas: plan.quotas,
+              });
+              if (pending.total_amount != null && pending.amount_due != null) {
+                setInvoiceAmounts({
+                  subtotal: Number(pending.amount_due),
+                  gst: Number(pending.tax_amount ?? 0),
+                  total: Number(pending.total_amount),
+                });
+              }
             }
           }
         }
@@ -328,7 +374,7 @@ function CompletePaymentContent() {
   const formCardStyle: React.CSSProperties = {
     backgroundColor: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)',
     borderRadius: '24px',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+    boxShadow: '0 25px 50px -12px var(--raw-rgba-0-0-0-0p15)',
     padding: '40px',
     border: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-f3f4f6)'}`,
   };
@@ -347,7 +393,7 @@ function CompletePaymentContent() {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
+    boxShadow: '0 10px 40px var(--raw-rgba-37-99-235-0p3)',
     transition: 'all 0.2s',
   };
 
@@ -414,7 +460,7 @@ function CompletePaymentContent() {
         </div>
 
         {error && (
-          <div style={{ marginBottom: 24, padding: 16, backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : 'var(--raw-fef2f2)', border: `1px solid ${isDark ? 'rgba(239,68,68,0.3)' : 'var(--raw-fecaca)'}`, borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ marginBottom: 24, padding: 16, backgroundColor: isDark ? 'var(--raw-rgba-239-68-68-0p15)' : 'var(--raw-fef2f2)', border: `1px solid ${isDark ? 'var(--raw-rgba-239-68-68-0p3)' : 'var(--raw-fecaca)'}`, borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <AlertCircle style={{ width: 20, height: 20, color: 'var(--raw-dc2626)', flexShrink: 0 }} />
             <span style={{ fontSize: 14, color: isDark ? 'var(--raw-fca5a5)' : 'var(--raw-991b1b)' }}>{error}</span>
           </div>
@@ -426,7 +472,7 @@ function CompletePaymentContent() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 20, fontWeight: 600, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)' }}>{planDetails.plan_name}</span>
-                <span style={{ backgroundColor: isDark ? 'rgba(37,99,235,0.15)' : 'var(--raw-dbeafe)', color: isDark ? 'var(--raw-93c5fd)' : 'var(--raw-1d4ed8)', fontSize: 12, fontWeight: 500, padding: '2px 8px', borderRadius: 12 }}>
+                <span style={{ backgroundColor: isDark ? 'var(--raw-rgba-37-99-235-0p15)' : 'var(--raw-dbeafe)', color: isDark ? 'var(--raw-93c5fd)' : 'var(--raw-1d4ed8)', fontSize: 12, fontWeight: 500, padding: '2px 8px', borderRadius: 12 }}>
                   {planDetails.plan_tier}
                 </span>
               </div>
@@ -436,8 +482,9 @@ function CompletePaymentContent() {
 
           {/* Price Display */}
           {(() => {
-            const gstAmount = Math.round(planDetails.base_price * GST_RATE * 100) / 100;
-            const totalAmount = Math.round((planDetails.base_price + gstAmount) * 100) / 100;
+            const subtotalAmount = invoiceAmounts ? invoiceAmounts.subtotal : planDetails.base_price;
+            const gstAmount = invoiceAmounts ? invoiceAmounts.gst : Math.round(planDetails.base_price * GST_RATE * 100) / 100;
+            const totalAmount = invoiceAmounts ? invoiceAmounts.total : Math.round((planDetails.base_price + gstAmount) * 100) / 100;
             return (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderTop: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}` }}>
@@ -466,7 +513,7 @@ function CompletePaymentContent() {
                             padding: '2px 8px',
                             fontSize: 12,
                             fontWeight: 600,
-                            backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : 'var(--raw-dcfce7)',
+                            backgroundColor: isDark ? 'var(--raw-rgba-16-185-129-0p15)' : 'var(--raw-dcfce7)',
                             color: 'var(--raw-15803d)',
                             borderRadius: 12
                           }}>
@@ -482,7 +529,7 @@ function CompletePaymentContent() {
                 <div style={{ padding: '12px 0', borderTop: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}`, borderBottom: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <span style={{ fontSize: 13, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>Subtotal</span>
-                    <span style={{ fontSize: 13, color: isDark ? 'var(--raw-d1d5db)' : 'var(--raw-374151)' }}>{formatCurrency(planDetails.base_price, planDetails.currency)}</span>
+                    <span style={{ fontSize: 13, color: isDark ? 'var(--raw-d1d5db)' : 'var(--raw-374151)' }}>{formatCurrency(subtotalAmount, planDetails.currency)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <span style={{ fontSize: 13, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>GST (18%)</span>
@@ -499,7 +546,7 @@ function CompletePaymentContent() {
 
           {/* Included Seats */}
           {planDetails.included_seats && (
-            <div style={{ marginTop: 12, padding: 12, backgroundColor: isDark ? 'rgba(67,56,202,0.2)' : 'var(--raw-eef2ff)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ marginTop: 12, padding: 12, backgroundColor: isDark ? 'var(--raw-rgba-67-56-202-0p2)' : 'var(--raw-eef2ff)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 14, color: 'var(--raw-4338ca)', fontWeight: 500 }}>Included Team Seats</span>
               <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--raw-4338ca)' }}>{planDetails.included_seats}</span>
             </div>
@@ -545,7 +592,7 @@ function CompletePaymentContent() {
         )}
 
         {/* Account Status */}
-        <div style={{ backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : 'var(--raw-f0fdf4)', borderRadius: 12, padding: 16, marginBottom: 24, border: `1px solid ${isDark ? 'rgba(16,185,129,0.3)' : 'var(--raw-bbf7d0)'}` }}>
+        <div style={{ backgroundColor: isDark ? 'var(--raw-rgba-16-185-129-0p15)' : 'var(--raw-f0fdf4)', borderRadius: 12, padding: 16, marginBottom: 24, border: `1px solid ${isDark ? 'var(--raw-rgba-16-185-129-0p3)' : 'var(--raw-bbf7d0)'}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <CheckCircle style={{ width: 18, height: 18, color: 'var(--raw-16a34a)' }} />
             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--raw-166534)' }}>Account Created — Payment Pending</span>
@@ -573,7 +620,7 @@ function CompletePaymentContent() {
           ) : (
             <>
               <CreditCard style={{ width: 20, height: 20 }} />
-              Pay {formatCurrency(Math.round((planDetails.base_price * (1 + GST_RATE)) * 100) / 100, planDetails.currency)} - Razorpay
+              Pay {formatCurrency(invoiceAmounts ? invoiceAmounts.total : Math.round((planDetails.base_price * (1 + GST_RATE)) * 100) / 100, planDetails.currency)} - Razorpay
             </>
           )}
         </button>
@@ -640,7 +687,7 @@ function LoadingFallback() {
       <div style={{
         backgroundColor: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)',
         borderRadius: '24px',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+        boxShadow: '0 25px 50px -12px var(--raw-rgba-0-0-0-0p15)',
         padding: '40px',
         border: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-f3f4f6)'}`,
       }}>

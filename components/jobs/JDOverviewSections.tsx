@@ -81,7 +81,7 @@ const stripEmptyCertifications = (description: string): string =>
       match.toLowerCase().includes('none')
       || match.toLowerCase().includes('not required')
       || match.toLowerCase().includes('n/a')
-      || match.trim().match(/^#+\s*Certifications\s*$/im)
+      || match.trim().match(/^#+\s*Certifications\s*$/i)
         ? ''
         : match,
     )
@@ -197,7 +197,7 @@ export default function JDOverviewSections({
             title={PLAN_LOCKED_MESSAGE}
             className={`${CARD} p-4 cursor-not-allowed opacity-60`}
           >
-            <h3 className="flex items-center gap-1.5 text-sm font-medium text-gray-400 dark:text-slate-500 mb-3">
+            <h3 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-slate-500 mb-3">
               Assessment Guidance <Lock className="w-3 h-3" />
             </h3>
             <p className="tf-body-muted italic">{PLAN_LOCKED_MESSAGE}</p>

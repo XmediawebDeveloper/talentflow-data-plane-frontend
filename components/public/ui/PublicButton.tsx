@@ -8,16 +8,16 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary))]/90",
+        default: "bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary)]/90",
         destructive:
-          "bg-[hsl(var(--destructive))] text-white hover:bg-[hsl(var(--destructive))]/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-[hsl(var(--destructive))]/60",
+          "bg-[var(--destructive)] text-white hover:bg-[var(--destructive)]/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-[var(--destructive)]/60",
         outline:
-          "border bg-[hsl(var(--background))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))] dark:bg-[hsl(var(--input))]/30 dark:border-[hsl(var(--input))] dark:hover:bg-[hsl(var(--input))]/50",
+          "border bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] dark:bg-[var(--input)]/30 dark:border-[var(--input)] dark:hover:bg-[var(--input)]/50",
         secondary:
-          "bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--secondary))]/80",
+          "bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:bg-[var(--secondary)]/80",
         ghost:
-          "hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))] dark:hover:bg-[hsl(var(--accent))]/50",
-        link: "text-[hsl(var(--primary))] underline-offset-4 hover:underline",
+          "hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] dark:hover:bg-[var(--accent)]/50",
+        link: "text-[var(--primary)] underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

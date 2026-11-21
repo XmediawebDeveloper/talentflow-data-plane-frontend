@@ -56,7 +56,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : 'var(--raw-dbeafe)',
+    backgroundColor: isDark ? 'var(--raw-rgba-59-130-246-0p2)' : 'var(--raw-dbeafe)',
     color: isDark ? 'var(--raw-93c5fd)' : 'var(--raw-2563eb)',
     fontSize: '14px',
     fontWeight: 600,
@@ -230,7 +230,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   };
 
   const statLabelStyle: React.CSSProperties = {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'var(--raw-rgba-255-255-255-0p8)',
     fontSize: '16px',
   };
 

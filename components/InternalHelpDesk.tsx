@@ -23,6 +23,10 @@ import FilterSelect from '@/components/ui/filter-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useDetailAutoRefresh, isOlder, announceNewReplies } from '@/lib/hooks/useDetailAutoRefresh';
+import { useReplyDraft } from '@/lib/hooks/useReplyDraft';
+import { useDebounce } from '@/lib/hooks/useDebounce';
+import ListPagination from '@/components/ListPagination';
 import UnitDisputesView from '@/components/subscription/unit-disputes/UnitDisputesView';
 
 type ViewType = 'overview' | 'submit' | 'tickets' | 'detail';
@@ -73,6 +77,19 @@ export default function InternalHelpDesk() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
+  // Server-side paging + search: before, only the API's first page ever
+  // loaded, and the search box filtered inside that page.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+  const debouncedSearch = useDebounce(searchQuery.trim(), 350);
+  // A new filter or search starts again from page 1.
+  const filterKey = `${filterStatus}|${filterPriority}|${debouncedSearch}`;
+  const [pagedFor, setPagedFor] = useState(filterKey);
+  if (pagedFor !== filterKey) {
+    setPagedFor(filterKey);
+    setPage(1);
+  }
   const [replyMessage, setReplyMessage] = useState('');
   const [replyFiles, setReplyFiles] = useState<File[]>([]);
   const [replySending, setReplySending] = useState(false);
@@ -89,6 +106,36 @@ export default function InternalHelpDesk() {
   const [stats, setStats] = useState<InternalTicketStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  /* An open ticket refreshes itself (every 30s while the tab is visible, and
+     on coming back to the tab), so a reply or status change from the other
+     side shows up without reloading. Skipped while a reply / action is in
+     flight; an older response never replaces newer data. */
+  const openTicketId = tab === 'requests' && view === 'detail' ? selectedTicket?.id ?? null : null;
+  useDetailAutoRefresh(!!openTicketId, async () => {
+    if (!openTicketId || replySending) return;
+    const fresh = await internalTicketService.getTicket(openTicketId);
+    const shown = selectedTicket?.id === fresh.id ? selectedTicket : null;
+    const apply = (cur: InternalTicket) => cur.id === fresh.id && !isOlder(fresh.updated_at, cur.updated_at);
+    setSelectedTicket((cur) => (cur && apply(cur) ? fresh : cur));
+    setTickets((prev) => prev.map((t) => (apply(t) ? fresh : t)));
+    // Someone else's reply came in → say so (yours are already on screen).
+    if (shown && apply(shown)) {
+      const since = Date.parse(shown.updated_at);
+      announceNewReplies(
+        fresh.ticket_number,
+        (fresh.responses ?? [])
+          .filter((r) => r.user_id !== authUser?.id && Date.parse(r.created_at) > since)
+          .map((r) => ({ name: r.user_name, message: r.message })),
+      );
+    }
+  });
+  // The reply box keeps a draft per ticket (survives switching tickets / reload).
+  useReplyDraft(
+    openTicketId && authUser?.id ? `${authUser.id}:helpdesk:${openTicketId}` : null,
+    replyMessage,
+    setReplyMessage,
+  );
 
   // The stats call failed — the cards show '—' instead of a number.
   const [statsFailed, setStatsFailed] = useState(false);
@@ -161,23 +208,28 @@ export default function InternalHelpDesk() {
     }
   }, [ticketIdFromUrl, router]);
 
-  const fetchTickets = async () => {
+  // `silent`: the background refresh — no spinner, no error toast.
+  const fetchTickets = async ({ silent = false }: { silent?: boolean } = {}) => {
     const seq = ++fetchSeqRef.current;
     const isStale = () => seq !== fetchSeqRef.current;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await internalTicketService.listTickets({
+        page,
+        page_size: pageSize,
         status: filterStatus !== 'all' ? filterStatus as any : undefined,
         priority: filterPriority !== 'all' ? filterPriority as any : undefined,
-        search: searchQuery || undefined,
+        search: debouncedSearch || undefined,
       });
       if (isStale()) return;
       setTickets(response.items);
+      setTotal(response.total ?? response.items.length);
     } catch (error) {
-      if (isStale()) return;
+      if (isStale() || silent) return;
       console.error('Error fetching tickets:', error);
       setTickets([]);
-      showErrorToast(error, "Couldn't load your tickets", { id: 'help-desk-tickets-load', retry: fetchTickets });
+      setTotal(0);
+      showErrorToast(error, "Couldn't load your tickets", { id: 'help-desk-tickets-load', retry: () => fetchTickets() });
     } finally {
       if (!isStale()) setLoading(false);
     }
@@ -210,7 +262,14 @@ export default function InternalHelpDesk() {
   useEffect(() => {
     if (!hasFetched.current) return;
     fetchTickets();
-  }, [filterStatus, filterPriority]);
+  }, [filterStatus, filterPriority, debouncedSearch, page, pageSize]);
+
+  // The overview and list refresh themselves too (every 30s while visible),
+  // so status changes and new replies show without a reload.
+  useDetailAutoRefresh(tab === 'requests' && (view === 'overview' || view === 'tickets'), () => {
+    void fetchTickets({ silent: true });
+    void fetchStats();
+  });
 
   const handleSubmitTicket = async () => {
     if (!title.trim() || !description.trim()) {
@@ -324,14 +383,8 @@ export default function InternalHelpDesk() {
     return cat?.icon || HelpCircle;
   };
 
-  const filteredTickets = tickets.filter(ticket => {
-    const matchesSearch =
-      ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.ticket_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
-
+  // Search runs on the server now (across every page), so rows show as returned.
+  const filteredTickets = tickets;
   const activeFilterChips: FilterChip[] = [
     filterStatus !== 'all' && {
       key: 'status',
@@ -700,7 +753,7 @@ export default function InternalHelpDesk() {
               <div className="p-6 border-b border-gray-200">
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                     <input
                       type="text"
                       value={searchQuery}
@@ -843,6 +896,17 @@ export default function InternalHelpDesk() {
                   })}
                 </MobileRecordList>
                 </>
+              )}
+              {/* Pagination (server total, not just this page) */}
+              {!loading && total > 0 && (
+                <ListPagination
+                  currentPage={page}
+                  itemsPerPage={pageSize}
+                  totalItems={total}
+                  onPageChange={setPage}
+                  onItemsPerPageChange={(n) => { setPageSize(n); setPage(1); }}
+                  itemLabel="requests"
+                />
               )}
             </div>
           </div>

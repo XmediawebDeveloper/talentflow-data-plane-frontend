@@ -66,7 +66,7 @@ export default function FeatureGate({
       <div className="border border-gray-200 rounded-xl p-6 bg-gray-50" title={PLAN_LOCKED_MESSAGE}>
         <div className="flex items-start gap-4">
           <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-            <Lock className="w-5 h-5 text-gray-400" />
+            <Lock className="w-5 h-5 text-gray-500" />
           </div>
           <div className="flex-1">
             <h3 className="tf-row-name mb-1">

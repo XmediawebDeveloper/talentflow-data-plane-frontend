@@ -9,6 +9,7 @@
 // folders away once and every database view opens with them folded.
 import { useState, useSyncExternalStore } from 'react';
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
 
 const COLLAPSED_KEY = 'tf_folder_panel_collapsed';
 /** Fired in this tab when the choice changes ('storage' only fires in others). */
@@ -65,16 +66,14 @@ export function folderColumnClasses(collapsed: boolean, animate: boolean, from: 
  *  heading. Shown only where the column is a side column. */
 export function FolderCollapseButton({ onCollapse, from }: { onCollapse: () => void; from: FolderColumnBreakpoint }) {
   return (
-    <button
+    <IconButton bare label="Hide folders"
       type="button"
       onClick={onCollapse}
-      aria-label="Hide folders"
       aria-expanded={true}
-      title="Hide folders"
-      className={`ml-auto ${from === 'sm' ? 'hidden sm:flex' : 'hidden md:flex'} h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-brand-blue/5 hover:text-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 transition-colors`}
+      className={`ml-auto ${from === 'sm' ? 'hidden sm:flex' : 'hidden md:flex'} h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 transition-colors`}
     >
       <ChevronsLeft className="h-4 w-4" />
-    </button>
+    </IconButton>
   );
 }
 
@@ -89,16 +88,14 @@ export function FolderPanelRail({
         animate ? 'animate-in fade-in slide-in-from-left-2 duration-200 ease-out motion-reduce:animate-none' : ''
       } ${className}`}
     >
-      <button
+      <IconButton bare label="Show folders"
         type="button"
         onClick={onExpand}
-        aria-label="Show folders"
         aria-expanded={false}
-        title="Show folders"
         className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 transition-colors"
       >
         <ChevronsRight className="h-4 w-4" />
-      </button>
+      </IconButton>
       <span className="tf-caption select-none" style={{ writingMode: 'vertical-rl' }}>
         Folders
       </span>

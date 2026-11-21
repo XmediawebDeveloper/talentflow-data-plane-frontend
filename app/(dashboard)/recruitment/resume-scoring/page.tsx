@@ -17,6 +17,7 @@ import FeatureGate from '@/components/shared/FeatureGate';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { cachedList, listCacheKey, LIST_CACHE_TTL_MS } from '@/lib/utils/listCache';
 import { clearScoringOrigin, FROM_RESUME_DATABASE } from '@/lib/utils/resumeActivityTrail';
 
 interface ScoredResumeData {
@@ -602,13 +603,20 @@ export default function ResumeScoringRoute() {
         await loadLegacyIndex(isStale, reloadScores);
         return;
       }
-      const res = await scoringService.listScoredJds({
+      const params: ScoredJdListParams = {
         ...historyQueryRef.current,
         group_by: 'lineage',
         expand_versions: true,
         include_facets: true,
         include_lineages: true,
-      });
+      };
+      // Going back to a filter / page seen in the last 30 s reuses that answer
+      // (any write clears the cache); landing, Refresh and after-scoring read fresh.
+      const res = await cachedList(
+        listCacheKey('scoring-jds:history', params as Record<string, unknown>),
+        () => scoringService.listScoredJds(params),
+        { fresh: reloadScores, ttlMs: LIST_CACHE_TTL_MS },
+      );
       if (isStale()) return;
       if (!res.versions) {
         // Older backend: no per-page versions to open the jobs with.

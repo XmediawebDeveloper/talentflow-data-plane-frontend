@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, Lock, X, Building2, Menu, MessageCircle } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Bell, CheckCheck, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, Lock, X, Building2, Menu, MessageCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
@@ -28,6 +28,7 @@ import { clearRbacSessionCache } from '@/lib/utils/rbacSessionCache';
 import { focusRefreshDue, markRefreshed } from '@/lib/utils/focusRefresh';
 import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 import { getAccessToken } from '@/lib/services/api';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* Highest unread count the bell badge spells out. 1-9 show as themselves;
    anything from 10 up reads "9+" — the count keeps growing behind the scenes
@@ -39,7 +40,7 @@ const MAX_BADGE_COUNT = 9;
    is measured against the rows actually rendered rather than given a pixel
    height: a row is as tall as its message wraps, and that differs between the
    phone-width sheet and the desktop dropdown. */
-const VISIBLE_NOTIFICATIONS = 2;
+const VISIBLE_NOTIFICATIONS = 4;
 
 /* Header theme button cycles Light → Dark → Auto (follows the OS setting). */
 const THEME_CYCLE = ['light', 'dark', 'system'] as const;
@@ -169,23 +170,13 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       }
     };
 
-    // Debounce rapid consecutive events (e.g. scoring 7 resumes fires 7 events).
-    // Coalesce into a single quota refresh 1.5s after the last event.
-    const debounceRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
-    const handleUnitsConsumed = () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        console.log('[Header] Units consumed (debounced), refreshing quota...');
-        fetchQuotaStatus();
-      }, 1500);
-    };
-
+    // No units-consumed listener here: QuotaContext (whose data this header
+    // shows) already refreshes on that event, at once, and queues one more
+    // fetch for events that land mid-fetch. A second, debounced refresh from
+    // here was a duplicate /usage/quota-status 1.5 s after every write.
     window.addEventListener('planChanged', handlePlanChange);
-    window.addEventListener('unitsConsumed', handleUnitsConsumed);
     return () => {
       window.removeEventListener('planChanged', handlePlanChange);
-      window.removeEventListener('unitsConsumed', handleUnitsConsumed);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [user]);
 
@@ -658,9 +649,31 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     }
   };
   
+  /**
+   * One quota's usage, for the dropdown rows and the header pill.
+   *
+   * - `used` (the "N used" text): `subscription.used` alone. In the unified
+   *   pool the API returns, it already counts EVERY unit consumed — plan and
+   *   add-on alike — and `addon.total_consumed` is a part of it. Adding the two
+   *   counted add-on usage twice. It is a raw counter, so real overage still
+   *   shows (it may exceed the limit).
+   * - `capacityUsed` (the bar and %): limit − total_remaining, the API's own
+   *   "left" figure shown beside the bar. So once add-ons are bought on top
+   *   of an exhausted plan, the bar drops to match the units now available,
+   *   instead of staying stuck at 100% while "Left 500" says otherwise. When
+   *   `total_remaining` isn't a number it falls back to `used`.
+   * Same model as the Usage page (UsageDashboard).
+   */
+  const quotaUsage = (quota: { subscription?: { used?: number }; total_remaining?: number | string }, limit: number) => {
+    const used = (quota.subscription?.used as number) ?? 0;
+    const remaining = typeof quota.total_remaining === 'number' ? Math.max(0, quota.total_remaining) : null;
+    const capacityUsed = remaining != null ? Math.max(0, limit - remaining) : Math.min(used, limit);
+    return { used, capacityUsed };
+  };
+
   // Calculate total units across all quota types (RU + RS + AS + AIU) — max_seats excluded
   const calculateTotalUnits = () => {
-    if (!quotaData?.quotas) return { remaining: 0, limit: 0, used: 0 };
+    if (!quotaData?.quotas) return { remaining: 0, limit: 0, used: 0, capacityUsed: 0 };
 
     const quotas = quotaData.quotas;
     // Exclude max_seats from totals — it is shown separately in the dropdown
@@ -669,6 +682,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     let totalRemaining = 0;
     let totalLimit = 0;
     let totalUsed = 0;
+    // Capacity used = limit − remaining, so the pill's bar always agrees with
+    // its "units left" (see usedShare below).
+    let totalCapacityUsed = 0;
 
     unitTypes.forEach(quotaType => {
       if (quotas[quotaType]) {
@@ -676,16 +692,17 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
         // Skip unlimited quotas in the calculation
         if ((quota as any).is_unlimited) return;
 
+        const limit = (quota.subscription?.limit as number || 0) + (quota.addon?.total_purchased || 0);
         totalRemaining += (quota.total_remaining as number) || 0;
-        totalLimit += (quota.subscription?.limit as number || 0) + (quota.addon?.total_purchased || 0);
-        // Same "used" as each row of the breakdown below: plan plus add-on
-        // consumption, matching a limit that includes add-on units. Raw
-        // counters rather than `limit - remaining` — see the rows' note.
-        totalUsed += ((quota.subscription?.used as number) ?? 0) + ((quota.addon?.total_consumed as number) ?? 0);
+        totalLimit += limit;
+        // Same "used" as each row of the breakdown below — see quotaUsage().
+        const { used, capacityUsed } = quotaUsage(quota, limit);
+        totalUsed += used;
+        totalCapacityUsed += capacityUsed;
       }
     });
 
-    return { remaining: totalRemaining, limit: totalLimit, used: totalUsed };
+    return { remaining: totalRemaining, limit: totalLimit, used: totalUsed, capacityUsed: totalCapacityUsed };
   };
 
   // Label, module icon and brand tint for each quota key shown in the plan
@@ -717,10 +734,17 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
   };
 
   const planName = getPlanDisplayName();
-  const usagePercentage = totalUnits.limit > 0 ? ((totalUnits.used / totalUnits.limit) * 100) : 0;
+  const usagePercentage = totalUnits.limit > 0 ? ((totalUnits.capacityUsed / totalUnits.limit) * 100) : 0;
   /* Shown beside a usage bar: whole percent, "<1%" for a sliver of use (so a
      little use never reads as 0%), capped at 100%. */
-  const percentLabel = (pct: number) => (pct > 0 && pct < 1 ? '<1%' : `${Math.min(100, Math.round(pct))}%`);
+  /* Never "100%" while units are left (e.g. 3,013 of 3,023 is 99.7%, which
+     rounded up to a full-looking 100% beside "Left 10"): then it reads 99%.
+     Every other figure rounds as before. */
+  const percentLabel = (pct: number, unitsLeft = 0) => {
+    if (pct > 0 && pct < 1) return '<1%';
+    const shown = Math.min(100, Math.round(pct));
+    return `${unitsLeft > 0 && shown >= 100 ? 99 : shown}%`;
+  };
   const isPendingStatus = tenantStatus === 'PENDING' || tenantStatus === 'SUSPENDED' || tenantStatus === 'LOCKED';
   const isExpiredSubscription = ['expired', 'inactive'].includes((quotaData?.subscription_status || '').toLowerCase());
 
@@ -897,17 +921,16 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       <div className="mx-auto flex h-full w-full max-w-[1400px] items-center justify-between px-4 md:px-8">
       {/* Hamburger Menu Button - Only on Mobile */}
       {onMenuClick && (
-        <button
+        <IconButton bare label={isMobileMenuOpen ? "Close menu" : "Open menu"}
           onClick={onMenuClick}
           className="lg:hidden p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors mr-2"
-          aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
         >
           {isMobileMenuOpen ? (
             <X className="w-5 h-5" />
           ) : (
             <Menu className="w-5 h-5" />
           )}
-        </button>
+        </IconButton>
       )}
 
       {/* Brand logo — shown in the header so the dashboard route (where the sidebar is hidden) still has a brand mark. */}
@@ -927,8 +950,12 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       {/* Global Search Bar - Hidden on mobile, visible on desktop */}
       <GlobalSearch className="hidden lg:flex items-center flex-1 max-w-sm" />
 
-      {/* Spacer for mobile to push icons to the right */}
-      <div className="flex-1 lg:hidden" />
+      {/* Spacer for mobile to push icons to the right — with the search
+          button (phones / tablets) at its right end, before the icons. Not
+          under 360px (2xs), where the icon row is already at its limit. */}
+      <div className="flex-1 lg:hidden flex justify-end">
+        <GlobalSearch variant="icon" className="hidden 2xs:block" />
+      </div>
 
       <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 lg:ml-8">
         {/* FIX-010: Keyboard Shortcuts Button with Tooltip - Hidden on mobile */}
@@ -980,12 +1007,12 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
             className="liquid-glass-card flex min-h-[36px] sm:min-h-[44px] cursor-not-allowed items-center gap-1.5 lg:gap-2 rounded-lg px-1.5 py-1 sm:px-2 sm:py-1.5 lg:px-2.5 opacity-60"
           >
             <div className="w-6 h-6 rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center dark:border-slate-700 dark:bg-slate-800">
-              <CreditCard className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.15} />
+              <CreditCard className="w-3.5 h-3.5 text-slate-500" strokeWidth={2.15} />
             </div>
             <span className="hidden sm:block text-2xs lg:text-xs font-semibold text-slate-500 dark:text-slate-400 truncate max-w-[90px] md:max-w-[130px] lg:max-w-[170px]">
               {loadingQuota ? 'Loading...' : planName}
             </span>
-            <Lock className="w-3 h-3 text-slate-400" />
+            <Lock className="w-3 h-3 text-slate-500" />
           </div>
         )}
         {hasQuotaPermission && canSeeUnits && (
@@ -1023,7 +1050,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                 /* Units used, as a bar and its percentage (same colour). */
                 <div
                   className="hidden sm:flex items-center gap-1"
-                  title={`${percentLabel(usagePercentage)} of units used`}
+                  title={`${percentLabel(usagePercentage, totalUnits.remaining)} of units used`}
                 >
                   <div
                     role="progressbar"
@@ -1047,11 +1074,11 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       usagePercentage > 70 ? 'text-brand-orange-deep dark:text-orange-300' : 'text-slate-600 dark:text-slate-300'
                     }`}
                   >
-                    {percentLabel(usagePercentage)}
+                    {percentLabel(usagePercentage, totalUnits.remaining)}
                   </span>
                 </div>
               )}
-              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform group-hover:text-slate-500 dark:text-slate-500 ${showPlanMenu ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3 h-3 text-slate-500 transition-transform group-hover:text-slate-500 dark:text-slate-500 ${showPlanMenu ? 'rotate-180' : ''}`} />
             </button>
 
             {showPlanMenu && !isExpiredSubscription && (
@@ -1065,43 +1092,46 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                     (page dropdowns peak at z-50) and stays under the layout's
                     global modals, which start at z-[88]. */}
                 <div className="fixed inset-0 z-[80]" onClick={() => setShowPlanMenu(false)} />
-                {/* Phones AND small tablets get a fixed, full-width sheet under
-                    the header: the pill sits ~180px in from the right edge, so
-                    a 520px panel anchored to it would run off the left of any
-                    viewport narrower than ~768px. Only md+ anchors to the pill. */}
-                <div className="fixed left-3 right-3 top-[4.25rem] md:absolute md:left-auto md:right-0 md:top-full md:mt-2 md:w-[420px] md:max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-5rem)] overflow-y-auto bg-white rounded-xl shadow-xl border border-gray-200 z-[85]">
+                {/* Compact panel (22rem). Phones and small tablets: centred under
+                    the header (left-3 right-3 + mx-auto), since the pill sits
+                    too far in from the edge to anchor a panel to it; md+:
+                    anchored to the pill. Opens like Quick actions — scales up
+                    from its corner with a fade (tailwindcss-animate). */}
+                <div className="animate-in fade-in zoom-in-90 slide-in-from-top-1 duration-200 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:animate-none origin-top md:origin-top-right fixed left-3 right-3 mx-auto w-[min(22rem,calc(100vw-1.5rem))] top-[4.25rem] md:absolute md:left-auto md:right-0 md:mx-0 md:top-full md:mt-2 md:w-[22rem] max-h-[calc(100dvh-5rem)] overflow-y-auto bg-white rounded-xl shadow-xl shadow-slate-900/10 border border-gray-200 z-[85]">
                   {/* Plan header — name, cadence/renewal meta, Upgrade plan.
                       flex-wrap lets the button drop below the meta line on
                       narrow phones instead of crushing the plan name. */}
                   {/* No flex-wrap here: the meta line wraps INSIDE the left
                       block, so the Upgrade button stays pinned to the right
                       corner instead of dropping below the plan name. */}
-                  <div className="px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 border-b border-gray-100">
+                  <div className="px-3 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 border-b border-gray-100">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-brand-blue text-white ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center flex-shrink-0">
                         <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       </div>
                       <div className="min-w-0">
-                        <h3 className="text-sm font-bold text-gray-900 truncate">{planName}</h3>
-                        <div className="flex items-center gap-1 flex-wrap tf-micro-hint mt-0.5">
+                        {/* Plan name, then its billing cadence in small brackets:
+                            "Apps starter (Annual plan)". The brackets never shrink, so
+                            they always show in full; only a very long plan name
+                            would end in "…". */}
+                        <h3 className="flex min-w-0 items-baseline gap-1 text-[0.8125rem] font-bold text-gray-900">
+                          <span className="truncate">{planName}</span>
                           {planPeriodLabel && (
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-gray-400" />
-                              {planPeriodLabel}
-                            </span>
+                            <span className="shrink-0 whitespace-nowrap text-2xs font-medium text-gray-500 dark:text-slate-400">({planPeriodLabel})</span>
                           )}
+                        </h3>
+                        <div className="flex items-center gap-1 flex-wrap tf-micro-hint mt-0.5">
                           {renewalLabel && (
                             <>
-                              {planPeriodLabel && <span className="text-gray-300 dark:text-slate-600">•</span>}
                               <span className="flex items-center gap-1">
-                                <Calendar className="w-3 h-3 text-gray-400" />
+                                <Calendar className="w-3 h-3 text-gray-500" />
                                 {quotaData?.is_trial ? 'Ends on' : 'Renews on'} {renewalLabel}
                               </span>
                             </>
                           )}
                           {planDaysLeft != null && (
                             <>
-                              {(planPeriodLabel || renewalLabel) && <span className="text-gray-300 dark:text-slate-600">•</span>}
+                              {renewalLabel && <span className="text-gray-300 dark:text-slate-600">•</span>}
                               <span className="text-success-strong font-medium">{planDaysLeft} days left</span>
                             </>
                           )}
@@ -1126,7 +1156,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                   </div>
 
                   {/* Unit balance breakdown */}
-                  <div className="px-3 pt-2 text-2xs font-semibold tracking-wider text-gray-500 uppercase">
+                  <div className="px-3 pt-1.5 text-2xs font-semibold tracking-wider text-gray-500 uppercase">
                     Unit Balance Breakdown
                   </div>
                   <div className="px-3 divide-y divide-gray-100">
@@ -1138,28 +1168,35 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       const isUnlimited = !!(quota as any).is_unlimited;
                       const remaining = isUnlimited ? null : ((quota.total_remaining as number) || 0);
                       const limit = isUnlimited ? null : ((quota.subscription?.limit as number || 0) + (quota.addon?.total_purchased || 0));
-                      // Raw counters, not `limit - remaining` — `remaining` is floored at 0
-                      // by the API, so that derivation silently caps "used" at `limit` and
-                      // hides real consumption once a tenant goes over quota.
-                      const used = isUnlimited ? 0 : ((quota.subscription?.used as number ?? 0) + (quota.addon?.total_consumed as number ?? 0));
-                      const pct = limit && limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
+                      // "N used" = true consumption (may exceed the limit); the bar and
+                      // % = limit − left, so they always agree with "Left". See quotaUsage().
+                      const { used: usedRaw, capacityUsed } = isUnlimited || limit == null
+                        ? { used: 0, capacityUsed: 0 }
+                        : quotaUsage(quota, limit);
+                      const used = usedRaw;
+                      const pct = limit && limit > 0 ? Math.min((capacityUsed / limit) * 100, 100) : 0;
+                      const addonPurchased = (quota.addon?.total_purchased as number) || 0;
+                      const addonLeft = Math.min(
+                        Math.max(0, addonPurchased - ((quota.addon?.total_consumed as number) || 0)),
+                        remaining ?? 0,
+                      );
                       return (
-                        <div key={key} className="py-2 sm:py-2.5 flex items-center gap-2">
-                          <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.tile}`}>
-                            <RowIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <div key={key} className="py-1.5 flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${meta.tile}`}>
+                            <RowIcon className="w-3 h-3" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="tf-row-title truncate">{meta.label}</div>
+                            <div className="tf-row-title !text-[0.8125rem] truncate">{meta.label}</div>
                             {!isUnlimited && limit != null && limit > 0 && (
                               /* Used share, as a bar and its percentage. */
-                              <div className="mt-1 flex items-center gap-1.5" title={`${percentLabel(pct)} of ${meta.label} used`}>
+                              <div className="mt-0.5 flex items-center gap-1.5" title={`${percentLabel(pct, remaining ?? 0)} of ${meta.label} used`}>
                                 <div
                                   role="progressbar"
                                   aria-label={`${meta.label} used`}
                                   aria-valuenow={Math.round(pct)}
                                   aria-valuemin={0}
                                   aria-valuemax={100}
-                                  className="h-1.5 w-full max-w-[140px] bg-gray-100 dark:bg-slate-700/80 rounded-full overflow-hidden"
+                                  className="h-1 w-full max-w-[88px] bg-gray-100 dark:bg-slate-700/80 rounded-full overflow-hidden"
                                 >
                                   <div
                                     className={`h-full rounded-full transition-[width] ${meta.bar}`}
@@ -1167,20 +1204,28 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                                   />
                                 </div>
                                 <span className={`shrink-0 text-2xs font-semibold tabular-nums ${meta.left}`}>
-                                  {percentLabel(pct)}
+                                  {percentLabel(pct, remaining ?? 0)}
                                 </span>
+                              </div>
+                            )}
+                            {/* Add-on units bought for this quota: shows the add-on was
+                                applied and how much of it is left (capped by the row's
+                                total "Left"), e.g. after topping up a used-up plan. */}
+                            {!isUnlimited && addonPurchased > 0 && (
+                              <div className="mt-0.5 text-2xs tabular-nums text-gray-500 dark:text-slate-400">
+                                Add-on: {addonLeft.toLocaleString()} of {addonPurchased.toLocaleString()} left
                               </div>
                             )}
                           </div>
                           {isUnlimited ? (
-                            <span className="text-xs font-semibold text-success-strong">Unlimited</span>
+                            <span className="text-[0.6875rem] font-semibold text-success-strong">Unlimited</span>
                           ) : (
                             <>
-                              <span className="tf-meta tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                              <span className="tf-meta !text-[0.6875rem] tabular-nums whitespace-nowrap min-w-[44px] text-right">
                                 {used.toLocaleString()} used
                               </span>
                               <span className="w-px h-4 bg-gray-200 flex-shrink-0" />
-                              <span className={`text-xs font-bold tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right ${meta.left}`}>
+                              <span className={`text-[0.6875rem] font-bold tabular-nums whitespace-nowrap min-w-[52px] text-right ${meta.left}`}>
                                 Left {(remaining ?? 0).toLocaleString()}
                               </span>
                             </>
@@ -1199,23 +1244,23 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                     const limit = isUnlimited ? null : ((seats.subscription?.limit as number || 0) + (seats.addon?.total_purchased || 0));
                     const used = (limit != null && remaining != null) ? limit - remaining : 0;
                     return (
-                      <div className="mx-3 mt-1.5 rounded-lg bg-brand-blue/5 border border-brand-blue/10 px-2.5 py-2 sm:px-3 sm:py-2.5">
+                      <div className="mx-3 mt-1 rounded-lg bg-brand-blue/5 border border-brand-blue/10 px-2 py-1.5">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-200/70 text-gray-600 dark:bg-slate-700/70 dark:text-slate-300 flex items-center justify-center flex-shrink-0">
-                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          <div className="w-6 h-6 rounded-md bg-gray-200/70 text-gray-600 dark:bg-slate-700/70 dark:text-slate-300 flex items-center justify-center flex-shrink-0">
+                            <Users className="w-3 h-3" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="tf-row-title">Users</div>
+                            <div className="tf-row-title !text-[0.8125rem]">Users</div>
                           </div>
                           {isUnlimited ? (
-                            <span className="text-xs font-semibold text-success-strong">Unlimited</span>
+                            <span className="text-[0.6875rem] font-semibold text-success-strong">Unlimited</span>
                           ) : (
                             <>
-                              <span className="tf-meta tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                              <span className="tf-meta !text-[0.6875rem] tabular-nums whitespace-nowrap min-w-[44px] text-right">
                                 {used.toLocaleString()} used
                               </span>
                               <span className="w-px h-4 bg-gray-300 flex-shrink-0" />
-                              <span className="text-xs font-bold text-gray-900 tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right">
+                              <span className="text-[0.6875rem] font-bold text-gray-900 tabular-nums whitespace-nowrap min-w-[52px] text-right">
                                 Left {(remaining ?? 0).toLocaleString()}
                               </span>
                             </>
@@ -1227,11 +1272,11 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
 
                   {/* Add-ons banner — deep-links to Usage & Quotas, where the
                       add-on purchase flow lives. */}
-                  <div className="mx-3 my-2.5 rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-wrap items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
-                      <Info className="w-3.5 h-3.5" />
+                  <div className="mx-3 my-2 rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 flex flex-wrap items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
+                      <Info className="w-3 h-3" />
                     </div>
-                    <span className="flex-1 min-w-0 tf-row-name">Need extra units right away?</span>
+                    <span className="flex-1 min-w-0 tf-row-name !text-[0.8125rem]">Need extra units right away?</span>
                     <Button
                       variant="primary"
                       size="sm"
@@ -1316,46 +1361,61 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                 className="fixed inset-0 z-[80]"
                 onClick={() => setShowNotifications(false)}
               ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-[85]">
-                <div className="px-4 py-3 bg-brand-blue text-white">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-medium flex items-center gap-2">
+              <div className="animate-in fade-in zoom-in-90 slide-in-from-top-1 duration-200 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:animate-none origin-top sm:origin-top-right fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-[23rem] bg-white dark:bg-slate-900 rounded-xl shadow-xl shadow-slate-900/10 ring-1 ring-gray-200/80 dark:ring-slate-700 overflow-hidden z-[85]">
+                {/* Header: title + live dot + new count, "Mark all read" on the
+                    right, then an All / Unread segmented toggle. */}
+                <div className="px-3.5 pt-3 pb-2.5 border-b border-gray-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-100">
+                      Notifications
                       {/* Real-time connection indicator */}
                       <Tooltip content={wsConnected ? 'Real-time connected' : 'Using polling'} position="bottom">
-                        <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-success' : 'bg-warning'}`}></span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-success' : 'bg-warning'}`} aria-label={wsConnected ? 'Real-time connected' : 'Using polling'} />
                       </Tooltip>
-                      <Bell className="w-5 h-5" />
-                      Notifications
+                      {unreadCount > 0 && (
+                        <span className="rounded-full bg-brand-blue/10 px-1.5 py-px text-2xs font-semibold text-brand-blue dark:bg-blue-400/15 dark:text-blue-300">
+                          {unreadCount} new
+                        </span>
+                      )}
                     </h3>
-                    {unreadCount > 0 && (
-                      <span className="tf-badge bg-white/20">{unreadCount} new</span>
-                    )}
+                    <button
+                      onClick={handleMarkAllAsRead}
+                      disabled={unreadCount === 0}
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/[0.08] disabled:cursor-not-allowed disabled:text-gray-500 disabled:hover:bg-transparent dark:text-blue-300 dark:hover:bg-blue-400/15 dark:disabled:text-slate-500 transition-colors"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" aria-hidden />
+                      Mark all read
+                    </button>
                   </div>
-                  <p className="text-sm text-white/80 mt-1">Stay updated with latest activities</p>
-                </div>
 
-                {/* Filter Tabs */}
-                <div className="flex border-b border-gray-200 bg-gray-50">
-                  <button
-                    onClick={() => setActiveNotificationTab('all')}
-                    className={`tf-tab-line flex-1 ${
-                      activeNotificationTab === 'all'
-                        ? 'tf-tab-line-active bg-white'
-                        : ''
-                    }`}
-                  >
-                    All ({totalCount})
-                  </button>
-                  <button
-                    onClick={() => setActiveNotificationTab('unread')}
-                    className={`tf-tab-line flex-1 ${
-                      activeNotificationTab === 'unread'
-                        ? 'tf-tab-line-active bg-white'
-                        : ''
-                    }`}
-                  >
-                    Unread ({unreadCount})
-                  </button>
+                  <div role="tablist" aria-label="Filter notifications" className="mt-2.5 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-0.5 dark:bg-slate-800">
+                    {([
+                      ['all', 'All', totalCount],
+                      ['unread', 'Unread', unreadCount],
+                    ] as const).map(([tab, label, count]) => {
+                      const active = activeNotificationTab === tab;
+                      return (
+                        <button
+                          key={tab}
+                          role="tab"
+                          aria-selected={active}
+                          onClick={() => setActiveNotificationTab(tab)}
+                          className={`flex items-center justify-center gap-1.5 rounded-md py-1 text-xs font-medium transition-colors ${
+                            active
+                              ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-700 dark:text-slate-100'
+                              : 'text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
+                          }`}
+                        >
+                          {label}
+                          <span className={`rounded-full px-1.5 text-2xs tabular-nums ${
+                            active ? 'bg-brand-blue/10 text-brand-blue dark:bg-blue-400/15 dark:text-blue-300' : 'bg-gray-200/70 dark:bg-slate-700'
+                          }`}>
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Fixed to VISIBLE_NOTIFICATIONS rows once there are more than
@@ -1370,48 +1430,56 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                 >
                   {notificationsLoading ? (
                     <div className="flex items-center justify-center py-8">
-                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                      <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
                     </div>
                   ) : notifications.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 text-gray-500">
-                      <Bell className="w-8 h-8 mb-2 opacity-50" />
-                      <p className="text-sm">
+                      <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 dark:bg-slate-800">
+                        <Bell className="w-5 h-5" aria-hidden />
+                      </span>
+                      <p className="text-sm font-medium text-gray-700 dark:text-slate-200">
                         {activeNotificationTab === 'unread' ? 'No unread notifications' : 'No notifications'}
                       </p>
-                      <p className="tf-hint mt-1">You're all caught up!</p>
+                      <p className="tf-hint mt-0.5">You're all caught up!</p>
                     </div>
                   ) : (
-                    <div ref={notificationListRef} className="p-2 space-y-1">
+                    <div ref={notificationListRef} className="p-1.5 space-y-0.5">
                       {notifications.map((notification) => {
                         const style = getNotificationStyle(notification.type);
                         const IconComponent = style.icon;
+                        const unread = !notification.is_read;
                         return (
                           <button
                             key={notification.id}
                             onClick={() => handleNotificationClick(notification)}
-                            className={`w-full text-left p-3 hover:bg-brand-blue/5 rounded-lg transition-colors ${
-                              !notification.is_read ? `border-l-4 ${style.borderColor} ${style.bgTint}` : ''
+                            className={`group/n relative flex w-full gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-brand-blue/[0.06] dark:hover:bg-blue-400/10 ${
+                              unread ? 'bg-brand-blue/[0.03] dark:bg-blue-400/[0.05]' : ''
                             }`}
                           >
-                            <div className="flex gap-3">
-                              <div className={`w-10 h-10 ${style.bgColor} rounded-full flex items-center justify-center flex-shrink-0`}>
-                                <IconComponent className={`w-5 h-5 ${style.iconColor}`} />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-2 mb-1">
-                                  <p className={`text-sm ${notification.is_read ? 'text-gray-600' : 'text-gray-900 font-medium'}`}>
-                                    {notification.title}
-                                  </p>
-                                  <span className="tf-meta whitespace-nowrap">{notification.time_ago}</span>
-                                </div>
-                                <p className="tf-meta">{notification.message}</p>
-                                {user.role === 'tenant_admin' && notification.action_label && (
-                                  <div className="flex items-center gap-2 mt-2">
-                                    <span className={`text-xs ${style.labelColor} font-medium`}>{notification.action_label}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                            <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${style.bgColor}`}>
+                              <IconComponent className={`w-4 h-4 ${style.iconColor}`} aria-hidden />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-start gap-2">
+                                <span className={`min-w-0 flex-1 text-[0.8125rem] leading-snug line-clamp-2 ${
+                                  unread ? 'font-semibold text-gray-900 dark:text-slate-100' : 'font-medium text-gray-700 dark:text-slate-300'
+                                }`}>
+                                  {notification.title}
+                                </span>
+                                <span className="mt-px shrink-0 text-2xs text-gray-500 whitespace-nowrap">{notification.time_ago}</span>
+                              </span>
+                              <span className="mt-0.5 block tf-meta !text-xs leading-snug line-clamp-2">{notification.message}</span>
+                              {user.role === 'tenant_admin' && notification.action_label && (
+                                <span className={`mt-1 inline-flex items-center gap-0.5 text-xs font-medium ${style.labelColor}`}>
+                                  {notification.action_label}
+                                  <ChevronRight className="w-3 h-3 transition-transform group-hover/n:translate-x-0.5 motion-reduce:transition-none" aria-hidden />
+                                </span>
+                              )}
+                            </span>
+                            {/* Unread marker */}
+                            {unread && (
+                              <span className="absolute right-2 bottom-2.5 h-1.5 w-1.5 rounded-full bg-brand-blue dark:bg-blue-400" aria-label="Unread" />
+                            )}
                           </button>
                         );
                       })}
@@ -1419,29 +1487,17 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                   )}
                 </div>
 
-                {/* Footer Actions */}
-                <div className="border-t border-gray-200 p-3 bg-gray-50 flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleMarkAllAsRead}
-                    disabled={unreadCount === 0}
-                    className="flex-1"
-                  >
-                    Mark All Read
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => {
-                      setShowNotifications(false);
-                      router.push('/notifications');
-                    }}
-                    className="flex-1"
-                  >
-                    View All
-                  </Button>
-                </div>
+                {/* Footer — one link to the full page (Mark all read is in the head). */}
+                <button
+                  onClick={() => {
+                    setShowNotifications(false);
+                    router.push('/notifications');
+                  }}
+                  className="flex w-full items-center justify-center gap-1 border-t border-gray-100 py-2.5 text-xs font-semibold text-brand-blue transition-colors hover:bg-brand-blue/[0.06] dark:border-slate-800 dark:text-blue-300 dark:hover:bg-blue-400/10"
+                >
+                  View all notifications
+                  <ArrowRight className="w-3.5 h-3.5" aria-hidden />
+                </button>
               </div>
             </>
           )}
@@ -1476,7 +1532,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
               <div className="text-xs lg:text-sm text-gray-900 truncate max-w-[80px] lg:max-w-none">{user.name || user.email || 'User'}</div>
               <div className="tf-micro-hint lg:text-xs">{user.roleDisplay || prettyRole(user.role)}</div>
             </div>
-            <ChevronDown className="hidden md:block w-3 h-3 lg:w-4 lg:h-4 text-gray-400" />
+            <ChevronDown className="hidden md:block w-3 h-3 lg:w-4 lg:h-4 text-gray-500" />
           </button>
 
           {showUserMenu && (
@@ -1604,7 +1660,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             <span className="block tf-row-name truncate">{title}</span>
                             <span className="block tf-meta truncate">{subtitle}</span>
                           </span>
-                          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-gray-300 transition-colors group-hover:text-brand-blue" />
+                          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground dark:text-gray-300 transition-colors group-hover:text-brand-blue" />
                         </button>
                       );
                     })}

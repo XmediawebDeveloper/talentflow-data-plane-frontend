@@ -16,6 +16,8 @@ import { IS_PRODUCTION_ENV } from '../../../lib/utils/env';
 
 import { formatScore1, formatSkillScore, truncate1 } from '@/lib/utils/matchStatus';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 interface Props {
   data: DashboardData;
 }
@@ -290,7 +292,7 @@ function SkillsListView({ data }: { data: DashboardData }) {
           <div className="px-3 sm:px-5 py-3 border-r border-gray-200">
             <div className="tf-micro-hint mb-0.5">Section Score</div>
             <div className={`text-lg sm:text-xl font-bold tabular-nums ${accentCls}`}>
-              {formatScore1(avg)}<span className="text-sm font-semibold text-gray-400">/10</span>
+              {formatScore1(avg)}<span className="text-sm font-semibold text-gray-500">/10</span>
             </div>
           </div>
           <div className="px-3 sm:px-5 py-3 border-r border-gray-200">
@@ -448,9 +450,9 @@ function SkillsGridView({ data }: { data: DashboardData }) {
               </div>
               <div className="text-right">
                 <div className="tf-meta">Contribution</div>
-                <div className={`text-lg font-bold ${notAssessed ? 'text-gray-400' : 'text-indigo-700'}`}>{notAssessed ? '—' : contribution}</div>
+                <div className={`text-lg font-bold ${notAssessed ? 'text-gray-500' : 'text-indigo-700'}`}>{notAssessed ? '—' : contribution}</div>
               </div>
-              {isOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+              {isOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
             </div>
           </div>
           <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -823,7 +825,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
               // to show. Distinct from "Not Answered" (asked, candidate silent).
               if (q.notDelivered) {
                 return (
-                  <span className="text-gray-400 italic inline-flex items-center gap-1.5">
+                  <span className="text-gray-500 italic inline-flex items-center gap-1.5">
                     <SkipForward className="w-3.5 h-3.5" />
                     Not asked — the interview ended before this question was reached
                   </span>
@@ -834,14 +836,14 @@ export function QuestionsView({ data, renderAnswerAction }: {
                 ansClean.toLowerCase() === '[skipped]' ||
                 ['skipped', 'not_answered', 'timeout', 'low_coverage', 'idk'].includes(rt);
               if (ansClean && isNonEnglishAnswer(ansClean)) {
-                return <span className="text-gray-400 italic">{NON_ENGLISH_ANSWER_TEXT}</span>;
+                return <span className="text-gray-500 italic">{NON_ENGLISH_ANSWER_TEXT}</span>;
               }
               if (!noRealAnswer) {
                 return <span className="text-gray-700">{answer}</span>;
               }
               if (q.skipReason) {
                 return (
-                  <span className={`inline-flex items-center gap-1.5 italic ${q.skipReason.tone === 'amber' ? 'text-warning' : 'text-gray-400'}`}>
+                  <span className={`inline-flex items-center gap-1.5 italic ${q.skipReason.tone === 'amber' ? 'text-warning' : 'text-gray-500'}`}>
                     <SkipForward className="w-3.5 h-3.5" />
                     {q.skipReason.text}
                   </span>
@@ -853,9 +855,9 @@ export function QuestionsView({ data, renderAnswerAction }: {
                 return <span className="text-gray-500 italic">Skipped — candidate clicked “Next Question”</span>;
               }
               if (rt === 'idk') {
-                return <span className="text-gray-400 italic">Not Answered — candidate said “I don't know”</span>;
+                return <span className="text-gray-500 italic">Not Answered — candidate said “I don't know”</span>;
               }
-              return <span className="text-gray-400 italic">Not Answered — no response from the candidate</span>;
+              return <span className="text-gray-500 italic">Not Answered — no response from the candidate</span>;
             })()}
           </div>
         </div>
@@ -884,16 +886,16 @@ export function QuestionsView({ data, renderAnswerAction }: {
                       <span className="truncate">{s.name}</span>
                     </span>
                     <span className={`text-right md:text-center text-lg font-bold tabular-nums ${
-                      s.is_unscored || s.is_skipped ? 'text-gray-400' : skillScoreText(s.score)
+                      s.is_unscored || s.is_skipped ? 'text-gray-500' : skillScoreText(s.score)
                     }`}>
-                      {s.is_unscored ? '—' : <>{formatSkillScore(s.score)}<span className="text-xs font-semibold text-gray-400">/10</span></>}
+                      {s.is_unscored ? '—' : <>{formatSkillScore(s.score)}<span className="text-xs font-semibold text-gray-500">/10</span></>}
                     </span>
                     <span className="col-span-2 md:col-span-1 border-l-2 border-warning pl-3 tf-body text-gray-700 leading-relaxed break-words">
                       {s.is_unscored
                         ? <span className="italic text-gray-500">Not evaluated — excluded from the question score.</span>
                         : s.is_skipped
                           ? <span className="italic text-gray-500">Skipped — not scored for this skill.</span>
-                          : (s.note || <span className="italic text-gray-400">No note from the evaluator.</span>)}
+                          : (s.note || <span className="italic text-gray-500">No note from the evaluator.</span>)}
                     </span>
                   </div>
                 ))}
@@ -990,7 +992,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
                                 ) : (
                                   <>
                                     <td className="px-3 py-2 text-center font-semibold tabular-nums">
-                                      <span className={s.is_skipped ? 'text-gray-400' : 'text-gray-900'}>{formatSkillScore(s.score)}</span>
+                                      <span className={s.is_skipped ? 'text-gray-500' : 'text-gray-900'}>{formatSkillScore(s.score)}</span>
                                       {s.is_skipped ? (
                                         <span className="ml-1 inline-flex items-center px-1.5 rounded text-2xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"
                                           title="Candidate skipped or said 'I don't know' — not scored for this skill.">
@@ -1033,7 +1035,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
                                     = {st.expr} = <span className="font-bold text-gray-900">{st.res}</span>
                                   </div>
                                 </div>
-                                {si < 2 && <ChevronRight className="hidden sm:block w-4 h-4 text-gray-400 shrink-0 ml-auto" />}
+                                {si < 2 && <ChevronRight className="hidden sm:block w-4 h-4 text-gray-500 shrink-0 ml-auto" />}
                               </div>
                             ))}
                           </div>
@@ -1338,7 +1340,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
   };
   // Jump-chip colour: the same score bands as the card's score badge.
   const jumpTone = (q: typeof delivered[number]): string => {
-    if (statusOf(q) === 'not_asked') return 'bg-gray-50 text-gray-400 border-gray-200';
+    if (statusOf(q) === 'not_asked') return 'bg-gray-50 text-gray-500 border-gray-200';
     if (q.section === 'hr') return 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20';
     if (q.isUnscored) return 'bg-gray-100 text-gray-500 border-gray-300';
     return scoreColorClass(q.questionScore);
@@ -1876,7 +1878,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                                     <div className="tf-meta">Score</div>
                                     <div className="flex items-center justify-center gap-1">
                                       <div
-                                        className={`text-base font-bold ${s.is_skipped ? 'text-gray-400' : 'text-emerald-500'}`}
+                                        className={`text-base font-bold ${s.is_skipped ? 'text-gray-500' : 'text-emerald-500'}`}
                                       >
                                         {formatSkillScore(s.score)}
                                       </div>
@@ -2072,7 +2074,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
 
       {/* Transcript dialog */}
       {transcriptOpen && (
-        <div
+        <ModalA11y><div
           className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
           onClick={() => setTranscriptOpen(null)}
         >
@@ -2084,14 +2086,13 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
               <div className="tf-section-title">
                 Question {transcriptOpen.qNum} — Full Transcript
               </div>
-              <button
+              <IconButton bare label="Close"
                 type="button"
                 onClick={() => setTranscriptOpen(null)}
-                className="text-gray-400 hover:text-gray-600"
-                aria-label="Close"
+                className="text-gray-500 hover:text-gray-600"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </IconButton>
             </div>
             <div className="p-6 overflow-y-auto">
               <div className="text-sm font-semibold text-indigo-600 mb-3">{transcriptOpen.question}</div>
@@ -2101,7 +2102,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
               </div>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </div>
   );
@@ -2201,7 +2202,7 @@ export function FormulaView() {
         <div className="tf-section-title mb-4">Priority Weights</div>
         <div className="tf-grid-3">
           {priorityWeights.map(p => (
-            <div key={p.priority} className="p-4 rounded-xl border" style={{ borderColor: p.color, backgroundColor: `${p.color}0F` }}>
+            <div key={p.priority} className="p-4 rounded-xl border" style={{ borderColor: p.color, backgroundColor: `color-mix(in srgb, ${p.color} 5.882%, transparent)` }}>
               <div className="text-sm font-semibold mb-1" style={{ color: p.color }}>{p.priority}</div>
               <div className="text-3xl font-bold mb-1" style={{ color: p.color }}>{p.weight}</div>
               <div className="tf-meta">{p.description}</div>
@@ -2236,7 +2237,7 @@ export function FormulaView() {
           <div
             key={i}
             className="rounded-2xl p-6 border-2"
-            style={{ borderColor: sc.color, backgroundColor: `${sc.color}0A` }}
+            style={{ borderColor: sc.color, backgroundColor: `color-mix(in srgb, ${sc.color} 3.922%, transparent)` }}
           >
             <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
               <div>

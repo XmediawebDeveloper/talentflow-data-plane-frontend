@@ -33,6 +33,8 @@ import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import FilterSelect from '@/components/ui/filter-select';
 import UnitActivityLog from './UnitActivityLog';
 import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -130,7 +132,7 @@ const LOG_PAGE_SIZE = 200;
 /* Member usage per team + range. Collapsing and re-opening a team used to
    refetch it every time; the cache is cleared whenever the team list reloads. */
 const membersCache = new Map<string, TeamMemberUsage[]>();
-const membersCacheKey = (teamId: string, fromDate: string, toDate: string) => `${teamId}|${fromDate}|${toDate}`;
+const membersCacheKey = (teamId: string, fromDate: string, toDate: string, isBilling?: boolean) => `${teamId}|${fromDate}|${toDate}|${isBilling ? 'billing' : ''}`;
 
 // Human-readable labels for all unit types (including system ones)
 const UNIT_TYPE_LABEL: Record<string, string> = {
@@ -293,7 +295,7 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <p className="tf-caption">
             Consumption history
-            <span className="ml-1.5 font-normal text-gray-400 dark:text-slate-500">
+            <span className="ml-1.5 font-normal text-gray-500 dark:text-slate-500">
               {historyCountLabel(entries.length, total)}{f.active && ` · ${sorted.length} matching`}
             </span>
           </p>
@@ -458,13 +460,13 @@ function useMemberLog(member: TeamMemberUsage, fromDate: string, toDate: string)
 }
 
 /** A team's member usage, fetched while the team is expanded. */
-function useTeamMembers(teamId: string, expanded: boolean, fromDate: string, toDate: string) {
+function useTeamMembers(teamId: string, expanded: boolean, fromDate: string, toDate: string, isBilling?: boolean) {
   const [members, setMembers] = useState<TeamMemberUsage[] | null>(null);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
   useEffect(() => {
     if (!expanded) return;
-    const key = membersCacheKey(teamId, fromDate, toDate);
+    const key = membersCacheKey(teamId, fromDate, toDate, isBilling);
     const cached = membersCache.get(key);
     if (cached) {
       setMembers(cached);
@@ -474,7 +476,7 @@ function useTeamMembers(teamId: string, expanded: boolean, fromDate: string, toD
     let cancelled = false;
     setLoadingMembers(true);
     setMembers(null);
-    teamService.getTeamMembersUsage(teamId, fromDate, toDate)
+    teamService.getTeamMembersUsage(teamId, fromDate, toDate, isBilling ? 'billing' : undefined)
       .then(res => {
         membersCache.set(key, res.members);
         if (!cancelled) setMembers(res.members);
@@ -482,7 +484,7 @@ function useTeamMembers(teamId: string, expanded: boolean, fromDate: string, toD
       .catch(() => { if (!cancelled) setMembers([]); })
       .finally(() => { if (!cancelled) setLoadingMembers(false); });
     return () => { cancelled = true; };
-  }, [expanded, teamId, fromDate, toDate]);
+  }, [expanded, teamId, fromDate, toDate, isBilling]);
 
   return { members, loadingMembers };
 }
@@ -523,7 +525,7 @@ function MemberListControls({ view, className = '' }: { view: MemberView; classN
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <div className="relative min-w-0 flex-1 sm:max-w-xs">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
         <input
           type="search"
           value={view.query}
@@ -607,14 +609,14 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
 
   return (
     <>
-      <tr
+      <tr {...clickableRowProps}
         onClick={toggle}
         className="cursor-pointer hover:bg-brand-blue/[0.04] dark:hover:bg-slate-800 transition-colors border-t border-gray-100 dark:border-slate-700/60 select-none"
       >
         {/* Member */}
         <td className="tf-td whitespace-nowrap">
           <div className="flex items-center gap-2">
-            <div className="text-gray-300 dark:text-slate-500 shrink-0">
+            <div className="text-muted-foreground dark:text-slate-500 shrink-0">
               {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </div>
             <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
@@ -632,7 +634,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
-              ${ru > 0 ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-200' : 'bg-gray-100 text-gray-400'}`}>
+              ${ru > 0 ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-200' : 'bg-gray-100 text-gray-500'}`}>
               {formatMeasure(ru, measure)}
             </span>
           </div>
@@ -642,7 +644,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
-              ${rs > 0 ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-100 text-gray-400'}`}>
+              ${rs > 0 ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-100 text-gray-500'}`}>
               {formatMeasure(rs, measure)}
             </span>
           </div>
@@ -652,7 +654,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
-              ${as_ > 0 ? 'bg-brand-cyan/15 text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan ring-1 ring-brand-cyan/30' : 'bg-gray-100 text-gray-400'}`}>
+              ${as_ > 0 ? 'bg-brand-cyan/15 text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan ring-1 ring-brand-cyan/30' : 'bg-gray-100 text-gray-500'}`}>
               {formatMeasure(as_, measure)}
             </span>
           </div>
@@ -662,7 +664,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
-              ${aiu > 0 ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-gray-100 text-gray-400'}`}>
+              ${aiu > 0 ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-gray-100 text-gray-500'}`}>
               {formatMeasure(aiu, measure)}
             </span>
           </div>
@@ -765,6 +767,7 @@ function TeamRow({
   team,
   fromDate,
   toDate,
+  isBilling,
   expanded,
   onToggle,
   grandTotal,
@@ -773,13 +776,14 @@ function TeamRow({
   team: TeamUsageSummary;
   fromDate: string;
   toDate: string;
+  isBilling?: boolean;
   expanded: boolean;
   onToggle: () => void;
   grandTotal: number;
   /** Member breakdown is tenant-admin only — others get a plain row. */
   canExpand: boolean;
 }) {
-  const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate);
+  const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate, isBilling);
   const view = useMemberView(members);
   const measure = useContext(MeasureContext);
 
@@ -792,7 +796,7 @@ function TeamRow({
   return (
     <>
       {/* Team summary row — outer table 6 cols */}
-      <tr
+      <tr {...((canExpand) ? clickableRowProps : {})}
         id={`team-usage-${team.team_id}`}
         onClick={canExpand ? onToggle : undefined}
         className={`transition-colors border-t border-gray-200 dark:border-slate-700 select-none ${canExpand ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800' : ''}`}
@@ -801,7 +805,7 @@ function TeamRow({
           <div className="flex items-center gap-3">
             {/* The only expand affordance — the whole row toggles. */}
             {canExpand && (
-              <div className={expanded ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'} aria-label={expanded ? 'Hide members' : 'Show members'}>
+              <div className={expanded ? 'text-brand-blue' : 'text-gray-500 dark:text-slate-500'} aria-label={expanded ? 'Hide members' : 'Show members'}>
                 {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               </div>
             )}
@@ -818,7 +822,7 @@ function TeamRow({
           </td>
         ))}
         <td className="tf-td whitespace-nowrap">
-          <span className={`text-sm font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
+          <span className={`text-sm font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-muted-foreground dark:text-slate-500'}`}>
             {total > 0 ? formatMeasure(total, measure) : '—'}
           </span>
         </td>
@@ -924,7 +928,7 @@ function MobileLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
   const sorted = [...f.filtered].sort((a, b) => b.created_at.localeCompare(a.created_at));
   return (
     <div className="border-t border-gray-100 px-2.5 py-2.5 dark:border-slate-700/60">
-      <p className="mb-2 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
+      <p className="mb-2 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">
         History · {historyCountLabel(entries.length, total)}{f.active && ` · ${sorted.length} matching`}
       </p>
       <HistoryToolbar f={f} onDownload={() => downloadHistory(sorted, memberName, fromDate, toDate)} className="mb-2" />
@@ -991,15 +995,14 @@ function MobileMemberCard({ member, teamId, fromDate, toDate, isTop = false }: {
           </>
         }
         actions={
-          <button
+          <IconButton bare label={expanded ? 'Hide usage logs' : 'Show usage logs'}
             type="button"
             onClick={toggle}
             aria-expanded={expanded}
-            aria-label={expanded ? 'Hide usage logs' : 'Show usage logs'}
             className="tf-icon-btn-outline"
           >
             {expanded ? <ChevronDown className="text-brand-blue" /> : <ChevronRight />}
-          </button>
+          </IconButton>
         }
       />
       {expanded && (
@@ -1046,6 +1049,7 @@ function MobileTeamCard({
   team,
   fromDate,
   toDate,
+  isBilling,
   expanded,
   onToggle,
   grandTotal,
@@ -1054,13 +1058,14 @@ function MobileTeamCard({
   team: TeamUsageSummary;
   fromDate: string;
   toDate: string;
+  isBilling?: boolean;
   expanded: boolean;
   onToggle: () => void;
   grandTotal: number;
   /** Member breakdown is tenant-admin only — others get a plain row. */
   canExpand: boolean;
 }) {
-  const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate);
+  const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate, isBilling);
   const view = useMemberView(members);
   const measure = useContext(MeasureContext);
   const total = teamTotalBy(team, measure);
@@ -1087,15 +1092,14 @@ function MobileTeamCard({
           </>
         }
         actions={canExpand ? (
-          <button
+          <IconButton bare label={expanded ? 'Hide team members' : 'Show team members'}
             type="button"
             onClick={onToggle}
             aria-expanded={expanded}
-            aria-label={expanded ? 'Hide team members' : 'Show team members'}
             className="tf-icon-btn-outline"
           >
             {expanded ? <ChevronDown className="text-brand-blue" /> : <ChevronRight />}
-          </button>
+          </IconButton>
         ) : undefined}
       >
         <ShareBar team={team} grandTotal={grandTotal} className="mt-2" />
@@ -1141,18 +1145,18 @@ export type MemberUsageRow = {
   lastActivity: string | null;
 };
 
-export function useAllMembersUsage(teams: TeamUsageSummary[], fromDate: string, toDate: string) {
-  const reqKey = `${fromDate}|${toDate}|${teams.map((t) => t.team_id).join(',')}`;
+export function useAllMembersUsage(teams: TeamUsageSummary[], fromDate: string, toDate: string, isBilling?: boolean) {
+  const reqKey = `${fromDate}|${toDate}|${isBilling ? 'billing' : ''}|${teams.map((t) => t.team_id).join(',')}`;
   const [data, setData] = useState<{ key: string; rows: MemberUsageRow[]; failed: string[] } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     // Same per-team cache as an expanded team row, so either view reuses the other's fetches.
     Promise.allSettled(teams.map(async (team) => {
-      const key = membersCacheKey(team.team_id, fromDate, toDate);
+      const key = membersCacheKey(team.team_id, fromDate, toDate, isBilling);
       const cached = membersCache.get(key);
       if (cached) return cached;
-      const res = await teamService.getTeamMembersUsage(team.team_id, fromDate, toDate);
+      const res = await teamService.getTeamMembersUsage(team.team_id, fromDate, toDate, isBilling ? 'billing' : undefined);
       membersCache.set(key, res.members);
       return res.members;
     })).then((results) => {
@@ -1194,16 +1198,17 @@ export function useAllMembersUsage(teams: TeamUsageSummary[], fromDate: string, 
 type MemberSortKey = 'name' | UnitKey | 'total' | 'last';
 const MEMBER_SORT_DESC_FIRST: readonly MemberSortKey[] = ['RU', 'RS', 'AS', 'AIU', 'total', 'last'];
 
-function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
+function MembersUsageView({ teams, fromDate, toDate, isBilling, query, isMobile, sort }: {
   /** Owned by the parent: the stat cards and the phone sort menu set it too. */
   sort: TableSort<MemberSortKey>;
   teams: TeamUsageSummary[];
   fromDate: string;
   toDate: string;
+  isBilling?: boolean;
   query: string;
   isMobile: boolean;
 }) {
-  const { rows, failed, loading } = useAllMembersUsage(teams, fromDate, toDate);
+  const { rows, failed, loading } = useAllMembersUsage(teams, fromDate, toDate, isBilling);
   const q = query.trim().toLowerCase();
   const visible = rows.filter((r) =>
     !q || r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q) || r.teams.some((t) => t.toLowerCase().includes(q)),
@@ -1347,7 +1352,7 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
         <p className="mt-2 tf-meta">
           {q ? `${visible.length} of ${rows.length}` : rows.length} {rows.length === 1 ? 'member' : 'members'}
           {rows.some((r) => r.teams.length > 1) && (
-            <span className="text-gray-400 dark:text-slate-500">
+            <span className="text-gray-500 dark:text-slate-500">
               {' '}· Someone in more than one team is counted once here, so this can differ from the team totals above.
             </span>
           )}
@@ -1372,15 +1377,15 @@ async function exportTeams(format: ExportFileFormat, teams: TeamUsageSummary[], 
   await exportRows(format, TEAM_EXPORT_HEADERS, rows, `team-usage-${fromDate}-to-${toDate}`, { sheetName: 'Team Usage' });
 }
 
-async function exportUsers(format: ExportFileFormat, teams: TeamUsageSummary[], fromDate: string, toDate: string) {
+async function exportUsers(format: ExportFileFormat, teams: TeamUsageSummary[], fromDate: string, toDate: string, isBilling?: boolean) {
   // All teams at once (one by one was slow on a long list); results keep team order.
   // Teams already loaded on screen (expanded rows, Members view) come from the cache.
   const results = await Promise.allSettled(
     teams.map(async (team) => {
-      const key = membersCacheKey(team.team_id, fromDate, toDate);
+      const key = membersCacheKey(team.team_id, fromDate, toDate, isBilling);
       const cached = membersCache.get(key);
       if (cached) return { members: cached };
-      const res = await teamService.getTeamMembersUsage(team.team_id, fromDate, toDate);
+      const res = await teamService.getTeamMembersUsage(team.team_id, fromDate, toDate, isBilling ? 'billing' : undefined);
       membersCache.set(key, res.members);
       return res;
     }),
@@ -1456,6 +1461,9 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
   const last90 = RANGE_PRESETS.find((p) => p.id === '90d')!;
   // Empty range: offer the widest preset unless it's already (or nearly) in use.
   const canWidenRange = fromDate > last90.range().from;
+  // The exact billing-period-start instant, not midnight of its date — so this
+  // page agrees with Usage History's User-Wise tab on day one of the period.
+  const isBilling = activePresetId === 'billing';
 
   // Every fetch gets a number; only the latest one's result is applied (a
   // restored range fires a second fetch right after the default one).
@@ -1477,9 +1485,10 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
     setExpandedTeamId(null);
     membersCache.clear();
     try {
+      const period = isBilling ? 'billing' : undefined;
       const res = isTenantAdmin
-        ? await teamService.getAllTeamsUsage(fromDate, toDate)
-        : await teamService.getMyTeamsUsage(fromDate, toDate);
+        ? await teamService.getAllTeamsUsage(fromDate, toDate, period)
+        : await teamService.getMyTeamsUsage(fromDate, toDate, period);
       if (seq !== fetchSeq.current) return;
       setTeams(res.teams ?? []);
     } catch {
@@ -1489,7 +1498,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
     } finally {
       if (seq === fetchSeq.current) setLoading(false);
     }
-  }, [fromDate, toDate, isTenantAdmin]);
+  }, [fromDate, toDate, isTenantAdmin, isBilling]);
 
   useEffect(() => { fetchTeams(); }, [fetchTeams]);
 
@@ -1579,7 +1588,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
         <div className="flex flex-col gap-2 sm:gap-3 lg:flex-row lg:items-center">
         {teams.length > 1 && (
           <div className="relative w-full min-w-0 lg:flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
             <input
               type="search"
               value={teamQuery}
@@ -1633,7 +1642,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                     onClick={() => { setExportScope('team'); setShowExportMenu(false); }}
                     className="group w-full text-left px-4 py-2.5 tf-body flex items-center gap-2"
                   >
-                    <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                    <FileText className="w-4 h-4 text-gray-500 dark:text-slate-500" />
                     <span className={MENU_ITEM_SCALE_CLASS}>Team Level</span>
                   </button>
                   {/* Reads per-member usage, which only tenant admins can see. */}
@@ -1642,7 +1651,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                       onClick={() => { setExportScope('user'); setShowExportMenu(false); }}
                       className="group w-full text-left px-4 py-2.5 tf-body flex items-center gap-2"
                     >
-                      <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                      <Users className="w-4 h-4 text-gray-500 dark:text-slate-500" />
                       <span className={MENU_ITEM_SCALE_CLASS}>User Level (drill-down)</span>
                     </button>
                   )}
@@ -1660,7 +1669,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
             columns={exportScope === 'user' ? USER_EXPORT_HEADERS : TEAM_EXPORT_HEADERS}
             onExport={(format) =>
               exportScope === 'user'
-                ? exportUsers(format, teams, fromDate, toDate)
+                ? exportUsers(format, teams, fromDate, toDate, isBilling)
                 : exportTeams(format, teams, fromDate, toDate)
             }
           />
@@ -1767,7 +1776,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
           Rendered instead of the table (not alongside it) so an expanded team
           fetches its members once. */}
       {showMembers ? (
-        <MembersUsageView teams={teams} fromDate={fromDate} toDate={toDate} query={teamQuery} isMobile={isMobile} sort={memberSort} />
+        <MembersUsageView teams={teams} fromDate={fromDate} toDate={toDate} isBilling={isBilling} query={teamQuery} isMobile={isMobile} sort={memberSort} />
       ) : isMobile ? (
         <div className="tf-card-soft overflow-hidden">
           {loading ? (
@@ -1804,6 +1813,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                   canExpand={isTenantAdmin}
                   fromDate={fromDate}
                   toDate={toDate}
+                  isBilling={isBilling}
                   expanded={isTenantAdmin && expandedTeamId === team.team_id}
                   onToggle={() => setExpandedTeamId(
                     expandedTeamId === team.team_id ? null : team.team_id
@@ -1895,6 +1905,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                   canExpand={isTenantAdmin}
                   fromDate={fromDate}
                   toDate={toDate}
+                  isBilling={isBilling}
                   expanded={isTenantAdmin && expandedTeamId === team.team_id}
                   onToggle={() => setExpandedTeamId(
                     expandedTeamId === team.team_id ? null : team.team_id

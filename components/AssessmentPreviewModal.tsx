@@ -6,6 +6,7 @@ import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageL
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 interface AssessmentPreviewModalProps {
   isOpen: boolean;
@@ -190,7 +191,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
   const chip = 'inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ring-1 whitespace-nowrap';
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+    <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-xl md:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
         {/* Header: what this is, and which assessment. No ✕ — the footer's
             Cancel closes (the popup standard). */}
@@ -372,6 +373,6 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
           <AppModalFooterButtons onCancel={onClose} compactFooter />
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

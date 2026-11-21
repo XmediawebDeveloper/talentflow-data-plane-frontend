@@ -14,6 +14,8 @@ import {
 import { revealAfterPaint } from '@/lib/utils/candidateScroll';
 import { Button } from '@/components/ui/button';
 import type { IconComponent } from '@/lib/types/icon';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface StepConsentProps {
   onAccept: (consents: {
@@ -273,7 +275,7 @@ export default function StepConsent({
                       {metaItems.map((item, i) => (
                         <span key={item.text} className="flex items-center min-w-0">
                           {i > 0 && <span aria-hidden className="mx-2.5 h-1 w-1 rounded-full bg-gray-300 flex-shrink-0" />}
-                          <item.icon className="w-3.5 h-3.5 text-gray-400 mr-1.5 flex-shrink-0" />
+                          <item.icon className="w-3.5 h-3.5 text-gray-500 mr-1.5 flex-shrink-0" />
                           <span className="min-w-0 break-words">{item.text}</span>
                         </span>
                       ))}
@@ -547,7 +549,7 @@ export default function StepConsent({
           CONSENT MODAL
       ═══════════════════════════════════════════════════ */}
       {showConsentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <ModalA11y innerDialog closeOnEscape={false}><div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div
             role="dialog" aria-modal="true" aria-labelledby="consent-modal-title"
             className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90dvh] flex flex-col"
@@ -559,14 +561,13 @@ export default function StepConsent({
                 <h2 id="consent-modal-title" className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Privacy &amp; Consent</h2>
                 <p className="mt-1 tf-body-muted">Please review the information below before starting your AI interview.</p>
               </div>
-              <button
+              <IconButton bare label="Close"
                 type="button"
                 onClick={() => setShowConsentModal(false)}
-                className="p-2.5 -mr-2 -mt-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
-                aria-label="Close"
+                className="p-2.5 -mr-2 -mt-1 rounded-lg text-gray-500 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </IconButton>
             </div>
 
             {/* Modal body (scrollable) - the reference's two columns, stacked
@@ -634,11 +635,11 @@ export default function StepConsent({
                             {key === 'retention' && (
                               <>
                                 <p className="flex items-start gap-2">
-                                  <Clock className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                  <Clock className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
                                   <span>Retained for <strong className="text-gray-900">{recordingStorageDays} days</strong>, then automatically deleted.</span>
                                 </p>
                                 <p className="flex items-start gap-2">
-                                  <Trash2 className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                  <Trash2 className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
                                   You may request early deletion at any time.
                                 </p>
                               </>
@@ -653,7 +654,7 @@ export default function StepConsent({
             </div>
 
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </div>
   );

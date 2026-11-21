@@ -36,6 +36,7 @@ import { INVALID_CAMERA_SELECTION_MESSAGE } from "@/lib/proctoring/virtualCamera
 // noise. Idempotent — safe even though face-verification also imports it.
 import "@/lib/tfjs-rejection-guard";
 import { keepAudioContextRunning, loadVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 interface FaceVerificationHandle {
   startVerification: (videoElement: HTMLVideoElement, intervalMs?: number) => void;
@@ -314,7 +315,6 @@ function nowIST(): string {
 // Minimum bytes to buffer before flushing a non-final recording segment.
 // S3 multipart-upload requires every part except the last to be >= 5 MiB; we add
 // a small margin so a slightly-undersized flush can't fail CompleteMultipartUpload.
-const RECORDING_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
 // A recorder that has produced no data this long after start is stalled (its
 // audio mix isn't running) — see the watchdog in startRecorder. Two 5 s
 // timeslices plus slack.
@@ -412,11 +412,11 @@ const Row = ({ label, value, color = 'var(--raw-e2e8f0)' }: { label: string; val
 );
 
 const Section = ({ label }: { label: string }) => (
-  <div className="text-purple-300 font-semibold pt-1 pb-0.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>{label}</div>
+  <div className="text-purple-300 font-semibold pt-1 pb-0.5" style={{ borderBottom: '1px solid var(--raw-rgba-255-255-255-0p07)' }}>{label}</div>
 );
 
 const Bar = ({ pct, color = 'var(--raw-818cf8)' }: { pct: number; color?: string }) => (
-  <div className="mt-0.5 mb-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+  <div className="mt-0.5 mb-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--raw-rgba-255-255-255-0p08)' }}>
     <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: color }} />
   </div>
 );
@@ -1791,7 +1791,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const finalUploadPromiseRef = useRef<Promise<void> | null>(null);
   // S3 multipart-upload segment index (0-based → backend part_number = idx + 1).
   // recordedChunksRef now holds only the UNFLUSHED clusters since the last
-  // segment; we flush a segment once the buffer reaches RECORDING_MIN_SEGMENT_BYTES.
+  // segment; we flush whatever is buffered (the backend stages small segments).
   // Camera-recording segment index. PERSISTED in sessionStorage (survives a
   // page reload in the same tab) so a reconnect-triggered refresh RESUMES the
   // segment numbering instead of restarting at 0. Restarting at 0 made the
@@ -3384,6 +3384,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         checkpointTimerRef.current = setInterval(() => {
           uploadCheckpointRef.current().catch(() => {});
         }, 30_000);
+        // One early upload 5 s in, so an interview closed before the first
+        // 30 s checkpoint still has webcam footage on the server. Harmless if
+        // the recorder is gone by then (the checkpoint no-ops).
+        window.setTimeout(() => { uploadCheckpointRef.current().catch(() => {}); }, 5000);
       };
       // Use isTypeSupported() to select the best available codec across browsers:
       // - Chrome/Brave: vp9 > vp8 webm
@@ -7969,12 +7973,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   useEffect(() => { handleMessageRef.current = handleMessage; }, [handleMessage]);
 
   // Checkpoint upload — flushes the recorder's buffer and ships ONE multipart
-  // segment WITHOUT stopping the recorder, but only once enough bytes have
-  // accumulated to form a valid S3 part (>= RECORDING_MIN_SEGMENT_BYTES). Called
-  // on a 30 s timer and on visibilitychange→hidden. Because S3 forbids
-  // sub-5-MiB non-final parts, small buffers are intentionally held back until
-  // the next tick rather than flushed; the trailing remainder ships as the final
-  // (any-size) part from uploadRecording().
+  // segment WITHOUT stopping the recorder, whenever anything is buffered (any
+  // size — the backend stages sub-5-MiB segments and folds them into the next
+  // valid S3 part). Called once 5 s after start, on a 30 s timer, and on
+  // visibilitychange→hidden / pagehide. The trailing remainder ships as the
+  // final part from uploadRecording().
   const uploadCheckpoint = useCallback(async (): Promise<void> => {
     if (isFinalizingUploadRef.current) return; // final upload owns the recorder
     if (checkpointInProgressRef.current) return; // skip overlap
@@ -8011,8 +8014,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       });
 
       const buffered = recordedChunksRef.current.reduce((sum, c) => sum + c.size, 0);
-      // Not enough for a valid non-final S3 part yet — keep buffering.
-      if (buffered < RECORDING_MIN_SEGMENT_BYTES) return;
+      // Ship whatever is buffered, however small: the backend STAGES sub-5-MiB
+      // segments (recording_staging) and folds them into the next valid S3
+      // part, so a short interview closed abruptly no longer loses everything.
+      if (buffered === 0) return;
 
       // Atomically snapshot the buffered clusters and reset the ref so new
       // clusters accumulate into a fresh array. Single-threaded JS guarantees no
@@ -8052,8 +8057,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         uploadCheckpointRef.current().catch(() => {});
       }
     };
+    // pagehide = tab closing. Best effort: the browser may cancel the upload.
+    const onPageHide = () => { uploadCheckpointRef.current().catch(() => {}); };
     document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', onPageHide);
+    };
   }, []);
 
   // Upload recording
@@ -11203,7 +11214,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     <>
       {/* ── Concurrent-session blocked overlay (single-active-session guard) ── */}
       {concurrentBlocked && (
-        <div className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
           <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl">
             <div className="text-amber-400 text-5xl mb-4">🔒</div>
             <h2 className="text-xl font-bold text-white mb-2">Interview already open elsewhere</h2>
@@ -11221,11 +11232,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               Reload &amp; try again
             </Button>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
       {/* ── Connection lost overlay ── */}
       {!isConnected && !isClosing && status.startsWith('Connection lost') && (
-        <div className="fixed inset-0 z-[200] bg-slate-950/70 flex items-center justify-center backdrop-blur-sm p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[200] bg-slate-950/70 flex items-center justify-center backdrop-blur-sm p-4">
           {/* Same reconnect logic as before — this only changes what is shown:
               while the automatic retries are running ("...reconnecting in Ns...")
               the message is calm and Refresh is optional; once they are used
@@ -11239,7 +11250,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <p className="text-slate-600 dark:text-slate-300 mb-1 text-sm leading-relaxed">
                 Your connection dropped for a moment. We&apos;re reconnecting automatically — please stay on this page.
               </p>
-              <p className="text-slate-400 text-xs mb-6">{status.replace(/^Connection lost — /, '')}</p>
+              <p className="text-slate-500 text-xs mb-6">{status.replace(/^Connection lost — /, '')}</p>
               <button
                 onClick={() => window.location.reload()}
                 className="w-full px-6 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-500/15 text-brand-blue dark:text-sky-300 text-sm font-semibold ring-1 ring-sky-100 dark:ring-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/25 transition-colors"
@@ -11265,12 +11276,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               </button>
             </div>
           )}
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* ── Proctoring: Face not in frame overlay ── */}
       {isConnected && isFaceBlocked && (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
           <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl">
             <div className="text-amber-500 text-5xl mb-4">👤</div>
             <h2 className="text-xl font-bold text-white mb-2">Face Not Detected</h2>
@@ -11305,14 +11316,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               This will auto-dismiss when your face is detected
             </p>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Fullscreen overlay removed — no longer blocking the interview */}
 
       {/* ── Microphone issue popup ── */}
       {showMicPopup && (
-        <div className="fixed inset-0 z-[101] bg-black/80 flex items-center justify-center backdrop-blur-sm">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[101] bg-black/80 flex items-center justify-center backdrop-blur-sm">
           <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="text-amber-500 text-5xl mb-4">🎤</div>
             <h2 className="text-xl font-bold text-white mb-2">Microphone Issue?</h2>
@@ -11329,7 +11340,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             </div>
             <p className="tf-meta mt-3">Auto-closing in 15 seconds...</p>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Turn/silence banner moved INTO the chat panel (rendered as `turnBanner`
@@ -11392,11 +11403,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         className="fixed z-[999] font-mono text-2xs select-none"
         style={{ left: debugPos.x, top: debugPos.y, minWidth: 230, maxWidth: 260 }}
       >
-        <div className="rounded-xl overflow-hidden shadow-2xl" style={{ background: 'rgba(8,8,20,0.93)', border: '1px solid rgba(99,102,241,0.55)', backdropFilter: 'blur(8px)' }}>
+        <div className="rounded-xl overflow-hidden shadow-2xl" style={{ background: 'var(--raw-rgba-8-8-20-0p93)', border: '1px solid var(--raw-rgba-99-102-241-0p55)', backdropFilter: 'blur(8px)' }}>
           {/* Drag handle + collapse */}
           <div
             className="flex items-center justify-between px-3 py-1.5 cursor-grab active:cursor-grabbing"
-            style={{ background: 'rgba(99,102,241,0.22)', borderBottom: debugOpen ? '1px solid rgba(99,102,241,0.3)' : 'none', touchAction: 'none' }}
+            style={{ background: 'var(--raw-rgba-99-102-241-0p22)', borderBottom: debugOpen ? '1px solid var(--raw-rgba-99-102-241-0p3)' : 'none', touchAction: 'none' }}
             onPointerDown={_dbgOnPointerDown}
             onPointerMove={_dbgOnPointerMove}
             onPointerUp={_dbgOnPointerUp}
@@ -11475,7 +11486,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       <div className="flex h-[100dvh] overflow-hidden bg-[var(--raw-0f1117)]">
 
         {/* ════ LEFT PANEL: Video feeds (dark) — 40% ════ */}
-        <div className="w-[40%] flex-shrink-0 flex flex-col bg-[var(--raw-0f1117)] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="w-[40%] flex-shrink-0 flex flex-col bg-[var(--raw-0f1117)] overflow-hidden" style={{ borderRight: '1px solid var(--raw-rgba-255-255-255-0p06)' }}>
 
           {/* ── Top half: BINA AI Avatar ── */}
           {/* Inset card with rounded corners, matching the webcam frame below
@@ -11520,7 +11531,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     className={`relative w-44 h-44 rounded-full overflow-hidden border-4 transition-colors duration-300 ${
                       binaSpeakingVisible ? 'border-purple-400/70' : 'border-white/20'
                     }`}
-                    style={binaSpeakingVisible ? { boxShadow: '0 0 40px 6px rgba(147,51,234,0.35)' } : undefined}
+                    style={binaSpeakingVisible ? { boxShadow: '0 0 40px 6px var(--raw-rgba-147-51-234-0p35)' } : undefined}
                   >
                     <Image
                       src={lindaAvatarSrc}
@@ -11558,7 +11569,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {binaSpeakingVisible && (
               <div
                 className="absolute inset-0 pointer-events-none"
-                style={{ background: 'radial-gradient(ellipse at center, rgba(147,51,234,0.10) 0%, transparent 70%)' }}
+                style={{ background: 'radial-gradient(ellipse at center, var(--raw-rgba-147-51-234-0p1) 0%, transparent 70%)' }}
               />
             )}
 
@@ -12054,7 +12065,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                           // recording waveform of the candidate's mic while they answer
                           // — the transcript is revealed after the turn is processed.
                           <div className="flex flex-col gap-1.5">
-                            <MicWaveform analyserRef={micAnalyserRef} active={isRecording} color="#059669" quietColor="#6ee7b7" />
+                            <MicWaveform analyserRef={micAnalyserRef} active={isRecording} color="var(--raw-059669)" quietColor="var(--raw-6ee7b7)" />
                             <p className="text-xs leading-relaxed italic text-emerald-700/70 dark:text-emerald-300">
                               Recording… Your transcript will appear after you finish speaking.
                             </p>
@@ -12265,11 +12276,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                             lineHeight: 1,
                             color: 'transparent',
                             background:
-                              'linear-gradient(110deg, transparent 40%, #d6f1ff 50%, transparent 60%) 100% 0 / 300% 100% no-repeat, ' +
-                              'linear-gradient(135deg, #0284c7 20%, #0369a1 80%)',
+                              'linear-gradient(110deg, transparent 40%, var(--raw-d6f1ff) 50%, transparent 60%) 100% 0 / 300% 100% no-repeat, ' +
+                              'linear-gradient(135deg, var(--raw-0284c7) 20%, var(--raw-0369a1) 80%)',
                             WebkitBackgroundClip: 'text',
                             backgroundClip: 'text',
-                            filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.95)) drop-shadow(0 2px 8px rgba(2,132,199,0.25))',
+                            filter: 'drop-shadow(0 0 10px var(--raw-rgba-255-255-255-0p95)) drop-shadow(0 2px 8px var(--raw-rgba-2-132-199-0p25))',
                             animation: `cdShine ${PRE_TURN_TICK_MS}ms ease-in-out both`,
                           }}
                         >{num}</span>
@@ -12578,7 +12589,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
       {/* End Interview Confirmation Modal */}
       {showEndConfirm && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
@@ -12671,12 +12682,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               </button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* ── Fullscreen exit overlay — shows when candidate leaves fullscreen mid-interview ── */}
       {isFullscreenExited && isConnected && !isClosing && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[var(--raw-0f1929)] border border-white/10 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5">
             {/* Warning icon */}
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/15 border border-amber-400/30">
@@ -12749,7 +12760,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               Return to Fullscreen
             </button>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* ── Camera/mic disconnected overlay — 3-minute pause+grace ──

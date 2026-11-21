@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import LanguageLogo from '@/components/assessments/LanguageLogo';
 import { CurrentQuestion } from '@/lib/services/candidateService';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface SQLQuestionViewProps {
   question: CurrentQuestion;
@@ -263,12 +264,12 @@ export function SQLQuestionView({
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="tf-label">Expected Result</h4>
-                    <button
+                    <IconButton bare label="Copy sample output"
                       onClick={() => copyToClipboard(question.sample_output || '')}
-                      className="text-gray-400 hover:text-gray-600 p-1"
+                      className="text-gray-500 hover:text-gray-600 p-1"
                     >
                       {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    </button>
+                    </IconButton>
                   </div>
                   <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm font-mono whitespace-pre-wrap break-words break-all">
                     {question.sample_output}
@@ -355,7 +356,7 @@ export function SQLQuestionView({
                   )}
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-64 text-gray-400">
+                <div className="flex items-center justify-center h-64 text-gray-500">
                   <div className="text-center">
                     <Play className="w-12 h-12 mx-auto mb-4 opacity-50" />
                     <p>Execute your query to see results</p>
@@ -368,13 +369,13 @@ export function SQLQuestionView({
             <div className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="font-medium text-gray-800">Available Tables</h4>
-                <button
+                <IconButton bare label="Reload tables"
                   onClick={loadTables}
                   disabled={loadingTables}
                   className="p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100"
                 >
                   <RefreshCw className={`w-4 h-4 ${loadingTables ? 'animate-spin' : ''}`} />
-                </button>
+                </IconButton>
               </div>
 
               {loadingTables ? (

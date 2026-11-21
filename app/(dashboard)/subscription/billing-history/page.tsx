@@ -24,6 +24,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import FilterSelect from '@/components/ui/filter-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface BillingStats {
   total_invoices: number;
@@ -505,7 +506,7 @@ export default function BillingHistoryPage() {
             {/* Search + filters */}
             <div className="mb-5 flex flex-col gap-3 tf-card-soft p-4 sm:p-5 xl:flex-row xl:flex-wrap xl:items-center">
               <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-slate-500" />
                 <input
                   type="text"
                   placeholder="Search by invoice number, plan name, or description"
@@ -639,9 +640,9 @@ export default function BillingHistoryPage() {
                   idBadge={
                     <span className="inline-flex min-w-0 max-w-full items-center gap-1 tf-id-chip">
                       <span className="min-w-0 truncate">{inv.invoice_number}</span>
-                      <button type="button" onClick={() => copyInvoiceNumber(inv.invoice_number)} aria-label="Copy invoice number" className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
+                      <IconButton bare label="Copy invoice number" type="button" onClick={() => copyInvoiceNumber(inv.invoice_number)} className="shrink-0 rounded p-0.5 text-gray-500 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
                         <Copy className="h-3.5 w-3.5" />
-                      </button>
+                      </IconButton>
                     </span>
                   }
                   title={getDescription(inv)}
@@ -708,15 +709,13 @@ export default function BillingHistoryPage() {
                           <span className="min-w-0 truncate tf-row-title" title={inv.invoice_number}>
                             {inv.invoice_number}
                           </span>
-                          <button
+                          <IconButton bare label="Copy invoice number"
                             type="button"
                             onClick={() => copyInvoiceNumber(inv.invoice_number)}
-                            aria-label="Copy invoice number"
-                            title="Copy invoice number"
-                            className="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-brand-blue dark:text-slate-500 dark:hover:bg-slate-800"
+                            className="shrink-0 rounded p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-brand-blue dark:text-slate-500 dark:hover:bg-slate-800"
                           >
                             <Copy className="h-3.5 w-3.5" />
-                          </button>
+                          </IconButton>
                         </div>
                       </td>
                       <td className="tf-td whitespace-nowrap tf-body">
@@ -738,7 +737,7 @@ export default function BillingHistoryPage() {
                       </td>
                       <td className="tf-td">
                         <div className="flex min-w-0 items-center gap-1.5">
-                          <CreditCard className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
+                          <CreditCard className="h-3.5 w-3.5 shrink-0 text-gray-500 dark:text-slate-500" />
                           <span className="min-w-0 truncate tf-body" title={getPaymentTitle(inv)}>
                             {getPaymentLabel(inv)}
                           </span>
@@ -795,7 +794,7 @@ export default function BillingHistoryPage() {
             {/* Search */}
             <div className="mb-5 tf-card-soft p-4 sm:p-5">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-slate-500" />
                 <input
                   type="text"
                   placeholder="Search by invoice number or add-on name"
@@ -923,7 +922,7 @@ export default function BillingHistoryPage() {
                   }
                   title={
                     <span className="inline-flex min-w-0 items-center gap-1.5">
-                      <Package className="h-4 w-4 shrink-0 text-gray-400" />
+                      <Package className="h-4 w-4 shrink-0 text-gray-500" />
                       <span className="min-w-0 break-words">{txn.addon_name}</span>
                     </span>
                   }
@@ -960,7 +959,7 @@ export default function BillingHistoryPage() {
             ) : (
               <div className="tf-card-soft p-12 text-center">
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-gray-100 dark:bg-slate-800 ring-1 ring-gray-200 dark:ring-slate-700">
-                  <Search className="h-7 w-7 text-gray-400 dark:text-slate-500" />
+                  <Search className="h-7 w-7 text-gray-500 dark:text-slate-500" />
                 </div>
                 <h3 className="tf-section-title sm:text-lg">No matching purchases</h3>
                 <p className="mx-auto mt-1 max-w-md tf-body-muted">

@@ -3,13 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import AssessmentCreation from '@/components/AssessmentCreation';
-import { PageSkeleton } from '@/components/ui/skeleton';
-import { jdService } from '@/lib/services/jdService';
 import api from '@/lib/services/api';
 import { Job } from '@/lib/types/types';
-import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import FeatureGate from '@/components/shared/FeatureGate';
-import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { cachedList, listCacheKey, LIST_CACHE_TTL_MS } from '@/lib/utils/listCache';
+import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
 
 interface TopicSettings {
   hr_enabled: boolean;
@@ -20,11 +18,15 @@ interface TopicSettings {
   coding_scoring_type: 'informational' | 'scored';
 }
 
+/* The job list is AssessmentCreation's own read (every JD version, paged, with
+   the picker's candidate counts). This page used to read the same list first,
+   holding a full-page skeleton until it landed, and the component then read
+   it all again on mount — two downloads of the largest response per open. */
+const NO_JOBS: Job[] = [];
+
 export default function CreateAssessmentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [topicSettings, setTopicSettings] = useState<TopicSettings>({
     hr_enabled: true,
     hr_scoring_type: 'informational',
@@ -36,52 +38,23 @@ export default function CreateAssessmentPage() {
 
   // Check for pre-selected JD from query params
   const preSelectedJdId = searchParams.get('jd_id') || searchParams.get('jobId');
-  const preSelectedJdTitle = searchParams.get('jd_title');
-  const returnUrl = searchParams.get('returnUrl');
+  // Same-site paths only (security sheet N4): never an off-site redirect.
+  const returnUrl = safeReturnUrl(searchParams.get('returnUrl'));
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch jobs and topic settings in parallel.
-        // Probe for total then pull all so the JD selector sees every JD version.
-        //
-        // NO status filter, deliberately — this seeds the very list AssessmentCreation
-        // then re-derives with `buildAssessmentJobList`, whose rule is "one row per
-        // job, on its latest Published or Republished version". Asking the API for
-        // `status: 'published'` would not shortcut that: the collapse has to see a
-        // lineage's archived and draft versions to know they are NEWER than the live
-        // one it picks, and View Versions lists every one of them with its real
-        // status. A pre-filtered seed painted a list the component then replaced.
-        const jdParams = { source: 'my-jds' as const };
-        const [jobsResponse, topicsResponse] = await Promise.allSettled([
-          fetchAllRows((page_size, page) => jdService.list({ ...jdParams, page_size, page })),
-          api.get('/assessments/settings/topics'),
-        ]);
-
-        if (jobsResponse.status === 'fulfilled' && jobsResponse.value?.items) {
-          /* The shared mapper — the same rows the JD picker builds for itself
-             once its own fetch lands, so the list does not change shape
-             underneath the user. The two coding fields it does not carry are
-             what the assessment flow reads to configure the coding round. */
-          const realJobs: Job[] = jobsResponse.value.items.map((jd: any) => ({
-            ...mapJDToJob(jd),
-            coding_required: jd.coding_required,
-            supported_languages: jd.supported_languages,
-          }));
-          setJobs(realJobs);
-        }
-
-        if (topicsResponse.status === 'fulfilled' && topicsResponse.value?.data) {
-          setTopicSettings(topicsResponse.value.data);
-        }
-      } catch (error) {
-        console.error('[TalentFlow] Failed to fetch data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
+    let cancelled = false;
+    /* Topic settings only; not awaited before the form mounts (the component
+       re-derives its untouched defaults when they land). Reused for 30 s on
+       arrival; the Assessments page's settings save is a write, which clears
+       it (lib/utils/listCache). */
+    cachedList(
+      listCacheKey('assessments|settings-topics'),
+      async () => (await api.get('/assessments/settings/topics')).data as TopicSettings,
+      { ttlMs: LIST_CACHE_TTL_MS },
+    )
+      .then((data) => { if (!cancelled && data) setTopicSettings(data); })
+      .catch((error) => { console.error('[TalentFlow] Failed to fetch topic settings:', error); });
+    return () => { cancelled = true; };
   }, []);
 
   const handleBack = () => {
@@ -145,15 +118,11 @@ export default function CreateAssessmentPage() {
     );
   };
 
-  if (isLoading) {
-    return <PageSkeleton variant="form" showStats={false} />;
-  }
-
   return (
     <FeatureGate feature="assessment">
       <AssessmentCreation
         onBack={handleBack}
-        jobs={jobs}
+        jobs={NO_JOBS}
         onCreateAssessment={handleCreateAssessment}
         onCreateNewJD={handleNavigateToJDCreation}
         topicSettings={topicSettings}

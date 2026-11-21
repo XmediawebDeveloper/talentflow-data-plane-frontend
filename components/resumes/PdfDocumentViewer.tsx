@@ -66,7 +66,7 @@ export default function PdfDocumentViewer({ url, onLoaded, onError, className }:
         pageEl.style.width = `${viewport.width}px`;
         pageEl.style.height = `${viewport.height}px`;
         pageEl.style.margin = '0 auto';
-        if (pageNumber > 1) pageEl.style.borderTop = '1px solid #e5e7eb';
+        if (pageNumber > 1) pageEl.style.borderTop = '1px solid var(--raw-e5e7eb)';
 
         const canvas = document.createElement('canvas');
         canvas.width = Math.floor(viewport.width * dpr);

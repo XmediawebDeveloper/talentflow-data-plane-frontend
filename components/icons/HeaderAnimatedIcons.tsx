@@ -1,5 +1,5 @@
 /**
- * The header's Chat, Notifications and Theme icons: outline at rest, filling
+ * The header's Quick actions, Chat, Notifications and Theme icons: outline at rest, filling
  * to solid — each with its own small animation — when their button is hovered,
  * keyboard-focused or open. Styles and keyframes: `.tf-hbtn` / `.tf-hicon-*`
  * in app/globals.css.
@@ -86,6 +86,18 @@ export function ThemeAnimatedIcon({ mode, className = '', ...props }: IconProps 
         <path d="m6.34 17.66-1.41 1.41" />
         <path d="m19.07 4.93-1.41 1.41" />
       </g>
+    </svg>
+  );
+}
+
+/** Quick actions bolt: strikes down and flickers, like a flash. */
+export function ZapAnimatedIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg {...base} className={`tf-hicon tf-hicon-zap ${className}`} {...props}>
+      <path
+        className="tf-hicon-fill"
+        d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+      />
     </svg>
   );
 }

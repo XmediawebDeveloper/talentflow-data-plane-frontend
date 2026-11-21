@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createPortal } from 'react-dom';
 import { MoreVertical } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { IconButton } from '@/components/ui/icon-button';
 
 export interface ResumeRowAction {
   key: string;
@@ -66,7 +67,7 @@ export default function ResumeRowMenu({
   if (actions.length === 0) return null;
   return (
     <>
-      <button
+      <IconButton bare label={`Actions for ${name}`} tooltip="Actions"
         type="button"
         onClick={(e) => {
           e.preventDefault();
@@ -76,16 +77,14 @@ export default function ResumeRowMenu({
           setAnchor(e.currentTarget.getBoundingClientRect());
           onOverlayChange?.(close);
         }}
-        aria-label={`Actions for ${name}`}
         aria-haspopup="menu"
         aria-expanded={!!anchor}
-        title="Actions"
         className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md border transition-colors ${anchor
           ? 'border-gray-400 bg-gray-50 dark:bg-slate-800 dark:border-slate-500'
           : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 hover:bg-gray-50 hover:border-gray-400 dark:hover:bg-slate-800'}`}
       >
         <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" aria-hidden="true" />
-      </button>
+      </IconButton>
       {anchor && typeof document !== 'undefined' && createPortal(
         <div
           ref={menuRef}

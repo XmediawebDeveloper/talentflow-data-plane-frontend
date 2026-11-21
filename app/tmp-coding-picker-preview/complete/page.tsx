@@ -2,6 +2,8 @@
 // TEMPORARY visual copy of the Complete Assessment popup markup (AssessmentInterface.tsx). Delete after review.
 import { AlertCircle, CheckCircle, Check, FileText, Info, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 export default function TmpCompletePreview() {
   const totalCount = 18;
@@ -50,19 +52,18 @@ export default function TmpCompletePreview() {
         ] as const;
 
         return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <ModalA11y><div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           {/* Header and footer stay put; only the middle scrolls. */}
           <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-xl w-full max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
             {/* Sticky header */}
             <div className="relative z-10 shrink-0 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-border shadow-sm">
             {/* Close Button */}
-            <button
+            <IconButton bare label="Close"
               onClick={() => setShowCompleteConfirm(false)}
               className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 transition-colors"
-              aria-label="Close"
             >
               <X className="w-5 h-5 text-gray-500" />
-            </button>
+            </IconButton>
 
             <div className="flex items-center gap-3 sm:gap-4 pr-8">
               <div className={`w-12 h-12 shrink-0 ${unansweredCount > 0 ? 'bg-warning-subtle' : 'bg-success-subtle'} rounded-full flex items-center justify-center`}>
@@ -166,7 +167,7 @@ export default function TmpCompletePreview() {
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
         );
 
 }

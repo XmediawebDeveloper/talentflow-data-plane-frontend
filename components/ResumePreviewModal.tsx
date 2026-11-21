@@ -1,6 +1,8 @@
 import { X, Download, Printer, ZoomIn, ZoomOut, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ResumePreviewModalProps {
   candidateName: string;
@@ -36,7 +38,7 @@ export default function ResumePreviewModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
@@ -49,36 +51,33 @@ export default function ResumePreviewModal({
               <p className="tf-body-secondary">{candidateName}</p>
             </div>
           </div>
-          <button
+          <IconButton bare label="Close"
             onClick={onClose}
-            className="text-gray-500 dark:text-slate-500 hover:bg-brand-blue/5 hover:text-brand-blue p-2 rounded-lg transition-colors"
-           aria-label="Close">
+            className="text-gray-500 dark:text-slate-500 hover:bg-brand-blue/5 hover:text-brand-blue p-2 rounded-lg transition-colors">
             <X className="w-5 h-5" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Toolbar */}
         <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
-            <button
+            <IconButton bare label="Zoom Out"
               onClick={handleZoomOut}
               disabled={zoomLevel <= 50}
               className="p-2 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="Zoom Out" title="Zoom Out"
             >
               <ZoomOut className="w-4 h-4" />
-            </button>
+            </IconButton>
             <span className="tf-body min-w-[60px] text-center">
               {zoomLevel}%
             </span>
-            <button
+            <IconButton bare label="Zoom In"
               onClick={handleZoomIn}
               disabled={zoomLevel >= 150}
               className="p-2 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="Zoom In" title="Zoom In"
             >
               <ZoomIn className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -240,6 +239,6 @@ export default function ResumePreviewModal({
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

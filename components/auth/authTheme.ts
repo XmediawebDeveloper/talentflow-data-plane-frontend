@@ -10,43 +10,43 @@ export const AUTH_THEME_CSS = `
 .tf-auth, .tf-auth-scope {
   --tf-brand: var(--brand-blue);
   --tf-brand-hover: var(--brand-blue-2);
-  --tf-brand-active: #0a2f7a;
+  --tf-brand-active: var(--raw-0a2f7a);
   --tf-brand-cyan: var(--brand-cyan);
   --tf-brand-teal: var(--brand-teal);
   --tf-brand-orange: var(--brand-orange);
-  --tf-brand-on: #ffffff;
+  --tf-brand-on: var(--raw-ffffff);
   --tf-brand-ink: var(--brand-blue);
-  --tf-brand-tint: color-mix(in srgb, var(--brand-blue) 7%, #ffffff);
-  --tf-brand-tint-solid: color-mix(in srgb, var(--brand-blue) 11%, #ffffff);
-  --tf-brand-border: color-mix(in srgb, var(--brand-blue) 20%, #ffffff);
-  --tf-cyan-tint: color-mix(in srgb, var(--brand-cyan) 11%, #ffffff);
-  --tf-orange-tint: color-mix(in srgb, var(--brand-orange) 13%, #ffffff);
+  --tf-brand-tint: color-mix(in srgb, var(--brand-blue) 7%, var(--raw-ffffff));
+  --tf-brand-tint-solid: color-mix(in srgb, var(--brand-blue) 11%, var(--raw-ffffff));
+  --tf-brand-border: color-mix(in srgb, var(--brand-blue) 20%, var(--raw-ffffff));
+  --tf-cyan-tint: color-mix(in srgb, var(--brand-cyan) 11%, var(--raw-ffffff));
+  --tf-orange-tint: color-mix(in srgb, var(--brand-orange) 13%, var(--raw-ffffff));
   --tf-ring: color-mix(in srgb, var(--brand-blue) 22%, transparent);
 
-  --tf-canvas: color-mix(in srgb, var(--brand-blue) 4%, #ffffff);
-  --tf-surface: #ffffff;
-  --tf-surface-soft: color-mix(in srgb, var(--brand-blue) 3%, #ffffff);
-  --tf-surface-subtle: #fafbfd;
-  --tf-surface-sunken: #f4f7fb;
-  --tf-border: #e3e8f1;
-  --tf-border-strong: #cfd8e6;
-  --tf-ink: #07123d;
-  --tf-ink-muted: #455479;
-  --tf-ink-subtle: #687492;
-  --tf-ink-faint: #8b96ad;
+  --tf-canvas: color-mix(in srgb, var(--brand-blue) 4%, var(--raw-ffffff));
+  --tf-surface: var(--raw-ffffff);
+  --tf-surface-soft: color-mix(in srgb, var(--brand-blue) 3%, var(--raw-ffffff));
+  --tf-surface-subtle: var(--raw-fafbfd);
+  --tf-surface-sunken: var(--raw-f4f7fb);
+  --tf-border: var(--raw-e3e8f1);
+  --tf-border-strong: var(--raw-cfd8e6);
+  --tf-ink: var(--raw-07123d);
+  --tf-ink-muted: var(--raw-455479);
+  --tf-ink-subtle: var(--raw-687492);
+  --tf-ink-faint: var(--raw-8b96ad);
 
-  --tf-danger: #b42318;
-  --tf-danger-ink: #912018;
-  --tf-danger-tint: #fef4f3;
-  --tf-danger-border: #f5c7c2;
-  --tf-success: #0b7047;
-  --tf-success-ink: #0b7047;
-  --tf-success-tint: #f2f9f5;
-  --tf-success-border: #bfe0ce;
-  --tf-warning: #b45b0c;
+  --tf-danger: var(--raw-b42318);
+  --tf-danger-ink: var(--raw-912018);
+  --tf-danger-tint: var(--raw-fef4f3);
+  --tf-danger-border: var(--raw-f5c7c2);
+  --tf-success: var(--raw-0b7047);
+  --tf-success-ink: var(--raw-0b7047);
+  --tf-success-tint: var(--raw-f2f9f5);
+  --tf-success-border: var(--raw-bfe0ce);
+  --tf-warning: var(--raw-b45b0c);
 
-  --tf-shadow: 0 28px 72px -38px rgba(15, 60, 153, 0.36), 0 14px 34px -28px rgba(16, 24, 40, 0.2);
-  --tf-shadow-sm: 0 10px 24px -20px rgba(16, 24, 40, 0.28);
+  --tf-shadow: 0 28px 72px -38px var(--raw-rgba-15-60-153-0p36), 0 14px 34px -28px var(--raw-rgba-16-24-40-0p2);
+  --tf-shadow-sm: 0 10px 24px -20px var(--raw-rgba-16-24-40-0p28);
   --tf-radius: 24px;
   --tf-radius-md: 14px;
   --tf-radius-sm: 10px;
@@ -54,41 +54,41 @@ export const AUTH_THEME_CSS = `
 }
 
 .dark .tf-auth, .dark .tf-auth-scope {
-  --tf-brand: #2563eb;
-  --tf-brand-hover: #1d4ed8;
-  --tf-brand-active: #1e40af;
-  --tf-brand-ink: #93b4ff;
-  --tf-brand-tint: rgba(37, 99, 235, 0.14);
-  --tf-brand-tint-solid: rgba(37, 99, 235, 0.2);
-  --tf-brand-border: rgba(147, 180, 255, 0.28);
-  --tf-cyan-tint: rgba(6, 182, 212, 0.14);
-  --tf-orange-tint: rgba(237, 136, 28, 0.14);
-  --tf-ring: rgba(147, 180, 255, 0.24);
+  --tf-brand: var(--raw-2563eb);
+  --tf-brand-hover: var(--raw-1d4ed8);
+  --tf-brand-active: var(--raw-1e40af);
+  --tf-brand-ink: var(--raw-93b4ff);
+  --tf-brand-tint: var(--raw-rgba-37-99-235-0p14);
+  --tf-brand-tint-solid: var(--raw-rgba-37-99-235-0p2);
+  --tf-brand-border: var(--raw-rgba-147-180-255-0p28);
+  --tf-cyan-tint: var(--raw-rgba-6-182-212-0p14);
+  --tf-orange-tint: var(--raw-rgba-237-136-28-0p14);
+  --tf-ring: var(--raw-rgba-147-180-255-0p24);
 
-  --tf-canvas: #101827;
-  --tf-surface: #151f31;
-  --tf-surface-soft: #18243a;
-  --tf-surface-subtle: #1a263b;
-  --tf-surface-sunken: #111a2b;
-  --tf-border: #283651;
-  --tf-border-strong: #344563;
-  --tf-ink: #f6f8fc;
-  --tf-ink-muted: #c8d0df;
-  --tf-ink-subtle: #99a6bc;
-  --tf-ink-faint: #7e8ba2;
+  --tf-canvas: var(--raw-101827);
+  --tf-surface: var(--raw-151f31);
+  --tf-surface-soft: var(--raw-18243a);
+  --tf-surface-subtle: var(--raw-1a263b);
+  --tf-surface-sunken: var(--raw-111a2b);
+  --tf-border: var(--raw-283651);
+  --tf-border-strong: var(--raw-344563);
+  --tf-ink: var(--raw-f6f8fc);
+  --tf-ink-muted: var(--raw-c8d0df);
+  --tf-ink-subtle: var(--raw-99a6bc);
+  --tf-ink-faint: var(--raw-7e8ba2);
 
-  --tf-danger: #f0837a;
-  --tf-danger-ink: #f5b5af;
-  --tf-danger-tint: rgba(180, 35, 24, 0.16);
-  --tf-danger-border: rgba(240, 131, 122, 0.3);
-  --tf-success: #63bf98;
-  --tf-success-ink: #8fd3b5;
-  --tf-success-tint: rgba(11, 112, 71, 0.18);
-  --tf-success-border: rgba(99, 191, 152, 0.28);
-  --tf-warning: #dfa05a;
+  --tf-danger: var(--raw-f0837a);
+  --tf-danger-ink: var(--raw-f5b5af);
+  --tf-danger-tint: var(--raw-rgba-180-35-24-0p16);
+  --tf-danger-border: var(--raw-rgba-240-131-122-0p3);
+  --tf-success: var(--raw-63bf98);
+  --tf-success-ink: var(--raw-8fd3b5);
+  --tf-success-tint: var(--raw-rgba-11-112-71-0p18);
+  --tf-success-border: var(--raw-rgba-99-191-152-0p28);
+  --tf-warning: var(--raw-dfa05a);
 
-  --tf-shadow: 0 28px 72px -40px rgba(0, 0, 0, 0.74), 0 14px 34px -28px rgba(0, 0, 0, 0.62);
-  --tf-shadow-sm: 0 10px 24px -18px rgba(0, 0, 0, 0.55);
+  --tf-shadow: 0 28px 72px -40px var(--raw-rgba-0-0-0-0p74), 0 14px 34px -28px var(--raw-rgba-0-0-0-0p62);
+  --tf-shadow-sm: 0 10px 24px -18px var(--raw-rgba-0-0-0-0p55);
 }
 
 .tf-auth {
@@ -551,12 +551,12 @@ export const AUTH_THEME_CSS = `
   border: 1px solid transparent;
   border-radius: var(--tf-radius-md);
   cursor: pointer;
-  box-shadow: 0 18px 30px -22px rgba(15, 60, 153, 0.75);
+  box-shadow: 0 18px 30px -22px var(--raw-rgba-15-60-153-0p75);
   transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.2s ease, opacity 0.15s ease, transform 0.15s ease;
 }
 .tf-auth-btn:hover:not(:disabled) {
   filter: saturate(1.06) brightness(1.06);
-  box-shadow: 0 20px 34px -22px rgba(15, 60, 153, 0.82);
+  box-shadow: 0 20px 34px -22px var(--raw-rgba-15-60-153-0p82);
   transform: translateY(-1px);
 }
 .tf-auth-btn:active:not(:disabled) {
@@ -786,7 +786,7 @@ export const AUTH_THEME_CSS = `
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(16, 24, 40, 0.55);
+  background: var(--raw-rgba-16-24-40-0p55);
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
@@ -1111,7 +1111,7 @@ export const AUTH_THEME_CSS = `
   color: var(--tf-brand-on);
   background: var(--tf-grad);
   border: 1px solid transparent;
-  box-shadow: 0 18px 30px -22px rgba(15, 60, 153, 0.75);
+  box-shadow: 0 18px 30px -22px var(--raw-rgba-15-60-153-0p75);
 }
 .tf-fp-btn--primary:hover:not(:disabled) {
   filter: saturate(1.06) brightness(1.06);

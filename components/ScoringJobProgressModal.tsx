@@ -3,6 +3,9 @@
 import { X, ClipboardList, Clock, Loader2, CheckCircle2, XCircle, AlertCircle, Minus, Maximize2, User, FileText, RotateCcw, Timer } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 export interface ResumeProgressItem {
   resumeId: string;
@@ -160,7 +163,7 @@ export default function ScoringJobProgressModal({
   // Minimized floating indicator
   if (isMinimized) {
     return (
-      <div
+      <div {...clickableProps}
         onClick={onMinimize}
         className="fixed bottom-4 right-4 z-50 bg-brand-blue text-white px-4 py-3 rounded-xl shadow-2xl shadow-brand-blue/25 hover:bg-brand-blue-2 transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300 ring-1 ring-white/10 max-w-xs"
       >
@@ -193,7 +196,7 @@ export default function ScoringJobProgressModal({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'queued':
-        return <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />;
+        return <Clock className="w-4 h-4 text-gray-500 dark:text-slate-500" />;
       case 'processing':
         return <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />;
       case 'completed':
@@ -203,7 +206,7 @@ export default function ScoringJobProgressModal({
       case 'already_scored':
         return <AlertCircle className="w-4 h-4 text-brand-orange-deep" />;
       default:
-        return <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />;
+        return <Clock className="w-4 h-4 text-gray-500 dark:text-slate-500" />;
     }
   };
 
@@ -242,7 +245,7 @@ export default function ScoringJobProgressModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-2xl overflow-hidden max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
@@ -290,15 +293,14 @@ export default function ScoringJobProgressModal({
                   <span className="hidden sm:inline">Minimize</span>
                 </Button>
               )}
-              <Button
+              <IconButton label="Close"
                 variant="secondary"
                 size="sm"
                 onClick={onClose}
                 className="w-8"
-                aria-label="Close"
               >
                 <X className="w-4 h-4" />
-              </Button>
+              </IconButton>
             </div>
           </div>
         </div>
@@ -333,7 +335,7 @@ export default function ScoringJobProgressModal({
               </div>
             )}
             <div className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
+              <Clock className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500" />
               <span className="tf-body-secondary">Queue: <span className="font-semibold text-gray-900 dark:text-slate-50">{overallQueued}</span></span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -450,6 +452,6 @@ export default function ScoringJobProgressModal({
           )}
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

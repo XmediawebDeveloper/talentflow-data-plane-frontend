@@ -3,8 +3,9 @@
  */
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
-import { ensureUnitsAvailable } from './unitGuard';
+import { ensureUnitsAvailable, unitRefusalError } from './unitGuard';
 import type { JDLineageVersion } from './jdService';
+import type { unitPoolService } from './unitPoolService';
 
 /**
  * Normalizes a scoring batch/item status string from the backend into one of
@@ -161,12 +162,46 @@ export interface ScoredResumeListResponse {
 
 // Async Bulk Scoring (Celery)
 export interface AsyncBulkScoringResponse {
+  /** Null only when a pre-check (see BulkScoringPrecheck) stopped the run. */
   batch_id: string;
   jd_id: string;
   jd_title: string;
   total_resumes: number;
   status: string;
   message: string;
+  /** Sent back when pre-checks were asked for: false = no batch was started
+   *  (all already scored, or `unit_check` refused). */
+  started?: boolean;
+  /* With `skipExisting`: the POST /scoring/check-existing fields for the
+     resumes sent (the already-scored ones were left out of the batch). */
+  total_checked?: number;
+  existing_count?: number;
+  existing_scores?: ExistingScoreRow[];
+  new_count?: number;
+  /** With `validateUnits`, when refused: the /unit-pool/validate-before-action result. */
+  unit_check?: Awaited<ReturnType<typeof unitPoolService.validateBeforeAction>>;
+}
+
+/** One already-scored resume, as POST /scoring/check-existing lists it. */
+export interface ExistingScoreRow {
+  resume_id: string;
+  score_id: string;
+  candidate_name: string;
+  candidate_email: string;
+  overall_score: number;
+  overall_rating_10?: number;
+  match_status: string;
+  scored_at: string | null;
+}
+
+/** Fold the Score click's pre-checks into POST /scoring/bulk-async (one round
+ *  trip instead of check-existing → validate-before-action → bulk-async). */
+export interface BulkScoringPrecheck {
+  /** Server leaves out resumes already scored for the JD and reports them. */
+  skipExisting?: boolean;
+  /** Server runs the RS unit check for the resumes left; a refusal comes back
+   *  as `unit_check` (see `bulkUnitRefusal`) instead of the client check. */
+  validateUnits?: boolean;
 }
 
 export interface BatchScoringItem {
@@ -551,14 +586,19 @@ export const scoringService = {
    * Start async bulk scoring via Celery
    * Returns a batch_id to poll for status
    */
-  async startBulkScoringAsync(jdId: string, resumeIds: string[]): Promise<AsyncBulkScoringResponse> {
+  async startBulkScoringAsync(jdId: string, resumeIds: string[], precheck?: BulkScoringPrecheck): Promise<AsyncBulkScoringResponse> {
     // Pre-check: don't start a batch the unit pool can't cover (1 RS per resume) —
     // it used to start and then fail resume by resume. Throws a readable message.
-    await ensureUnitsAvailable('RS', resumeIds.length, 'resume_scoring', jdId);
+    // With `validateUnits` the server runs this same check in the request below.
+    if (!precheck?.validateUnits) {
+      await ensureUnitsAvailable('RS', resumeIds.length, 'resume_scoring', jdId);
+    }
     try {
       const response = await api.post<AsyncBulkScoringResponse>('/scoring/bulk-async', {
         jd_id: jdId,
         resume_ids: resumeIds,
+        ...(precheck?.skipExisting ? { skip_existing: true } : {}),
+        ...(precheck?.validateUnits ? { validate_units: true } : {}),
       });
       // Dispatch event to refresh header quota display
       dispatchUnitsConsumed();
@@ -566,6 +606,14 @@ export const scoringService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /** The error to show when bulk-async (`validateUnits`) refused the run for
+   *  units — the same message ensureUnitsAvailable throws. Null otherwise. */
+  bulkUnitRefusal(response: AsyncBulkScoringResponse): Error | null {
+    const check = response.unit_check;
+    if (!check || check.can_proceed) return null;
+    return unitRefusalError(check, 'RS');
   },
 
   /**

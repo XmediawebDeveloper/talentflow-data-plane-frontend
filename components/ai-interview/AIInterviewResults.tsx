@@ -68,6 +68,8 @@ import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForAc
 import { RESULTS_TIMELINE_LIMIT, TimelineHistoryDialog, ViewHistoryButton } from '@/components/ui/timeline-history-dialog';
 import ResendLinkModal from '@/components/recruitment/ResendLinkModal';
 import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
+import { clickableProps, clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface AIInterviewResultsProps {
   configId: string;
@@ -273,8 +275,8 @@ export function getStatusIcon(status: string) {
     case 'invited': return <Mail className="w-4 h-4 text-brand-blue" />;
     case 'terminated': return <Ban className="w-4 h-4 text-destructive" />;
     case 'cancelled': return <XCircle className="w-4 h-4 text-destructive" />;
-    case 'expired': return <XCircle className="w-4 h-4 text-gray-400" />;
-    default: return <Mail className="w-4 h-4 text-gray-400" />;
+    case 'expired': return <XCircle className="w-4 h-4 text-gray-500" />;
+    default: return <Mail className="w-4 h-4 text-gray-500" />;
   }
 }
 
@@ -1032,14 +1034,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   const renderRowMenu = (session: AIInterviewResponse) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
+        <IconButton bare label={`Actions for ${session.candidate_name || 'candidate'}`} tooltip="Actions"
           type="button"
           className={portaled ? ROW_ACTION_BUTTON_CLASS : 'h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30'}
-          aria-label={`Actions for ${session.candidate_name || 'candidate'}`}
-          title="Actions"
         >
           <MoreVertical className="w-4 h-4" />
-        </button>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
         <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => handleViewDetails(session)}>
@@ -1943,7 +1943,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           <div className="min-w-0">
                             <p className="tf-micro-hint uppercase tracking-wide">Score</p>
                             <p className="text-xl font-semibold leading-tight tabular-nums text-gray-900">
-                              {score}<span className="text-sm font-medium text-gray-400">%</span>
+                              {score}<span className="text-sm font-medium text-gray-500">%</span>
                             </p>
                           </div>
                           <ResultBadge result={result} />
@@ -1970,7 +1970,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     {/* View Details + Download Report (the table's button —
                         same permission / not-evaluated rules). */}
                     <div className="flex items-center gap-2">
-                      <div
+                      <div {...clickableProps}
                         onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
                         title="View Details"
                         className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 px-2.5 sm:px-3 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
@@ -2104,7 +2104,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     const detailColumnIds: ResultColumnId[] = [];
                     return (
                       <Fragment key={session.id}>
-                      <tr
+                      <tr {...clickableRowProps}
                         /* Job Details: the row opens / closes its details, as
                            on the AI Talent Match table; ⋮ › View Details opens it. */
                         /* Clicking a row opens the candidate's result, as on the
@@ -2335,7 +2335,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     className="tf-input w-14 px-1.5 text-center rounded-xl"
                   />
                 </div>
-                <button
+                <IconButton bare label="Previous page"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
                   className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
@@ -2343,14 +2343,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       ? 'text-gray-400 opacity-40 cursor-not-allowed'
                       : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
                   }`}
-                  aria-label="Previous page" title="Previous page"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                </button>
+                </IconButton>
                 <span className="tf-label whitespace-nowrap px-1">
                   <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
                 </span>
-                <button
+                <IconButton bare label="Next page"
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
                   className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
@@ -2358,10 +2357,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       ? 'text-gray-400 opacity-40 cursor-not-allowed'
                       : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
                   }`}
-                  aria-label="Next page" title="Next page"
                 >
                   <ChevronRight className="w-4 h-4" />
-                </button>
+                </IconButton>
               </div>
             </div>
           </div>

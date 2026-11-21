@@ -30,6 +30,8 @@ import agreementService, {
   getAgreementTypeName,
 } from '@/lib/services/agreementService';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface AgreementLogsProps {
   compact?: boolean;
@@ -157,7 +159,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
   if (isLoading && logs.length === 0) {
     return (
       <div className="flex items-center justify-center py-12 tf-loader-center">
-        <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+        <RefreshCw className="w-6 h-6 animate-spin text-gray-500" />
       </div>
     );
   }
@@ -178,13 +180,13 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
               </p>
             </div>
           </div>
-          <button
+          <IconButton bare label="Refresh logs"
             onClick={loadLogs}
             disabled={isLoading}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            className="p-2 text-gray-500 hover:text-gray-600 rounded-lg hover:bg-gray-100"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
+          </IconButton>
         </div>
       </div>
 
@@ -193,7 +195,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
         <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-400" />
+              <Filter className="w-4 h-4 text-gray-500" />
               <span className="tf-label">Filters:</span>
             </div>
 
@@ -242,7 +244,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
               onChange={setStartDate}
               className="w-auto"
             />
-            <span className="text-gray-400">to</span>
+            <span className="text-gray-500">to</span>
             <DateField
               aria-label="End date"
               value={endDate}
@@ -250,12 +252,12 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
               className="w-auto"
             />
 
-            <button
+            <IconButton bare label="Search logs"
               onClick={handleSearch}
               className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
             >
               <Search className="w-4 h-4" />
-            </button>
+            </IconButton>
 
             <button
               onClick={clearFilters}
@@ -303,7 +305,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
               <tr key={log.id} className="hover:bg-gray-50">
                 <td className="tf-td">
                   <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-400" />
+                    <User className="w-4 h-4 text-gray-500" />
                     <div>
                       <p className="tf-row-name">
                         {log.user_name || 'Unknown'}
@@ -330,13 +332,13 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
                 </td>
                 <td className="tf-td">
                   <div className="flex items-center gap-1.5">
-                    <Globe className="w-4 h-4 text-gray-400" />
+                    <Globe className="w-4 h-4 text-gray-500" />
                     <span className="tf-body-secondary">{log.ip_address}</span>
                   </div>
                 </td>
                 <td className="tf-td">
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <Calendar className="w-4 h-4 text-gray-500" />
                     <span className="tf-body-secondary">
                       {formatIST(log.created_at)}
                     </span>
@@ -393,32 +395,30 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
                 className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
               />
             </div>
-            <button
+            <IconButton bare label="Previous page"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
               className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-              aria-label="Previous page" title="Previous page"
             >
               <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </button>
+            </IconButton>
             <span className="tf-label px-1 whitespace-nowrap">
               <span className="text-brand-blue font-semibold">{page + 1}</span> / {totalPages}
             </span>
-            <button
+            <IconButton bare label="Next page"
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
               className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-              aria-label="Next page" title="Next page"
             >
               <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </button>
+            </IconButton>
           </div>
         </div>
       )}
 
       {/* Detail Modal */}
       {selectedLog && showAuditTrail && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
+        <ModalA11y><div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-4">
             <div
               className="fixed inset-0 bg-gray-500 bg-opacity-75"
@@ -430,16 +430,15 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
             <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80dvh] flex flex-col overflow-hidden">
               <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                 <h3 className="tf-section-title">Agreement Log Details</h3>
-                <button
+                <IconButton bare label="Close"
                   onClick={() => {
                     setSelectedLog(null);
                     setShowAuditTrail(false);
                   }}
                   className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                  aria-label="Close"
                 >
                   <X className="w-5 h-5" />
-                </button>
+                </IconButton>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -540,7 +539,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
               </div>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </div>
   );

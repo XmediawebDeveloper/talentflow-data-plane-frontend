@@ -7,6 +7,7 @@ import { resumeService } from '@/lib/services/resumeService';
 import { showErrorToast } from '@/lib/utils/errorToast';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The "Candidates Selected" panel, lifted out of the Score Resume / Apply to
@@ -257,16 +258,14 @@ export default function SelectedCandidatesPanel({
                 </div>
               </div>
 
-              <button
+              <IconButton bare label={hasMultiple ? `View ${resume.name}'s resume versions` : `View ${resume.name}'s resume`} tooltip={hasMultiple ? 'View resume versions' : 'View resume'}
                 type="button"
                 onClick={() => handleView(resume)}
                 disabled={loadingViewFor === resume.id}
-                title={hasMultiple ? 'View resume versions' : 'View resume'}
-                aria-label={hasMultiple ? `View ${resume.name}'s resume versions` : `View ${resume.name}'s resume`}
-                className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
+                className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
               >
                 {loadingViewFor === resume.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-              </button>
+              </IconButton>
             </div>
           );
         })}

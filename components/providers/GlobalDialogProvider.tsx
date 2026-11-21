@@ -12,6 +12,7 @@ import {
 import { AlertTriangle, CheckCircle, Info, XCircle, HelpCircle, Trash2, AlertCircle, FileText, LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { APP_MODAL_WIDTH, MODAL_FOOTER_BUTTON_CLASS, MODAL_FOOTER_ROW_CLASS } from '@/components/ui/app-modal';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -281,7 +282,7 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
           />
 
           {/* Dialog */}
-          <div
+          <ModalA11y closeOnEscape={false}><div
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="global-dialog-title"
@@ -381,7 +382,7 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                 </div>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         </>
       )}
     </GlobalDialogContext.Provider>

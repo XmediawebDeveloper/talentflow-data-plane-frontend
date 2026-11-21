@@ -52,6 +52,7 @@ import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -188,15 +189,14 @@ function SectionCard({
         {badge}
         <div className="ml-auto flex items-center gap-2">
           {action}
-          <button
+          <IconButton bare label={open ? `Hide ${title}` : `Show ${title}`}
             type="button"
             onClick={() => setOpen(o => !o)}
             aria-expanded={open}
-            title={open ? `Hide ${title}` : `Show ${title}`}
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
+            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
           >
             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-          </button>
+          </IconButton>
         </div>
       </div>
       {open && <div className="p-4 sm:p-5">{children}</div>}
@@ -372,14 +372,23 @@ export default function AIInterviewPreview() {
 
   const interviewId = interview?.id;
   const interviewJdId = interview?.jd_id;
+  const storedInterviewVersion = interview?.interview_version;
   useEffect(() => {
     if (!published || !interviewId) return;
+    /* The stored version (V1, V2..) — the number the All Interviews table
+       shows first (interviewVersionOrdinal). Only a record without one (older
+       backend / row not backfilled) still derives it from every config, which
+       re-downloaded the whole default + archived config lists after publish. */
+    if (typeof storedInterviewVersion === 'number' && storedInterviewVersion > 0) {
+      setInterviewVersion(storedInterviewVersion);
+      return;
+    }
     let cancelled = false;
     resolveAIInterviewVersion({ id: interviewId, jd_id: interviewJdId })
       .then((v) => { if (!cancelled) setInterviewVersion(v); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [published, interviewId, interviewJdId]);
+  }, [published, interviewId, interviewJdId, storedInterviewVersion]);
 
   const mthRound = rounds.find(r => r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical');
   const nthRound = rounds.find(r => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have');

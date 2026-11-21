@@ -12,6 +12,7 @@ import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import PlanLockedOverlay from '@/components/shared/PlanLockedOverlay';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { Skeleton } from '@/components/ui/skeleton';
+import { clickableLinkProps, clickableProps } from '@/lib/a11y/clickableProps';
 
 interface AdminDashboardProps {
   user?: User;
@@ -224,14 +225,14 @@ export default function AdminDashboard({
               <p className="tf-body-secondary">Total Resumes</p>
               <p className="text-3xl font-bold text-gray-900 mt-1 tracking-tight">{stats?.total_resumes || 0}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span
+                <span {...clickableLinkProps}
                   className="text-xs text-brand-blue font-medium cursor-pointer hover:underline hover:text-brand-blue-2 transition-colors"
                   onClick={() => router.push('/recruitment/resume-database?tab=my-resumes')}
                 >
                   {stats?.my_resumes || 0} My Resumes
                 </span>
                 <span className="text-xs text-gray-300">|</span>
-                <span
+                <span {...clickableLinkProps}
                   className="text-xs text-brand-cyan font-medium cursor-pointer hover:underline hover:text-brand-teal transition-colors"
                   onClick={() => router.push('/recruitment/resume-database?tab=internal-db')}
                 >
@@ -250,13 +251,13 @@ export default function AdminDashboard({
           <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand-cyan/5 blur-2xl group-hover:bg-brand-cyan/10 transition-colors" />
           <div className="relative flex items-center justify-between">
             <div>
-              <p
+              <p {...clickableLinkProps}
                 className="tf-card-desc cursor-pointer hover:text-brand-cyan transition-colors"
                 onClick={() => router.push('/recruitment/job-openings')}
               >
                 Job Descriptions
               </p>
-              <p
+              <p {...clickableLinkProps}
                 className="text-3xl font-bold text-gray-900 mt-1 tracking-tight cursor-pointer hover:text-brand-cyan transition-colors"
                 onClick={() => router.push('/recruitment/job-openings')}
               >
@@ -264,14 +265,14 @@ export default function AdminDashboard({
               </p>
               {/* JD02A & JD02B: Show published, draft, and my JDs counts - All clickable */}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span
+                <span {...clickableLinkProps}
                   className="text-xs text-success font-medium cursor-pointer hover:underline hover:text-success transition-colors"
                   onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?status=published'); }}
                 >
                   {stats?.active_jds || 0} Published
                 </span>
                 <span className="text-xs text-gray-300">|</span>
-                <span
+                <span {...clickableLinkProps}
                   className="text-xs text-brand-orange-deep font-medium cursor-pointer hover:underline hover:text-brand-orange transition-colors"
                   onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?status=draft'); }}
                 >
@@ -279,7 +280,7 @@ export default function AdminDashboard({
                 </span>
               </div>
             </div>
-            <div
+            <div {...clickableLinkProps}
               className="w-12 h-12 bg-brand-cyan/10 ring-1 ring-brand-cyan/15 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 shadow-sm shadow-brand-cyan/10"
               onClick={() => router.push('/recruitment/job-openings')}
             >
@@ -289,7 +290,7 @@ export default function AdminDashboard({
         </div>
 
         {/* Users Card - Clickable for admins */}
-        <div
+        <div {...clickableProps}
           className={`group relative overflow-hidden bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-6 ${canManageUsers ? 'cursor-pointer hover:shadow-lg hover:shadow-brand-teal/10 hover:border-brand-teal/30 hover:-translate-y-0.5 transition-all' : 'hover:shadow-md transition-shadow'}`}
           onClick={() => canManageUsers && onNavigateToUsers?.()}
         >
@@ -308,7 +309,7 @@ export default function AdminDashboard({
 
         {/* Assessments Card - Clickable (only if plan includes assessment) */}
         {<PlanLockedOverlay locked={isPlanLocked('assessment')}>{(
-          <div
+          <div {...clickableLinkProps}
             className="tf-card-soft group relative overflow-hidden p-6 cursor-pointer hover:shadow-lg hover:shadow-brand-orange/10 hover:border-brand-orange/30 hover:-translate-y-0.5 transition-all"
             onClick={() => router.push('/recruitment/assessments')}
           >
@@ -348,7 +349,7 @@ export default function AdminDashboard({
           <div className="tf-grid-stats-5">
             {/* Resume Upload Units */}
             {subscriptionUnits.RU && <PlanLockedOverlay locked={isPlanLocked('resume_upload')}>{(
-              <div
+              <div {...clickableLinkProps}
                 className="tf-card-soft group cursor-pointer p-4 hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all"
                 onClick={() => router.push('/recruitment/resume-database?tab=my-resumes')}
               >
@@ -379,7 +380,7 @@ export default function AdminDashboard({
 
             {/* Resume Scoring Units */}
             {subscriptionUnits.RS && <PlanLockedOverlay locked={isPlanLocked('resume_scoring')}>{(
-              <div
+              <div {...clickableLinkProps}
                 className="tf-card-soft group cursor-pointer p-4 hover:shadow-md hover:shadow-brand-cyan/10 hover:border-brand-cyan/30 hover:-translate-y-0.5 transition-all"
                 onClick={() => router.push('/recruitment/resume-scoring')}
               >
@@ -410,7 +411,7 @@ export default function AdminDashboard({
 
             {/* Assessment Units */}
             {subscriptionUnits.AS && <PlanLockedOverlay locked={isPlanLocked('assessment')}>{(
-              <div
+              <div {...clickableLinkProps}
                 className="tf-card-soft group cursor-pointer p-4 hover:shadow-md hover:shadow-brand-orange/10 hover:border-brand-orange/30 hover:-translate-y-0.5 transition-all"
                 onClick={() => router.push('/recruitment/assessments')}
               >
@@ -441,7 +442,7 @@ export default function AdminDashboard({
 
             {/* AI Interview Units */}
             {subscriptionUnits.AIU && <PlanLockedOverlay locked={isPlanLocked('ai_interview')}>{(
-              <div
+              <div {...clickableLinkProps}
                 className="tf-card-soft group cursor-pointer p-4 hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue-2/30 hover:-translate-y-0.5 transition-all"
                 onClick={() => router.push('/recruitment/ai-interviews')}
               >
@@ -472,7 +473,7 @@ export default function AdminDashboard({
 
             {/* Max Users */}
             {subscriptionUnits.max_seats && (
-              <div
+              <div {...clickableProps}
                 className={`group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-teal/10 hover:border-brand-teal/30 transition-all ${canManageUsers ? 'cursor-pointer hover:-translate-y-0.5' : ''}`}
                 onClick={() => canManageUsers && onNavigateToUsers?.()}
               >
@@ -794,7 +795,7 @@ export default function AdminDashboard({
                           </div>
                         </div>
                         <time
-                          className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0 group-hover:text-gray-600 transition-colors"
+                          className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0 group-hover:text-gray-600 transition-colors"
                           title={fullTime}
                           dateTime={activity.created_at}
                         >

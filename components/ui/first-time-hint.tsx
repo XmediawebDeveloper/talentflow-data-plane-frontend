@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { Lightbulb, X } from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
 
 const PREFIX = 'tf:hint:';
 
@@ -60,14 +61,13 @@ export default function FirstTimeHint({
       >
         Got it
       </button>
-      <button
+      <IconButton bare label="Dismiss tip"
         type="button"
         onClick={dismiss}
-        aria-label="Dismiss tip"
-        className="-m-0.5 flex-shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800"
+        className="-m-0.5 flex-shrink-0 rounded p-0.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800"
       >
         <X className="h-3.5 w-3.5" />
-      </button>
+      </IconButton>
     </div>
   );
 }

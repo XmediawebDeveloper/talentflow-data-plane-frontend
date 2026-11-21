@@ -12,7 +12,7 @@ import { dispatchAccessRestrictedEvent, getAccessToken } from '@/lib/services/ap
 const WS_CLOSE_ACCOUNT_INACTIVE = 4403;
 
 interface WebSocketMessage {
-  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated' | 'plan_change_pending' | 'company_profile_updated' | 'access_restricted' | 'plan_updated';
+  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated' | 'plan_change_pending' | 'company_profile_updated' | 'access_restricted' | 'plan_updated' | 'activity_changed';
   data?: any;
 }
 
@@ -211,6 +211,13 @@ export function useNotificationWebSocket({
 
               case 'connected':
                 console.log('[WebSocket] Connection confirmed:', message.data?.message);
+                // (Re)connected: "My Activities" catches up on anything missed meanwhile.
+                window.dispatchEvent(new Event('tf:activity-changed'));
+                break;
+
+              case 'activity_changed':
+                // An activity of this user started / progressed / finished / was cleared (any device).
+                window.dispatchEvent(new Event('tf:activity-changed'));
                 break;
 
               case 'pong':

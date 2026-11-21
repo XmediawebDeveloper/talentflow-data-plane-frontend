@@ -3,6 +3,7 @@
 import React from 'react';
 import { AlertTriangle, Lock, Trash2, FileText, Users, Info, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 interface QuotaOverage {
   quotaType: string;
@@ -95,7 +96,7 @@ export default function DowngradeWarningModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm dark:bg-black/70 sm:items-center sm:p-4">
+    <ModalA11y><div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm dark:bg-black/70 sm:items-center sm:p-4">
       <div className="relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-slate-900 sm:max-h-[90dvh] sm:max-w-2xl sm:rounded-2xl tf-round-edges">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-slate-700/60 sm:px-6 sm:py-4">
@@ -364,6 +365,6 @@ export default function DowngradeWarningModal({
           </button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

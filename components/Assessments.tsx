@@ -169,6 +169,9 @@ import InviteStatusChip from '@/components/ui/invite-status-chip';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { jobLineageKey, collapseByLineage as collapseJobLineages, orderTotalJobs } from '@/lib/utils/assessmentJobOrder';
 import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
+import { clickableProps, clickableRowProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 
 /** What the version-history helpers below read off an assessment row — the
@@ -227,27 +230,25 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
         />
       </div>
 
-      <button
+      <IconButton bare label="Previous page"
         onClick={() => onPageChange(page - 1)}
         disabled={page === 1}
         className={navBtnClass}
-        aria-label="Previous page" title="Previous page"
       >
         <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-      </button>
+      </IconButton>
 
       <span className="tf-label px-1 whitespace-nowrap">
         <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
       </span>
 
-      <button
+      <IconButton bare label="Next page"
         onClick={() => onPageChange(page + 1)}
         disabled={page === totalPages}
         className={navBtnClass}
-        aria-label="Next page" title="Next page"
       >
         <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-      </button>
+      </IconButton>
     </div>
   );
 }
@@ -2310,7 +2311,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           : 'Not scored yet';
       return (
         <td className="tf-td text-sm text-center">
-          <span className="text-gray-400" title={why}>&mdash;</span>
+          <span className="text-gray-500" title={why}>&mdash;</span>
         </td>
       );
     }
@@ -5558,7 +5559,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       activeSelection?: { jobVersion: number; assessmentId: string } | null;
     } = {},
   ) => (
-    <div
+    <div {...clickableProps}
       key={assessment.id}
       /* The anchor the return-from-a-detail-page scroll aims at — see
          `restoreScrollTargetRef`. Only on the Job List: the Send Invite picker
@@ -6078,7 +6079,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                  (the `__unlinked__` case) has no job to open,
                  and the panel simply gets no header control. */
               assessment.jd_id ? (
-                <button
+                <IconButton bare label="View job version details"
                   type="button"
                   onClick={(e) => {
                   e.stopPropagation();
@@ -6088,11 +6089,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   );
                   }}
                   className="h-8 w-8 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                  aria-label="View job version details"
-                  title="View job version details"
                 >
                   <Eye className="w-4 h-4" />
-                </button>
+                </IconButton>
               ) : undefined
             }
             /* Opens the same popup the header eye opens, landing on
@@ -6340,7 +6339,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     <div className="flex items-center gap-1.5 flex-shrink-0">
       {/* Three Dots Menu */}
       <div className="relative">
-        <button
+        <IconButton bare label="More actions"
           data-assessment-menu-trigger
           onClick={(e) => {
             e.stopPropagation();
@@ -6359,8 +6358,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             }
             setOpenMenuId(willOpen ? menuKey : null);
           }}
-          aria-label="More actions"
-          title="More actions"
           className={
             variant === 'compact'
               ? `${QUICK_ACTION_BASE} text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-400`
@@ -6368,7 +6365,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           }
         >
           <MoreVertical className={variant === 'compact' ? 'w-4 h-4' : 'w-4 h-4 text-gray-600'} />
-        </button>
+        </IconButton>
 
       {/* Dropdown Menu */}
       {openMenuId === menuKey && menuAnchor && typeof document !== 'undefined' && createPortal(
@@ -6561,7 +6558,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   unarchiveOff ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
                 }`}
               >
-                <ArchiveRestore className={`w-4 h-4 flex-shrink-0 ${unarchiveOff ? 'text-gray-300' : 'text-menu-icon-archive'}`} />
+                <ArchiveRestore className={`w-4 h-4 flex-shrink-0 ${unarchiveOff ? 'text-muted-foreground dark:text-gray-300' : 'text-menu-icon-archive'}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Unarchive</span>
               </button>
               );
@@ -6599,7 +6596,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
-              <Archive className={`w-4 h-4 flex-shrink-0 ${archiveOff ? 'text-gray-300' : 'text-menu-icon-archive'}`} />
+              <Archive className={`w-4 h-4 flex-shrink-0 ${archiveOff ? 'text-muted-foreground dark:text-gray-300' : 'text-menu-icon-archive'}`} />
               <span className={MENU_ITEM_SCALE_CLASS}>Archive</span>
             </button>
             );
@@ -6961,13 +6958,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <div className="inline-flex items-center gap-2 max-w-full min-w-0 bg-brand-blue/5 text-brand-blue px-3 py-1.5 rounded-lg ring-1 ring-brand-blue/20">
                     <Info className="w-4 h-4 shrink-0" />
                     <span className="text-sm font-medium min-w-0 truncate" title={preSelectedJdTitle}>Filtered by JD: {preSelectedJdTitle}</span>
-                    <button
+                    <IconButton bare label="Clear filter"
                       onClick={() => router.push('/recruitment/assessments')}
                       className="ml-1 shrink-0 hover:bg-brand-blue/10 rounded p-0.5 transition-colors"
-                      aria-label="Clear filter" title="Clear filter"
                     >
                       <X className="w-3.5 h-3.5" />
-                    </button>
+                    </IconButton>
                   </div>
                 </div>
               )}
@@ -8073,7 +8069,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {(() => {
                                   const allOnPage = pageItems.length > 0 && pageItems.every((row) => selectedResultKeys.has(resultRowKey(row)));
                                   return (
-                                    <button
+                                    <IconButton bare label={allOnPage ? 'Deselect all on this page' : 'Select all on this page'}
                                       type="button"
                                       onClick={() => setSelectedResultKeys((prev) => {
                                         const next = new Set(prev);
@@ -8082,11 +8078,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         return next;
                                       })}
                                       className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
-                                      aria-label={allOnPage ? 'Deselect all on this page' : 'Select all on this page'}
-                                      title={allOnPage ? 'Deselect all on this page' : 'Select all on this page'}
                                     >
-                                      {allOnPage ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
-                                    </button>
+                                      {allOnPage ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                                    </IconButton>
                                   );
                                 })()}
                               </th>
@@ -8130,23 +8124,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                             {pageItems.map((result) => {
                               return (
-                                <tr
+                                <tr {...clickableRowProps}
                                   key={`${result._assessment_id}-${result.invitation_id}`}
                                   onClick={() => openCandidateResult(result, filteredResults)}
                                   className="transition-colors hover:bg-brand-blue/5 cursor-pointer"
                                   title={`View ${result.candidate_name || 'candidate'}'s result`}
                                 >
                                   <td className="tf-td pl-3 sm:pl-4 lg:pl-6 pr-0 w-10" onClick={(e) => e.stopPropagation()}>
-                                    <button
+                                    <IconButton bare label={selectedResultKeys.has(resultRowKey(result)) ? 'Deselect candidate' : 'Select candidate'}
                                       type="button"
                                       onClick={() => toggleResultSelected(result)}
                                       className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
-                                      aria-label={selectedResultKeys.has(resultRowKey(result)) ? 'Deselect candidate' : 'Select candidate'}
                                     >
                                       {selectedResultKeys.has(resultRowKey(result))
                                         ? <CheckSquare className="w-4 h-4 text-brand-blue" />
-                                        : <Square className="w-4 h-4 text-gray-400" />}
-                                    </button>
+                                        : <Square className="w-4 h-4 text-gray-500" />}
+                                    </IconButton>
                                   </td>
                                   <td className="tf-td">
                                     <div className="flex items-center gap-3">
@@ -8186,8 +8179,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       {/* Duration is the Timeline's last line, not a column of its own. */}
                                       {formatTimeSpent(result.time_spent_seconds) !== '-' && (
                                         <div className="flex items-center gap-2 whitespace-nowrap">
-                                          <Timer className="w-3 h-3 flex-shrink-0 text-gray-400" />
-                                          <span><span className="text-gray-400 dark:text-slate-500">Duration:</span> {formatTimeSpent(result.time_spent_seconds)}</span>
+                                          <Timer className="w-3 h-3 flex-shrink-0 text-gray-500" />
+                                          <span><span className="text-gray-500 dark:text-slate-500">Duration:</span> {formatTimeSpent(result.time_spent_seconds)}</span>
                                         </div>
                                       )}
                                     </div>
@@ -8307,16 +8300,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               selected={isSelected}
                               onClick={() => openCandidateResult(result, filteredResults)}
                               select={
-                                <button
+                                <IconButton bare label={isSelected ? 'Deselect candidate' : 'Select candidate'}
                                   type="button"
                                   onClick={() => toggleResultSelected(result)}
                                   className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
-                                  aria-label={isSelected ? 'Deselect candidate' : 'Select candidate'}
                                 >
                                   {isSelected
                                     ? <CheckSquare className="w-4 h-4 text-brand-blue" />
-                                    : <Square className="w-4 h-4 text-gray-400" />}
-                                </button>
+                                    : <Square className="w-4 h-4 text-gray-500" />}
+                                </IconButton>
                               }
                               idBadge={
                                 <>
@@ -8805,7 +8797,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       run();
                                     }}
                                   >
-                                    <Icon className={`w-4 h-4 ${reason ? 'text-gray-300' : iconClass}`} />
+                                    <Icon className={`w-4 h-4 ${reason ? 'text-muted-foreground dark:text-gray-300' : iconClass}`} />
                                     <span>{label}</span>
                                   </DropdownMenuItem>
                                 ))}
@@ -9207,7 +9199,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <div className="pt-2 border-t border-gray-100 dark:border-slate-800 tf-meta space-y-1">
                                     {timelineEvents(inv).length === 0 ? (
                                       <div className="flex items-center gap-2">
-                                        <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                        <Clock className="w-3 h-3 text-gray-500 flex-shrink-0" />
                                         <span>Created: {formatIST(inv.created_at)}</span>
                                       </div>
                                     ) : (
@@ -9253,18 +9245,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     wide table scrolls sideways. */}
                                 {showInviteSelection && (
                                 <th className="tf-th-cell text-left w-12 tf-sticky-col-left tf-th">
-                                  <button
+                                  <IconButton bare label={allFilteredSelected ? 'Deselect all invitations' : 'Select all invitations'} tooltip={allFilteredSelected ? 'Deselect all' : `Select all ${selectAllCount} matching`}
                                     onClick={toggleSelectAllInvites}
                                     className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
-                                    aria-label={allFilteredSelected ? 'Deselect all invitations' : 'Select all invitations'}
-                                    title={allFilteredSelected ? 'Deselect all' : `Select all ${selectAllCount} matching`}
                                   >
                                     {allFilteredSelected ? (
                                       <CheckSquare className="w-4 h-4 text-gray-800 dark:text-slate-200" />
                                     ) : (
-                                      <Square className="w-4 h-4 text-gray-400" />
+                                      <Square className="w-4 h-4 text-gray-500" />
                                     )}
-                                  </button>
+                                  </IconButton>
                                 </th>
                                 )}
                                 <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
@@ -9318,19 +9308,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <tr key={inv.id} className="transition-colors hover:bg-brand-blue/5">
                                     {showInviteSelection && (
                                     <td className="tf-td tf-sticky-col-left">
-                                      <button
+                                      <IconButton bare label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`} tooltip={inviteJobLock(inv) ?? undefined}
                                         onClick={() => { if (!inviteJobLock(inv)) toggleSelectInvite(inv.id); }}
                                         disabled={!!inviteJobLock(inv)}
-                                        title={inviteJobLock(inv) ?? undefined}
                                         className="p-1 hover:bg-gray-200 dark:hover:bg-slate-700 rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                                        aria-label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
                                       >
                                         {selectedInviteIds.has(inv.id) ? (
                                           <CheckSquare className="w-4 h-4 text-gray-800 dark:text-slate-200" />
                                         ) : (
-                                          <Square className="w-4 h-4 text-gray-400" />
+                                          <Square className="w-4 h-4 text-gray-500" />
                                         )}
-                                      </button>
+                                      </IconButton>
                                     </td>
                                     )}
                                     <td className="tf-td">
@@ -9366,7 +9354,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       <div className="space-y-1">
                                         {timelineEvents(inv).length === 0 ? (
                                           <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                            <Clock className="w-3 h-3 text-gray-500 flex-shrink-0" />
                                             <span>Created: {formatIST(inv.created_at)}</span>
                                           </div>
                                         ) : (
@@ -9476,19 +9464,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               key={inv.id}
                               selected={showInviteSelection && selectedInviteIds.has(inv.id)}
                               select={showInviteSelection ? (
-                                <button
+                                <IconButton bare label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`} tooltip={inviteJobLock(inv) ?? undefined}
                                   onClick={() => { if (!inviteJobLock(inv)) toggleSelectInvite(inv.id); }}
                                   disabled={!!inviteJobLock(inv)}
-                                  title={inviteJobLock(inv) ?? undefined}
                                   className="p-1 hover:bg-gray-200 dark:hover:bg-slate-700 rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                                  aria-label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
                                 >
                                   {selectedInviteIds.has(inv.id) ? (
                                     <CheckSquare className="w-4 h-4 text-gray-800 dark:text-slate-200" />
                                   ) : (
-                                    <Square className="w-4 h-4 text-gray-400" />
+                                    <Square className="w-4 h-4 text-gray-500" />
                                   )}
-                                </button>
+                                </IconButton>
                               ) : undefined}
                               idBadge={
                                 <>
@@ -9524,7 +9510,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <div className="mt-3 tf-meta space-y-1">
                                 {timelineEvents(inv).length === 0 ? (
                                   <div className="flex items-center gap-2">
-                                    <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                    <Clock className="w-3 h-3 text-gray-500 flex-shrink-0" />
                                     <span>Created: {formatIST(inv.created_at)}</span>
                                   </div>
                                 ) : (
@@ -10226,7 +10212,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 }`}>
                                   <AlertTriangle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
                                     event.severity === 'high' ? 'text-destructive' :
-                                    event.severity === 'medium' ? 'text-warning' : 'text-gray-400'
+                                    event.severity === 'medium' ? 'text-warning' : 'text-gray-500'
                                   }`} />
                                 </div>
                                 <div className="min-w-0">
@@ -10617,7 +10603,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         const closeIfIdle = () => { if (!isCloning) setCloneTargetAssessment(null); };
 
         return (
-        <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
             {/* Header and the two panels scroll together, so the actions stay
                 reachable on a short viewport. */}
@@ -10672,7 +10658,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
 
               <div className="flex justify-center py-2 sm:py-2.5" aria-hidden="true">
-                <ArrowDown className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 dark:text-slate-500" />
+                <ArrowDown className="w-5 h-5 sm:w-6 sm:h-6 text-gray-500 dark:text-slate-500" />
               </div>
 
               {/* TO — what the confirm button actually produces: a draft, which
@@ -10719,7 +10705,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
         );
       })()}
 

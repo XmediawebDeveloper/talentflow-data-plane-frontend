@@ -3,7 +3,8 @@
  */
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
-import { onListCacheInvalidate, withListCacheInvalidation } from '@/lib/utils/listCache';
+import { sessionTokenManager } from './candidateService';
+import { cachedList, listCacheKey, listReadOptions, onListCacheInvalidate, withListCacheInvalidation, type ListReadOptions } from '@/lib/utils/listCache';
 import { primeLineages, primeVersionCounts } from '@/lib/utils/jdLineagePrime';
 import type { JDLineageVersion } from './jdService';
 
@@ -45,7 +46,18 @@ export interface AssessmentCreate {
    *  edited is "Draft Updated". Only the form knows this on a create: the
    *  backend has no saved baseline to diff against yet. */
   content_edited?: boolean;
+  /** Create AND publish in one request (the Configure step's Publish). The
+   *  backend runs exactly what POST /assessments/{id}/publish runs. A refused
+   *  publish — or an older backend that ignores the flag — comes back as a
+   *  draft, so callers must still call `publish` when the reply is not live
+   *  (see `isLiveAssessmentStatus`). */
+  publish?: boolean;
 }
+
+/** Is this status a published (live) assessment? The API says "published";
+ *  some mapped records carry "active". */
+export const isLiveAssessmentStatus = (status: unknown): boolean =>
+  ['published', 'active'].includes(String(status ?? '').toLowerCase());
 
 export interface AssessmentUpdate {
   title?: string;
@@ -1306,10 +1318,15 @@ export const assessmentService = {
    * 1b. Get JD IDs that already have assessments (for 1:1 filtering)
    * Returns list of JD IDs that have non-archived assessments
    */
-  async getJDsWithAssessments(): Promise<string[]> {
+  async getJDsWithAssessments(opts?: ListReadOptions): Promise<string[]> {
     try {
-      const response = await api.get<string[]>('/assessments/jds-with-assessments');
-      return response.data;
+      /* `reuseRecent` (a screen showing it on arrival) reuses a read from the
+         last 30 s; the default asks the server, as before. Writes clear it. */
+      return await cachedList(
+        listCacheKey('assessments|jds-with-assessments'),
+        async () => (await api.get<string[]>('/assessments/jds-with-assessments')).data,
+        listReadOptions(opts),
+      );
     } catch (error) {
       console.error('Failed to fetch JDs with assessments:', error);
       return []; // Return empty array on error to not block UX
@@ -1859,6 +1876,15 @@ withListCacheInvalidation(assessmentService, [
   'regenerateQuestions',
 ]);
 
+// The candidate answer/complete endpoints only accept requests from the
+// invitation that owns the attempt (and its live session), like code run.
+function candidateAttemptHeaders(invitationToken: string): Record<string, string> {
+  const headers: Record<string, string> = { 'X-Invitation-Token': invitationToken };
+  const sessionToken = sessionTokenManager.getToken(invitationToken);
+  if (sessionToken) headers['X-Session-Token'] = sessionToken;
+  return headers;
+}
+
 // Candidate-facing services (public)
 export const candidateAssessmentService = {
   /**
@@ -1874,12 +1900,13 @@ export const candidateAssessmentService = {
   },
 
   /**
-   * Start assessment
+   * Start assessment. The invitation's email is required (the backend refuses
+   * a start without it, so a forwarded link cannot be used).
    */
-  async start(token: string, consentAccepted: boolean = true) {
+  async start(token: string, candidateEmail: string, consentAccepted: boolean = true) {
     try {
-      const response = await api.post('/assessments/candidate/start', {
-        invitation_token: token,
+      const response = await api.post(`/assessments/candidate/assessment/${token}/start`, {
+        candidate_email: candidateEmail,
         consent_accepted: consentAccepted,
       });
       return response.data;
@@ -1889,14 +1916,15 @@ export const candidateAssessmentService = {
   },
 
   /**
-   * Submit answer
+   * Submit answer. The backend checks the invitation owns the question's
+   * attempt, so send the same headers as code run/submit.
    */
-  async submitAnswer(questionId: string, answer: string) {
+  async submitAnswer(token: string, questionId: string, answer: string) {
     try {
       const response = await api.post('/assessments/candidate/answer', {
         question_id: questionId,
         answer,
-      });
+      }, { headers: candidateAttemptHeaders(token) });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -1904,11 +1932,15 @@ export const candidateAssessmentService = {
   },
 
   /**
-   * Complete assessment
+   * Complete assessment (same ownership headers as submitAnswer).
    */
-  async complete(attemptId: string) {
+  async complete(token: string, attemptId: string) {
     try {
-      const response = await api.post(`/assessments/candidate/${attemptId}/complete`);
+      const response = await api.post(
+        `/assessments/candidate/${attemptId}/complete`,
+        undefined,
+        { headers: candidateAttemptHeaders(token) },
+      );
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

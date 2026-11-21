@@ -3,7 +3,7 @@
 import { Search, CheckCircle, Briefcase, Loader2, Eye, ChevronDown, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Job } from '@/lib/types/types';
-import { jdService } from '@/lib/services/jdService';
+import { jdService, type JDListResponse } from '@/lib/services/jdService';
 import {
   getPublishedJobs,
   groupByLineage,
@@ -16,12 +16,14 @@ import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
+import { seedJobCandidateCounts, useJobCandidateCountsFor } from '@/lib/hooks/useJobCandidateCounts';
 import ListPagination from '@/components/ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { onListCacheInvalidate } from '@/lib/utils/listCache';
 import { getTokens } from '@/lib/services/api';
 import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** Same rows-per-page the Job Openings list starts on. */
 const DEFAULT_ITEMS_PER_PAGE = 10;
@@ -151,6 +153,11 @@ export interface JobOpeningPickerListProps {
   /** Bump to re-fetch the list (e.g. after a run is scored, so its counts
    *  are fresh). The first value does not trigger a fetch. */
   reloadSignal?: number;
+  /** With `reloadSignal`: only these JD ids changed (Resume Scoring — a run
+   *  changes only the scored version's "Scored" count). The bump then re-reads
+   *  just those rows and patches them in, instead of re-downloading every
+   *  page. Empty / omitted = full reload. */
+  reloadJobIds?: string[];
   /** 'page': the list heading (with its count) and Search Jobs share one
    *  toolbar line — for a full page (Resume Scoring's Score Resumes). The
    *  default keeps the stacked search-then-heading layout used in popups. */
@@ -183,10 +190,27 @@ export default function JobOpeningPickerList({
   hideSelectedTick = false,
   applicantsLabel,
   reloadSignal,
+  reloadJobIds,
   layout = 'default',
 }: JobOpeningPickerListProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const candidateCounts = useJobCandidateCounts(showCandidateCounts);
+
+  /* Version history — the same hook and endpoints behind the Job Openings
+     page's own "View Versions", so the history opened from this list is the
+     history that page shows. */
+  const versionLineage = useJobVersionLineage();
+  const { seedFilterData } = versionLineage;
+
+  /* Per-row extras that come WITH each list page (GET /jd include_*): the
+     scored counts the View Versions test needs (it used to ask
+     /scoring/jd/counts one wave after the list, twice), and the "N assessed /
+     N interviewed" chips (they used to page every assessment and every AI
+     interview config tenant-wide). Seeded before the rows reach state, so
+     neither is asked for again. */
+  const seedFromPage = (res: Pick<JDListResponse, 'scoring_counts' | 'candidate_counts'>) => {
+    if (res.scoring_counts) seedFilterData({ versionCounts: res.scoring_counts });
+    if (showCandidateCounts) seedJobCandidateCounts(res.candidate_counts);
+  };
 
   /* The job list, read the way the Job Openings page reads it: `source:
      'my-jds'`, in pages of 100, mapped through the shared mapper. Every host
@@ -206,11 +230,52 @@ export default function JobOpeningPickerList({
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const lastReloadSignal = useRef(reloadSignal);
+  /* Latest values for the reload effect, which runs on the signal alone. */
+  const reloadJobIdsRef = useRef(reloadJobIds);
+  reloadJobIdsRef.current = reloadJobIds;
+  const fetchedJobsRef = useRef(fetchedJobs);
+  fetchedJobsRef.current = fetchedJobs;
+  const seedFromPageRef = useRef(seedFromPage);
+  seedFromPageRef.current = seedFromPage;
   useEffect(() => {
     if (reloadSignal === undefined || reloadSignal === lastReloadSignal.current) return;
     lastReloadSignal.current = reloadSignal;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setReloadToken(t => t + 1);
+    const ids = Array.from(new Set((reloadJobIdsRef.current ?? []).filter(Boolean)));
+    if (ids.length === 0 || !fetchedJobsRef.current?.length) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setReloadToken(t => t + 1);
+      return;
+    }
+    /* Targeted refresh: a scoring run changes only the scored version's
+       "Scored" count, so re-read just those rows (same endpoint, same
+       mapping) and patch them in — not every page of the job list. Any
+       failure falls back to the full reload. */
+    let cancelled = false;
+    jdService
+      .list({
+        ids,
+        page: 1,
+        page_size: ids.length,
+        include_scoring_counts: true,
+        ...(showCandidateCounts ? { include_candidate_counts: true } : {}),
+      })
+      .then((res) => {
+        if (cancelled) return;
+        seedFromPageRef.current(res);
+        const fresh = new Map((res.items ?? []).map((jd) => [jd.id, mapJDToJob(jd)]));
+        setFetchedJobs((prev) => {
+          if (!prev) return prev;
+          const next = prev.map((job) => fresh.get(job.id) ?? job);
+          const scope = sessionScope();
+          lastFullJobList = scope ? { scope, jobs: next } : null;
+          return next;
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setReloadToken(t => t + 1);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadSignal]);
 
   /* Progressive: the first 10 jobs are put on screen the moment they land,
@@ -235,7 +300,11 @@ export default function JobOpeningPickerList({
         const items = await jdService.listAllMineProgressive((firstItems) => {
           if (cancelled || cachedJobsForSession()) return;
           setFetchedJobs(firstItems.map(mapJDToJob));
-        }, DEFAULT_ITEMS_PER_PAGE);
+        }, DEFAULT_ITEMS_PER_PAGE, {
+          includeScoringCounts: true,
+          includeCandidateCounts: showCandidateCounts,
+          onPage: (res) => { if (!cancelled) seedFromPageRef.current(res); },
+        });
         if (cancelled) return;
         const full = items.map(mapJDToJob);
         const scope = sessionScope();
@@ -255,12 +324,8 @@ export default function JobOpeningPickerList({
 
     void load();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadToken]);
-
-  /* Version history — the same hook and endpoints behind the Job Openings
-     page's own "View Versions", so the history opened from this list is the
-     history that page shows. */
-  const versionLineage = useJobVersionLineage();
 
   /* The eye on a job row opens the Job Details page's Version History popup
      over this list — literally that component, so the cards, badges,
@@ -403,6 +468,11 @@ export default function JobOpeningPickerList({
   const safePage = Math.min(currentPage, totalPages);
   const currentJobs = sortedJobs.slice((safePage - 1) * itemsPerPage, safePage * itemsPerPage);
 
+  /* The chips for the rows on screen only: seeded from the list pages above,
+     so normally no request; a row the pages did not answer for (a failed
+     tally) is asked of GET /jd/candidate-counts. */
+  const candidateCounts = useJobCandidateCountsFor(currentJobs.map(job => job.id), showCandidateCounts);
+
   /* One role at a time. The pick survives paging and searching, since it is
      held outside the list (in the host, via `selection`/`onSelectionChange`). */
   const selectedJobId = selection?.job.id ?? null;
@@ -421,7 +491,7 @@ export default function JobOpeningPickerList({
       <div className={layout === 'page' ? 'hidden' : 'mb-4'}>
         <label className="block tf-label mb-2">Search Jobs</label>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search by JD number, role, department or location..."
@@ -471,7 +541,7 @@ export default function JobOpeningPickerList({
             <label className="flex w-full items-center gap-2 md:w-[25rem] lg:w-[29rem]">
               <span className="tf-meta shrink-0 whitespace-nowrap !font-semibold !text-[var(--text-primary)]">Search Jobs</span>
               <span className="relative min-w-0 flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
                 <input
                   type="text"
                   placeholder="Search by JD number, role, department or location..."
@@ -701,7 +771,7 @@ export default function JobOpeningPickerList({
                           Clicking the headline picks the job, so the whole
                           block is a target without a <label> wrapping the
                           controls beside it. */}
-                      <div
+                      <div {...clickableProps}
                         onClick={() => selectable && pickVersion(job, versionKey)}
                         className={selectable ? 'cursor-pointer' : 'cursor-not-allowed'}
                       >
@@ -781,7 +851,7 @@ export default function JobOpeningPickerList({
                           unlike the View Versions button below: a
                           single-version job opens here too, and the popup
                           shows that one version. */}
-                      <button
+                      <IconButton bare label="View version history"
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -789,11 +859,9 @@ export default function JobOpeningPickerList({
                           setVersionHistoryFor(job);
                         }}
                         className="h-9 w-9 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                        aria-label="View version history"
-                        title="View version history"
                       >
                         <Eye className="w-4 h-4" />
-                      </button>
+                      </IconButton>
                       {viewVersionsButton && (
                         <div className={`lg:hidden sm:order-first sm:mr-auto sm:ml-0 sm:basis-auto sm:[&>button]:w-auto [&>button]:h-9 [&>button]:px-3 ${lineageSelected && onProceed ? 'max-sm:basis-full [&>button]:w-full [&>button]:justify-center' : 'ml-auto'}`}>{viewVersionsButton}</div>
                       )}
@@ -832,7 +900,7 @@ export default function JobOpeningPickerList({
                          group so picking a version releases whatever else
                          was chosen. */
                       renderAction={(versionJob) => (
-                        <button
+                        <IconButton bare label={`View v${versionJob.versionNumber ?? 1} details`}
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -840,11 +908,9 @@ export default function JobOpeningPickerList({
                             setVersionHistoryFor(versionJob);
                           }}
                           className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                          aria-label={`View v${versionJob.versionNumber ?? 1} details`}
-                          title={`View v${versionJob.versionNumber ?? 1} details`}
                         >
                           <Eye className="w-3.5 h-3.5" />
-                        </button>
+                        </IconButton>
                       )}
                       onSelectVersion={(versionJob) => pickVersion(versionJob, versionKey)}
                       selectedVersionId={selectedJobId}

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, ExternalLink, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 export interface ChatAttachment {
   url: string;
@@ -66,7 +68,7 @@ export default function ChatAttachmentViewer({
     'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40';
 
   return createPortal(
-    <div
+    <ModalA11y closeOnEscape={false}><div
       role="dialog"
       aria-modal="true"
       aria-label={fileName}
@@ -86,9 +88,9 @@ export default function ChatAttachmentViewer({
           <ExternalLink className="h-4 w-4" />
           <span className="hidden sm:inline">Open</span>
         </a>
-        <button type="button" onClick={onClose} className={`${barButton} w-9 px-0`} aria-label="Close" title="Close (Esc)">
+        <IconButton bare label="Close" tooltip="Close (Esc)" type="button" onClick={onClose} className={`${barButton} w-9 px-0`}>
           <X className="h-5 w-5" />
-        </button>
+        </IconButton>
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-8">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -99,7 +101,7 @@ export default function ChatAttachmentViewer({
           className="max-h-full max-w-full rounded-lg object-contain shadow-2xl animate-in zoom-in-95 duration-200"
         />
       </div>
-    </div>,
+    </div></ModalA11y>,
     document.body,
   );
 }

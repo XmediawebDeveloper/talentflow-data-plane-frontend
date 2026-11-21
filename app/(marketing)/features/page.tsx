@@ -147,7 +147,7 @@ export default function FeaturesPage() {
                   {/* Corner glow that blooms on hover */}
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.18),transparent)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                    className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p18),transparent)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"
                   />
                   <span className="relative flex items-start justify-between gap-3">
                     <span className="grid h-11 w-11 place-items-center rounded-xl bg-mkt-accent-solid/[0.08] text-mkt-accent transition-[background-color,color,scale,rotate] duration-500 group-hover:-rotate-6 group-hover:scale-110 group-hover:bg-mkt-accent-solid group-hover:text-white dark:bg-white/10">

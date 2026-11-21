@@ -11,6 +11,7 @@ import { showErrorToast } from '@/lib/utils/errorToast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { findInvalidSkillPunctuation } from '@/lib/skillDuplicates';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface RoundConfig {
   type: string;
@@ -337,9 +338,9 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <Button variant="secondary" size="sm" onClick={onBack} aria-label="Back">
+          <IconButton label="Back" variant="secondary" size="sm" onClick={onBack}>
             <ArrowLeft className="w-5 h-5" />
-          </Button>
+          </IconButton>
           <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
             <Brain className="w-5 h-5 text-brand-blue" />
           </div>
@@ -359,7 +360,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                 step === s ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' :
                 ['select-jd', 'configure'].indexOf(step) > i ? 'bg-success-subtle text-success' :
-                'bg-slate-100 text-gray-400'
+                'bg-slate-100 text-gray-500'
               }`}>
                 {['select-jd', 'configure'].indexOf(step) > i ? (
                   <CheckCircle2 className="w-4 h-4" />
@@ -367,7 +368,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   i + 1
                 )}
               </div>
-              <span className={`text-sm ${step === s ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>
+              <span className={`text-sm ${step === s ? 'text-brand-blue font-medium' : 'text-gray-500'}`}>
                 {s === 'select-jd' ? 'Select JD' : 'Configure & Publish'}
               </span>
               {i < 1 && <div className="w-12 h-px bg-gray-200 mx-1" />}
@@ -474,7 +475,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                           </div>
                         )}
                       </div>
-                      <ArrowLeft className="w-4 h-4 text-gray-400 rotate-180 flex-shrink-0 mt-1" />
+                      <ArrowLeft className="w-4 h-4 text-gray-500 rotate-180 flex-shrink-0 mt-1" />
                     </div>
                   </button>
                 ))}
@@ -539,12 +540,12 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                               <span className="tf-hint">Round {round.order}</span>
                             </div>
                             {rounds.length > 1 && (
-                              <button
+                              <IconButton bare label="Remove round"
                                 onClick={() => handleRemoveRound(index)}
-                                className="p-1 text-gray-400 hover:text-destructive transition-colors"
+                                className="p-1 text-gray-500 hover:text-destructive transition-colors"
                               >
                                 <Trash2 className="w-4 h-4" />
-                              </button>
+                              </IconButton>
                             )}
                           </div>
 
@@ -579,7 +580,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                   <label className="tf-meta">
                                     Skills
                                     {round.topics.length > 0 && (
-                                      <span className="ml-1 text-gray-400">({round.topics.length})</span>
+                                      <span className="ml-1 text-gray-500">({round.topics.length})</span>
                                     )}
                                   </label>
                                   <div className="flex items-center gap-3">
@@ -633,23 +634,21 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                                   hasTopicWeightError ? 'border-destructive focus:ring-destructive-line' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                                                 }`}
                                               />
-                                              <span className={`text-xs w-4 ${hasTopicWeightError ? 'text-destructive' : 'text-gray-400'}`}>%</span>
+                                              <span className={`text-xs w-4 ${hasTopicWeightError ? 'text-destructive' : 'text-gray-500'}`}>%</span>
                                               <span className="tf-hint w-14 text-right">{skillTime} min</span>
-                                              <button
+                                              <IconButton bare label="Add comment"
                                                 onClick={() => toggleComment(round.type, topic)}
                                                 className={`p-0.5 rounded transition-colors ${
-                                                  round.topicComments[topic] ? 'text-brand-blue' : 'text-gray-300 hover:text-gray-500'
+                                                  round.topicComments[topic] ? 'text-brand-blue' : 'text-muted-foreground dark:text-gray-300 hover:text-gray-500'
                                                 }`}
-                                                aria-label="Add comment" title="Add comment"
                                               >
                                                 <MessageCircle className="w-3.5 h-3.5" />
-                                              </button>
-                                              <button
+                                              </IconButton>
+                                              <IconButton bare label="Close"
                                                 onClick={() => handleRemoveTopic(index, topic)}
-                                                className="p-0.5 text-gray-300 hover:text-destructive transition-colors"
-                                               aria-label="Close">
+                                                className="p-0.5 text-muted-foreground dark:text-gray-300 hover:text-destructive transition-colors">
                                                 <X className="w-3.5 h-3.5" />
-                                              </button>
+                                              </IconButton>
                                             </div>
                                           </div>
                                           {hasTopicWeightError && (
@@ -784,7 +783,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   <div className="flex items-center gap-2">
                     <Video className="w-4 h-4" />
                     Introduction Video
-                    <span className="text-xs text-gray-400 font-normal">(Optional)</span>
+                    <span className="text-xs text-gray-500 font-normal">(Optional)</span>
                   </div>
                 </label>
                 {introVideoFile || introVideoUrl ? (
@@ -799,9 +798,9 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                     {uploadingVideo ? (
                       <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
                     ) : (
-                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-destructive transition-colors" aria-label="Close">
+                      <IconButton bare label="Close" onClick={handleRemoveVideo} className="p-1 text-gray-500 hover:text-destructive transition-colors">
                         <X className="w-4 h-4" />
-                      </button>
+                      </IconButton>
                     )}
                   </div>
                 ) : (

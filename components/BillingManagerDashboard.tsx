@@ -194,7 +194,7 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
             <div className="mt-5 space-y-3 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-gray-600 inline-flex items-center gap-2">
-                  <Users className="w-4 h-4 text-gray-400" />
+                  <Users className="w-4 h-4 text-gray-500" />
                   Seats
                 </span>
                 <span className="font-medium text-gray-900 tabular-nums">
@@ -203,7 +203,7 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-600 inline-flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-400" />
+                  <Calendar className="w-4 h-4 text-gray-500" />
                   Renews
                 </span>
                 <span className="font-medium text-gray-900">
