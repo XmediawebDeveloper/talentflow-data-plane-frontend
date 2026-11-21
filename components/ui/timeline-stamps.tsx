@@ -39,8 +39,8 @@ export default function TimelineStamps({
       {!startedAt && !completedAt && <span>—</span>}
       {duration && (
         <span className="flex items-center gap-1.5 whitespace-nowrap">
-          <Timer className="w-3 h-3 shrink-0 text-gray-400" />
-          <span><span className="text-gray-400 dark:text-slate-500">Duration:</span> {duration}</span>
+          <Timer className="w-3 h-3 shrink-0 text-gray-500" />
+          <span><span className="text-gray-500 dark:text-slate-500">Duration:</span> {duration}</span>
         </span>
       )}
     </div>

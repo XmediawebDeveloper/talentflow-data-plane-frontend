@@ -20,6 +20,9 @@ import { toast } from 'sonner';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
+import { clickableProps, clickableRowProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Utility function to format date to IST (Asia/Kolkata timezone)
 function formatDateTimeIST(date: Date | string | undefined): { date: string; time: string } {
@@ -738,11 +741,11 @@ export default function BulkScoringProgressModal({
       case 'Scored successfully':
         return <CheckCircle2 className="w-4 h-4 text-success" />;
       case 'Already Scored - Skipped':
-        return <CheckCircle2 className="w-4 h-4 text-brand-cyan" />;
+        return <CheckCircle2 className="w-4 h-4 text-brand-orange-deep" />;
       case 'Failed':
         return <XCircle className="w-4 h-4 text-destructive" />;
       case 'Cancelled':
-        return <Ban className="w-4 h-4 text-gray-500 dark:text-slate-400" />;
+        return <Ban className="w-4 h-4 text-warning-strong" />;
       default:
         return <Clock className="w-4 h-4 text-gray-500 dark:text-slate-500" />;
     }
@@ -761,11 +764,11 @@ export default function BulkScoringProgressModal({
       case 'Scored successfully':
         return 'bg-success-subtle text-success border-success-line';
       case 'Already Scored - Skipped':
-        return 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20';
+        return 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/25';
       case 'Failed':
         return 'bg-destructive-subtle text-destructive border-destructive-line';
       case 'Cancelled':
-        return 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-600';
+        return 'bg-warning-subtle text-warning-strong border-warning-line';
       default:
         return 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
     }
@@ -812,7 +815,7 @@ export default function BulkScoringProgressModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-[min(95vw,1400px)] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] max-h-[880px] flex flex-col overflow-hidden">
         {/* A DEFINITE height, not just a max-height. `flex-1` can only hand out
             space a parent actually has, and a content-sized dialog has none to
@@ -834,16 +837,14 @@ export default function BulkScoringProgressModal({
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
               {onBack && (
-                <Button
+                <IconButton label={backLabel}
                   variant="secondary"
                   size="sm"
                   onClick={onBack}
                   className="w-8 flex-shrink-0 !px-0"
-                  aria-label={backLabel}
-                  title={backLabel}
                 >
                   <ArrowLeft className="w-4 h-4" />
-                </Button>
+                </IconButton>
               )}
               <div className="hidden sm:flex w-11 h-11 bg-brand-blue/10 rounded-xl items-center justify-center flex-shrink-0">
                 <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
@@ -911,7 +912,7 @@ export default function BulkScoringProgressModal({
                 </Button>
               )}
               {onRefresh && (
-                <Button
+                <IconButton label="Refresh"
                   variant="secondary"
                   size="sm"
                   onClick={async () => {
@@ -925,11 +926,9 @@ export default function BulkScoringProgressModal({
                   }}
                   disabled={refreshing}
                   className="w-8"
-                  aria-label="Refresh"
-                  title="Refresh"
                 >
                   <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                </Button>
+                </IconButton>
               )}
               {/* Minimise only while scoring is still running — once every row
                   has settled there is nothing left to run in the background,
@@ -960,15 +959,14 @@ export default function BulkScoringProgressModal({
                   nothing) would have no close button at all and no rows that
                   could ever settle to grow one. */}
               {(isAllComplete || totalResumes === 0) && (
-                <Button
+                <IconButton label="Close modal"
                   variant="secondary"
                   size="sm"
                   onClick={onClose}
                   className="w-8"
-                  aria-label="Close modal"
                 >
                   <X className="w-4 h-4" />
-                </Button>
+                </IconButton>
               )}
             </div>
           </div>
@@ -987,14 +985,29 @@ export default function BulkScoringProgressModal({
                 <span className={`text-sm font-semibold tabular-nums ${runState.pct}`} aria-live="polite">{progressPct}%</span>
               </div>
               <div
-                className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+                className="flex h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
                 role="progressbar"
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={progressPct}
                 aria-label="Scoring progress"
               >
-                <div className={`h-full rounded-full transition-[width] duration-500 ease-out ${runState.bar}`} style={{ width: `${progressPct}%` }} />
+                {/* One segment per outcome — the same colours as the pills and
+                    the AI Assessment / AI Interview send bar; the resumes being
+                    scored right now pulse blue. */}
+                {[
+                  { key: 'done', n: completedCount, bar: 'bg-success' },
+                  { key: 'skipped', n: skippedCount, bar: 'bg-brand-orange' },
+                  { key: 'cancelled', n: cancelledCount, bar: 'bg-warning-strong' },
+                  { key: 'failed', n: failedCount, bar: 'bg-destructive' },
+                  { key: 'running', n: isAllComplete ? 0 : inProgressCount, bar: 'bg-brand-blue animate-pulse' },
+                ].filter(seg => seg.n > 0).map(seg => (
+                  <div
+                    key={seg.key}
+                    className={`h-full transition-[width] duration-500 ease-out ${seg.bar}`}
+                    style={{ width: `${totalResumes > 0 ? Math.min(100, (seg.n / totalResumes) * 100) : 0}%` }}
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -1028,13 +1041,13 @@ export default function BulkScoringProgressModal({
                 shifts as counts change. All clears the status filter. */}
             {[
               { key: 'all', label: 'All', count: totalResumes, icon: <Layers className="w-4 h-4" />, tone: 'text-gray-500 dark:text-slate-400' },
-              { key: 'queued', label: 'Queue', count: queuedCount, icon: <Clock className="w-4 h-4" />, tone: 'text-blue-600 dark:text-blue-300' },
+              { key: 'queued', label: 'Queue', count: queuedCount, icon: <Clock className="w-4 h-4" />, tone: 'text-gray-600 dark:text-slate-300' },
               { key: 'in-progress', label: 'Processing', count: inProgressCount, icon: <Loader2 className={`w-4 h-4 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />, tone: 'text-brand-blue' },
               { key: 'completed', label: 'Done', count: completedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-success' },
-              /* brand-cyan: the same colour as the Skipped row badge */
-              { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-brand-cyan' },
+              /* Orange: the same colour as the Skipped row badge and bar segment */
+              { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-brand-orange-deep' },
               { key: 'failed', label: 'Failed', count: failedCount, icon: <XCircle className="w-4 h-4" />, tone: 'text-destructive' },
-              { key: 'cancelled', label: 'Cancelled', count: cancelledCount, icon: <Ban className="w-4 h-4" />, tone: 'text-gray-500 dark:text-slate-400' },
+              { key: 'cancelled', label: 'Cancelled', count: cancelledCount, icon: <Ban className="w-4 h-4" />, tone: 'text-warning-strong' },
             ].map(stat => {
               const isActive = statusFilter === stat.key;
               return (
@@ -1401,7 +1414,7 @@ export default function BulkScoringProgressModal({
                           ? formatDateTimeIST(new Date())
                           : null;
                       return (
-                      <tr
+                      <tr {...((canViewResult(item)) ? clickableRowProps : {})}
                         key={item.id}
                         onClick={canViewResult(item) ? () => onViewResult!(item) : undefined}
                         className={`border-b border-gray-100 dark:border-slate-700/60 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${
@@ -1533,16 +1546,14 @@ export default function BulkScoringProgressModal({
                           <div className="flex items-center gap-2">
                             {/* Eye — only once scored: opens the score table. */}
                             {item.status === 'Scored successfully' && item.resumeId && (
-                              <Button
+                              <IconButton label={`View ${item.candidateName}'s score table`} tooltip="View score table"
                                 variant="secondary"
                                 size="sm"
                                 onClick={(e) => { e.stopPropagation(); setScoreTableItem(item); }}
-                                aria-label={`View ${item.candidateName}'s score table`}
-                                title="View score table"
                                 className="!h-8 !w-8 !px-0"
                               >
                                 <Eye className="w-4 h-4" />
-                              </Button>
+                              </IconButton>
                             )}
                             {batchRowAction(item, '!h-8')}
                             {!batchId && onRetryFailed && item.status === 'Failed' && (
@@ -1572,7 +1583,7 @@ export default function BulkScoringProgressModal({
                   in a box of its own. */}
               <div className="lg:hidden space-y-2 pt-3">
                 {pagedData.map((item) => (
-                  <div
+                  <div {...((canViewResult(item)) ? clickableProps : {})}
                     key={item.id}
                     onClick={canViewResult(item) ? () => onViewResult!(item) : undefined}
                     className={`bg-white dark:bg-slate-900 border rounded-xl p-3 sm:p-4 shadow-sm ${selected.has(item.id) ? 'border-brand-blue/40 ring-1 ring-brand-blue/20' : 'border-gray-200 dark:border-slate-700'} ${canViewResult(item) ? 'cursor-pointer' : ''}`}
@@ -1921,6 +1932,6 @@ export default function BulkScoringProgressModal({
           </AppModal>
         );
       })()}
-    </div>
+    </div></ModalA11y>
   );
 }

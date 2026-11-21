@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
-import { Copy, GitBranch, Loader2, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronDown, FileText, Info, RefreshCw, Ban, Lightbulb, HelpCircle, Minus, Upload } from 'lucide-react';
+import { Copy, GitBranch, Loader2, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronDown, ChevronRight, FileText, Info, RefreshCw, Ban, Lightbulb, Minus, Upload, Layers, Search } from 'lucide-react';
 import AppModal, { AppModalFooterButtons } from '@/components/ui/app-modal';
+import ListPagination from '@/components/ListPagination';
 import { Button } from '@/components/ui/button';
 import UploadModal from '@/components/UploadModal';
 import UploadHistoryEmptyState from '@/components/resumes/UploadHistoryEmptyState';
@@ -30,6 +31,8 @@ import { showErrorToast } from '@/lib/utils/errorToast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { setUploadHistoryOpener } from '@/lib/backgroundTasks';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Dynamic import to avoid SSR issues with docx-preview dependency
 const DuplicateResumeModal = dynamic(() => import('@/components/DuplicateResumeModal'), {
@@ -138,6 +141,12 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
     setUploadHistoryOpener(open);
     return () => setUploadHistoryOpener(null, open);
   }, []);
+  /* Read by polling: no new poller once this host has unmounted. */
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const [uploadHistoryTab, setUploadHistoryTab] = useState<'current' | 'completed'>('current');
   // Flipped the moment an upload starts here, so the Upload History button goes
   // live for a first-time user immediately instead of waiting for the resume
@@ -145,6 +154,23 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
   const [uploadStartedThisSession, setUploadStartedThisSession] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
   const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | 'cancelled' | null>(null);
+  /* Upload History popup — display only: every file in one table, or the
+     upload-by-upload cards; and how many table rows are shown. */
+  const [uploadHistoryView, setUploadHistoryView] = useState<'table' | 'batches'>('batches');
+  /* Files the user retried / cancelled from the table, for the tab + pill they
+     did it on ('tab|filter'). They stay in that table with their new status
+     even once they no longer match the pill, or their upload moves to the
+     other tab — so an action never makes a row vanish. Display only. */
+  const [uploadHistoryPinned, setUploadHistoryPinned] = useState<{ key: string; ids: Set<string> }>({ key: '', ids: new Set() });
+  /* Table view bulk actions: the files ticked for Retry / Cancel, the
+     confirmation, and which bulk action is running. */
+  type UploadHistoryBulkItem = { batchId: string; itemId: string; fileName: string; status: string };
+  const [uploadHistorySelected, setUploadHistorySelected] = useState<Map<string, UploadHistoryBulkItem>>(new Map());
+  const [uploadHistoryBulk, setUploadHistoryBulk] = useState<{ open: boolean; mode: 'retry' | 'cancel'; items: UploadHistoryBulkItem[] }>({ open: false, mode: 'retry', items: [] });
+  const [uploadHistoryBulkBusy, setUploadHistoryBulkBusy] = useState<null | 'retry' | 'cancel'>(null);
+  // Per file table (the Table view, and each upload's "Show files"): search + page.
+  const [uploadHistoryTableUi, setUploadHistoryTableUi] = useState<Record<string, { page: number; perPage: number; q: string }>>({});
+  const uploadHistoryPagerScrollRef = useRef<HTMLSpanElement | null>(null);
   // When the last in-flight batch finishes while the user is watching the
   // Currently Processing tab, move them to Completed instead of leaving them
   // on the "No uploads in progress" empty state.
@@ -158,11 +184,13 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
   useEffect(() => {
     const prev = prevActiveUploadCountRef.current;
     prevActiveUploadCountRef.current = activeUploadCount;
-    if (prev > 0 && activeUploadCount === 0 && isUploadHistoryModalOpen && uploadHistoryTab === 'current') {
+    // Never in the Table view (it has no tabs) or while a status pill is picked.
+    const userIsWorking = uploadHistoryView === 'table' || !!uploadHistoryFilter;
+    if (prev > 0 && activeUploadCount === 0 && isUploadHistoryModalOpen && uploadHistoryTab === 'current' && !userIsWorking) {
       setUploadHistoryTab('completed');
       setUploadHistoryFilter(null);
     }
-  }, [activeUploadCount, isUploadHistoryModalOpen, uploadHistoryTab]);
+  }, [activeUploadCount, isUploadHistoryModalOpen, uploadHistoryTab, uploadHistoryFilter, uploadHistoryView]);
   const [retryingBatches, setRetryingBatches] = useState<Set<string>>(new Set());
   const [cancellingBatches, setCancellingBatches] = useState<Set<string>>(new Set());
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
@@ -329,7 +357,10 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
     // they can call deleteCompletedBatches() explicitly elsewhere.
     setIsUploadHistoryModalOpen(false);
     setIsUploadHistoryMinimized(false);
+    // Still uploading? Its batches stay in My Activities (server activity feed).
     setUploadHistoryFilter(null);
+    setUploadHistorySelected(new Map());
+    setUploadHistoryPinned({ key: '', ids: new Set() });
   };
 
   const handleRetryBatch = async (batchId: string, e: React.MouseEvent) => {
@@ -401,6 +432,55 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
     }
   };
 
+  /* Retry / Cancel several files at once (Table view). The same per-file
+     endpoints the row buttons call, five at a time, then one toast and one
+     refresh instead of one per file. */
+  const runUploadHistoryBulk = async () => {
+    const { mode, items } = uploadHistoryBulk;
+    setUploadHistoryBulk(b => ({ ...b, open: false }));
+    if (!items.length) return;
+    setUploadHistoryBulkBusy(mode);
+    const ids = items.map(i => i.itemId);
+    const mark = (set: React.Dispatch<React.SetStateAction<Set<string>>>, on: boolean) =>
+      set(prev => { const next = new Set(prev); ids.forEach(id => (on ? next.add(id) : next.delete(id))); return next; });
+    mark(mode === 'retry' ? setRetryingItems : setCancellingItems, true);
+    let ok = 0;
+    let failed = 0;
+    let units = 0;
+    const batches = new Set<string>();
+    try {
+      for (let i = 0; i < items.length; i += 5) {
+        const chunk = items.slice(i, i + 5);
+        const results = await Promise.allSettled(chunk.map(it =>
+          mode === 'retry' ? resumeService.retryItem(it.batchId, it.itemId) : resumeService.cancelItem(it.batchId, it.itemId)
+        ));
+        results.forEach((r, j) => {
+          if (r.status === 'fulfilled') {
+            ok += 1;
+            batches.add(chunk[j].batchId);
+            units += Number(mode === 'retry' ? r.value?.units_deducted : r.value?.refunded_units) || 0;
+          } else {
+            failed += 1;
+          }
+        });
+      }
+      if (ok > 0) {
+        toast.success(mode === 'retry'
+          ? `Retrying ${ok} file${ok === 1 ? '' : 's'}. ${units > 0 ? `${units} Resume Storage unit${units === 1 ? '' : 's'} deducted.` : 'No additional units deducted.'}`
+          : `Cancelled ${ok} file${ok === 1 ? '' : 's'}.${units > 0 ? ` ${units} unit${units === 1 ? '' : 's'} refunded.` : ''}`);
+      }
+      if (failed > 0) {
+        toast.error(`${failed} file${failed === 1 ? '' : 's'} couldn't be ${mode === 'retry' ? 'retried' : 'cancelled'}. Try them again from their row.`);
+      }
+      await refreshMyResumesBatches();
+      if (mode === 'retry') batches.forEach(b => startBatchPolling(b));
+      setUploadHistorySelected(new Map());
+    } finally {
+      mark(mode === 'retry' ? setRetryingItems : setCancellingItems, false);
+      setUploadHistoryBulkBusy(null);
+    }
+  };
+
   const handleCancelItem = (batchId: string, itemId: string, fileName: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setCancelItemConfirm({ isOpen: true, batchId, itemId, fileName });
@@ -431,6 +511,8 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
 
   // Start (or restart) polling for a batch — used after retry so items progress in real-time
   const startBatchPolling = (batchId: string) => {
+    // Host already gone (closed mid-upload): the activity feed keeps its dock row.
+    if (!mountedRef.current) return;
     const pollInterval = setInterval(async () => {
       try {
         const status = await resumeService.getBatchStatus(batchId);
@@ -1072,10 +1154,11 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
           size="xl"
           widthClassName="sm:max-w-4xl"
           tone="plain"
+          density="compact"
           zIndexClass="z-50"
           icon={<Upload className="w-4 h-4 text-brand-blue" />}
           title="Upload History"
-          subtitle="View all past bulk upload reports"
+          subtitle="See what happened to every resume you uploaded — and what needs your attention"
           headerExtra={
             <Button
               variant="secondary"
@@ -1084,50 +1167,57 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                 setIsUploadHistoryMinimized(true);
                 setIsUploadHistoryModalOpen(false);
               }}
-              className="px-2 sm:px-3"
+              className="h-8 px-2 text-xs sm:px-2.5"
               aria-label="Minimize"
               title="Minimize — uploads carry on; find them in My Activities"
             >
-              <Minus className="w-4 h-4" />
+              <Minus className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Minimize</span>
             </Button>
           }
           bodyClassName="bg-gray-50/70"
           footer={
             <>
-              {/* Floating Resolve Selected Bar */}
+              {/* Resolve selected new versions */}
               {selectedVersionedItems.size > 0 && (
-                <div className="shrink-0 border-t border-brand-blue-2/20 px-3 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-brand-blue-2/[0.07] to-brand-blue/[0.04] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10">
-                      <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                <div className="shrink-0 border-t border-brand-blue-2/20 bg-brand-blue-2/[0.05] px-4 py-2 sm:px-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-7 h-7 bg-brand-blue-2/10 text-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <GitBranch className="w-3.5 h-3.5" />
                     </div>
                     <div className="min-w-0">
-                      <span className="text-sm font-semibold text-brand-blue-2">
-                        {selectedVersionedItems.size} versioned resume{selectedVersionedItems.size !== 1 ? 's' : ''} selected
-                      </span>
-                      <p className="text-xs text-brand-blue-2/80">Choose how to resolve these version conflicts</p>
+                      <p className="text-[13px] font-semibold leading-tight text-gray-900 dark:text-slate-100">
+                        {selectedVersionedItems.size} new version{selectedVersionedItems.size !== 1 ? 's' : ''} selected
+                      </p>
+                      <p className="tf-meta leading-tight">Choose what to keep for these candidates</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setSelectedVersionedItems(new Map())}
-                      className="px-2.5 sm:px-3 py-1.5 sm:py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors"
+                      className="h-8 text-xs"
                     >
                       Clear
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
                       onClick={() => setIsBulkResolveModalOpen(true)}
-                      className="tf-btn tf-btn-primary flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex gap-1.5 sm:gap-2 whitespace-normal"
+                      icon={<GitBranch className="w-3.5 h-3.5" />}
+                      className="h-8 flex-1 text-xs sm:flex-none"
                     >
-                      <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       Resolve ({selectedVersionedItems.size})
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
-              <div className="flex shrink-0 flex-col gap-3 border-t border-gray-100 bg-slate-50/50 px-4 py-3 dark:border-slate-700/60 dark:bg-slate-800/50 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
-                <AppModalFooterButtons onCancel={handleCloseUploadHistory} cancelLabel="Close" tone="plain" />
+              <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-100 bg-white px-4 py-2.5 dark:border-slate-700/60 dark:bg-slate-900 sm:px-5">
+                <span className="hidden sm:inline tf-meta">Uploads keep running if you close this window.</span>
+                <AppModalFooterButtons onCancel={handleCloseUploadHistory} cancelLabel="Close" tone="plain" compactFooter />
               </div>
             </>
           }
@@ -1141,7 +1231,14 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                   // Stats are scoped to the records in the active tab — when a
                   // batch finishes its numbers move from Currently Processing
                   // into Completed automatically.
-                  const displayRecords = uploadHistoryTab === 'current' ? activeRecords : completedRecords;
+                  /* The Table view lists the files of every upload (the pills filter
+                     them); the In progress / Completed tabs only split the
+                     upload-by-upload cards. So an action that moves an upload
+                     between tabs never takes its rows out of the table. */
+                  const isTableView = uploadHistoryView === 'table';
+                  const displayRecords = isTableView
+                    ? myResumesHistory
+                    : uploadHistoryTab === 'current' ? activeRecords : completedRecords;
                   const completedCount = displayRecords.reduce((sum, r) => sum + (r.completed || 0), 0);
                   const duplicatedCount = displayRecords.reduce((sum, r) => sum + (r.duplicated || 0), 0);
                   const versionedCount = displayRecords.reduce((sum, r) => sum + (r.versioned || 0), 0);
@@ -1153,295 +1250,509 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                     r.statuses?.filter((s: any) => s.status === 'cancelled' || s.status === 'discarded').length || 0,
                   ), 0);
                   const totalFiles = displayRecords.reduce((sum, r) => sum + (r.totalFiles || 0), 0);
-                  // Cancelled files were never attempted, so they must not count against
-                  // the success rate — that is what turned a cancelled batch into "23%".
-                  const attemptedFiles = Math.max(0, totalFiles - cancelledTotal);
-                  const successRate = attemptedFiles > 0 ? Math.round((completedCount / attemptedFiles) * 100) : 0;
 
                   /* A tab holding no batches at all gets one illustrated empty
-                     state and nothing else. Previously it stacked three blocks
-                     that each said the same thing — the all-zero stats card, the
-                     "0 batches" list header, and the list's own placeholder. */
+                     state and nothing else. */
                   const showFullEmptyState = displayRecords.length === 0;
 
+                  /* ── Display-only values (no behaviour) ── */
+                  const isCurrentTab = uploadHistoryTab === 'current';
+                  /* Is anything in view still running? Table view: any upload; cards: the tab. */
+                  const isRunningScope = isTableView ? activeRecords.length > 0 : isCurrentTab;
+                  const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-IN')} ${n === 1 ? one : many}`;
+                  const processedTotal = completedCount + failedCount + duplicatedCount + versionedCount + cancelledTotal;
+                  const overallPct = totalFiles > 0 ? Math.min(100, Math.round((processedTotal / totalFiles) * 100)) : 0;
+                  /* Duplicates need nothing from the user; new versions and failures do. */
+                  const needsLook = versionedCount > 0 || failedCount > 0;
+
+                  // Overall time left — the same estimate the old banner showed,
+                  // only for batches that still have genuinely active items.
+                  const overallEta = (() => {
+                    if (!isRunningScope) return null;
+                    const activeBatches = myResumesHistory.filter(r =>
+                      r.pending > 0 && r.date &&
+                      r.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing')
+                    );
+                    if (activeBatches.length === 0) return null;
+                    const totalPending = activeBatches.reduce((sum: number, r: any) => sum + r.pending, 0);
+                    const totalProcessed = activeBatches.reduce((sum: number, r: any) => sum + r.completed + r.errors + r.duplicated + (r.versioned || 0), 0);
+                    if (totalProcessed <= 0) return { text: 'Estimating time left…', left: totalPending, batches: activeBatches.length };
+                    // Cap elapsed at 10 minutes so a batch that started hours ago with a
+                    // stuck file doesn't produce an absurd ETA (e.g. "233–433 mins remaining").
+                    const earliestStart = Math.min(...activeBatches.map((r: any) => new Date(r.date).getTime()));
+                    const elapsed = Math.min(Date.now() - earliestStart, 10 * 60 * 1000);
+                    const avgTimePerFile = elapsed / totalProcessed;
+                    const remainingMs = totalPending * avgTimePerFile;
+                    const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
+                    const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
+                    const text = lowMins === highMins
+                      ? `about ${lowMins} min${lowMins !== 1 ? 's' : ''} left`
+                      : `about ${lowMins}–${highMins} mins left`;
+                    return { text, left: totalPending, batches: activeBatches.length };
+                  })();
+
+                  const heading = isRunningScope
+                    ? (isTableView
+                      ? `${plural(activeRecords.length, 'upload')} in progress…`
+                      : totalFiles > 0 ? `Uploading ${plural(totalFiles, 'resume')}…` : 'Starting your upload…')
+                    : needsLook ? 'Finished — some files need a look' : 'All uploads finished';
+                  const subline = isTableView
+                    ? `${plural(myResumesHistory.length, 'upload')} · ${plural(totalFiles, 'file')} · ${completedCount.toLocaleString('en-IN')} added to your resume database.`
+                    : isCurrentTab
+                      ? `Each resume is read and added to your resume database. ${plural(activeRecords.length, 'upload')} in progress.`
+                      : `${plural(completedRecords.length, 'upload')} · ${plural(totalFiles, 'file')} · ${completedCount.toLocaleString('en-IN')} added to your resume database.`;
+
+                  /* One coloured segment per outcome, inside one rounded bar — the
+                     AI Assessment / AI Interview send progress bar's colours: done
+                     green, left out on purpose gray, cancelled amber, failed red,
+                     and the files being read right now a pulsing blue. */
+                  const barSegments = (r: { completed: number; versioned: number; duplicated: number; errors: number; cancelled: number; processing: number; total: number }) => [
+                    { key: 'completed', n: r.completed, bar: 'bg-success' },
+                    { key: 'versioned', n: r.versioned, bar: 'bg-success/60' },
+                    { key: 'duplicated', n: r.duplicated, bar: 'bg-brand-orange' },
+                    { key: 'cancelled', n: r.cancelled, bar: 'bg-warning-strong' },
+                    { key: 'error', n: r.errors, bar: 'bg-destructive' },
+                    { key: 'processing', n: r.processing, bar: 'bg-brand-blue animate-pulse' },
+                  ].filter(s => s.n > 0).map(s => ({ ...s, width: r.total > 0 ? Math.min(100, (s.n / r.total) * 100) : 0 }));
+                  /* Files being read right now (not just waiting). */
+                  const processingOf = (recs: typeof displayRecords) => recs.reduce((sum, r) =>
+                    sum + (r.statuses?.filter((x: { status: string }) => x.status === 'processing').length || 0), 0);
+
+                  /* Plain-word names + what each status means, for the pills,
+                     the batch chips and the file rows. */
+                  type FilterKey = NonNullable<typeof uploadHistoryFilter>;
+                  const STATUS_INFO: Record<FilterKey, { label: string; hint: string; tone: string; chip: string; icon: typeof CheckCircle }> = {
+                    completed: { label: 'Done', hint: 'Read successfully and saved to your resume database.', tone: 'text-success', chip: 'bg-success-subtle text-success', icon: CheckCircle },
+                    versioned: { label: 'New version', hint: 'Looks like an updated resume of a candidate you already have. Review it to decide what to keep.', tone: 'text-brand-blue-2', chip: 'bg-brand-blue-2/10 text-brand-blue-2', icon: GitBranch },
+                    duplicated: { label: 'Duplicate', hint: 'This resume is already in your database, so it was not added again. Nothing to do.', tone: 'text-brand-orange-deep', chip: 'bg-brand-orange/10 text-brand-orange-deep', icon: Copy },
+                    error: { label: 'Failed', hint: 'Could not be read. Open the file to see why, then Retry.', tone: 'text-destructive', chip: 'bg-destructive-subtle text-destructive', icon: AlertCircle },
+                    pending: { label: 'Queue', hint: 'Waiting its turn, or being read right now.', tone: 'text-gray-600 dark:text-slate-300', chip: 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300', icon: Clock },
+                    cancelled: { label: 'Cancelled', hint: 'Stopped before it was read — its unit was refunded. Retry puts it back in the queue.', tone: 'text-warning-strong', chip: 'bg-warning-subtle text-warning-strong', icon: Ban },
+                  };
+                  /* How many files ended in each outcome ("Done 1", "Duplicate 13"). */
+                  const renderBreakdown = (outcomes: [FilterKey, number][], total: number, className = '') => {
+                    const shown = outcomes.filter(([, n]) => n > 0);
+                    if (!shown.length) return null;
+                    return (
+                      <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+                        {shown.map(([key, n]) => {
+                          const info = STATUS_INFO[key];
+                          const Icon = info.icon;
+                          return (
+                            <span
+                              key={key}
+                              title={`${info.label}: ${plural(n, 'file')} of ${total.toLocaleString('en-IN')} — ${info.hint}`}
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${info.chip}`}
+                            >
+                              <Icon className="w-3 h-3" />
+                              {info.label}
+                              <span className="font-semibold tabular-nums">{n.toLocaleString('en-IN')}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    );
+                  };
+                  const pills: { key: FilterKey | null; n: number }[] = [
+                    { key: null, n: totalFiles },
+                    { key: 'completed', n: completedCount },
+                    { key: 'versioned', n: versionedCount },
+                    { key: 'duplicated', n: duplicatedCount },
+                    { key: 'error', n: failedCount },
+                    { key: 'pending', n: pendingCount },
+                    { key: 'cancelled', n: cancelledTotal },
+                  ];
+
+                  /* ── One file table, used by the Table view and by each upload's
+                     "Show files". Row click, version picking and Retry / Cancel
+                     call the same handlers the file list always used. ── */
+                  type UploadFile = { id: string; status: string; fileName: string; errorMessage?: string; candidateName?: string; resumeId?: string };
+                  type UploadRecord = (typeof displayRecords)[number];
+                  const isVersionedFile = (f: UploadFile) => f.status === 'versioned' || f.status === 'version';
+                  const toVersionItem = (f: UploadFile) => ({ id: f.id, fileName: f.fileName, candidateName: f.candidateName || '', resumeId: f.resumeId });
+                  /* One file's status, in the same words and colours as the pills. */
+                  const fileStatus = (file: UploadFile) => {
+                    const s = file.status;
+                    if (s === 'completed') return { label: 'Done', cls: 'bg-success-subtle text-success', reason: file.candidateName ? `${file.candidateName} · added to your database` : 'Added to your database' };
+                    if (s === 'versioned' || s === 'version') return { label: 'New version', cls: 'bg-brand-blue-2/10 text-brand-blue-2', reason: file.candidateName ? `Newer resume of ${file.candidateName} · click to review` : 'Newer resume of an existing candidate · click to review' };
+                    if (s === 'duplicate' || s === 'duplicated') return { label: 'Duplicate', cls: 'bg-brand-orange/10 text-brand-orange-deep', reason: file.errorMessage || 'Already in your database · not added again' };
+                    if (s === 'error') return { label: 'Failed', cls: 'bg-destructive-subtle text-destructive', reason: file.errorMessage || 'Could not be read' };
+                    if (s === 'processing') return { label: 'Reading', cls: 'bg-brand-blue/10 text-brand-blue', reason: 'Reading the resume…' };
+                    if (s === 'pending') return { label: 'Queue', cls: 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300', reason: 'Waiting its turn…' };
+                    if (s === 'cancelled' || s === 'discarded') return { label: s === 'cancelled' ? 'Cancelled' : 'Discarded', cls: 'bg-warning-subtle text-warning-strong', reason: file.errorMessage || 'Cancelled before it was read' };
+                    return { label: String(s ?? 'unknown'), cls: 'bg-amber-100 text-amber-800', reason: `Unrecognised status: ${String(s)}` };
+                  };
+                  const renderFileTable = (
+                    allRows: { file: UploadFile; record: UploadRecord }[],
+                    opts: {
+                      tableKey: string;
+                      showUpload: boolean;
+                      emptyText: ReactNode;
+                      /** Called before a row's own Retry / Cancel (to keep the row in view). */
+                      onAct?: (fileId: string) => void;
+                      /** Tick boxes on retry-able / cancel-able rows + the bulk bar. */
+                      selectable?: boolean;
+                      /** Rows acted on in this view — they carry an "Updated" tag. */
+                      pinnedIds?: Set<string>;
+                      onBulk?: (mode: 'retry' | 'cancel', items: UploadHistoryBulkItem[]) => void;
+                    },
+                  ) => {
+                    /* Search + pagination (5 rows a page by default). */
+                    const ui = uploadHistoryTableUi[opts.tableKey] ?? { page: 1, perPage: 5, q: '' };
+                    const setUi = (patch: Partial<typeof ui>) => setUploadHistoryTableUi(prev => ({
+                      ...prev,
+                      [opts.tableKey]: { ...(prev[opts.tableKey] ?? { page: 1, perPage: 5, q: '' }), ...patch },
+                    }));
+                    const q = ui.q.trim().toLowerCase();
+                    const searchedRows = q
+                      ? allRows.filter(({ file, record }) =>
+                          [file.fileName, file.candidateName, fileStatus(file).label, opts.showUpload ? record.fileName : '']
+                            .some(v => !!v && String(v).toLowerCase().includes(q)))
+                      : allRows;
+                    const pageCount = Math.max(1, Math.ceil(searchedRows.length / ui.perPage));
+                    const page = Math.min(ui.page, pageCount);
+                    const firstIndex = (page - 1) * ui.perPage;
+                    const shownRows = searchedRows.slice(firstIndex, firstIndex + ui.perPage);
+                    const versionedShown = shownRows.filter(r => isVersionedFile(r.file));
+                    /* Retry works on waiting, failed and cancelled files; Cancel on waiting ones.
+                       Never on the optimistic temp-/local- records (their ids are not UUIDs). */
+                    type Row = { file: UploadFile; record: UploadRecord };
+                    const canActOn = ({ file, record }: Row) => !!file.id
+                      && !record.id.startsWith('temp-') && !record.id.startsWith('local-') && !String(file.id).startsWith('temp-')
+                      && (file.status === 'pending' || file.status === 'error' || file.status === 'cancelled');
+                    const toBulkItem = ({ file, record }: Row): UploadHistoryBulkItem => ({ batchId: record.id, itemId: file.id, fileName: file.fileName, status: file.status });
+                    const actionableShown = opts.selectable ? shownRows.filter(canActOn) : [];
+                    const pickedRows = opts.selectable ? searchedRows.filter(r => uploadHistorySelected.has(r.file.id) && canActOn(r)) : [];
+                    const cancelPicked = pickedRows.filter(r => r.file.status === 'pending');
+                    const withCheckbox = versionedShown.length > 0 || actionableShown.length > 0;
+                    const allVersionedPicked = withCheckbox
+                      && versionedShown.every(r => selectedVersionedItems.has(r.file.id))
+                      && actionableShown.every(r => uploadHistorySelected.has(r.file.id));
+                    /* One-click shortcut for the picked pill: every matching row, all pages. */
+                    const shortcut = (() => {
+                      if (!opts.selectable || pickedRows.length > 0) return null;
+                      if (uploadHistoryFilter === 'error') {
+                        const rows = searchedRows.filter(r => r.file.status === 'error' && canActOn(r));
+                        return rows.length ? { mode: 'retry' as const, label: `Retry all failed (${rows.length})`, rows } : null;
+                      }
+                      if (uploadHistoryFilter === 'cancelled') {
+                        const rows = searchedRows.filter(r => r.file.status === 'cancelled' && canActOn(r));
+                        return rows.length ? { mode: 'retry' as const, label: `Re-queue all cancelled (${rows.length})`, rows } : null;
+                      }
+                      if (uploadHistoryFilter === 'pending') {
+                        const rows = searchedRows.filter(r => r.file.status === 'pending' && canActOn(r));
+                        return rows.length ? { mode: 'cancel' as const, label: `Cancel all waiting (${rows.length})`, rows } : null;
+                      }
+                      return null;
+                    })();
+                    const bulkBusy = !!uploadHistoryBulkBusy;
+                    // ☐ · S.No · File · Status (+ reason) · [Upload] · Actions
+                    const GRID = withCheckbox
+                      ? (opts.showUpload
+                        ? 'sm:grid-cols-[1.25rem_2.25rem_minmax(12rem,2fr)_minmax(10rem,1.5fr)_minmax(9rem,1fr)_5rem]'
+                        : 'sm:grid-cols-[1.25rem_2.25rem_minmax(12rem,2fr)_minmax(10rem,1.5fr)_5rem]')
+                      : (opts.showUpload
+                        ? 'sm:grid-cols-[2.25rem_minmax(12rem,2fr)_minmax(10rem,1.5fr)_minmax(9rem,1fr)_5rem]'
+                        : 'sm:grid-cols-[2.25rem_minmax(12rem,2fr)_minmax(10rem,1.5fr)_5rem]');
+                    return (
+                      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden dark:border-slate-700 dark:bg-slate-900">
+                        {/* Search */}
+                        <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-3 py-2 dark:border-slate-700/60">
+                          <div className="relative min-w-0 flex-1 sm:max-w-sm">
+                            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" aria-hidden="true" />
+                            <input
+                              type="search"
+                              value={ui.q}
+                              onChange={(e) => setUi({ q: e.target.value, page: 1 })}
+                              placeholder={opts.showUpload ? 'Search file, candidate, status or upload…' : 'Search file, candidate or status…'}
+                              aria-label="Search files"
+                              className="h-7 w-full rounded-md border border-gray-200 bg-white pl-8 pr-3 text-[13px] text-gray-900 placeholder:text-gray-500 focus-visible:outline-none focus-visible:border-brand-blue/40 focus-visible:ring-2 focus-visible:ring-brand-blue/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                            />
+                          </div>
+                          <span className="tf-meta ml-auto">
+                            {q ? `${searchedRows.length.toLocaleString('en-IN')} of ` : ''}{plural(allRows.length, 'file')}
+                          </span>
+                          {pickedRows.length > 0 && (
+                            <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
+                              <span className="tf-meta whitespace-nowrap">
+                                <b className="font-semibold text-gray-900 tabular-nums dark:text-slate-100">{pickedRows.length}</b> selected
+                              </span>
+                              <Button type="button" variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setUploadHistorySelected(new Map())} disabled={bulkBusy}>
+                                Clear
+                              </Button>
+                              {cancelPicked.length > 0 && (
+                                <Button
+                                  type="button" variant="secondary" size="sm" className="h-7 text-xs text-destructive"
+                                  disabled={bulkBusy}
+                                  onClick={() => opts.onBulk?.('cancel', cancelPicked.map(toBulkItem))}
+                                  icon={uploadHistoryBulkBusy === 'cancel' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                                  title="Stop the ticked files that are still waiting"
+                                >
+                                  Cancel ({cancelPicked.length})
+                                </Button>
+                              )}
+                              <Button
+                                type="button" variant="primary" size="sm" className="h-7 text-xs"
+                                disabled={bulkBusy}
+                                onClick={() => opts.onBulk?.('retry', pickedRows.map(toBulkItem))}
+                                icon={uploadHistoryBulkBusy === 'retry' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                              >
+                                Retry ({pickedRows.length})
+                              </Button>
+                            </div>
+                          )}
+                          {shortcut && (
+                            <Button
+                              type="button"
+                              variant={shortcut.mode === 'cancel' ? 'secondary' : 'primary'}
+                              size="sm"
+                              className={`h-7 text-xs ${shortcut.mode === 'cancel' ? 'text-destructive' : ''}`}
+                              disabled={bulkBusy}
+                              onClick={() => opts.onBulk?.(shortcut.mode, shortcut.rows.map(toBulkItem))}
+                              icon={uploadHistoryBulkBusy
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : shortcut.mode === 'cancel' ? <X className="w-3.5 h-3.5" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                            >
+                              {shortcut.label}
+                            </Button>
+                          )}
+                        </div>
+                        <div className="overflow-x-auto">
+                          <ul className={`divide-y divide-gray-100 dark:divide-slate-700/60 ${opts.showUpload ? 'sm:min-w-[44rem]' : 'sm:min-w-[34rem]'}`}>
+                            {shownRows.length > 0 && (
+                              <li className={`hidden sm:grid ${GRID} gap-3 px-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 sticky top-0 z-[1]`}>
+                                {withCheckbox && (
+                                  <span className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      className="tf-checkbox"
+                                      aria-label={allVersionedPicked ? 'Deselect all on this page' : 'Select all on this page'}
+                                      checked={allVersionedPicked}
+                                      onChange={() => {
+                                        if (versionedShown.length) {
+                                          const next = new Map(selectedVersionedItems);
+                                          if (allVersionedPicked) versionedShown.forEach(r => next.delete(r.file.id));
+                                          else versionedShown.forEach(r => next.set(r.file.id, toVersionItem(r.file)));
+                                          setSelectedVersionedItems(next);
+                                        }
+                                        if (actionableShown.length) {
+                                          const next = new Map(uploadHistorySelected);
+                                          if (allVersionedPicked) actionableShown.forEach(r => next.delete(r.file.id));
+                                          else actionableShown.forEach(r => next.set(r.file.id, toBulkItem(r)));
+                                          setUploadHistorySelected(next);
+                                        }
+                                      }}
+                                    />
+                                  </span>
+                                )}
+                                <span>S.No</span>
+                                <span>File</span>
+                                <span>Status</span>
+                                {opts.showUpload && <span>Upload</span>}
+                                <span className="text-right">Actions</span>
+                              </li>
+                            )}
+                            {shownRows.length === 0 && (q || opts.emptyText) && (
+                              <li className="px-3 py-8 text-center tf-body-muted">
+                                {q ? <>No files match &ldquo;{ui.q.trim()}&rdquo;.</> : opts.emptyText}
+                              </li>
+                            )}
+                            {shownRows.map(({ file, record }, i) => {
+                              const st = fileStatus(file);
+                              const isVersioned = isVersionedFile(file);
+                              const isClickable = ['completed', 'versioned', 'duplicate', 'error'].includes(file.status);
+                              const isSelected = selectedVersionedItems.has(file.id);
+                              const recordIsTemp = record.id.startsWith('temp-') || record.id.startsWith('local-');
+                              const canAct = file.id && !recordIsTemp && !String(file.id).startsWith('temp-')
+                                && (file.status === 'pending' || file.status === 'error' || file.status === 'cancelled');
+                              return (
+                                <li {...clickableProps}
+                                  key={`${record.id}:${file.id || i}`}
+                                  onClick={() => {
+                                    if (isVersioned) {
+                                      // Open resolution modal for this single versioned file
+                                      setSelectedVersionedItems(new Map([[file.id, toVersionItem(file)]]));
+                                      setIsBulkResolveModalOpen(true);
+                                    } else if (isClickable) {
+                                      setSelectedHistoryItem({
+                                        id: file.id,
+                                        fileName: file.fileName,
+                                        status: file.status as UploadHistoryItem['status'],
+                                        errorMessage: file.errorMessage,
+                                        candidateName: file.candidateName,
+                                        resumeId: file.resumeId,
+                                      });
+                                    }
+                                  }}
+                                  className={`grid grid-cols-1 ${GRID} gap-x-3 gap-y-1 px-3 py-2 sm:items-center transition-colors ${
+                                    isVersioned && isSelected ? 'bg-brand-blue-2/[0.06]'
+                                      : opts.selectable && uploadHistorySelected.has(file.id) ? 'bg-brand-blue/[0.04]' : ''
+                                  } ${isClickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/60' : ''}`}
+                                >
+                                  {withCheckbox && (
+                                    <span className="hidden sm:flex items-center">
+                                      {isVersioned && (
+                                        <input
+                                          type="checkbox"
+                                          className="tf-checkbox focus:ring-brand-blue-2/40"
+                                          aria-label={`Select ${file.fileName}`}
+                                          checked={isSelected}
+                                          onClick={(e) => e.stopPropagation()}
+                                          onChange={() => {
+                                            const next = new Map(selectedVersionedItems);
+                                            if (isSelected) next.delete(file.id);
+                                            else next.set(file.id, toVersionItem(file));
+                                            setSelectedVersionedItems(next);
+                                          }}
+                                        />
+                                      )}
+                                      {!isVersioned && opts.selectable && canAct && (
+                                        <input
+                                          type="checkbox"
+                                          className="tf-checkbox"
+                                          aria-label={`Select ${file.fileName}`}
+                                          checked={uploadHistorySelected.has(file.id)}
+                                          onClick={(e) => e.stopPropagation()}
+                                          onChange={() => {
+                                            const next = new Map(uploadHistorySelected);
+                                            if (next.has(file.id)) next.delete(file.id);
+                                            else next.set(file.id, toBulkItem({ file, record }));
+                                            setUploadHistorySelected(next);
+                                          }}
+                                        />
+                                      )}
+                                    </span>
+                                  )}
+                                  <span className="hidden sm:block text-sm tabular-nums text-gray-500 dark:text-slate-400">{firstIndex + i + 1}</span>
+                                  <div className="min-w-0">
+                                    <div className="tf-row-name truncate" title={file.fileName}>{file.fileName}</div>
+                                    {file.candidateName && <div className="tf-meta truncate">{file.candidateName}</div>}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium ${st.cls}`}>{st.label}</span>
+                                    {opts.pinnedIds?.has(file.id) && (
+                                      <span className="ml-1.5 inline-flex items-center rounded-full bg-brand-blue/10 px-1.5 py-0.5 text-2xs font-medium text-brand-blue" title="You retried or cancelled this file — its status is live">
+                                        Updated
+                                      </span>
+                                    )}
+                                    <div className="tf-meta mt-0.5 truncate" title={st.reason}>{st.reason}</div>
+                                  </div>
+                                  {opts.showUpload && (
+                                    <div className="min-w-0 tf-meta">
+                                      <div className="truncate text-gray-700 dark:text-slate-200" title={record.fileName}>{record.fileName}</div>
+                                      {record.date && <div className="truncate">{formatDateTimeIST(record.date)}</div>}
+                                    </div>
+                                  )}
+                                  <div className="flex items-center justify-start sm:justify-end gap-1" onClick={e => e.stopPropagation()}>
+                                    {canAct && (
+                                      <IconButton bare label="Retry this file" tooltip={file.status === 'cancelled' ? 'Re-queue this cancelled file' : 'Retry this file'}
+                                        type="button"
+                                        disabled={retryingItems.has(file.id)}
+                                        onClick={(e) => { opts.onAct?.(file.id); handleRetryItem(record.id, file.id, e); }}
+                                        className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10'}`}
+                                      >
+                                        <RefreshCw className={`w-3.5 h-3.5 ${retryingItems.has(file.id) ? 'animate-spin' : ''}`} />
+                                      </IconButton>
+                                    )}
+                                    {canAct && file.status === 'pending' && (
+                                      <IconButton bare label="Cancel this file (waiting only)"
+                                        type="button"
+                                        disabled={cancellingItems.has(file.id)}
+                                        onClick={(e) => { opts.onAct?.(file.id); handleCancelItem(record.id, file.id, file.fileName, e); }}
+                                        className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors ${cancellingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-destructive hover:bg-destructive-subtle'}`}
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </IconButton>
+                                    )}
+                                    {isClickable && (
+                                      <ChevronRight className="hidden sm:block w-4 h-4 text-gray-400" aria-hidden="true" />
+                                    )}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                        <ListPagination
+                          attached
+                          compact
+                          minimalOnMobile
+                          currentPage={page}
+                          itemsPerPage={ui.perPage}
+                          totalItems={searchedRows.length}
+                          onPageChange={(p) => setUi({ page: p })}
+                          onItemsPerPageChange={(n) => setUi({ perPage: n, page: 1 })}
+                          pageSizeOptions={[5, 10, 20]}
+                          itemLabel="files"
+                          scrollContainerRef={uploadHistoryPagerScrollRef}
+                        />
+                      </div>
+                    );
+                  };
+
                   return (
-                    <>
-                      {/* Tabs */}
-                      <div className="tf-card-soft inline-flex items-center p-1 mb-4 sm:mb-6">
+                    <div className="space-y-3">
+                      {/* Pagination scroll target: a page change in these short tables keeps the
+                          popup where it is (without one, ListPagination scrolls the page behind). */}
+                      <span ref={uploadHistoryPagerScrollRef} className="hidden" aria-hidden="true" />
+                      {/* Tabs — By upload only; the Table view lists every upload */}
+                      {!isTableView && (
+                      <div className="inline-flex items-center gap-0.5 rounded-lg border border-gray-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900" role="tablist" aria-label="Uploads">
                         <button
+                          type="button"
+                          role="tab"
+                          aria-selected={isCurrentTab}
                           onClick={() => setUploadHistoryTab('current')}
-                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-sm font-medium transition-all ${
-                            uploadHistoryTab === 'current'
-                              ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                          className={`flex h-7 items-center gap-1.5 px-2.5 sm:px-3 rounded-md text-xs font-medium transition-colors ${
+                            isCurrentTab
+                              ? 'bg-brand-blue text-white shadow-sm'
                               : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                           }`}
                         >
-                          <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeRecords.length > 0 && uploadHistoryTab !== 'current' ? 'text-brand-blue animate-spin' : ''}`} />
-                          Currently Processing
+                          <RefreshCw className={`w-3.5 h-3.5 ${activeRecords.length > 0 && !isCurrentTab ? 'text-brand-blue animate-spin' : ''}`} />
+                          In progress
                           {activeRecords.length > 0 && (
-                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold ${
-                              uploadHistoryTab === 'current' ? 'bg-white text-brand-blue' : 'bg-brand-blue/10 text-brand-blue'
+                            <span className={`inline-flex items-center justify-center min-w-[1rem] h-4 px-1 rounded-full text-[10px] font-semibold tabular-nums ${
+                              isCurrentTab ? 'bg-white text-brand-blue' : 'bg-brand-blue/10 text-brand-blue'
                             }`}>
                               {activeRecords.length}
                             </span>
                           )}
                         </button>
                         <button
+                          type="button"
+                          role="tab"
+                          aria-selected={!isCurrentTab}
                           onClick={() => setUploadHistoryTab('completed')}
-                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-sm font-medium transition-all ${
-                            uploadHistoryTab === 'completed'
-                              ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                          className={`flex h-7 items-center gap-1.5 px-2.5 sm:px-3 rounded-md text-xs font-medium transition-colors ${
+                            !isCurrentTab
+                              ? 'bg-brand-blue text-white shadow-sm'
                               : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                           }`}
                         >
-                          <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          <CheckCircle className="w-3.5 h-3.5" />
                           Completed
                           {completedRecords.length > 0 && (
-                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold ${
-                              uploadHistoryTab === 'completed' ? 'bg-white text-brand-blue' : 'bg-gray-100 text-gray-700'
+                            <span className={`inline-flex items-center justify-center min-w-[1rem] h-4 px-1 rounded-full text-[10px] font-semibold tabular-nums ${
+                              !isCurrentTab ? 'bg-white text-brand-blue' : 'bg-gray-100 text-gray-700'
                             }`}>
                               {completedRecords.length}
                             </span>
                           )}
                         </button>
                       </div>
-
-                      {/* 7-card stats grid — same layout in both tabs, scoped to
-                          the tab's records. Brand palette throughout, except the
-                          neutral Cancelled card. When
-                          every number is zero the grid is replaced by a single
-                          "nothing here" card, so a wall of zeros never shows.
-                          Skipped entirely when the tab has no batches — the
-                          illustrated empty state below speaks for it. */}
-                      {!showFullEmptyState && (() => {
-                        const statCards = [
-                          // Labelled "Files Completed" (not "Completed") because it sums completed
-                          // files across every batch in this tab, while the tab badge and the
-                          // "N batches" header below count batches — a batch with several files
-                          // can push this past that batch count, which used to read as a bug.
-                          { key: 'completed', label: 'Files Completed', value: completedCount, icon: CheckCircle, tone: 'brand-blue' },
-                          { key: 'duplicated', label: 'Duplicates', value: duplicatedCount, icon: Copy, tone: 'brand-orange' },
-                          { key: 'versioned', label: 'Versioned', value: versionedCount, icon: GitBranch, tone: 'brand-blue-2' },
-                          { key: 'error', label: 'Failed', value: failedCount, icon: AlertCircle, tone: 'brand-orange-deep' },
-                          { key: 'pending', label: 'Pending', value: pendingCount, icon: Clock, tone: 'brand-teal' },
-                          { key: 'cancelled', label: 'Cancelled', value: cancelledTotal, icon: Ban, tone: 'gray' },
-                        ] as const;
-
-                        // Tailwind needs whole class names, so map tone → classes.
-                        const TONE_CLASS: Record<string, { card: string; active: string; idle: string; tile: string; value: string }> = {
-                          'brand-blue': {
-                            card: 'from-brand-blue/[0.08] to-brand-blue/[0.03]',
-                            active: 'border-brand-blue/50 ring-2 ring-brand-blue/30 shadow-md',
-                            idle: 'border-brand-blue/20',
-                            tile: 'bg-brand-blue/10 text-brand-blue',
-                            value: 'text-brand-blue',
-                          },
-                          'brand-blue-2': {
-                            card: 'from-brand-blue-2/[0.08] to-brand-blue-2/[0.03]',
-                            active: 'border-brand-blue-2/50 ring-2 ring-brand-blue-2/30 shadow-md',
-                            idle: 'border-brand-blue-2/20',
-                            tile: 'bg-brand-blue-2/10 text-brand-blue-2',
-                            value: 'text-brand-blue-2',
-                          },
-                          'brand-cyan': {
-                            card: 'from-brand-cyan/[0.08] to-brand-cyan/[0.03]',
-                            active: 'border-brand-cyan/50 ring-2 ring-brand-cyan/30 shadow-md',
-                            idle: 'border-brand-cyan/20',
-                            tile: 'bg-brand-cyan/10 text-brand-cyan',
-                            value: 'text-brand-cyan',
-                          },
-                          'brand-teal': {
-                            card: 'from-brand-teal/[0.08] to-brand-teal/[0.03]',
-                            active: 'border-brand-teal/50 ring-2 ring-brand-teal/30 shadow-md',
-                            idle: 'border-brand-teal/20',
-                            tile: 'bg-brand-teal/10 text-brand-teal',
-                            value: 'text-brand-teal',
-                          },
-                          'brand-orange': {
-                            card: 'from-brand-orange/[0.08] to-brand-orange/[0.03]',
-                            active: 'border-brand-orange/50 ring-2 ring-brand-orange/30 shadow-md',
-                            idle: 'border-brand-orange/20',
-                            tile: 'bg-brand-orange/10 text-brand-orange',
-                            value: 'text-brand-orange-deep',
-                          },
-                          'brand-orange-deep': {
-                            card: 'from-brand-orange-deep/[0.08] to-brand-orange-deep/[0.03]',
-                            active: 'border-brand-orange-deep/50 ring-2 ring-brand-orange-deep/30 shadow-md',
-                            idle: 'border-brand-orange-deep/20',
-                            tile: 'bg-brand-orange-deep/10 text-brand-orange-deep',
-                            value: 'text-brand-orange-deep',
-                          },
-                          // Cancelled is deliberately off-palette: it's an
-                          // absence of work, not a result.
-                          'gray': {
-                            card: 'from-gray-100 to-gray-200/50',
-                            active: 'border-gray-700 ring-2 ring-gray-400 shadow-md',
-                            idle: 'border-gray-300',
-                            tile: 'bg-gray-100 text-gray-600',
-                            value: 'text-gray-800',
-                          },
-                        };
-
-                        const allZero = statCards.every(card => (card.value || 0) === 0) && totalFiles === 0;
-
-                        if (allZero) {
-                          return (
-                            <div className="flex items-center gap-3 mb-4 sm:mb-6 tf-panel p-4">
-                              <div className="w-9 h-9 bg-brand-blue/10 text-brand-blue rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Clock className="w-4 h-4" />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="tf-row-name">
-                                  {uploadHistoryTab === 'current' ? 'No uploads in progress' : 'No completed uploads yet'}
-                                </p>
-                                <p className="tf-meta">
-                                  {uploadHistoryTab === 'current'
-                                    ? 'Upload resumes to see live progress and status counts here.'
-                                    : 'Finished upload batches and their status counts will appear here.'}
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        // Only outcomes that actually happened get a card — a
-                        // batch with no duplicates or failures shouldn't spend
-                        // grid space saying so. The active filter's card stays
-                        // even at zero, otherwise clicking a card could make it
-                        // vanish with the filter still applied and no way to
-                        // toggle it back off.
-                        const visibleCards = statCards.filter(
-                          card => (card.value || 0) > 0 || uploadHistoryFilter === card.key
-                        );
-
-                        return (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
-                            {visibleCards.map(({ key, label, value, icon: Icon, tone }) => {
-                              const t = TONE_CLASS[tone];
-                              const isActive = uploadHistoryFilter === key;
-                              return (
-                                <div
-                                  key={key}
-                                  onClick={() => setUploadHistoryFilter(isActive ? null : key)}
-                                  className={`bg-white border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-colors ${isActive ? t.active : 'border-gray-200 hover:border-gray-300'}`}
-                                >
-                                  <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 mb-1.5 sm:mb-2">
-                                    <div className={`w-6 h-6 sm:w-7 sm:h-7 ${t.tile} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                                      <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                    </div>
-                                    <span className="tf-meta truncate">{label}</span>
-                                  </div>
-                                  <div className={`text-lg sm:text-xl lg:text-2xl font-bold tracking-tight ${t.value}`}>{value}</div>
-                                </div>
-                              );
-                            })}
-
-                            {/* Success Rate — not a filter, so it stays static.
-                                Hidden when nothing was attempted: 0% would read
-                                as a total failure rather than "no data". */}
-                            {attemptedFiles > 0 && (
-                            <div className="tf-panel p-2.5 sm:p-3 lg:p-4">
-                              <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 mb-1.5 sm:mb-2">
-                                <div className="w-6 h-6 sm:w-7 sm:h-7 bg-brand-cyan/10 text-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
-                                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                </div>
-                                <span className="tf-meta truncate">Success Rate</span>
-                              </div>
-                              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
-                            </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Active Filter Indicator */}
-                      {uploadHistoryFilter && (
-                        <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-white rounded-lg shadow-sm shadow-black/[0.03]">
-                          <span className="tf-meta">Filtering by:</span>
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                            uploadHistoryFilter === 'completed' ? 'bg-brand-blue/10 text-brand-blue' :
-                            uploadHistoryFilter === 'duplicated' ? 'bg-brand-orange/15 text-brand-orange-deep' :
-                            uploadHistoryFilter === 'versioned' ? 'bg-brand-blue-2/10 text-brand-blue-2' :
-                            uploadHistoryFilter === 'error' ? 'bg-brand-orange-deep/10 text-brand-orange-deep' :
-                            uploadHistoryFilter === 'cancelled' ? 'bg-gray-200 text-gray-800' :
-                            'bg-brand-teal/10 text-brand-teal'
-                          }`}>
-                            {uploadHistoryFilter === 'completed' ? 'Files Completed' :
-                             uploadHistoryFilter === 'duplicated' ? 'Duplicates' :
-                             uploadHistoryFilter === 'versioned' ? 'Versioned' :
-                             uploadHistoryFilter === 'error' ? 'Failed' :
-                             uploadHistoryFilter === 'cancelled' ? 'Cancelled' :
-                             'Pending'}
-                          </span>
-                          <button
-                            onClick={() => setUploadHistoryFilter(null)}
-                            className="ml-auto text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                           aria-label="Close">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Overall ETA Banner — only relevant on the Currently Processing tab */}
-                      {uploadHistoryTab === 'current' && (() => {
-                        // Only show for batches that still have genuinely active items
-                        const activeBatches = myResumesHistory.filter(r =>
-                          r.pending > 0 && r.date &&
-                          r.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing')
-                        );
-                        if (activeBatches.length === 0) return null;
-                        const totalPending = activeBatches.reduce((sum: number, r: any) => sum + r.pending, 0);
-                        const totalProcessed = activeBatches.reduce((sum: number, r: any) => sum + r.completed + r.errors + r.duplicated + (r.versioned || 0), 0);
-                        if (totalProcessed <= 0) {
-                          return (
-                            <div className="flex items-center gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/[0.07] rounded-xl">
-                              <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue animate-spin flex-shrink-0" />
-                              <span className="text-sm text-brand-blue">Processing {totalPending} resume{totalPending !== 1 ? 's' : ''}... Estimating time remaining</span>
-                            </div>
-                          );
-                        }
-                        // Cap elapsed at 10 minutes so a batch that started hours ago with a
-                        // stuck file doesn't produce an absurd ETA (e.g. "233–433 mins remaining").
-                        const earliestStart = Math.min(...activeBatches.map((r: any) => new Date(r.date).getTime()));
-                        const elapsed = Math.min(Date.now() - earliestStart, 10 * 60 * 1000);
-                        const avgTimePerFile = elapsed / totalProcessed;
-                        const remainingMs = totalPending * avgTimePerFile;
-                        const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
-                        const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
-                        const etaText = lowMins === highMins
-                          ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
-                          : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
-                        return (
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/[0.07] rounded-xl">
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0" />
-                              <span className="text-sm font-medium text-brand-blue">{etaText}</span>
-                            </div>
-                            <span className="text-xs text-brand-blue/60 sm:ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
-                          </div>
-                        );
-                      })()}
-
-                      {/* Upload History List */}
-                      {!showFullEmptyState && (
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="tf-row-title">
-                            {uploadHistoryTab === 'current' ? 'Active Uploads' : 'Recent Uploads'}
-                          </h3>
-                          <span className="tf-meta">{displayRecords.length} batch{displayRecords.length !== 1 ? 'es' : ''}</span>
-                        </div>
                       )}
 
                       {showFullEmptyState ? (
                         <>
                           <UploadHistoryEmptyState
                             title={
-                              uploadHistoryTab === 'current'
+                              isCurrentTab && !isTableView
                                 ? 'No uploads in progress'
                                 : myResumesHistory.length === 0 ? 'No upload history yet' : 'Nothing here yet'
                             }
                             lines={
-                              uploadHistoryTab === 'current'
+                              isCurrentTab && !isTableView
                                 ? ['All your uploads are processed.', 'Start a new bulk upload to see live progress here.']
                                 : myResumesHistory.length === 0
                                   ? ['Bulk upload reports will appear here.', 'Upload multiple resumes to see detailed status reports.']
@@ -1458,7 +1769,7 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
 
                           {/* The Upload Resume popup's own Tip — the brand's amber,
                               so it reads as guidance rather than a warning. */}
-                          <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
+                          <div className="flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
                             <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
                             <p className="tf-body">
                               <span className="font-semibold">Tip:</span> You can upload a single resume or bulk upload multiple resumes at once.
@@ -1466,509 +1777,528 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
                           </div>
                         </>
                       ) : (
-                        <div className="space-y-4">
-                          {displayRecords
-                            .slice(0, 20)
-                            .map(record => {
-                              // Prefer the server counter, but fall back to the item list so an
-                              // older batch row (written before `cancelled` existed) still adds up.
-                              const cancelledFromItems = record.statuses?.filter(
-                                (s: any) => s.status === 'cancelled' || s.status === 'discarded'
-                              ).length ?? 0;
-                              const cancelledCount = Math.max(record.cancelled ?? 0, cancelledFromItems);
-                              const processed = record.completed + record.errors + record.duplicated + (record.versioned || 0) + cancelledCount;
-                              // Files the batch counters can't explain. If this is ever non-zero the
-                              // summary is under-reporting, and we say so instead of hiding it.
-                              const unaccountedCount = Math.max(0, (record.totalFiles || 0) - processed - (record.pending || 0));
-                              // Success is measured against files that were actually attempted —
-                              // cancelling 77 of 100 is not a 23% failure of the upload.
-                              const attempted = Math.max(0, (record.totalFiles || 0) - cancelledCount);
-                              const percentage = attempted > 0 ? Math.round((record.completed / attempted) * 100) : 100;
-                              const isUploading = record.status === 'uploading';
-                              const isProcessing = record.status === 'processing' || record.pending > 0;
-                              const isCancelled = cancelledCount > 0;
-                              // Optimistic pre-API record: its id and item ids are `temp-*`
-                              // placeholders, not UUIDs. Every retry/cancel endpoint takes UUID
-                              // path params, so any action fired against it 422s on uuid_parsing.
-                              // `local-*` records are the client-side stand-ins for single
-                              // uploads the server gave us no batch for — same story, no UUID.
-                              const isTempRecord = record.id.startsWith('temp-') || record.id.startsWith('local-');
-                              const hasErrors = record.errors > 0;
-                              const hasIssues = record.duplicated > 0 || (record.versioned || 0) > 0 || record.errors > 0 || cancelledCount > 0;
+                        <>
+                          {/* Status card — the bulk invite / scoring popup's: what is
+                              happening in one line, then one bar for every outcome. */}
+                          <div className="rounded-xl border border-gray-200 bg-white p-3.5 dark:border-slate-700 dark:bg-slate-900">
+                            <div className="flex items-start gap-3">
+                              <span className={`h-8 w-8 shrink-0 rounded-lg inline-flex items-center justify-center ${
+                                isRunningScope ? 'bg-brand-blue/10 text-brand-blue'
+                                  : needsLook ? 'bg-warning-subtle text-warning-strong'
+                                  : 'bg-success-subtle text-success'
+                              }`}>
+                                {isRunningScope ? <Loader2 className="w-4 h-4 animate-spin" />
+                                  : needsLook ? <AlertCircle className="w-4 h-4" />
+                                  : <CheckCircle className="w-4 h-4" />}
+                              </span>
+                              <div className="min-w-0 flex-1" aria-live="polite">
+                                <p className="text-sm font-semibold leading-tight text-gray-900 dark:text-slate-100">{heading}</p>
+                                <p className="tf-meta mt-0.5">{subline}</p>
+                              </div>
+                            </div>
 
-                              return (
+                            {totalFiles > 0 && (
+                              <div className="mt-3">
+                                <div className="mb-1.5 flex items-end justify-between gap-3">
+                                  <span className="tf-meta">
+                                    {processedTotal.toLocaleString('en-IN')} of {plural(totalFiles, 'file')} processed
+                                    {overallEta ? ` · ${overallEta.text}` : ''}
+                                  </span>
+                                </div>
                                 <div
-                                  key={record.id}
-                                  /* One subtle border, nothing else: the card is not
-                                     clickable, so no hover lift or chevron either. */
-                                  className="tf-panel pb-4 sm:pb-5"
+                                  className="flex h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+                                  role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={overallPct}
+                                  aria-label={`${processedTotal} of ${totalFiles} files processed`}
                                 >
-                                  {/* Header Row */}
-                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 sm:px-5 pt-4 sm:pt-5">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className="w-9 h-9 bg-brand-blue/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <FileText className="w-4 h-4 text-brand-blue" />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <span className="tf-row-title block truncate">{record.fileName}</span>
-                                        {record.date && (
-                                          <span className="tf-meta flex items-center gap-1 mt-0.5">
-                                            <Calendar className="w-3 h-3 flex-shrink-0" />
-                                            <span className="truncate">Started {formatDateTimeIST(record.date)}</span>
-                                          </span>
-                                        )}
-                                        {record.completedAt && record.pending === 0 && (() => {
-                                          const start = new Date(record.date).getTime();
-                                          const end = new Date(record.completedAt).getTime();
-                                          const ms = Math.max(0, end - start);
-                                          const totalSec = Math.round(ms / 1000);
-                                          const h = Math.floor(totalSec / 3600);
-                                          const m = Math.floor((totalSec % 3600) / 60);
-                                          const s = totalSec % 60;
-                                          const duration = h > 0
-                                            ? `${h}h ${m}m ${s}s`
-                                            : m > 0
-                                              ? `${m}m ${s}s`
-                                              : `${s}s`;
-                                          return (
-                                            <span className="tf-meta flex items-center gap-1 mt-0.5">
-                                              <CheckCircle className="w-3 h-3 flex-shrink-0 text-brand-blue" />
-                                              <span className="truncate">
-                                                Finished {formatDateTimeIST(record.completedAt)}
-                                                <span className="ml-1.5 text-gray-400">·</span>
-                                                <span className="ml-1.5 text-gray-700 font-medium">{duration}</span>
-                                              </span>
-                                            </span>
-                                          );
-                                        })()}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 ml-12 sm:ml-0">
-                                      {isUploading && (
-                                        <span className="tf-badge gap-1.5 bg-brand-blue/10 text-brand-blue">
-                                          <Loader2 className="w-3 h-3 animate-spin" />
-                                          Uploading…
-                                        </span>
-                                      )}
-                                      {!isUploading && hasIssues && (
-                                        <span className="tf-badge gap-1.5 bg-brand-orange/10 text-brand-orange-deep">
-                                          <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                                          Needs review
-                                        </span>
-                                      )}
-                                      {!isUploading && (
-                                        <div className="text-right">
-                                          <div className={`text-xl font-bold tracking-tight leading-none tabular-nums ${
-                                            percentage === 100 ? 'text-brand-blue' :
-                                            percentage >= 90 ? 'text-brand-cyan' :
-                                            percentage >= 70 ? 'text-brand-orange' :
-                                            'text-brand-orange-deep'
-                                          }`}>
-                                            {percentage}%
-                                          </div>
-                                          <div className="tf-micro-hint mt-1 uppercase tracking-wide">Success</div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
+                                  {barSegments({ completed: completedCount, versioned: versionedCount, duplicated: duplicatedCount, errors: failedCount, cancelled: cancelledTotal, processing: isRunningScope ? processingOf(displayRecords) : 0, total: totalFiles }).map(seg => (
+                                    <div key={seg.key} className={`${seg.bar} h-full transition-[width] duration-500`} style={{ width: `${seg.width}%` }} />
+                                  ))}
+                                </div>
+                                {renderBreakdown([
+                                  ['completed', completedCount],
+                                  ['versioned', versionedCount],
+                                  ['duplicated', duplicatedCount],
+                                  ['error', failedCount],
+                                  ['pending', pendingCount],
+                                  ['cancelled', cancelledTotal],
+                                ], totalFiles, 'mt-2.5')}
+                                {overallEta && overallEta.batches > 1 && (
+                                  <p className="tf-meta mt-1.5">{plural(overallEta.left, 'resume')} left across {overallEta.batches} uploads</p>
+                                )}
+                              </div>
+                            )}
 
-                                  {/* Outcome strip — one soft panel split by hairlines instead
-                                      of six separately bordered tiles; a number is coloured
-                                      only when something actually landed in it. */}
-                                  <div className="mx-4 sm:mx-5 mt-4 grid grid-cols-3 sm:grid-cols-6 gap-y-2 rounded-lg bg-gray-50 py-2.5 sm:divide-x sm:divide-gray-200/80">
-                                    {[
-                                      { label: 'Done', value: record.completed, tone: 'text-brand-blue' },
-                                      { label: 'Duplicates', value: record.duplicated, tone: 'text-brand-orange-deep' },
-                                      { label: 'Version', value: record.versioned || 0, tone: 'text-brand-blue-2' },
-                                      { label: 'Failed', value: record.errors, tone: 'text-destructive' },
-                                      { label: 'Pending', value: record.pending, tone: 'text-brand-teal' },
-                                      { label: 'Cancelled', value: cancelledCount, tone: 'text-gray-700' },
-                                    ].map(({ label, value, tone }) => (
-                                      <div key={label} className="text-center px-1">
-                                        <div className={`text-base font-semibold tabular-nums leading-tight ${value > 0 ? tone : 'text-gray-300'}`}>{value}</div>
-                                        <div className="tf-micro-hint mt-0.5">{label}</div>
-                                      </div>
-                                    ))}
+                          </div>
+
+                          {/* Status pills — click one to see only those files. Hover
+                              (or focus) a pill to read what it means. */}
+                          <div>
+                            <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Filter files by status">
+                              {pills.map(({ key, n }) => {
+                                const info = key ? STATUS_INFO[key] : null;
+                                const Icon = info?.icon ?? Layers;
+                                const selected = uploadHistoryFilter === key;
+                                const muted = key !== null && n === 0 && !selected;
+                                return (
+                                  <button
+                                    key={key ?? 'all'}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={selected}
+                                    onClick={() => {
+                                      setUploadHistoryFilter(key === null || selected ? null : key);
+                                      // A status picked → its files in the table, where they can be retried / cancelled.
+                                      if (key !== null && !selected) setUploadHistoryView('table');
+                                    }}
+                                    title={info?.hint ?? 'Total — every file in these uploads.'}
+                                    className={`inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-xs transition-colors ${
+                                      selected
+                                        ? 'border-brand-blue/50 ring-1 ring-brand-blue/20 bg-brand-blue/[0.06]'
+                                        : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:shadow-sm dark:border-slate-700 dark:bg-slate-900'
+                                    } ${muted ? 'opacity-70' : ''}`}
+                                  >
+                                    <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${info?.tone ?? 'text-gray-500'} ${key === 'pending' && isRunningScope && n > 0 ? 'animate-pulse' : ''}`} />
+                                    <span className="text-gray-600 dark:text-slate-400">{info?.label ?? 'Total'}:</span>
+                                    <span
+                                      className="font-bold tabular-nums text-gray-900 dark:text-slate-50"
+                                      title={n > 99 ? `${n.toLocaleString('en-IN')} files` : undefined}
+                                    >
+                                      {n > 99 ? '99+' : n.toLocaleString('en-IN')}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {uploadHistoryFilter && (
+                              <p className="tf-meta mt-2 flex items-center gap-1.5">
+                                <Info className="w-3.5 h-3.5 flex-shrink-0" />
+                                Showing only <b className="font-semibold text-gray-700 dark:text-slate-200">{STATUS_INFO[uploadHistoryFilter].label}</b> — {STATUS_INFO[uploadHistoryFilter].hint}
+                                <button type="button" onClick={() => setUploadHistoryFilter(null)} className="ml-1 font-medium text-brand-blue hover:underline">Show all</button>
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Needs your attention — the next step, said plainly. */}
+                          {!uploadHistoryFilter && needsLook && (
+                            <div className="rounded-lg border border-warning-line bg-warning-subtle/60 px-3 py-2">
+                              <p className="text-xs font-semibold text-warning-strong mb-1.5">Needs your attention</p>
+                              <ul className="space-y-1.5">
+                                {versionedCount > 0 && (
+                                  <li className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-700 dark:text-slate-200">
+                                    <GitBranch className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue-2" />
+                                    <span className="min-w-0 flex-1">
+                                      <b className="font-semibold">{plural(versionedCount, 'resume')}</b> look{versionedCount === 1 ? 's' : ''} like a newer version of a candidate you already have. Review and decide what to keep.
+                                    </span>
+                                    <button type="button" onClick={() => { setUploadHistoryFilter('versioned'); setUploadHistoryView('table'); }} className="font-medium text-brand-blue hover:underline">Review</button>
+                                  </li>
+                                )}
+                                {failedCount > 0 && (
+                                  <li className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-700 dark:text-slate-200">
+                                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-destructive" />
+                                    <span className="min-w-0 flex-1">
+                                      <b className="font-semibold">{plural(failedCount, 'file')}</b> could not be read. Open a file to see why, then Retry.
+                                    </span>
+                                    <button type="button" onClick={() => { setUploadHistoryFilter('error'); setUploadHistoryView('table'); }} className="font-medium text-brand-blue hover:underline">Show failed</button>
+                                  </li>
+                                )}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Upload list — every file in one table, or upload by upload */}
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-baseline gap-2">
+                              <h3 className="tf-row-title">
+                                {uploadHistoryView === 'table'
+                                  ? (uploadHistoryFilter ? `${STATUS_INFO[uploadHistoryFilter].label} files` : 'All files')
+                                  : isCurrentTab ? 'Uploads in progress' : 'Recent uploads'}
+                              </h3>
+                              <span className="tf-meta">{plural(displayRecords.length, 'upload')}</span>
+                            </div>
+                            <div className="inline-flex items-center rounded-lg bg-gray-100 p-0.5 dark:bg-slate-800" role="tablist" aria-label="View">
+                              {([['batches', 'By upload'], ['table', 'Table']] as const).map(([v, label]) => (
+                                <button
+                                  key={v}
+                                  type="button"
+                                  role="tab"
+                                  aria-selected={uploadHistoryView === v}
+                                  onClick={() => setUploadHistoryView(v)}
+                                  title={v === 'table' ? 'Every file in one table' : 'Each upload as its own card'}
+                                  className={`h-6 px-2.5 text-xs font-medium rounded-md transition-colors ${
+                                    uploadHistoryView === v
+                                      ? 'bg-white text-brand-blue shadow-sm dark:bg-slate-900'
+                                      : 'text-gray-600 hover:text-brand-blue dark:text-slate-300'
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {uploadHistoryView === 'table' ? (() => {
+                            /* Same status matching the cards' file lists use. */
+                            const fileMatches = (f: UploadFile) => {
+                              if (!uploadHistoryFilter) return true;
+                              if (uploadHistoryFilter === 'completed') return f.status === 'completed';
+                              if (uploadHistoryFilter === 'duplicated') return f.status === 'duplicate' || f.status === 'duplicated';
+                              if (uploadHistoryFilter === 'versioned') return f.status === 'versioned' || f.status === 'version';
+                              if (uploadHistoryFilter === 'error') return f.status === 'error';
+                              if (uploadHistoryFilter === 'pending') return f.status === 'pending' || f.status === 'processing';
+                              if (uploadHistoryFilter === 'cancelled') return f.status === 'cancelled' || f.status === 'discarded';
+                              return true;
+                            };
+                            /* Every upload's files (the pills filter them). Files retried /
+                               cancelled here stay listed with their live status and an
+                               "Updated" tag until the pill changes or the list is
+                               refreshed — an action never makes a row vanish. */
+                            const pinKey = `table|${uploadHistoryFilter ?? 'all'}`;
+                            const pinnedIds = uploadHistoryPinned.key === pinKey ? uploadHistoryPinned.ids : new Set<string>();
+                            const pinRows = (ids: string[]) => setUploadHistoryPinned(prev => {
+                              const next = new Set(prev.key === pinKey ? prev.ids : []);
+                              ids.forEach(id => next.add(id));
+                              return { key: pinKey, ids: next };
+                            });
+                            const tableRows = myResumesHistory.flatMap(record =>
+                              (record.statuses || [])
+                                .filter((file: UploadFile) => fileMatches(file) || pinnedIds.has(file.id))
+                                .map((file: UploadFile) => ({ file, record }))
+                            );
+                            /* Acted-on rows whose status no longer matches the pill. */
+                            const movedOut = uploadHistoryFilter
+                              ? tableRows.filter(r => pinnedIds.has(r.file.id) && !fileMatches(r.file)).length
+                              : 0;
+                            return (
+                              <div className="space-y-2">
+                                {movedOut > 0 && (
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-brand-blue/5 px-3 py-1.5 text-xs text-gray-700 ring-1 ring-brand-blue/15 dark:text-slate-200">
+                                    <Info className="h-3.5 w-3.5 shrink-0 text-brand-blue" />
+                                    <span className="min-w-0 flex-1">
+                                      {plural(movedOut, 'file')} changed status after your action and {movedOut === 1 ? 'is' : 'are'} no longer &ldquo;{STATUS_INFO[uploadHistoryFilter!].label}&rdquo;.
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setUploadHistoryPinned({ key: '', ids: new Set() })}
+                                      className="font-medium text-brand-blue hover:underline"
+                                    >
+                                      Refresh list
+                                    </button>
                                   </div>
-                                  {unaccountedCount > 0 && (
-                                    <div className="mx-4 sm:mx-5 mt-3 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                                      <AlertCircle className="mt-px h-3.5 w-3.5 flex-shrink-0" />
-                                      <span>
-                                        {unaccountedCount} file{unaccountedCount !== 1 ? 's' : ''} in this batch {unaccountedCount !== 1 ? 'are' : 'is'} not
-                                        reflected in the totals above — open the file list below for their actual state.
+                                )}
+                                {renderFileTable(tableRows, {
+                                  tableKey: 'all',
+                                  showUpload: true,
+                                  selectable: true,
+                                  pinnedIds,
+                                  onAct: (fileId) => pinRows([fileId]),
+                                  onBulk: (mode, items) => {
+                                    pinRows(items.map(i => i.itemId));
+                                    setUploadHistoryBulk({ open: true, mode, items });
+                                  },
+                                  emptyText: uploadHistoryFilter
+                                    ? <>No files with status &ldquo;{STATUS_INFO[uploadHistoryFilter].label}&rdquo;.</>
+                                    : 'No file details yet — they appear as soon as the upload is registered.',
+                                })}
+                              </div>
+                            );
+                          })() : (
+                          <div className="space-y-3">
+                            {displayRecords
+                              .slice(0, 20)
+                              .map(record => {
+                                // Prefer the server counter, but fall back to the item list so an
+                                // older batch row (written before `cancelled` existed) still adds up.
+                                const cancelledFromItems = record.statuses?.filter(
+                                  (s: any) => s.status === 'cancelled' || s.status === 'discarded'
+                                ).length ?? 0;
+                                const cancelledCount = Math.max(record.cancelled ?? 0, cancelledFromItems);
+                                const processed = record.completed + record.errors + record.duplicated + (record.versioned || 0) + cancelledCount;
+                                // Files the batch counters can't explain. If this is ever non-zero the
+                                // summary is under-reporting, and we say so instead of hiding it.
+                                const unaccountedCount = Math.max(0, (record.totalFiles || 0) - processed - (record.pending || 0));
+                                const isUploading = record.status === 'uploading';
+                                const isProcessing = record.status === 'processing' || record.pending > 0;
+                                const isCancelled = cancelledCount > 0;
+                                // Optimistic pre-API record: its id and item ids are `temp-*`
+                                // placeholders, not UUIDs. Every retry/cancel endpoint takes UUID
+                                // path params, so any action fired against it 422s on uuid_parsing.
+                                // `local-*` records are the client-side stand-ins for single
+                                // uploads the server gave us no batch for — same story, no UUID.
+                                const isTempRecord = record.id.startsWith('temp-') || record.id.startsWith('local-');
+                                const hasErrors = record.errors > 0;
+                                const recordNeedsLook = record.errors > 0 || (record.versioned || 0) > 0;
+
+                                /* The batch's state, in one chip. */
+                                const statusChip = isUploading
+                                  ? { label: 'Uploading…', cls: 'bg-brand-blue/10 text-brand-blue', icon: <Loader2 className="w-3 h-3 animate-spin" /> }
+                                  : isProcessing
+                                    ? { label: 'Processing', cls: 'bg-brand-blue/10 text-brand-blue', icon: <Loader2 className="w-3 h-3 animate-spin" /> }
+                                    : recordNeedsLook
+                                      ? { label: 'Needs a look', cls: 'bg-warning-subtle text-warning-strong', icon: <AlertCircle className="w-3 h-3" /> }
+                                      : isCancelled && record.completed === 0
+                                        ? { label: 'Cancelled', cls: 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300', icon: <Ban className="w-3 h-3" /> }
+                                        : { label: 'Completed', cls: 'bg-success-subtle text-success', icon: <CheckCircle className="w-3 h-3" /> };
+
+                                /* Outcome chips — only the outcomes that happened. */
+                                const outcomes = ([
+                                  ['completed', record.completed],
+                                  ['versioned', record.versioned || 0],
+                                  ['duplicated', record.duplicated],
+                                  ['error', record.errors],
+                                  ['pending', record.pending],
+                                  ['cancelled', cancelledCount],
+                                ] as [FilterKey, number][]).filter(([, n]) => n > 0);
+
+                                // Time left for this batch — only when items are genuinely active.
+                                const batchEta = (() => {
+                                  if (!(record.pending > 0 && record.date &&
+                                    record.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing'))) return null;
+                                  // Cap elapsed at 10 minutes to prevent absurd ETAs when a file
+                                  // is stuck at 'processing' and the batch started hours ago.
+                                  const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
+                                  if (processed <= 0 || elapsed <= 0) return 'estimating time left…';
+                                  const avgTimePerFile = elapsed / processed;
+                                  const remainingMs = record.pending * avgTimePerFile;
+                                  const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
+                                  const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
+                                  return lowMins === highMins
+                                    ? `about ${lowMins} min${lowMins !== 1 ? 's' : ''} left`
+                                    : `about ${lowMins}–${highMins} mins left`;
+                                })();
+
+                                return (
+                                  <div
+                                    key={record.id}
+                                    /* Not clickable as a whole — no hover lift or chevron. */
+                                    className="rounded-xl border border-gray-200 bg-white pb-3.5 dark:border-slate-700 dark:bg-slate-900"
+                                  >
+                                    {/* Header: name + when, status on the right */}
+                                    <div className="flex items-start justify-between gap-3 px-3.5 pt-3.5">
+                                      <div className="flex items-start gap-3 min-w-0">
+                                        <div className="w-8 h-8 bg-brand-blue/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                                          <FileText className="w-4 h-4 text-brand-blue" />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <span className="tf-row-title block truncate">{record.fileName}</span>
+                                          <span className="tf-meta mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                            {record.date && (
+                                              <span className="inline-flex items-center gap-1">
+                                                <Calendar className="w-3 h-3 flex-shrink-0" />
+                                                Started {formatDateTimeIST(record.date)}
+                                              </span>
+                                            )}
+                                            {record.completedAt && record.pending === 0 && (() => {
+                                              const start = new Date(record.date).getTime();
+                                              const end = new Date(record.completedAt).getTime();
+                                              const ms = Math.max(0, end - start);
+                                              const totalSec = Math.round(ms / 1000);
+                                              const h = Math.floor(totalSec / 3600);
+                                              const m = Math.floor((totalSec % 3600) / 60);
+                                              const s = totalSec % 60;
+                                              const duration = h > 0
+                                                ? `${h}h ${m}m ${s}s`
+                                                : m > 0
+                                                  ? `${m}m ${s}s`
+                                                  : `${s}s`;
+                                              return (
+                                                <span className="inline-flex items-center gap-1">
+                                                  <CheckCircle className="w-3 h-3 flex-shrink-0 text-success" />
+                                                  Finished {formatDateTimeIST(record.completedAt)} · took <span className="font-medium text-gray-700 dark:text-slate-200">{duration}</span>
+                                                </span>
+                                              );
+                                            })()}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <span className={`tf-badge shrink-0 gap-1.5 ${statusChip.cls}`}>
+                                        {statusChip.icon}
+                                        {statusChip.label}
                                       </span>
                                     </div>
-                                  )}
 
-                                  {/* Progress, with the time estimate right under the bar */}
-                                  <div className="px-4 sm:px-5 mt-4">
-                                    <div className="flex items-center justify-between text-xs mb-1.5">
-                                      <span className="font-medium text-gray-700">Progress</span>
-                                      <span className="text-gray-500 tabular-nums">{processed} of {record.totalFiles}</span>
+                                    {/* Progress: count + time left, %, one bar for every outcome */}
+                                    <div className="px-3.5 mt-3">
+                                      <div className="mb-1.5 flex items-end justify-between gap-3">
+                                        <span className="tf-meta">
+                                          {processed.toLocaleString('en-IN')} of {plural(record.totalFiles || 0, 'file')} processed
+                                          {batchEta ? ` · ${batchEta}` : ''}
+                                        </span>
+                                      </div>
+                                      <div className="flex h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
+                                        {barSegments({ completed: record.completed, versioned: record.versioned || 0, duplicated: record.duplicated, errors: record.errors, cancelled: cancelledCount, processing: isProcessing ? processingOf([record]) : 0, total: record.totalFiles || 0 }).map(seg => (
+                                          <div key={seg.key} className={`${seg.bar} h-full transition-[width] duration-500`} style={{ width: `${seg.width}%` }} />
+                                        ))}
+                                      </div>
+                                      {renderBreakdown(outcomes, record.totalFiles || 0, 'mt-2.5')}
                                     </div>
-                                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                      <div
-                                        className={`h-full rounded-full transition-all ${
-                                          percentage === 100 ? 'bg-brand-blue' :
-                                          percentage >= 90 ? 'bg-brand-cyan' :
-                                          percentage >= 70 ? 'bg-brand-orange' :
-                                          'bg-brand-orange-deep'
-                                        }`}
-                                        style={{ width: `${Math.min((processed / record.totalFiles) * 100, 100)}%` }}
-                                      />
-                                    </div>
-                                    {/* Estimated Time Remaining — only when items are genuinely active */}
-                                    {record.pending > 0 && record.date &&
-                                     record.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing') &&
-                                     (() => {
-                                      // Cap elapsed at 10 minutes to prevent absurd ETAs when a file
-                                      // is stuck at 'processing' and the batch started hours ago.
-                                      const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
-                                      if (processed <= 0 || elapsed <= 0) {
-                                        return (
-                                          <div className="flex items-center gap-1.5 mt-2 tf-meta">
-                                            <Clock className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue" />
-                                            <span>Estimating time remaining…</span>
-                                          </div>
-                                        );
-                                      }
-                                      const avgTimePerFile = elapsed / processed;
-                                      const remainingMs = record.pending * avgTimePerFile;
-                                      const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
-                                      const highMins = Math.max(1, Math.ceil((remainingMs * 1.3) / 60000));
-                                      const etaText = lowMins === highMins
-                                        ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
-                                        : `Approx. ${lowMins}–${highMins} mins remaining`;
-                                      return (
-                                        <div className="flex items-center gap-1.5 mt-2 tf-meta">
-                                          <Clock className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue" />
-                                          <span>{etaText}</span>
-                                          <span className="text-gray-300">·</span>
-                                          <span>{record.pending} file{record.pending !== 1 ? 's' : ''} left</span>
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
+                                    {unaccountedCount > 0 && (
+                                      <div className="mx-3.5 mt-3 flex items-start gap-1.5 rounded-lg bg-warning-subtle px-3 py-2 text-xs text-warning-strong">
+                                        <AlertCircle className="mt-px h-3.5 w-3.5 flex-shrink-0" />
+                                        <span>
+                                          {unaccountedCount} file{unaccountedCount !== 1 ? 's' : ''} in this upload {unaccountedCount !== 1 ? 'are' : 'is'} not
+                                          reflected in the totals above — open the file list below for their actual state.
+                                        </span>
+                                      </div>
+                                    )}
 
-                                  {/* Retry / Cancel Batch — borderless tinted buttons. Hidden
-                                      until the optimistic temp record is swapped for the real
-                                      server batch_id, since both endpoints take a UUID. */}
-                                  {(isProcessing || hasErrors || isCancelled) && !isTempRecord && (
-                                    <div className="flex items-center gap-2 px-4 sm:px-5 mt-4" onClick={e => e.stopPropagation()}>
-                                      {(isProcessing || hasErrors || isCancelled) && (
-                                        <button
-                                          type="button"
-                                          disabled={retryingBatches.has(record.id)}
-                                          onClick={(e) => handleRetryBatch(record.id, e)}
-                                          className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-lg transition-colors text-brand-blue bg-brand-blue/[0.08] hover:bg-brand-blue/[0.14] disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                        >
-                                          <RefreshCw className={`w-3.5 h-3.5 ${retryingBatches.has(record.id) ? 'animate-spin' : ''}`} />
-                                          {retryingBatches.has(record.id)
-                                            ? 'Retrying…'
-                                            : isCancelled && !isProcessing ? `Re-queue ${cancelledCount} cancelled` : 'Retry'}
-                                        </button>
-                                      )}
-                                      {/* Cancel — only while items are still pending. type="button"
-                                          so a stray Enter can't activate it; it opens a confirmation. */}
-                                      {isProcessing && record.pending > 0 && (
-                                        <button
-                                          type="button"
-                                          disabled={cancellingBatches.has(record.id)}
-                                          onClick={(e) => handleCancelBatch(record.id, record.pending, e)}
-                                          onKeyDown={(e) => {
-                                            // Space scrolls the file list; it must not double as "cancel 77 files".
-                                            if (e.key === ' ') e.preventDefault();
-                                          }}
-                                          className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-lg transition-colors text-destructive bg-destructive-subtle hover:brightness-95 disabled:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                        >
-                                          <X className="w-3.5 h-3.5" />
-                                          {cancellingBatches.has(record.id) ? 'Cancelling…' : `Cancel batch (${record.pending} pending)`}
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  {/* Individual File Statuses */}
-                                  {record.statuses && record.statuses.length > 0 && (() => {
-                                    const filteredStatuses = uploadHistoryFilter
-                                      ? record.statuses.filter((f: any) => {
-                                          if (uploadHistoryFilter === 'completed') return f.status === 'completed';
-                                          if (uploadHistoryFilter === 'duplicated') return f.status === 'duplicate' || f.status === 'duplicated';
-                                          if (uploadHistoryFilter === 'versioned') return f.status === 'versioned' || f.status === 'version';
-                                          if (uploadHistoryFilter === 'error') return f.status === 'error';
-                                          if (uploadHistoryFilter === 'pending') return f.status === 'pending' || f.status === 'processing';
-                                          if (uploadHistoryFilter === 'cancelled') return f.status === 'cancelled' || f.status === 'discarded';
-                                          return true;
-                                        })
-                                      : record.statuses;
-                                    /* The file list is a dropdown — collapsed by default so a
-                                       batch reads as its summary first. A status filter opens
-                                       it, since filtering is asking to see those files. */
-                                    const filesOpen = !!uploadHistoryFilter || expandedUploadBatches.has(record.id);
-                                    return filteredStatuses.length > 0 ? (
-                                    <div className="mt-4 border-t border-gray-100 pt-3 px-4 sm:px-5">
-                                      <div className={`flex items-center justify-between ${filesOpen ? 'mb-2' : ''}`}>
-                                        <div className="flex items-center gap-3">
+                                    {/* Retry / Cancel Batch. Hidden until the optimistic temp
+                                        record is swapped for the real server batch_id, since
+                                        both endpoints take a UUID. */}
+                                    {(isProcessing || hasErrors || isCancelled) && !isTempRecord && (
+                                      <div className="flex flex-wrap items-center gap-2 px-3.5 mt-3" onClick={e => e.stopPropagation()}>
+                                        {(isProcessing || hasErrors || isCancelled) && (
                                           <button
                                             type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setExpandedUploadBatches((prev) => {
-                                                const next = new Set(prev);
-                                                if (next.has(record.id)) next.delete(record.id);
-                                                else next.add(record.id);
-                                                return next;
-                                              });
-                                            }}
-                                            disabled={!!uploadHistoryFilter}
-                                            aria-expanded={filesOpen}
-                                            className="-ml-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:hover:bg-transparent disabled:cursor-default transition-colors"
+                                            disabled={retryingBatches.has(record.id)}
+                                            onClick={(e) => handleRetryBatch(record.id, e)}
+                                            title={isCancelled && !isProcessing ? 'Put the cancelled files back in the queue' : 'Try the failed or stuck files again'}
+                                            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium rounded-md transition-colors text-brand-blue bg-brand-blue/[0.08] hover:bg-brand-blue/[0.14] disabled:text-gray-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                                           >
-                                            <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${filesOpen ? '' : '-rotate-90'}`} />
-                                            Files ({filteredStatuses.length}{uploadHistoryFilter ? ` of ${record.statuses.length}` : ''})
+                                            <RefreshCw className={`w-3.5 h-3.5 ${retryingBatches.has(record.id) ? 'animate-spin' : ''}`} />
+                                            {retryingBatches.has(record.id)
+                                              ? 'Retrying…'
+                                              : isCancelled && !isProcessing ? `Re-queue ${cancelledCount} cancelled` : 'Retry'}
                                           </button>
-                                          {/* Select All checkbox for versioned items */}
-                                          {uploadHistoryFilter === 'versioned' && filteredStatuses.length > 0 && (() => {
-                                            const versionedInBatch = filteredStatuses.filter((f: any) => f.status === 'versioned' || f.status === 'version');
-                                            if (versionedInBatch.length === 0) return null;
-                                            const allSelected = versionedInBatch.every((f: any) => selectedVersionedItems.has(f.id));
-                                            return (
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const newSelected = new Map(selectedVersionedItems);
-                                                  if (allSelected) {
-                                                    versionedInBatch.forEach((f: any) => newSelected.delete(f.id));
-                                                  } else {
-                                                    versionedInBatch.forEach((f: any) => {
-                                                      newSelected.set(f.id, {
-                                                        id: f.id,
-                                                        fileName: f.fileName,
-                                                        candidateName: f.candidateName || '',
-                                                        resumeId: f.resumeId,
+                                        )}
+                                        {/* Cancel — only while items are still pending. type="button"
+                                            so a stray Enter can't activate it; it opens a confirmation. */}
+                                        {isProcessing && record.pending > 0 && (
+                                          <button
+                                            type="button"
+                                            disabled={cancellingBatches.has(record.id)}
+                                            onClick={(e) => handleCancelBatch(record.id, record.pending, e)}
+                                            onKeyDown={(e) => {
+                                              // Space scrolls the file list; it must not double as "cancel 77 files".
+                                              if (e.key === ' ') e.preventDefault();
+                                            }}
+                                            title="Stop the files still waiting — files already added stay"
+                                            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium rounded-md transition-colors text-destructive bg-destructive-subtle hover:brightness-95 disabled:text-gray-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                          >
+                                            <X className="w-3.5 h-3.5" />
+                                            {cancellingBatches.has(record.id) ? 'Cancelling…' : `Cancel ${record.pending} waiting`}
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Individual File Statuses */}
+                                    {record.statuses && record.statuses.length > 0 && (() => {
+                                      const filteredStatuses = uploadHistoryFilter
+                                        ? record.statuses.filter((f: any) => {
+                                            if (uploadHistoryFilter === 'completed') return f.status === 'completed';
+                                            if (uploadHistoryFilter === 'duplicated') return f.status === 'duplicate' || f.status === 'duplicated';
+                                            if (uploadHistoryFilter === 'versioned') return f.status === 'versioned' || f.status === 'version';
+                                            if (uploadHistoryFilter === 'error') return f.status === 'error';
+                                            if (uploadHistoryFilter === 'pending') return f.status === 'pending' || f.status === 'processing';
+                                            if (uploadHistoryFilter === 'cancelled') return f.status === 'cancelled' || f.status === 'discarded';
+                                            return true;
+                                          })
+                                        : record.statuses;
+                                      /* The file list is a dropdown — collapsed by default so a
+                                         batch reads as its summary first. A status filter opens
+                                         it, since filtering is asking to see those files. */
+                                      const filesOpen = !!uploadHistoryFilter || expandedUploadBatches.has(record.id);
+                                      return filteredStatuses.length > 0 ? (
+                                      <div className="mt-3 border-t border-gray-100 pt-3 px-3.5 dark:border-slate-700/60">
+                                        <div className={`flex flex-wrap items-center justify-between gap-2 ${filesOpen ? 'mb-2' : ''}`}>
+                                          <div className="flex items-center gap-3">
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setExpandedUploadBatches((prev) => {
+                                                  const next = new Set(prev);
+                                                  if (next.has(record.id)) next.delete(record.id);
+                                                  else next.add(record.id);
+                                                  return next;
+                                                });
+                                              }}
+                                              disabled={!!uploadHistoryFilter}
+                                              aria-expanded={filesOpen}
+                                              className="-ml-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-semibold text-brand-blue hover:bg-brand-blue/5 disabled:text-gray-700 disabled:hover:bg-transparent disabled:cursor-default transition-colors"
+                                            >
+                                              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${filesOpen ? '' : '-rotate-90'}`} />
+                                              {uploadHistoryFilter
+                                                ? `${STATUS_INFO[uploadHistoryFilter].label} (${filteredStatuses.length} of ${record.statuses.length} files)`
+                                                : `${filesOpen ? 'Hide' : 'Show'} files (${filteredStatuses.length})`}
+                                            </button>
+                                            {/* Select All checkbox for versioned items */}
+                                            {uploadHistoryFilter === 'versioned' && filteredStatuses.length > 0 && (() => {
+                                              const versionedInBatch = filteredStatuses.filter((f: any) => f.status === 'versioned' || f.status === 'version');
+                                              if (versionedInBatch.length === 0) return null;
+                                              const allSelected = versionedInBatch.every((f: any) => selectedVersionedItems.has(f.id));
+                                              return (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const newSelected = new Map(selectedVersionedItems);
+                                                    if (allSelected) {
+                                                      versionedInBatch.forEach((f: any) => newSelected.delete(f.id));
+                                                    } else {
+                                                      versionedInBatch.forEach((f: any) => {
+                                                        newSelected.set(f.id, {
+                                                          id: f.id,
+                                                          fileName: f.fileName,
+                                                          candidateName: f.candidateName || '',
+                                                          resumeId: f.resumeId,
+                                                        });
                                                       });
-                                                    });
-                                                  }
-                                                  setSelectedVersionedItems(newSelected);
-                                                }}
-                                                className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-brand-blue-2 bg-brand-blue-2/10 border border-brand-blue-2/20 rounded-md hover:bg-brand-blue-2/15 transition-colors"
-                                              >
-                                                <input
-                                                  type="checkbox"
-                                                  checked={allSelected}
-                                                  readOnly
-                                                  className="tf-checkbox w-3 h-3 pointer-events-none"
-                                                />
-                                                Select All
-                                              </button>
-                                            );
-                                          })()}
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs">
-                                          <span className="flex items-center gap-1 text-success tabular-nums" title="Done">
-                                            <CheckCircle className="w-3 h-3" />
-                                            {record.statuses.filter((f: any) => f.status === 'completed' || f.status === 'versioned').length}
-                                          </span>
-                                          <span className="flex items-center gap-1 text-brand-blue tabular-nums" title="In progress or queued">
-                                            <Clock className="w-3 h-3" />
-                                            {record.statuses.filter((f: any) => f.status === 'processing' || f.status === 'pending').length}
-                                          </span>
-                                          <span className="flex items-center gap-1 text-destructive tabular-nums" title="Failed or duplicate">
-                                            <AlertCircle className="w-3 h-3" />
-                                            {record.statuses.filter((f: any) => f.status === 'error' || f.status === 'duplicate' || f.status === 'duplicated').length}
-                                          </span>
-                                          {/* Cancelled files had no counter at all, so they were invisible here too */}
-                                          {record.statuses.some((f: any) => f.status === 'cancelled' || f.status === 'discarded') && (
-                                            <span className="flex items-center gap-1 text-gray-500 tabular-nums" title="Cancelled">
-                                              <Ban className="w-3 h-3" />
-                                              {record.statuses.filter((f: any) => f.status === 'cancelled' || f.status === 'discarded').length}
-                                            </span>
+                                                    }
+                                                    setSelectedVersionedItems(newSelected);
+                                                  }}
+                                                  className="flex items-center gap-1.5 px-2 py-0.5 text-xs text-brand-blue-2 bg-brand-blue-2/10 border border-brand-blue-2/20 rounded-md hover:bg-brand-blue-2/15 transition-colors"
+                                                >
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={allSelected}
+                                                    readOnly
+                                                    tabIndex={-1}
+                                                    className="tf-checkbox w-3 h-3 pointer-events-none"
+                                                  />
+                                                  Select All
+                                                </button>
+                                              );
+                                            })()}
+                                          </div>
+                                          {!filesOpen && (
+                                            <span className="tf-meta">Open to see each file and what happened to it</span>
                                           )}
                                         </div>
+                                        {filesOpen && (<>
+                                        {/* Short note: what Retry / Cancel can do */}
+                                        {record.statuses.some((f: any) => f.status === 'pending' || f.status === 'error' || f.status === 'cancelled') && (
+                                          <p className="flex items-center gap-1.5 tf-meta mb-2.5">
+                                            <Info className="w-3 h-3 flex-shrink-0" />
+                                            Retry works on waiting, failed &amp; cancelled files. Cancel works only on files still waiting.
+                                          </p>
+                                        )}
+                                        {filteredStatuses.some((f: any) => ['completed', 'versioned', 'version', 'duplicate', 'error'].includes(f.status)) && (
+                                          <p className="flex items-center gap-1.5 tf-meta mb-2.5">
+                                            <ChevronRight className="w-3 h-3 flex-shrink-0" />
+                                            Click a file to see its details{filteredStatuses.some((f: any) => f.status === 'versioned' || f.status === 'version') ? ' — or, for a new version, to decide what to keep' : ''}.
+                                          </p>
+                                        )}
+                                        {renderFileTable(
+                                          filteredStatuses.map((file: UploadFile) => ({ file, record })),
+                                          { tableKey: `batch:${record.id}`, showUpload: false, emptyText: null },
+                                        )}
+                                        </>)}
                                       </div>
-                                      {filesOpen && (<>
-                                      {/* Short note: cancel only for queued items */}
-                                      {record.statuses.some((f: any) => f.status === 'pending' || f.status === 'error' || f.status === 'cancelled') && (
-                                        <p className="flex items-center gap-1.5 tf-micro-hint mb-2.5">
-                                          <Info className="w-3 h-3 flex-shrink-0 text-gray-400" />
-                                          Retry is available for queued, failed &amp; cancelled files. Cancel is only available for queued files.
-                                        </p>
-                                      )}
-                                      <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 max-h-72 overflow-y-auto">
-                                        {filteredStatuses.map((file: any, idx: number) => {
-                                          const isClickable = ['completed', 'versioned', 'duplicate', 'error'].includes(file.status);
-                                          const isVersioned = file.status === 'versioned' || file.status === 'version';
-                                          const isSelected = selectedVersionedItems.has(file.id);
-                                          const isCancelledFile = file.status === 'cancelled' || file.status === 'discarded';
-                                          // Anything the UI has no case for. Surfaced explicitly rather than
-                                          // being absorbed by the "Queued" fallback, so a new backend status
-                                          // can never masquerade as "still waiting in the queue".
-                                          const isUnknownStatusFile = ![
-                                            'completed', 'versioned', 'version', 'processing',
-                                            'pending', 'duplicate', 'duplicated', 'error',
-                                            'cancelled', 'discarded',
-                                          ].includes(file.status);
-                                          return (
-                                          <div
-                                            key={file.id || idx}
-                                            onClick={() => {
-                                              if (isVersioned) {
-                                                // Open resolution modal for this single versioned file
-                                                setSelectedVersionedItems(new Map([[file.id, {
-                                                  id: file.id,
-                                                  fileName: file.fileName,
-                                                  candidateName: file.candidateName || '',
-                                                  resumeId: file.resumeId,
-                                                }]]));
-                                                setIsBulkResolveModalOpen(true);
-                                              } else if (isClickable) {
-                                                setSelectedHistoryItem({
-                                                  id: file.id,
-                                                  fileName: file.fileName,
-                                                  status: file.status,
-                                                  errorMessage: file.errorMessage,
-                                                  candidateName: file.candidateName,
-                                                  resumeId: file.resumeId,
-                                                });
-                                              }
-                                            }}
-                                            className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${
-                                              isVersioned && isSelected ? 'bg-brand-blue-2/[0.06]' :
-                                              isUnknownStatusFile ? 'bg-amber-50/70' :
-                                              'bg-white'
-                                            } ${isClickable ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                                          >
-                                            {/* Checkbox for versioned items */}
-                                            {isVersioned && (
-                                              <input
-                                                type="checkbox"
-                                                checked={isSelected}
-                                                onClick={(e) => e.stopPropagation()}
-                                                onChange={(e) => {
-                                                  e.stopPropagation();
-                                                  const newSelected = new Map(selectedVersionedItems);
-                                                  if (isSelected) {
-                                                    newSelected.delete(file.id);
-                                                  } else {
-                                                    newSelected.set(file.id, {
-                                                      id: file.id,
-                                                      fileName: file.fileName,
-                                                      candidateName: file.candidateName || '',
-                                                      resumeId: file.resumeId,
-                                                    });
-                                                  }
-                                                  setSelectedVersionedItems(newSelected);
-                                                }}
-                                                className="tf-checkbox focus:ring-brand-blue-2/40"
-                                              />
-                                            )}
-                                            {/* Status Icon */}
-                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                              file.status === 'completed' ? 'bg-success-subtle text-success' :
-                                              file.status === 'versioned' ? 'bg-brand-blue-2/10 text-brand-blue-2' :
-                                              file.status === 'processing' ? 'bg-brand-blue/10 text-brand-blue' :
-                                              file.status === 'duplicate' ? 'bg-brand-orange/10 text-brand-orange-deep' :
-                                              file.status === 'error' ? 'bg-destructive-subtle text-destructive' :
-                                              isUnknownStatusFile ? 'bg-amber-100 text-amber-700' :
-                                              'bg-gray-100 text-gray-500'
-                                            }`}>
-                                              {file.status === 'completed' && <CheckCircle className="w-3.5 h-3.5" />}
-                                              {file.status === 'versioned' && <GitBranch className="w-3.5 h-3.5" />}
-                                              {file.status === 'processing' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                                              {file.status === 'duplicate' && <Copy className="w-3.5 h-3.5" />}
-                                              {file.status === 'error' && <AlertCircle className="w-3.5 h-3.5" />}
-                                              {file.status === 'pending' && <Clock className="w-3.5 h-3.5" />}
-                                              {isCancelledFile && <Ban className="w-3.5 h-3.5" />}
-                                              {isUnknownStatusFile && <HelpCircle className="w-3.5 h-3.5" />}
-                                            </div>
-                                            {/* File Info */}
-                                            <div className="flex-1 min-w-0">
-                                              <div className="tf-row-name truncate">{file.fileName}</div>
-                                              <div className="tf-meta mt-0.5 truncate">
-                                                {file.status === 'completed' && (file.candidateName || 'Uploaded successfully')}
-                                                {file.status === 'versioned' && (file.candidateName ? `${file.candidateName} · version update detected` : 'Version update detected · pending resolution')}
-                                                {file.status === 'processing' && 'Processing…'}
-                                                {file.status === 'pending' && 'Waiting in queue…'}
-                                                {file.status === 'duplicate' && (file.errorMessage || 'Duplicate · already exists')}
-                                                {file.status === 'error' && (file.errorMessage || 'Failed to process')}
-                                                {isCancelledFile && (file.errorMessage || 'Cancelled before processing')}
-                                                {isUnknownStatusFile && `Unrecognised status: ${String(file.status)}`}
-                                              </div>
-                                            </div>
-                                            {/* Status Badge */}
-                                            <span className={`hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium flex-shrink-0 ${
-                                              file.status === 'completed' ? 'bg-success-subtle text-success' :
-                                              file.status === 'versioned' ? 'bg-brand-blue-2/10 text-brand-blue-2' :
-                                              file.status === 'processing' ? 'bg-brand-blue/10 text-brand-blue' :
-                                              file.status === 'duplicate' ? 'bg-brand-orange/10 text-brand-orange-deep' :
-                                              file.status === 'error' ? 'bg-destructive-subtle text-destructive' :
-                                              isUnknownStatusFile ? 'bg-amber-100 text-amber-800' :
-                                              'bg-gray-100 text-gray-600'
-                                            }`}>
-                                              {file.status === 'completed' ? 'Done' :
-                                               file.status === 'versioned' ? 'Version' :
-                                               file.status === 'processing' ? 'Running' :
-                                               file.status === 'duplicate' ? 'Duplicate' :
-                                               file.status === 'error' ? 'Failed' :
-                                               file.status === 'cancelled' ? 'Cancelled' :
-                                               file.status === 'discarded' ? 'Discarded' :
-                                               file.status === 'pending' ? 'Queued' :
-                                               /* Never claim "Queued" for a status we don't understand —
-                                                  that is exactly how 77 cancelled files read as queued. */
-                                               String(file.status ?? 'unknown')}
-                                            </span>
-                                            {/* Per-item Retry / Cancel — same temp-record guard as the
-                                                batch-level actions above. Without it the optimistic
-                                                record renders these buttons over `temp-file-N` ids and
-                                                the request 422s on uuid_parsing for both path params. */}
-                                            {file.id && !isTempRecord && !String(file.id).startsWith('temp-')
-                                              && (file.status === 'pending' || file.status === 'error' || file.status === 'cancelled') && (
-                                              <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                                                <button
-                                                  disabled={retryingItems.has(file.id)}
-                                                  onClick={(e) => handleRetryItem(record.id, file.id, e)}
-                                                  className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10'}`}
-                                                  aria-label="Retry this file" title={file.status === 'cancelled' ? 'Re-queue this cancelled file' : 'Retry this file'}
-                                                >
-                                                  <RefreshCw className={`w-3.5 h-3.5 ${retryingItems.has(file.id) ? 'animate-spin' : ''}`} />
-                                                </button>
-                                                {file.status === 'pending' && (
-                                                  <button
-                                                    disabled={cancellingItems.has(file.id)}
-                                                    onClick={(e) => handleCancelItem(record.id, file.id, file.fileName, e)}
-                                                    className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors ${cancellingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-destructive hover:bg-destructive-subtle'}`}
-                                                    aria-label="Cancel this file (queued only)" title="Cancel this file (queued only)"
-                                                  >
-                                                    <X className="w-3.5 h-3.5" />
-                                                  </button>
-                                                )}
-                                              </div>
-                                            )}
-                                          </div>
-                                        );
-                                        })}
-                                      </div>
-                                      </>)}
-                                    </div>
-                                    ) : uploadHistoryFilter ? (
-                                      <div className="mt-4 border-t border-gray-100 pt-4 px-4 sm:px-5">
-                                        <p className="tf-hint text-center py-3">No {
-                                          uploadHistoryFilter === 'completed' ? 'completed' :
-                                          uploadHistoryFilter === 'duplicated' ? 'duplicate' :
-                                          uploadHistoryFilter === 'versioned' ? 'versioned' :
-                                          uploadHistoryFilter === 'error' ? 'failed' :
-                                          uploadHistoryFilter === 'cancelled' ? 'cancelled' :
-                                          'pending'
-                                        } files in this batch</p>
-                                      </div>
-                                    ) : null;
-                                  })()}
-                                </div>
-                              );
-                            })}
-                        </div>
+                                      ) : uploadHistoryFilter ? (
+                                        <div className="mt-3 border-t border-gray-100 pt-3 px-3.5 dark:border-slate-700/60">
+                                          <p className="tf-meta text-center py-2">No files with status &ldquo;{STATUS_INFO[uploadHistoryFilter].label}&rdquo; in this upload</p>
+                                        </div>
+                                      ) : null;
+                                    })()}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                          )}
+                        </>
                       )}
-                    </>
+                    </div>
                   );
                 })()}
         </AppModal>
@@ -2076,6 +2406,51 @@ export function useResumeUploadFlow(opts: ResumeUploadFlowOptions) {
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               Cancel file
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Retry / Cancel Confirmation (Upload History table) */}
+      <AlertDialog
+        open={uploadHistoryBulk.open}
+        onOpenChange={(open) => {
+          if (!open) setUploadHistoryBulk(b => ({ ...b, open: false }));
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-lg" hideClose>
+          <AlertDialogHeader>
+            <div className="flex items-start gap-4">
+              <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${
+                uploadHistoryBulk.mode === 'cancel' ? 'bg-red-100 text-red-600' : 'bg-brand-blue/10 text-brand-blue'
+              }`}>
+                {uploadHistoryBulk.mode === 'cancel' ? <Ban className="h-5 w-5" /> : <RefreshCw className="h-5 w-5" />}
+              </div>
+              <div className="flex-1 pt-1">
+                <AlertDialogTitle className="text-xl font-bold text-gray-900">
+                  {uploadHistoryBulk.mode === 'cancel'
+                    ? `Cancel ${uploadHistoryBulk.items.length} waiting file${uploadHistoryBulk.items.length !== 1 ? 's' : ''}?`
+                    : `Retry ${uploadHistoryBulk.items.length} file${uploadHistoryBulk.items.length !== 1 ? 's' : ''}?`}
+                </AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <p className="mt-1 tf-body-muted">
+                    {uploadHistoryBulk.mode === 'cancel'
+                      ? 'They will not be processed. Their units are refunded and you can re-queue them later with Retry.'
+                      : 'They go back in the queue and are read again. A file that failed because you were out of Resume Storage units uses 1 unit.'}
+                  </p>
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="border-t border-gray-100 pt-4">
+            <AlertDialogCancel>{uploadHistoryBulk.mode === 'cancel' ? 'Keep processing' : 'Not now'}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { void runUploadHistoryBulk(); }}
+              className={uploadHistoryBulk.mode === 'cancel' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-brand-blue hover:bg-brand-blue-2 text-white'}
+            >
+              {uploadHistoryBulk.mode === 'cancel'
+                ? `Cancel ${uploadHistoryBulk.items.length} file${uploadHistoryBulk.items.length !== 1 ? 's' : ''}`
+                : `Retry ${uploadHistoryBulk.items.length} file${uploadHistoryBulk.items.length !== 1 ? 's' : ''}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

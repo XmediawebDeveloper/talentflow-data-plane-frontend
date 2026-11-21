@@ -4,6 +4,7 @@ import React, { ReactNode, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { Drawer as DrawerPrimitive } from 'vaul';
 import { Button } from './button';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** Below Tailwind's `sm` (640px) — where `mobileSheet` turns into a bottom sheet. */
 const PHONE_QUERY = '(max-width: 639.98px)';
@@ -132,6 +133,10 @@ interface AppModalProps {
    *  that asks "discard changes?" on Cancel still asks); tapping outside does
    *  nothing, as on the centred box. From sm up nothing changes. Off by default. */
   mobileSheet?: boolean;
+  /** `compact`: a tighter header (smaller icon tile and title), body and
+   *  default footer — for dense, data-heavy popups. Off by default, so every
+   *  existing popup keeps its size. */
+  density?: 'default' | 'compact';
 }
 
 export function AppModalFooterButtons({
@@ -204,7 +209,9 @@ export default function AppModal({
   compactFooter = false,
   widthClassName,
   mobileSheet = false,
+  density = 'default',
 }: AppModalProps) {
+  const compact = density === 'compact';
   const warning = tone === 'warning';
   // White header (warning's frame) — `plain` keeps a brand-blue icon tile.
   const lightHeader = warning || tone === 'plain';
@@ -225,7 +232,7 @@ export default function AppModal({
       <>
         {/* Header — no close button unless `closeButton`; otherwise Cancel in the footer is the way out. */}
         <div
-          className={`flex shrink-0 items-center justify-between gap-3 px-4 py-4 sm:px-6 ${
+          className={`flex shrink-0 items-center justify-between gap-3 ${compact ? 'px-4 py-3 sm:px-5' : 'px-4 py-4 sm:px-6'} ${
             lightHeader ? 'border-b border-gray-100 bg-white dark:border-slate-700/60 dark:bg-slate-900' : 'bg-brand-blue'
           }`}
         >
@@ -233,11 +240,11 @@ export default function AppModal({
             {headerStart}
             {icon && (
               <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center [&>svg]:h-5 [&>svg]:w-5 ${
+                className={`flex shrink-0 items-center justify-center ${compact ? 'h-8 w-8 [&>svg]:h-4 [&>svg]:w-4' : 'h-10 w-10 [&>svg]:h-5 [&>svg]:w-5'} ${
                   warning
                     ? 'rounded-full bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/15 dark:bg-orange-500/15 dark:text-orange-300'
                     : tone === 'plain'
-                      ? 'rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30'
+                      ? `${compact ? 'rounded-lg' : 'rounded-xl'} bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30`
                       : 'rounded-xl bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-sm'
                 }`}
               >
@@ -246,7 +253,7 @@ export default function AppModal({
             )}
             <div className="min-w-0">
               <TitleTag
-                className={`line-clamp-2 break-words text-base font-bold leading-snug sm:text-lg ${
+                className={`line-clamp-2 break-words leading-snug ${compact ? 'text-[15px] font-semibold' : 'text-base font-bold sm:text-lg'} ${
                   lightHeader ? 'text-gray-900 dark:text-slate-50' : 'text-white'
                 }`}
               >
@@ -254,7 +261,7 @@ export default function AppModal({
               </TitleTag>
               {subtitle && (
                 <p
-                  className={`text-xs sm:text-sm ${
+                  className={`${compact ? 'text-xs' : 'text-xs sm:text-sm'} ${
                     warning ? 'text-gray-600 dark:text-slate-400' : tone === 'plain' ? 'truncate text-gray-600 dark:text-slate-400' : 'truncate text-white/80'
                   }`}
                 >
@@ -265,12 +272,10 @@ export default function AppModal({
           </div>
           {headerExtra && <div className="shrink-0">{headerExtra}</div>}
           {closeButton && (
-            <button
+            <IconButton bare label="Close"
               type="button"
               onClick={onCancel}
               disabled={cancelDisabled}
-              aria-label="Close"
-              title="Close"
               className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 ${
                 lightHeader
                   ? 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus-visible:ring-brand-blue/40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
@@ -278,14 +283,14 @@ export default function AppModal({
               }`}
             >
               <X className="h-5 w-5" />
-            </button>
+            </IconButton>
           )}
         </div>
 
-        <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${bodyClassName}`}>{children}</div>
+        <div className={`min-h-0 flex-1 overflow-y-auto ${compact ? 'p-4 sm:p-5' : 'p-4 sm:p-6'} ${bodyClassName}`}>{children}</div>
 
         {showFooter && (footer ?? (
-          <div className="flex shrink-0 flex-col gap-3 border-t border-gray-100 bg-slate-50/50 px-4 py-3 dark:border-slate-700/60 dark:bg-slate-800/50 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
+          <div className={`flex shrink-0 flex-col gap-3 border-t border-gray-100 bg-slate-50/50 dark:border-slate-700/60 dark:bg-slate-800/50 sm:flex-row sm:items-center sm:justify-between ${compact ? 'px-4 py-2.5 sm:px-5' : 'px-4 py-3 sm:px-6 sm:py-4'}`}>
             {footerStart && <div className="min-w-0 tf-body-muted">{footerStart}</div>}
             <AppModalFooterButtons
               onCancel={onCancel}
@@ -294,7 +299,7 @@ export default function AppModal({
               actions={actions}
               hideCancel={closeButton}
               tone={tone}
-              compactFooter={compactFooter}
+              compactFooter={compactFooter || compact}
             />
           </div>
         ))}

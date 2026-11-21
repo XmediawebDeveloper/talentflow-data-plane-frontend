@@ -47,6 +47,7 @@ import { showErrorToast } from '@/lib/utils/errorToast';
 import CandidateHeader from './CandidateHeader';
 import CandidateStepper from './CandidateStepper';
 import { CANDIDATE_PAGE, RECRUITER_BAR_ROW, RECRUITER_SHELL } from '@/lib/constants/candidateLayout';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 /* The right-column cards on the question screen (candidate, camera, timer,
    progress) and the question navigator — a softer, roomier card than the
@@ -1842,7 +1843,7 @@ export function AssessmentInterface({
     <div className={`${CANDIDATE_PAGE} relative`}>
       {/* DISQUALIFICATION Modal - Shows when fullscreen is exited */}
       {showDisqualificationModal && (
-        <div className="fixed inset-0 bg-black/98 backdrop-blur-lg flex items-center justify-center z-[10000]">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-black/98 backdrop-blur-lg flex items-center justify-center z-[10000]">
           <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full mx-4 p-5 sm:p-8 text-center border-4 sm:border-8 border-destructive max-h-[calc(100dvh-2rem)] overflow-y-auto">
             {/* Disqualification Icon */}
             <div className="w-20 h-20 sm:w-28 sm:h-28 bg-destructive rounded-full flex items-center justify-center mx-auto mb-5 sm:mb-6">
@@ -1891,7 +1892,7 @@ export function AssessmentInterface({
               Click "I Understand" to submit your assessment and view your completion status.
             </p>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Auto-Submit Modal - Shows on 3rd violation (NO CONTINUE BUTTON) */}
@@ -2474,7 +2475,7 @@ export function AssessmentInterface({
         ] as const;
 
         return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           {/* Header and footer stay put; only the middle scrolls. */}
           <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-xl w-full max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
             {/* Sticky header */}
@@ -2587,7 +2588,7 @@ export function AssessmentInterface({
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
         );
       })()}
     </div>

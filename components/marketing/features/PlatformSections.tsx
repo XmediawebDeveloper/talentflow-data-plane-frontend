@@ -200,11 +200,11 @@ export function ClosingCta() {
           >
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.16),transparent)]"
+              className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p16),transparent)]"
             />
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute -bottom-28 -right-20 h-72 w-72 rounded-full bg-[radial-gradient(closest-side,rgba(76,123,232,0.16),transparent)]"
+              className="pointer-events-none absolute -bottom-28 -right-20 h-72 w-72 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-76-123-232-0p16),transparent)]"
             />
             <h2
               id="features-cta-title"

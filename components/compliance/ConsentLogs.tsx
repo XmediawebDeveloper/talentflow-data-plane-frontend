@@ -36,6 +36,8 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import NameAvatar from '@/components/ui/name-avatar';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ConsentLogsProps {
   compact?: boolean;
@@ -230,7 +232,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
   if (isLoading && !hasLoadedOnce) {
     return (
       <div className="flex items-center justify-center py-12 tf-loader-center">
-        <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+        <RefreshCw className="w-6 h-6 animate-spin text-gray-500" />
       </div>
     );
   }
@@ -264,13 +266,13 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               </p>
             </div>
           </div>
-          <button
+          <IconButton bare label="Refresh logs"
             onClick={loadLogs}
             disabled={isLoading}
-            className="h-8 w-8 sm:h-9 sm:w-9 inline-flex items-center justify-center shrink-0 self-start text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            className="h-8 w-8 sm:h-9 sm:w-9 inline-flex items-center justify-center shrink-0 self-start text-gray-500 hover:text-gray-600 rounded-lg hover:bg-gray-100"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
+          </IconButton>
         </div>
       </div>
 
@@ -599,7 +601,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
 
       {/* Detail Modal */}
       {selectedLog && showAuditTrail && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
+        <ModalA11y><div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-3 sm:p-6">
             <div
               className="fixed inset-0 bg-gray-500 bg-opacity-75"
@@ -611,16 +613,15 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
             <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[85dvh] flex flex-col overflow-hidden">
               <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
                 <h3 className="tf-section-title">Consent Log Details</h3>
-                <button
+                <IconButton bare label="Close"
                   onClick={() => {
                     setSelectedLog(null);
                     setShowAuditTrail(false);
                   }}
                   className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                  aria-label="Close"
                 >
                   <X className="w-5 h-5" />
-                </button>
+                </IconButton>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
                 <div className="tf-grid-2 [&>div]:min-w-0">
@@ -693,7 +694,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               </div>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </div>
   );

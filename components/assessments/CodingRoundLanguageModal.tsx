@@ -19,6 +19,8 @@ import {
 import LanguageLogo from '@/components/assessments/LanguageLogo';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The coding round's LANGUAGE PICKER — the dialog behind the Coding Round
@@ -161,7 +163,7 @@ export default function CodingRoundLanguageModal({
   const listControls = (
     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto flex-shrink-0">
       <div className="relative flex-1 sm:w-56 sm:flex-none">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
         <input
           type="text"
           value={search}
@@ -202,7 +204,7 @@ export default function CodingRoundLanguageModal({
   );
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+    <ModalA11y innerDialog><div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
       <div
         role="dialog"
         aria-modal="true"
@@ -240,16 +242,15 @@ export default function CodingRoundLanguageModal({
               Select up to {maxLanguages} programming languages for the assessment
             </p>
           </div>
-          <Button
+          <IconButton label="Close"
             type="button"
             variant="secondary"
             size="sm"
             onClick={onCancel}
-            aria-label="Close"
             className="-mr-1 flex-shrink-0"
           >
             <X className="w-5 h-5" />
-          </Button>
+          </IconButton>
         </div>
 
         {/* Content */}
@@ -301,7 +302,7 @@ export default function CodingRoundLanguageModal({
                       <h4 className="tf-row-name sm:text-base">
                         Languages from Job Description
                       </h4>
-                      <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" aria-hidden="true" />
+                      <Info className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" aria-hidden="true" />
                     </div>
                     <p className="tf-meta mt-0.5 leading-snug">
                       These languages are detected from the JD and selected by default. You can
@@ -364,7 +365,7 @@ export default function CodingRoundLanguageModal({
                 Selected Languages (0)
               </h4>
               <div className="flex items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-4">
-                <Inbox className="w-6 h-6 text-gray-400 flex-shrink-0" />
+                <Inbox className="w-6 h-6 text-gray-500 flex-shrink-0" />
                 <div className="min-w-0">
                   <p className="tf-label">No languages selected</p>
                   <p className="tf-meta mt-0.5 leading-snug">
@@ -404,14 +405,13 @@ export default function CodingRoundLanguageModal({
                   >
                     <LanguageLogo language={lang} />
                     {lang}
-                    <button
+                    <IconButton bare label={`Remove ${lang}`}
                       type="button"
                       onClick={() => onToggle(lang)}
-                      aria-label={`Remove ${lang}`}
-                      className="p-0.5 rounded text-gray-400 hover:text-destructive transition-colors"
+                      className="p-0.5 rounded text-gray-500 hover:text-destructive transition-colors"
                     >
                       <X className="w-3.5 h-3.5" />
-                    </button>
+                    </IconButton>
                   </span>
                 ))}
               </div>
@@ -466,6 +466,6 @@ export default function CodingRoundLanguageModal({
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

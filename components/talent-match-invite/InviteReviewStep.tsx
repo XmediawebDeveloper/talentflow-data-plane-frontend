@@ -16,6 +16,8 @@ import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 import { SourceIcon, sourceFromLabel } from './inviteSources';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 import type { InviteKind } from './inviteVersions';
+import { clickableRowProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 export type ReviewCounts = BulkInviteReviewPage['counts'];
 /** A row unticked in the review: which side of the request it leaves. */
@@ -193,7 +195,7 @@ export default function InviteReviewStep({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <label className="relative flex-1 min-w-[12rem]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" aria-hidden="true" />
           <input
             type="search"
             value={searchInput}
@@ -240,7 +242,7 @@ export default function InviteReviewStep({
               }`}
             >
               {g.label && <SourceIcon source={sourceFromLabel(g.label)} />}
-              {g.label || 'All sources'}<span className="tabular-nums text-gray-400">{g.count.toLocaleString()}</span>
+              {g.label || 'All sources'}<span className="tabular-nums text-gray-500">{g.count.toLocaleString()}</span>
             </button>
           ))}
         </div>
@@ -310,10 +312,10 @@ export default function InviteReviewStep({
                 const skipped = r.status === 'skipped';
                 const on = !skipped && isIn(r);
                 return (
-                <tr
+                <tr {...clickableRowProps}
                   key={r.key}
                   onClick={() => { if (!skipped) toggle(r); }}
-                  className={`${skipped ? '' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/60'} ${on || skipped ? '' : 'text-gray-400 dark:text-slate-500'}`}
+                  className={`${skipped ? '' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/60'} ${on || skipped ? '' : 'text-gray-500 dark:text-slate-500'}`}
                 >
                   <td className="tf-td">
                     <input
@@ -330,15 +332,13 @@ export default function InviteReviewStep({
                     <span className="flex items-center gap-1 min-w-0">
                       <span className={`truncate font-medium ${on ? 'text-gray-900 dark:text-slate-50' : ''}`} title={`${r.name}${r.email ? ` · ${r.email}` : ''}`}>{showName(r.name)}</span>
                       {r.resume_id && (
-                        <button
+                        <IconButton bare label={`View resume of ${r.name}`} tooltip="View resume"
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setPreviewing(r); onOverlayChange?.(closePreview); }}
-                          aria-label={`View resume of ${r.name}`}
-                          title="View resume"
-                          className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10"
+                          className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10"
                         >
                           <Eye className="w-3.5 h-3.5" aria-hidden="true" />
-                        </button>
+                        </IconButton>
                       )}
                     </span>
                     <span className="block truncate tf-meta md:hidden">{r.email || 'No email'}</span>
@@ -389,7 +389,7 @@ export default function InviteReviewStep({
                         key={r.key}
                         selected={on}
                         onClick={skipped ? undefined : () => toggle(r)}
-                        className={on || skipped ? '' : 'text-gray-400 dark:text-slate-500'}
+                        className={on || skipped ? '' : 'text-gray-500 dark:text-slate-500'}
                         select={
                           <input
                             type="checkbox"
@@ -419,15 +419,13 @@ export default function InviteReviewStep({
                         }
                         title={<span className={`truncate ${on ? 'text-gray-900 dark:text-slate-50' : ''}`} title={`${r.name}${r.email ? ` · ${r.email}` : ''}`}>{showName(r.name)}</span>}
                         actions={r.resume_id ? (
-                          <button
+                          <IconButton bare label={`View resume of ${r.name}`} tooltip="View resume"
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setPreviewing(r); onOverlayChange?.(closePreview); }}
-                            aria-label={`View resume of ${r.name}`}
-                            title="View resume"
-                            className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10"
+                            className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10"
                           >
                             <Eye className="w-3.5 h-3.5" aria-hidden="true" />
-                          </button>
+                          </IconButton>
                         ) : undefined}
                         fields={[{ label: 'Email', value: <span className="break-all" title={r.email}>{r.email || 'No email'}</span> }]}
                       />

@@ -83,7 +83,7 @@ export function AssessmentWatermark({
             left: `${position.left}%`,
             opacity: 0.14,
             transform: `rotate(-18deg) translateZ(0)`,
-            textShadow: '0 0 1px rgba(255,255,255,0.35)',
+            textShadow: '0 0 1px var(--raw-rgba-255-255-255-0p35)',
           }}
         >
           {watermarkText}

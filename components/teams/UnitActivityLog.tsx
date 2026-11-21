@@ -169,7 +169,7 @@ export default function UnitActivityLog({
               >
                 {returned
                   ? <PlusCircle className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
-                  : <MinusCircle className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />}
+                  : <MinusCircle className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />}
                 <div className="min-w-0 flex-1">
                   <p className="tf-row-name">
                     {item.label}

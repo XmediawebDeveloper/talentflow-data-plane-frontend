@@ -2,6 +2,7 @@ import { Search, Filter, X, ChevronDown, SlidersHorizontal, MapPin, Building2, C
 import { useState, useEffect } from 'react';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { DateField } from '@/components/ui/date-field';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface SearchFilterBarProps {
   searchQuery: string;
@@ -115,29 +116,27 @@ export default function SearchFilterBar({
             className="w-full h-10 pl-10 pr-20 border border-border rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-1 focus-visible:border-transparent transition-all bg-background text-foreground placeholder:text-muted-foreground text-sm"
           />
           {localSearchQuery && (
-            <button
+            <IconButton bare label="Clear search"
               onClick={() => {
                 setLocalSearchQuery('');
                 onSearchChange('');
               }}
               className="absolute right-10 top-1/2 -translate-y-1/2 hover:bg-accent/60 rounded-full p-1 transition-colors"
-              aria-label="Clear search"
             >
               <X className="w-3.5 h-3.5 text-muted-foreground" />
-            </button>
+            </IconButton>
           )}
           {localSearchQuery && localSearchQuery !== debouncedSearch && (
             <div className="absolute right-[4.5rem] top-1/2 -translate-y-1/2">
               <Loader2 className="w-3.5 h-3.5 text-[var(--primary)] animate-spin" />
             </div>
           )}
-          <button
+          <IconButton bare label="Search tips"
             onClick={() => setShowSearchTips(!showSearchTips)}
             className="absolute right-2.5 top-1/2 -translate-y-1/2 hover:bg-accent/60 rounded-full p-1 transition-colors"
-            aria-label="Search tips"
           >
             <HelpCircle className="w-4 h-4 text-muted-foreground" />
-          </button>
+          </IconButton>
         </div>
 
         <div className="flex gap-2 sm:gap-3">
@@ -551,12 +550,11 @@ export default function SearchFilterBar({
                 <p className="tf-meta">Supports partial, exact, and multiple keyword searches</p>
               </div>
             </div>
-            <button
+            <IconButton bare label="Close"
               onClick={() => setShowSearchTips(false)}
-              className="text-gray-500 hover:text-gray-700 p-1 hover:bg-white rounded transition-colors"
-             aria-label="Close">
+              className="text-gray-500 hover:text-gray-700 p-1 hover:bg-white rounded transition-colors">
               <X className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
 
           <div className="tf-grid-3">

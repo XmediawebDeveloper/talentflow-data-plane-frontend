@@ -21,6 +21,7 @@ import { type ResumeVersionFilter, RESUME_VERSION_FILTER_OPTIONS, keepByVersion 
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
 import { useResumeSelection } from '@/components/resumes/ResumeSelectionContext';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
+import ResumeSelectAllMenu, { ResumeBulkActions } from '@/components/resumes/ResumeSelectAllMenu';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import { useResumeUploadFlow } from '@/components/resumes/useResumeUploadFlow';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
@@ -61,6 +62,9 @@ import { useInPageScoringProgress } from '@/components/resumes/useInPageScoringP
 import ScoringStartSummary, { type ScoringStartRequest } from '@/components/resumes/ScoringStartSummary';
 import { NoFoldersState, NoFoldersMatchState, NoMatchingResumesState } from '@/components/resumes/ResumeEmptyStates';
 import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 const formatDateIST = formatISTDate;
 
@@ -201,7 +205,7 @@ function UnifiedFolderResumeSearch({
   return (
     <div ref={containerRef} className="relative">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
         <input
           ref={inputRef}
           type="search"
@@ -214,22 +218,21 @@ function UnifiedFolderResumeSearch({
             if (query.trim()) setIsOpen(true);
           }}
           placeholder="Search folders and resumes..."
-          className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-400 [&::-webkit-search-cancel-button]:hidden"
+          className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-500 [&::-webkit-search-cancel-button]:hidden"
           role="searchbox"
           aria-label="Search folders and resumes"
           aria-autocomplete="list"
         />
         {isLoading && query.trim() ? (
-          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 animate-spin" />
         ) : query ? (
-          <button
+          <IconButton bare label="Clear global search"
             type="button"
             onClick={clear}
             className="absolute right-2 top-1/2 -translate-y-1/2 hover:bg-gray-200 rounded-full p-1 transition-colors"
-            aria-label="Clear global search"
           >
-            <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-          </button>
+            <X className="w-4 h-4 text-gray-500 hover:text-gray-600" />
+          </IconButton>
         ) : null}
       </div>
 
@@ -331,7 +334,7 @@ function ToolbarFilterSelect<T extends string>({
   return (
     <label title={label} className="relative min-w-0 flex-1 sm:min-w-[180px] sm:flex-none">
       <span className="sr-only">{label}</span>
-      <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-400">
+      <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500">
         {icon}
       </span>
       <FilterSelect
@@ -542,7 +545,7 @@ function DroppableFolderCard({
   };
 
   return (
-    <div
+    <div {...clickableProps}
       ref={attachRefs}
       className={`group/card relative bg-white border rounded-xl shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 transition-all ${
         stretch ? 'h-full' : ''
@@ -595,7 +598,7 @@ function DroppableFolderCard({
             navigate — the whole point is to look without leaving. */}
         <div className="relative flex-shrink-0">
           {!hideActions && (
-          <button
+          <IconButton bare label={`Folder actions for ${folder.name}`} tooltip="Folder actions"
             type="button"
             onClick={(e) => {
               e.preventDefault();
@@ -609,11 +612,9 @@ function DroppableFolderCard({
             }`}
             aria-haspopup="menu"
             aria-expanded={showActions}
-            aria-label={`Folder actions for ${folder.name}`}
-            title="Folder actions"
           >
             <Plus className="w-4 h-4" />
-          </button>
+          </IconButton>
           )}
 
           {!hideActions && showActions && (
@@ -682,15 +683,13 @@ function DroppableFolderCard({
         </div>
 
         {hasSubfolders && (
-          <button
+          <IconButton bare label={showSubfolders ? `Hide subfolders of ${folder.name}` : `Show subfolders of ${folder.name}`} tooltip={showSubfolders ? 'Hide subfolders' : 'Show subfolders'}
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               toggleSubfolders();
             }}
             aria-expanded={showSubfolders}
-            aria-label={showSubfolders ? `Hide subfolders of ${folder.name}` : `Show subfolders of ${folder.name}`}
-            title={showSubfolders ? 'Hide subfolders' : 'Show subfolders'}
             className={`p-1 rounded-md transition-colors flex-shrink-0 cursor-pointer ${
               showSubfolders
                 ? 'bg-brand-blue/10 text-brand-blue'
@@ -698,12 +697,12 @@ function DroppableFolderCard({
             }`}
           >
             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ease-in-out ${showSubfolders ? 'rotate-180' : ''}`} />
-          </button>
+          </IconButton>
         )}
         {/* One chevron per card: a folder with subfolders shows the peek
             toggle, everything else keeps the plain navigate arrow. Showing
             both read as two competing affordances. */}
-        {!hasSubfolders && <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+        {!hasSubfolders && <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0" />}
       </div>
 
       {hasSubfolders && showSubfolders && (
@@ -742,7 +741,7 @@ function DroppableFolderCard({
                     : 'border-l-transparent hover:bg-brand-blue/10 hover:border-l-brand-blue/40'
                 }`}
               >
-                <span aria-hidden="true" className="text-gray-300 text-xs leading-none">└</span>
+                <span aria-hidden="true" className="text-muted-foreground dark:text-gray-300 text-xs leading-none">└</span>
                 <Folder className={`w-3.5 h-3.5 flex-shrink-0 ${
                   peekChild?.id === child.id ? 'text-brand-blue' : 'text-brand-orange'
                 }`} />
@@ -754,7 +753,7 @@ function DroppableFolderCard({
                   {child.count || 0}
                 </span>
                 <ChevronRight className={`w-3.5 h-3.5 flex-shrink-0 ${
-                  childSubfolders > 0 ? 'text-brand-blue' : 'text-gray-400'
+                  childSubfolders > 0 ? 'text-brand-blue' : 'text-gray-500'
                 }`} />
               </button>
             );
@@ -793,7 +792,7 @@ function DroppableFolderCard({
               <Folder className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
               <span className="flex-1 min-w-0 truncate tf-meta">{grandChild.name}</span>
               <span className="tf-micro-hint flex-shrink-0">{grandChild.count || 0}</span>
-              <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
             </button>
           ))}
         </div>
@@ -909,9 +908,11 @@ function CardFolderNameInput({
  * organised into folders. Rendered by the tabbed shell at
  * app/(dashboard)/recruitment/resume-database/page.tsx, which owns the
  * breadcrumb and the tab strip and passes them down as `header` so they sit
- * inside this view's white card (and stay put while the list loads).
+ * inside this view's white card (and stay put while the list loads). `header`
+ * takes this view's title row and places it between the breadcrumb and tabs.
  */
-export default function MyResumesView({ header }: { header?: ReactNode }) {
+export default function MyResumesView({ header }: { header?: (titleRow: ReactNode) => ReactNode }) {
+  const withHeader = (titleRow: ReactNode) => (header ? header(titleRow) : titleRow);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, hasPermission, hasPermissionCode, isLoading: authLoading } = useAuth();
@@ -934,7 +935,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [folders, setFolders] = useState<FolderType[]>([]);
   // Shared with the Shared Database tab (see ResumeSelectionContext); the row
   // cache lets bulk actions read ticked resumes that are not on screen.
-  const { selectedResumes, setSelectedResumes, rowById, selectedRows } = useResumeSelection(resumes);
+  const { selectedResumes, setSelectedResumes, rowById, selectedRows, rememberRows } = useResumeSelection(resumes);
+  /* "Select all resumes": the last list request (folder, search, filters,
+     sort, versions), re-run across every page; the ids it selected. */
+  const lastListRequestRef = useRef<{ params: Record<string, unknown>; versionFilter: ResumeVersionFilter } | null>(null);
+  const [selectingAllResumes, setSelectingAllResumes] = useState(false);
+  const [allMatchingIds, setAllMatchingIds] = useState<string[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   // The folder id the currently-rendered `resumes` actually belong to. Set in
   // lockstep with setResumes in fetchData — unlike `selectedFolder`, which
@@ -1481,6 +1487,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         }
       }
 
+      lastListRequestRef.current = { params: searchParams, versionFilter };
+
       /* Guard replay of a param-effect call (see `dedupe` above): skip it when
          it asks for exactly what the fetch that just finished loaded. On a
          refresh the restored view usually equals the mount fetch's defaults,
@@ -1850,6 +1858,35 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   // must be preserved — wiping them would surprise users with multi-folder
   // selections (e.g. picking 5 in folder A then opening folder B and clicking
   // Select All used to drop the original 5).
+  /* Select all resumes — every page of the current list (same folder, search,
+     filters, sort and versions), not just the one on screen. The rows go into
+     the shared row cache so the bulk actions can read them. Team-member email
+     resumes stay out, as with the page's own Select All. */
+  const selectAllMatchingResumes = async () => {
+    const last = lastListRequestRef.current;
+    if (!last || selectingAllResumes) return;
+    setSelectingAllResumes(true);
+    const toastId = toast.loading('Selecting all resumes…');
+    try {
+      const { page: _page, page_size: _pageSize, ...rest } = last.params;
+      void _page; void _pageSize;
+      const all = await fetchAllRows((ps, pg) => resumeService.list({ ...rest, page: pg, page_size: ps }));
+      const rows = keepByVersion(all.items || [], last.versionFilter)
+        .map(convertApiResumeToRow)
+        .filter(r => !(r.is_tenant_user_email || r.isTenantUserEmail));
+      rememberRows(rows);
+      const ids = rows.map(r => r.id);
+      setAllMatchingIds(ids);
+      setSelectedResumes(prev => Array.from(new Set([...prev, ...ids])));
+      toast.success(`${ids.length} resume${ids.length === 1 ? '' : 's'} selected`, { id: toastId });
+    } catch (error) {
+      toast.dismiss(toastId);
+      showErrorToast(error, "Couldn't select all resumes", { retry: selectAllMatchingResumes });
+    } finally {
+      setSelectingAllResumes(false);
+    }
+  };
+
   const handleSelectAll = (selected: boolean) => {
     // Resumes locked out for a team-member email never enter a "select all".
     const visibleIds = filteredResumes
@@ -3144,26 +3181,27 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="tf-page-sheet">
-            {/* Breadcrumb + tab strip — rendered for real even while the list
-                loads, so switching tabs stays possible and nothing shifts. */}
-            {header}
-            {/* Header row */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
-              <div className="w-full sm:w-auto flex items-start gap-3">
-                <Skeleton className="hidden sm:block h-9 w-9 rounded-lg flex-shrink-0" />
-                <div>
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-                    <Skeleton className="h-6 w-48" />
-                    <Skeleton className="h-5 w-20 rounded-full" />
+            {/* Breadcrumb › title row (skeleton) › tab strip — the breadcrumb
+                and tabs render for real even while the list loads, so
+                switching tabs stays possible and nothing shifts. */}
+            {withHeader(
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                <div className="w-full sm:w-auto flex items-start gap-3">
+                  <Skeleton className="hidden sm:block h-9 w-9 rounded-lg flex-shrink-0" />
+                  <div>
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
+                      <Skeleton className="h-6 w-48" />
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                    <Skeleton className="h-4 w-40" />
                   </div>
-                  <Skeleton className="h-4 w-40" />
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <Skeleton className="h-9 w-32 rounded-md flex-1 sm:flex-initial" />
+                  <Skeleton className="h-9 w-32 rounded-md flex-1 sm:flex-initial" />
                 </div>
               </div>
-              <div className="flex gap-2 w-full sm:w-auto">
-                <Skeleton className="h-9 w-32 rounded-md flex-1 sm:flex-initial" />
-                <Skeleton className="h-9 w-32 rounded-md flex-1 sm:flex-initial" />
-              </div>
-            </div>
+            )}
             {/* Search / toolbar card */}
             <div className="tf-card-soft p-3 sm:p-4 mb-4">
               <div className="flex items-center gap-3">
@@ -3195,7 +3233,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="tf-page-sheet">
-      {header}
+      {withHeader(
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <div className="w-full sm:w-auto min-w-0 flex items-start gap-3">
           <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
@@ -3264,6 +3302,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           </button>
         </div>
       </div>
+      )}
 
       {/* No frame of its own: this wraps the page's whole list inside the white
           page panel, so a border/ring/shadow here was a card-in-panel double
@@ -3271,52 +3310,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           content inset. Still no overflow-hidden — that would make it a scroll
           container the sticky search bar below would pin to. */}
       <div className="bg-white">
-        {/* Bulk Actions Bar - Shows at TOP when resumes selected */}
-        {selectedResumes.length > 0 && (() => {
-          // Detect the Archived Resumes folder context — when active, the
-          // recruiter is looking at archived resumes, so swap Archive → Unarchive
-          // and hide Apply-to-Job / Assessment / AI Talent Match (those actions
-          // shouldn't apply to retired records).
-          const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
-          const isArchivedContext =
-            !!archivedFolder &&
-            (selectedFolder === archivedFolder.id ||
-              selectedResumes.every(id => rowById(id)?.isArchived));
-          return (
-          <BulkActionsBar
-            selectedCount={selectedResumes.length}
-            onCancel={() => setSelectedResumes([])}
-            onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
-            onMoveToFolderDisabled={!canMoveMyResumes}
-            onMoveToFolderDisabledReason="You do not have permission to move resumes to a folder"
-            onApplyToJob={!isArchivedContext ? handleApplyToJob : undefined}
-            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
-            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
-            onDownload={handleBulkDownload}
-            // Own uploads: downloading needs Resume Upload access (lib/permissions/resumeDownload.ts).
-            onDownloadDisabled={!canDownloadMyResumes}
-            onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
-            onDelete={() => handleDeleteResumes(selectedResumes)}
-            onDeleteDisabled={!canDeleteMyResumes}
-            onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
-            folders={folders.filter(f => f.id !== 'all')}
-            onAssessment={!isArchivedContext ? handleAssessment : undefined}
-            onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment')))}
-            onAssessmentDisabledReason={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? "You do not have permission to invite candidates to an assessment" : PLAN_LOCKED_MESSAGE}
-            onArchive={!isArchivedContext ? () => setIsArchiveModalOpen(true) : undefined}
-            onArchiveDisabled={!canArchiveMyResumes}
-            onArchiveDisabledReason="You do not have permission to archive resumes"
-            onUnarchive={isArchivedContext ? () => handleUnarchiveResumes(selectedResumes) : undefined}
-            onUnarchiveDisabled={!canArchiveMyResumes}
-            onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
-            // No `my_resumes:ai_interview` action code exists yet, so this
-            // follows the AI Interviews module's own share permission.
-            onAIInterview={!isArchivedContext ? handleAIInterview : undefined}
-            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview')))}
-            onAIInterviewDisabledReason={!(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview'))) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
-          />
-          );
-        })()}
 
         {/* Search pinned to the top of the scroll viewport so it stays reachable
             while the list scrolls beneath it. Opaque bg so rows don't show
@@ -3328,6 +3321,79 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 Job Openings toolbar (the buttons drop under the search only below
                 ~360px); Folder Filters takes its own line under them. */}
             <div className="flex flex-wrap items-start gap-2 xl:flex-nowrap">
+              {/* Select All — what to select (as on Job Openings). The bulk
+                  actions open from the Actions (N) row below. */}
+              {(() => {
+                const pageIds = filteredResumes
+                  .filter(r => !(r.is_tenant_user_email || r.isTenantUserEmail))
+                  .map(r => r.id);
+                return (
+                  <ResumeSelectAllMenu
+                    selectedCount={selectedResumes.length}
+                    pageCount={pageIds.length}
+                    pageSelected={pageIds.length > 0 && pageIds.every(id => selectedResumes.includes(id))}
+                    onSelectPage={() => handleSelectAll(true)}
+                    onDeselectPage={() => handleSelectAll(false)}
+                    onClear={() => setSelectedResumes([])}
+                    totalCount={totalItems}
+                    onSelectAll={() => { void selectAllMatchingResumes(); }}
+                    allSelected={allMatchingIds.length > 0 && allMatchingIds.length === totalItems && allMatchingIds.every(id => selectedResumes.includes(id))}
+                  />
+                );
+              })()}
+              {/* Actions (N) + Clear — beside Select All, before the search, while
+                  anything is ticked (the Select Applicants to Score popup). */}
+              <ResumeBulkActions
+                count={selectedResumes.length}
+                onClear={() => setSelectedResumes([])}
+                renderActions={(close) => {
+                      // Detect the Archived Resumes folder context — when active, the
+                      // recruiter is looking at archived resumes, so swap Archive → Unarchive
+                      // and hide Apply-to-Job / Assessment / AI Talent Match (those actions
+                      // shouldn't apply to retired records).
+                      const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+                      const isArchivedContext =
+                        !!archivedFolder &&
+                        (selectedFolder === archivedFolder.id ||
+                          selectedResumes.every(id => rowById(id)?.isArchived));
+                      return (
+                      <BulkActionsBar
+                        variant="menu"
+                        onAction={close}
+                        selectedCount={selectedResumes.length}
+                        onCancel={() => setSelectedResumes([])}
+                        onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
+                        onMoveToFolderDisabled={!canMoveMyResumes}
+                        onMoveToFolderDisabledReason="You do not have permission to move resumes to a folder"
+                        onApplyToJob={!isArchivedContext ? handleApplyToJob : undefined}
+                        onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
+                        onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
+                        onDownload={handleBulkDownload}
+                        // Own uploads: downloading needs Resume Upload access (lib/permissions/resumeDownload.ts).
+                        onDownloadDisabled={!canDownloadMyResumes}
+                        onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
+                        onDelete={() => handleDeleteResumes(selectedResumes)}
+                        onDeleteDisabled={!canDeleteMyResumes}
+                        onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
+                        folders={folders.filter(f => f.id !== 'all')}
+                        onAssessment={!isArchivedContext ? handleAssessment : undefined}
+                        onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment')))}
+                        onAssessmentDisabledReason={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? "You do not have permission to invite candidates to an assessment" : PLAN_LOCKED_MESSAGE}
+                        onArchive={!isArchivedContext ? () => setIsArchiveModalOpen(true) : undefined}
+                        onArchiveDisabled={!canArchiveMyResumes}
+                        onArchiveDisabledReason="You do not have permission to archive resumes"
+                        onUnarchive={isArchivedContext ? () => handleUnarchiveResumes(selectedResumes) : undefined}
+                        onUnarchiveDisabled={!canArchiveMyResumes}
+                        onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
+                        // No `my_resumes:ai_interview` action code exists yet, so this
+                        // follows the AI Interviews module's own share permission.
+                        onAIInterview={!isArchivedContext ? handleAIInterview : undefined}
+                        onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview')))}
+                        onAIInterviewDisabledReason={!(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview'))) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
+                      />
+                      );
+                }}
+              />
               <div className="min-w-[6.5rem] flex-1 basis-0">
                 <UnifiedFolderResumeSearch
                   query={searchQuery}
@@ -3397,7 +3463,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 {/* No "View" label: the two icons carry their own tooltips and
                     the picked one is already lit. */}
                 <div className="flex h-10 items-center justify-center gap-1 rounded-lg bg-brand-blue/5 px-1.5 ring-1 ring-brand-blue/10">
-                  <button
+                  <IconButton bare label="List View"
                     type="button"
                     onClick={() => setViewMode('list')}
                     className={`rounded p-2 transition-all ${
@@ -3405,11 +3471,10 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
                         : 'text-gray-600 hover:text-brand-blue'
                     }`}
-                    aria-label="List View" title="List View"
                   >
                     <List className="h-4 w-4" />
-                  </button>
-                  <button
+                  </IconButton>
+                  <IconButton bare label="Grid View"
                     type="button"
                     onClick={() => setViewMode('card')}
                     className={`rounded p-2 transition-all ${
@@ -3417,10 +3482,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
                         : 'text-gray-600 hover:text-brand-blue'
                     }`}
-                    aria-label="Grid View" title="Grid View"
                   >
                     <LayoutGrid className="h-4 w-4" />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
             </div>
@@ -3495,7 +3559,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   </button>
                   {buildBreadcrumbPath(selectedFolder).map((item, index, arr) => (
                     <div key={item.id} className="flex min-w-0 items-center gap-2 [overflow-wrap:anywhere]">
-                      <ChevronRight className="w-4 h-4 shrink-0 text-gray-400" />
+                      <ChevronRight className="w-4 h-4 shrink-0 text-gray-500" />
                       {index === arr.length - 1 ? (
                         <span className="text-gray-900 font-medium">{item.name}</span>
                       ) : (
@@ -3759,7 +3823,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       </button>
                       {breadcrumbPath.map((item, index) => (
                         <div key={item.id} className="flex items-center gap-2">
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                          <ChevronRight className="w-4 h-4 text-gray-500" />
                           {index === breadcrumbPath.length - 1 ? (
                             <span className="text-gray-900 font-medium">{item.name}</span>
                           ) : (
@@ -3774,7 +3838,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       ))}
                       {cardViewFolder === 'all' && (
                         <>
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                          <ChevronRight className="w-4 h-4 text-gray-500" />
                           <span className="text-gray-900 font-medium">All Resumes</span>
                         </>
                       )}
@@ -3893,7 +3957,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               {/* 2-up below lg: three across a tablet truncated "Root (Default)" / "Archived Resumes" to a few letters. */}
                               <div className="tf-grid-3 mb-4 sm:mb-6 items-stretch">
                                 {showAllResumesCard && (
-                                  <div
+                                  <div {...clickableProps}
                                     className="h-full bg-white border border-brand-blue/20 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all duration-150"
                                     onClick={() => {
                                       setCardViewFolder('all');
@@ -3908,7 +3972,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         <h3 className="tf-row-title truncate">All Resumes</h3>
                                         <p className="tf-meta">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
                                       </div>
-                                      <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                      <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0" />
                                     </div>
                                   </div>
                                 )}
@@ -4219,7 +4283,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             onClick={() => !isDownloadingZip && setIsZipDownloadModalOpen(false)}
           />
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="flex items-start justify-between gap-4 p-6 border-b border-gray-200">
@@ -4288,7 +4352,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 </button>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         </>
       )}
 
@@ -4301,7 +4365,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             onClick={() => !isArchivingResumes && setIsArchiveModalOpen(false)}
           />
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="flex items-start justify-between gap-4 p-6 border-b border-gray-200">
@@ -4370,7 +4434,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 </button>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         </>
       )}
 

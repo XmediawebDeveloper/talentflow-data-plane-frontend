@@ -99,6 +99,9 @@ import { toOneDecimalScore } from '@/lib/utils/score';
 import NameAvatar from '@/components/ui/name-avatar';
 import { AssessmentIllustration, InterviewIllustration, ScoredResumesIllustration, TalentMatchIllustration } from '@/components/jobs/JobResultsIllustrations';
 import DeletedResumeRows from '@/components/resumes/DeletedResumeRows';
+import { clickableProps, clickableRowProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -205,7 +208,7 @@ function QuickActionHeader({ icon, title, accent, open, onToggle, controls, titl
     // Rotation follows the panel's timing; the nudge down on hover is the
     // faster hover curve, so both read as intended.
     <ChevronDown
-      className={`w-4 h-4 ml-auto shrink-0 text-gray-400 dark:text-slate-500 transition-transform ${QUICK_ACTION_EASE} motion-reduce:transition-none group-hover:translate-y-0.5 ${open ? 'rotate-180' : ''}`}
+      className={`w-4 h-4 ml-auto shrink-0 text-gray-500 dark:text-slate-500 transition-transform ${QUICK_ACTION_EASE} motion-reduce:transition-none group-hover:translate-y-0.5 ${open ? 'rotate-180' : ''}`}
     />
   );
   const toggleClass = `group flex items-center gap-2.5 text-left rounded-lg cursor-pointer transition-opacity ${QUICK_ACTION_HOVER_EASE} hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40`;
@@ -404,7 +407,7 @@ function QuickActionRow({
         <span className={`flex-1 min-w-0 truncate transition-transform ${QUICK_ACTION_HOVER_EASE} ${disabled ? '' : 'group-hover:translate-x-0.5'}`}>{label}</span>
         {disabled
           ? <Lock className="w-3 h-3 shrink-0" />
-          : <ChevronRight className={`w-4 h-4 shrink-0 text-gray-400 dark:text-slate-500 transition-transform ${QUICK_ACTION_HOVER_EASE} group-hover:translate-x-0.5`} />}
+          : <ChevronRight className={`w-4 h-4 shrink-0 text-gray-500 dark:text-slate-500 transition-transform ${QUICK_ACTION_HOVER_EASE} group-hover:translate-x-0.5`} />}
       </button>
 
       {disabled && disabledTooltip && <QuickActionTooltip text={disabledTooltip} />}
@@ -3268,16 +3271,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <div className="flex items-center gap-2">
                 {onEdit && (
                   editLocked ? (
-                    <button
+                    <IconButton bare label="Edit this JD" tooltip="You do not have permission to edit job descriptions"
                       type="button"
                       aria-disabled="true"
                       onClick={() => { /* locked: tooltip only */ }}
                       className={`${JOB_ICON_ACTION_BASE} !bg-gray-50 dark:!bg-slate-800 text-gray-400 dark:text-slate-500 !border-gray-200 dark:!border-slate-700 cursor-not-allowed opacity-60`}
-                      aria-label="Edit this JD"
-                      title="You do not have permission to edit job descriptions"
                     >
                       <Edit className="w-4 h-4" />
-                    </button>
+                    </IconButton>
                   ) : editDisabled ? (
                     <Tooltip content={editDisabledReason} position="bottom">
                       <button
@@ -3291,13 +3292,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       </button>
                     </Tooltip>
                   ) : (
-                    <button
+                    <IconButton bare label="Edit this JD"
                       onClick={handleEdit}
                       className={`${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_EDIT}`}
-                      aria-label="Edit this JD" title="Edit this JD"
                     >
                       <Edit className="w-4 h-4" />
-                    </button>
+                    </IconButton>
                   )
                 )}
 
@@ -3305,7 +3305,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     the JD out of service, so it should not look like the
                     neutral pair either side of it. */}
                 {onDisable && (
-                  <button
+                  <IconButton bare label="Disable this JD" tooltip={disableLocked ? 'You do not have permission to disable job descriptions' : 'Disable this JD'}
                     onClick={() => { if (!disableLocked) handleDisable(); }}
                     aria-disabled={disableLocked || undefined}
                     className={
@@ -3313,15 +3313,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         ? `${JOB_ICON_ACTION_BASE} !bg-gray-50 dark:!bg-slate-800 text-gray-400 dark:text-slate-500 !border-gray-200 dark:!border-slate-700 cursor-not-allowed opacity-60`
                         : `${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_DISABLE}`
                     }
-                    aria-label="Disable this JD"
-                    title={disableLocked ? 'You do not have permission to disable job descriptions' : 'Disable this JD'}
                   >
                     <Ban className="w-4 h-4" />
-                  </button>
+                  </IconButton>
                 )}
 
                 {onArchive && (
-                  <button
+                  <IconButton bare label="Archive this JD" tooltip={archiveLocked ? 'You do not have permission to archive job descriptions' : 'Archive this JD'}
                     onClick={() => { if (!archiveLocked) handleArchive(); }}
                     aria-disabled={archiveLocked || undefined}
                     className={
@@ -3329,11 +3327,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         ? `${JOB_ICON_ACTION_BASE} !bg-gray-50 dark:!bg-slate-800 text-gray-400 dark:text-slate-500 !border-gray-200 dark:!border-slate-700 cursor-not-allowed opacity-60`
                         : `${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_ARCHIVE}`
                     }
-                    aria-label="Archive this JD"
-                    title={archiveLocked ? 'You do not have permission to archive job descriptions' : 'Archive this JD'}
                   >
                     <Archive className="w-4 h-4" />
-                  </button>
+                  </IconButton>
                 )}
               </div>
             )}
@@ -3375,13 +3371,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 )}
                 {/* Delete button - COMMENTED OUT */}
                 {false && onDelete && (
-                  <button
+                  <IconButton bare label="Delete Job"
                     onClick={handleDelete}
                     className="p-2 text-destructive hover:text-destructive hover:bg-destructive-subtle rounded-lg transition-all"
-                    aria-label="Delete Job" title="Delete Job"
                   >
                     <Trash2 className="w-5 h-5" />
-                  </button>
+                  </IconButton>
                 )}
               </div>
             )}
@@ -4350,27 +4345,25 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       {(safeActivityPage - 1) * ACTIVITY_PAGE_SIZE + 1}–{Math.min(safeActivityPage * ACTIVITY_PAGE_SIZE, events.length)} of {events.length}
                     </span>
                     <div className="flex items-center gap-1">
-                      <button
+                      <IconButton bare label="Previous activity page"
                         type="button"
                         onClick={() => setActivityPage(safeActivityPage - 1)}
                         disabled={safeActivityPage <= 1}
-                        aria-label="Previous activity page"
                         className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:pointer-events-none transition-colors"
                       >
                         <ChevronLeft className="w-3.5 h-3.5" />
-                      </button>
+                      </IconButton>
                       <span className="px-1.5 tabular-nums text-gray-700 dark:text-slate-300">
                         <span className="font-semibold text-brand-blue">{safeActivityPage}</span> / {activityTotalPages}
                       </span>
-                      <button
+                      <IconButton bare label="Next activity page"
                         type="button"
                         onClick={() => setActivityPage(safeActivityPage + 1)}
                         disabled={safeActivityPage >= activityTotalPages}
-                        aria-label="Next activity page"
                         className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:pointer-events-none transition-colors"
                       >
                         <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
+                      </IconButton>
                     </div>
                   </div>
                 )}
@@ -4766,7 +4759,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           || 'Untitled assessment';
 
         return (
-        <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden border border-gray-200 dark:border-slate-700">
             {/* Everything above the actions scrolls together, so a long
                 assessment title on a short viewport can never push the buttons
@@ -4787,14 +4780,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       : 'Complete the remaining setup steps before it can be published.'}
                   </p>
                 </div>
-                <button
+                <IconButton bare label="Close"
                   onClick={() => setDraftAssessment(null)}
                   disabled={publishingDraft}
                   className="p-1.5 -mr-1.5 -mt-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
-                  aria-label="Close"
                 >
-                  <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 dark:text-slate-400" />
-                </button>
+                  <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-500 dark:text-slate-400" />
+                </IconButton>
               </div>
 
               {/* THE RECORD this prompt is about — named, timed and badged, so
@@ -4886,7 +4878,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               )}
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
         );
       })()}
 
@@ -4908,7 +4900,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           || 'Untitled interview';
 
         return (
-        <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <ModalA11y closeOnEscape={false}><div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden border border-gray-200 dark:border-slate-700">
             {/* Everything above the actions scrolls together, so a long
                 position title on a short viewport can never push the buttons
@@ -4929,14 +4921,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       : 'Complete the remaining setup steps before it can be published.'}
                   </p>
                 </div>
-                <button
+                <IconButton bare label="Close"
                   onClick={() => setDraftAIInterview(null)}
                   disabled={publishingAIDraft}
                   className="p-1.5 -mr-1.5 -mt-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
-                  aria-label="Close"
                 >
-                  <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 dark:text-slate-400" />
-                </button>
+                  <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-500 dark:text-slate-400" />
+                </IconButton>
               </div>
 
               {/* THE RECORD this prompt is about. `Brain` rather than the
@@ -5029,7 +5020,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               )}
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
         );
       })()}
 
@@ -5297,11 +5288,10 @@ function ScoreSelectedInfo({ message }: { message: string }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <button
+        <IconButton bare label="Why is this count lower than the number selected?"
           type="button"
-          aria-label="Why is this count lower than the number selected?"
           aria-expanded={open}
-          className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 transition-colors cursor-help"
+          className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 transition-colors cursor-help"
           onPointerDown={stop}
           onPointerUp={stop}
           onKeyDown={stop}
@@ -5316,7 +5306,7 @@ function ScoreSelectedInfo({ message }: { message: string }) {
           }}
         >
           <Info className="size-3.5" />
-        </button>
+        </IconButton>
       </PopoverAnchor>
       <PopoverContent
         side="top"
@@ -5938,7 +5928,7 @@ function AIMatchTabContent({
                   if (jobLockedReason) {
                     return (
                       <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
-                        <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                        <ClipboardList className="w-4 h-4 text-gray-500 mt-0.5" />
                         <span className="min-w-0">
                           <span className="block">Score Selected</span>
                           <span className="block tf-micro-hint normal-case whitespace-normal">{jobLockedReason}</span>
@@ -5951,7 +5941,7 @@ function AIMatchTabContent({
                     // is spelled out on the row itself, not behind an ⓘ.
                     return (
                       <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
-                        <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                        <ClipboardList className="w-4 h-4 text-gray-500 mt-0.5" />
                         <span className="min-w-0">
                           <span className="block">Score Selected{scoredResumesLoaded ? ' (0)' : ''}</span>
                           <span className="block tf-micro-hint normal-case whitespace-normal">
@@ -6119,7 +6109,7 @@ function AIMatchTabContent({
                           (candidate.rank || 0) >= 7 ? 'bg-success-subtle text-success-strong border border-success-line' :
                           (candidate.rank || 0) >= 4 ? 'bg-warning-subtle text-warning-strong border border-warning-line' :
                           (candidate.rank || 0) >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700' :
-                          'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700'
+                          'bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-500 border border-gray-200 dark:border-slate-700'
                         }`}>
                           {candidate.rank || '-'}
                         </div>
@@ -6163,7 +6153,7 @@ function AIMatchTabContent({
                         </span>
                       </div>
 
-                      <div
+                      <div {...clickableProps}
                         onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(candidate); }}
                         className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
                       >
@@ -6239,7 +6229,7 @@ function AIMatchTabContent({
 
                   return (
                     <Fragment key={candidate.resumeId}>
-                    <tr
+                    <tr {...clickableRowProps}
                       data-row-selected={isSelected}
                       aria-expanded={isExpanded}
                       title={isExpanded ? 'Hide details' : 'Show details'}
@@ -6249,20 +6239,19 @@ function AIMatchTabContent({
                       {/* Row checkbox — the reference's icon checkbox, same
                           toggle; stopPropagation so ticking doesn't open it. */}
                       <td className="tf-td tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
-                        <button
+                        <IconButton bare label={isSelected ? 'Deselect candidate' : 'Select candidate'}
                           type="button"
                           onClick={() => toggleSelect(candidate.resumeId)}
                           aria-pressed={isSelected}
-                          aria-label={isSelected ? 'Deselect candidate' : 'Select candidate'}
                           className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
                         >
-                          {isSelected ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
-                        </button>
+                          {isSelected ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-500" />}
+                        </IconButton>
                       </td>
                       {/* Rating — 10 green, 9–7 orange, below 7 red. */}
                       <td className="tf-td text-center">
                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${
-                          !rank ? 'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border-gray-200 dark:border-slate-700'
+                          !rank ? 'bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-500 border-gray-200 dark:border-slate-700'
                           : rank >= 10 ? 'bg-success-subtle text-success border-success-line'
                           : rank >= 7 ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
                           : 'bg-destructive-subtle text-destructive border-destructive-line'
@@ -6315,15 +6304,13 @@ function AIMatchTabContent({
                         <span className="inline-flex" title={selectedIds.size >= 2 ? 'Several candidates are selected — use Actions above, or clear the selection' : undefined}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild disabled={selectedIds.size >= 2}>
-                            <button
+                            <IconButton bare label="Actions" tooltip={selectedIds.size >= 2 ? undefined : 'Actions'}
                               type="button"
-                              aria-label="Actions"
-                              title={selectedIds.size >= 2 ? undefined : 'Actions'}
                               disabled={selectedIds.size >= 2}
                               className={ROW_ACTION_BUTTON_CLASS}
                             >
                               <MoreVertical className="w-4 h-4" />
-                            </button>
+                            </IconButton>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
                             {onViewCandidate && (
@@ -6337,7 +6324,7 @@ function AIMatchTabContent({
                                 version (or while that is still being checked). */}
                             {jobLockedReason || !scoredResumesLoaded || isScored ? (
                               <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
-                                <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                                <ClipboardList className="w-4 h-4 text-gray-500 mt-0.5" />
                                 <span className="min-w-0">
                                   <span className="block">Score</span>
                                   <span className="block tf-micro-hint normal-case whitespace-normal">
@@ -6402,16 +6389,14 @@ function AIMatchTabContent({
                         </DropdownMenu>
                         </span>
                         {/* ▾ — this row's details, open / closed (the row click does the same). */}
-                        <button
+                        <IconButton bare label={isExpanded ? 'Hide details' : 'Show details'}
                           type="button"
                           onClick={() => toggleRowExpanded(candidate.resumeId)}
                           aria-expanded={isExpanded}
-                          aria-label={isExpanded ? 'Hide details' : 'Show details'}
-                          title={isExpanded ? 'Hide details' : 'Show details'}
                           className={isExpanded ? ROW_ACTION_BUTTON_ACTIVE_CLASS : ROW_ACTION_BUTTON_CLASS}
                         >
                           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                        </button>
+                        </IconButton>
                         </div>
                       </td>
                     </tr>

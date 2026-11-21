@@ -169,7 +169,7 @@ export function DashboardTilt() {
       onClick={onTap}
     >
       {/* Soft halo behind the object */}
-      <div className="pointer-events-none absolute inset-x-[8%] inset-y-[10%] -z-10 rounded-full bg-[radial-gradient(closest-side,rgba(15,60,153,0.22),transparent)] blur-2xl dark:bg-[radial-gradient(closest-side,rgba(76,123,232,0.3),transparent)]" />
+      <div className="pointer-events-none absolute inset-x-[8%] inset-y-[10%] -z-10 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-15-60-153-0p22),transparent)] blur-2xl dark:bg-[radial-gradient(closest-side,var(--raw-rgba-76-123-232-0p3),transparent)]" />
 
       <div ref={stage} className="relative [transform-style:preserve-3d]">
         {/* Base panel */}
@@ -181,7 +181,7 @@ export function DashboardTilt() {
               <span
                 key={i}
                 className={`grid h-7 w-7 place-items-center rounded-lg sm:h-8 sm:w-8 ${
-                  i === 0 ? "bg-mkt-accent-solid text-white shadow-[0_6px_14px_-6px_rgba(15,60,153,0.7)]" : "text-slate-400"
+                  i === 0 ? "bg-mkt-accent-solid text-white shadow-[0_6px_14px_-6px_rgba(15,60,153,0.7)]" : "text-slate-500"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -193,7 +193,7 @@ export function DashboardTilt() {
           <div className="min-w-0 [transform-style:preserve-3d]">
             <div className="flex items-center justify-between gap-2">
               <p className={`${DISPLAY} flex items-center gap-1 text-[13px] font-bold text-mkt-ink sm:text-base`}>
-                Hiring overview <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                Hiring overview <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
               </p>
               <span className="inline-flex items-center gap-1 rounded-lg border border-slate-900/[0.08] px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-white/10 dark:text-slate-400 sm:text-xs">
                 <CalendarDays className="h-3 w-3" /> Last 30 days
@@ -260,7 +260,7 @@ export function DashboardTilt() {
                     </Layer>
                   </div>
                 </div>
-                <div className="mt-1.5 flex justify-between text-[8px] text-slate-400 sm:text-[11px]">
+                <div className="mt-1.5 flex justify-between text-[8px] text-slate-500 sm:text-[11px]">
                   {DAYS.map((d) => (
                     <span key={d}>{d}</span>
                   ))}
@@ -320,7 +320,7 @@ export function DashboardTilt() {
               <br />
               Scoring
             </span>
-            <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+            <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
           </div>
         </Layer>
 
@@ -330,7 +330,7 @@ export function DashboardTilt() {
               <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
             </span>
             <span className={`${DISPLAY} text-[11px] font-bold text-mkt-ink sm:text-sm`}>AI Interviews</span>
-            <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+            <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
           </div>
         </Layer>
 

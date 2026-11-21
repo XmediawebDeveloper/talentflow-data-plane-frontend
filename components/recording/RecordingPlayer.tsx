@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, Monitor, Download, Clock, Loader2, Video, Play, Pause, Volume2, VolumeX, Maximize, Minimize, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { IconButton } from '@/components/ui/icon-button';
 
 export interface RecordingSource {
   /** null = not fetched yet, false = no recording exists, true = exists. */
@@ -395,9 +396,9 @@ export function VideoWithDuration({
             </div>
 
             <div className="flex items-center gap-0.5">
-              <button type="button" onClick={togglePlay} className={ctrlBtn} aria-label={playing ? 'Pause' : 'Play'} title={playing ? 'Pause' : 'Play'}>
+              <IconButton bare label={playing ? 'Pause' : 'Play'} type="button" onClick={togglePlay} className={ctrlBtn}>
                 {playing ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
-              </button>
+              </IconButton>
               <span className="ml-1 text-xs tabular-nums text-white/90">
                 {formatDuration(currentTime)} / {duration !== null ? formatDuration(duration) : '—'}
               </span>
@@ -436,9 +437,9 @@ export function VideoWithDuration({
               </div>
 
               <div className="flex items-center">
-                <button type="button" onClick={toggleMute} className={ctrlBtn} aria-label={muted || volume === 0 ? 'Unmute' : 'Mute'} title={muted || volume === 0 ? 'Unmute' : 'Mute'}>
+                <IconButton bare label={muted || volume === 0 ? 'Unmute' : 'Mute'} type="button" onClick={toggleMute} className={ctrlBtn}>
                   {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                </button>
+                </IconButton>
                 <input
                   type="range"
                   min={0}
@@ -451,9 +452,9 @@ export function VideoWithDuration({
                 />
               </div>
 
-              <button type="button" onClick={toggleFullscreen} className={ctrlBtn} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} title={fullscreen ? 'Exit full screen' : 'Full screen'}>
+              <IconButton bare label={fullscreen ? 'Exit full screen' : 'Full screen'} type="button" onClick={toggleFullscreen} className={ctrlBtn}>
                 {fullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-              </button>
+              </IconButton>
             </div>
           </div>
         )}
@@ -466,16 +467,14 @@ export function VideoWithDuration({
     {violationMarkers.length > 0 && duration && (
       <div className="mt-1">
         <div className="flex justify-center">
-          <button
+          <IconButton bare label={showViolations ? 'Hide violations timeline' : 'Show violations timeline'} tooltip={showViolations ? 'Hide violations' : 'Show violations'}
             type="button"
             onClick={() => setShowViolations(o => !o)}
             aria-expanded={showViolations}
-            aria-label={showViolations ? 'Hide violations timeline' : 'Show violations timeline'}
-            title={showViolations ? 'Hide violations' : 'Show violations'}
-            className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+            className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
           >
             {showViolations ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
+          </IconButton>
         </div>
         {showViolations && (
           <div className="px-1">
@@ -536,7 +535,7 @@ function VideoPane({
   if (source.available === false || !source.url) {
     return (
       <div className="h-64 rounded-xl bg-slate-50 border border-dashed border-gray-200 flex flex-col items-center justify-center tf-body-muted gap-2">
-        <Video className="w-6 h-6 text-gray-400" />
+        <Video className="w-6 h-6 text-gray-500" />
         {label} not available
       </div>
     );

@@ -276,11 +276,11 @@ export default function LogVerificationPage() {
                   <span className="text-xs font-semibold text-destructive min-w-[100px] capitalize">{m.field.replace(/_/g, ' ')}</span>
                   <div className="flex-1 grid grid-cols-2 gap-4">
                     <div>
-                      <span className="text-2xs font-medium text-gray-400 dark:text-slate-500 uppercase">Expected</span>
+                      <span className="text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase">Expected</span>
                       <p className="tf-body mt-0.5">{m.expected || '—'}</p>
                     </div>
                     <div>
-                      <span className="text-2xs font-medium text-gray-400 dark:text-slate-500 uppercase">Actual</span>
+                      <span className="text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase">Actual</span>
                       <p className="text-sm text-destructive mt-0.5 font-medium">{m.actual || '—'}</p>
                     </div>
                   </div>
@@ -475,7 +475,7 @@ export default function LogVerificationPage() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div className="flex-1 min-w-0 sm:min-w-[280px]">
                 <div className="relative">
-                  <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                  <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
                   <input
                     type="text"
                     placeholder="Search by action, entity, user email..."
@@ -509,7 +509,7 @@ export default function LogVerificationPage() {
           {filteredEntries.length === 0 ? (
             <div className="p-16 text-center">
               <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <ShieldCheck className="w-8 h-8 text-gray-400 dark:text-slate-500" />
+                <ShieldCheck className="w-8 h-8 text-gray-500 dark:text-slate-500" />
               </div>
               <p className="text-gray-600 dark:text-slate-400 font-medium">No verification entries</p>
               <p className="tf-body-muted mt-1">
@@ -542,7 +542,7 @@ export default function LogVerificationPage() {
                         {/* Main row */}
                         <td className="tf-td whitespace-nowrap">
                           <div className="flex items-center gap-2 tf-body-secondary">
-                            <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                            <Clock className="w-4 h-4 text-gray-500 dark:text-slate-500" />
                             <span>{formatIST(entry.expected.timestamp)}</span>
                           </div>
                         </td>

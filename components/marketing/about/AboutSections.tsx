@@ -208,7 +208,7 @@ export function AboutCta() {
           >
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.28),transparent)]"
+              className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p28),transparent)]"
             />
             <div className="relative max-w-xl">
               <h2

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { SiteHeader } from "./SiteHeader";
 import { REDESIGNED_ROUTES } from "./fonts";
 import { hasStoredSession } from '@/lib/services/api';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Items with a `section` exist on the one-page landing route, so on "/" the
 // menu scrolls to them; an item without one would always navigate to its page.
@@ -133,10 +134,9 @@ function ClassicHeader() {
           )}
 
           <div className="hidden lg:flex items-center gap-2 xl:gap-3 flex-shrink-0">
-            <button
+            <IconButton bare label="Toggle dark mode"
               onClick={toggleDarkMode}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              aria-label="Toggle dark mode"
             >
               {mounted ? (
                 theme === "dark" ? (
@@ -147,7 +147,7 @@ function ClassicHeader() {
               ) : (
                 <div className="w-5 h-5" />
               )}
-            </button>
+            </IconButton>
 
             {/* Only show auth buttons when not logged in */}
             {!isLoggedIn && !isOrgLogin && (
@@ -166,10 +166,9 @@ function ClassicHeader() {
           </div>
 
           <div className="flex lg:hidden items-center gap-2">
-            <button
+            <IconButton bare label="Toggle dark mode"
               onClick={toggleDarkMode}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              aria-label="Toggle dark mode"
             >
               {mounted ? (
                 theme === "dark" ? (
@@ -180,12 +179,11 @@ function ClassicHeader() {
               ) : (
                 <div className="w-5 h-5" />
               )}
-            </button>
+            </IconButton>
 
             {!isOrgLogin && (
-              <button
+              <IconButton bare label={mobileMenuOpen ? "Close menu" : "Open menu"}
                 className="p-2"
-                aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
                 aria-expanded={mobileMenuOpen}
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               >
@@ -194,7 +192,7 @@ function ClassicHeader() {
                 ) : (
                   <Menu className="w-6 h-6 text-gray-600 dark:text-gray-300" />
                 )}
-              </button>
+              </IconButton>
             )}
           </div>
         </div>

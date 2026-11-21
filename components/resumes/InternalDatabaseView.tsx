@@ -11,6 +11,7 @@ import ResumeTable, { ResumeTableSkeleton } from '@/components/ResumeTable';
 import ListPagination from '@/components/ListPagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
+import ResumeSelectAllMenu, { ResumeBulkActions } from '@/components/resumes/ResumeSelectAllMenu';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadHistoryPanel from '@/components/UploadHistoryPanel';
 import UploadModal from '@/components/UploadModal';
@@ -49,6 +50,7 @@ import { useResumeSelection } from '@/components/resumes/ResumeSelectionContext'
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { NoMatchingResumesState, NoResumesYetState } from '@/components/resumes/ResumeEmptyStates';
 import { RESUME_DELETE_OWNER_ONLY_REASON, canDeleteResumes } from '@/lib/permissions/resumeDelete';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 interface SearchFilters {
   skills?: string[];
@@ -181,7 +183,9 @@ function toListRow(r: ApiResume): Resume {
  * app/(dashboard)/recruitment/resume-database/page.tsx, which owns the
  * breadcrumb and the tab strip and passes them down as `header`.
  */
-export default function InternalDatabaseView({ header }: { header?: ReactNode }) {
+export default function InternalDatabaseView({ header }: { header?: (titleRow: ReactNode) => ReactNode }) {
+  // The page places this view's title row between the breadcrumb and the tabs.
+  const withHeader = (titleRow: ReactNode) => (header ? header(titleRow) : titleRow);
   const router = useRouter();
   const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
   // Viewing isn't downloading (2026-11-10): needs Shared Database access.
@@ -269,7 +273,36 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   /* Selection is shared with the My Resumes tab (see ResumeSelectionContext)
      and survives paging, so bulk actions read the ticked rows from the shared
      row cache, not from the 10 on screen. */
-  const { selectedResumes, setSelectedResumes, rowById, selectedRows } = useResumeSelection(resumes);
+  const { selectedResumes, setSelectedResumes, rowById, selectedRows, rememberRows } = useResumeSelection(resumes);
+  /* "Select all resumes" — every page of the current list (same search,
+     filters, sort and versions). The rows go into the shared row cache so
+     the bulk actions can read them; team-member email resumes stay out. */
+  const [selectingAllResumes, setSelectingAllResumes] = useState(false);
+  const [allMatchingIds, setAllMatchingIds] = useState<string[]>([]);
+  const selectAllMatchingResumes = async () => {
+    if (selectingAllResumes) return;
+    setSelectingAllResumes(true);
+    const toastId = toast.loading('Selecting all resumes…');
+    try {
+      const { version_filter, unfiltered: _unfiltered, page: _page, page_size: _pageSize, ...rest } =
+        listQuery as InternalDbQuery & { version_filter: ResumeVersionFilter; unfiltered: boolean };
+      void _unfiltered; void _page; void _pageSize;
+      const all = await fetchAllRows((ps, pg) => resumeService.list({ ...rest, page: pg, page_size: ps }));
+      const rows = keepByVersion(all.items || [], version_filter)
+        .map(toListRow)
+        .filter(r => !isTenantUserEmailResume(r));
+      rememberRows(rows);
+      const ids = rows.map(r => r.id);
+      setAllMatchingIds(ids);
+      setSelectedResumes(prev => Array.from(new Set([...prev, ...ids])));
+      toast.success(`${ids.length} resume${ids.length === 1 ? '' : 's'} selected`, { id: toastId });
+    } catch (error) {
+      toast.dismiss(toastId);
+      showErrorToast(error, "Couldn't select all resumes", { retry: selectAllMatchingResumes });
+    } finally {
+      setSelectingAllResumes(false);
+    }
+  };
 
   // Track if initial load is done
   const initialLoadDone = useRef(false);
@@ -1008,18 +1041,19 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           <div className="tf-page-sheet">
             {/* Breadcrumb + tab strip — rendered for real even while the list
                 loads, so switching tabs stays possible and nothing shifts. */}
-            {header}
-            {/* Header: icon, title + count pill, description */}
-            <div className="flex items-start gap-3 mb-5">
-              <Skeleton className="hidden sm:block h-9 w-9 rounded-lg shrink-0" />
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-6 w-52" />
-                  <Skeleton className="h-5 w-20 rounded-full" />
+            {withHeader(
+              /* Header: icon, title + count pill, description */
+              <div className="flex items-start gap-3 mb-5">
+                <Skeleton className="hidden sm:block h-9 w-9 rounded-lg shrink-0" />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-6 w-52" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-80 max-w-full" />
                 </div>
-                <Skeleton className="h-4 w-80 max-w-full" />
               </div>
-            </div>
+            )}
             {/* Search + table card */}
             <div className="tf-card tf-round-edges overflow-hidden">
               <div className="p-3 flex gap-2 items-center border-b border-gray-200">
@@ -1041,7 +1075,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="tf-page-sheet">
-      {header}
+      {withHeader(
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-start gap-3">
           <div className="hidden sm:flex w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30 items-center justify-center shrink-0">
@@ -1072,35 +1106,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           </div>
         </div>
       </div>
-
-      {selectedResumes.length > 0 && (
-        <div className="mb-5">
-          <BulkActionsBar
-            selectedCount={selectedResumes.length}
-            onCancel={() => setSelectedResumes([])}
-            // Same action set as My Resumes, in the same order. `onResumeScoring`
-            // is deliberately not passed: its handler was identical to
-            // `handleBulkApplyToJob` (same modal, same job picker), so the bar
-            // showed "Score Resume" and "Resume Scoring" as two buttons doing
-            // one thing.
-            onApplyToJob={handleBulkApplyToJob}
-            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:score')))}
-            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
-            onAssessment={handleBulkAssessment}
-            onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment')))}
-            onAssessmentDisabledReason={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment'))) ? "You do not have permission to invite candidates to an assessment" : PLAN_LOCKED_MESSAGE}
-            onAIInterview={handleBulkAIInterview}
-            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('internal_db:invite_ai_interview')))}
-            onAIInterviewDisabledReason={!(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('internal_db:invite_ai_interview'))) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
-            onDownload={handleBulkDownload}
-            onDownloadDisabled={!canDownloadShared}
-            onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
-            onDelete={() => handleDeleteResumes(selectedResumes)}
-            onDeleteDisabled={!canDeleteResumes(isTenantAdmin)}
-            onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
-          />
-        </div>
       )}
+
 
       {/* No frame of its own: this wraps the page's whole list inside the white
           page panel, so a border/ring/shadow here was a card-in-panel double
@@ -1124,6 +1131,59 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             onFiltersChange={(next: SearchFilters) => search.setFilters(next as Record<string, unknown>)}
             sortBy={sortBy}
             onSortChange={setSortBy}
+            /* Select All — what to select (as on Job Openings). */
+            beforeSearch={(() => {
+              const pageIds = resumes.filter(r => !isTenantUserEmailResume(r)).map(r => r.id);
+              return (
+                <>
+                <ResumeSelectAllMenu
+                  selectedCount={selectedResumes.length}
+                  pageCount={pageIds.length}
+                  pageSelected={pageIds.length > 0 && pageIds.every(id => selectedResumes.includes(id))}
+                  onSelectPage={() => handleSelectAll(true)}
+                  onDeselectPage={() => handleSelectAll(false)}
+                  onClear={() => setSelectedResumes([])}
+                  totalCount={totalResumes}
+                  onSelectAll={() => { void selectAllMatchingResumes(); }}
+                  allSelected={allMatchingIds.length > 0 && allMatchingIds.length === totalResumes && allMatchingIds.every(id => selectedResumes.includes(id))}
+                />
+                {/* Actions (N) + Clear — beside Select All, before the search
+                    (the Select Applicants to Score popup). */}
+                <ResumeBulkActions
+                  count={selectedResumes.length}
+                  onClear={() => setSelectedResumes([])}
+                  renderActions={(close) => (
+                      <BulkActionsBar
+                        variant="menu"
+                        onAction={close}
+                        selectedCount={selectedResumes.length}
+                        onCancel={() => setSelectedResumes([])}
+                        // Same action set as My Resumes, in the same order. `onResumeScoring`
+                        // is deliberately not passed: its handler was identical to
+                        // `handleBulkApplyToJob` (same modal, same job picker), so the bar
+                        // showed "Score Resume" and "Resume Scoring" as two buttons doing
+                        // one thing.
+                        onApplyToJob={handleBulkApplyToJob}
+                        onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:score')))}
+                        onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
+                        onAssessment={handleBulkAssessment}
+                        onAssessmentDisabled={isPlanLocked('assessment') || !(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment')))}
+                        onAssessmentDisabledReason={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment'))) ? "You do not have permission to invite candidates to an assessment" : PLAN_LOCKED_MESSAGE}
+                        onAIInterview={handleBulkAIInterview}
+                        onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('internal_db:invite_ai_interview')))}
+                        onAIInterviewDisabledReason={!(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('internal_db:invite_ai_interview'))) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
+                        onDownload={handleBulkDownload}
+                        onDownloadDisabled={!canDownloadShared}
+                        onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
+                        onDelete={() => handleDeleteResumes(selectedResumes)}
+                        onDeleteDisabled={!canDeleteResumes(isTenantAdmin)}
+                        onDeleteDisabledReason={RESUME_DELETE_OWNER_ONLY_REASON}
+                      />
+                    )}
+                  />
+                </>
+              );
+            })()}
             /* Versions dropdown right after the search box; its choice is a
                filter tag, so the badge counts it and Reset clears it. */
             afterSearch={
@@ -1342,7 +1402,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             onClick={() => !isDownloadingSelection && setIsZipDownloadModalOpen(false)}
           />
           {/* Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="flex items-start justify-between gap-4 p-6 border-b border-gray-200">
@@ -1411,7 +1471,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 </button>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         </>
       )}
       </div>

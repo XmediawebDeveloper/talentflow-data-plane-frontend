@@ -67,6 +67,7 @@ import {
   findInvalidSkillPunctuation,
   normalizeSkillName as normalizeSkillNameShared,
 } from '@/lib/skillDuplicates';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Step indicator constants                                               */
@@ -609,27 +610,24 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
           />
           {/* Flexible mode: move skill to the other category */}
           {mode === 'flexible' && onMoveSkill && !isLocked && (
-            <button
-              title={category === 'mth' ? 'Move to Nice-to-Have' : 'Move to Must-Have'}
+            <IconButton bare label={category === 'mth' ? 'Move to Nice-to-Have' : 'Move to Must-Have'}
               onClick={() => onMoveSkill(skill.name)}
-              className="p-1 text-gray-400 hover:text-brand-blue transition-colors flex-shrink-0"
+              className="p-1 text-gray-500 hover:text-brand-blue transition-colors flex-shrink-0"
             >
               <ArrowRightLeft className="w-3.5 h-3.5" />
-            </button>
+            </IconButton>
           )}
           {/* Hide delete when locked in flexible mode.
               Always drawn, never hover-revealed: a control that appears only
               once the pointer is over its row is invisible to anyone scanning
               the list, and on touch there is no hover to reveal it with. */}
           {!(mode === 'flexible' && isLocked) && (
-            <button
+            <IconButton bare label={`Remove ${skill.name}`}
               onClick={() => setSkillToDelete(skill.name)}
-              className="p-1 text-gray-400 hover:text-destructive transition-colors flex-shrink-0"
-              title={`Remove ${skill.name}`}
-              aria-label={`Remove ${skill.name}`}
+              className="p-1 text-gray-500 hover:text-destructive transition-colors flex-shrink-0"
             >
               <Trash2 className="w-4 h-4" />
-            </button>
+            </IconButton>
           )}
         </div>
         {commentOpen === skill.name && (
@@ -641,13 +639,12 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
               placeholder="Add interviewer note for this skill (not shown to candidate)…"
               className="flex-1 px-3 py-1.5 text-xs border border-brand-orange/30 rounded-lg bg-brand-orange/5 focus:outline-none focus:ring-2 focus:ring-brand-orange/40 placeholder-brand-orange/50"
             />
-            <button
+            <IconButton bare label="Clear & close"
               onClick={() => { updateComment(skill.name, ''); setCommentOpen(null); }}
-              aria-label="Clear & close" title="Clear & close"
-              className="p-1 text-gray-400 hover:text-destructive transition-colors flex-shrink-0"
+              className="p-1 text-gray-500 hover:text-destructive transition-colors flex-shrink-0"
             >
               <X className="w-3.5 h-3.5" />
-            </button>
+            </IconButton>
           </div>
         )}
       </div>
@@ -837,8 +834,8 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
                         className="w-full flex items-center gap-2 px-3 py-2.5 bg-slate-50 hover:bg-brand-blue/5 transition-colors text-left"
                       >
                         {isCollapsed
-                          ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                          : <ChevronUp className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                          : <ChevronUp className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                         }
                         <span className="flex-1 min-w-0 tf-label break-words">{cluster.name || 'Unnamed Topic'}</span>
                         <PriorityBadge p={cluster.priority} />
@@ -1186,7 +1183,7 @@ function HRSection({
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-800 leading-relaxed break-words">{q.question_text}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="text-2xs font-semibold uppercase tracking-wide text-gray-400">Ask As</span>
+                        <span className="text-2xs font-semibold uppercase tracking-wide text-gray-500">Ask As</span>
                         <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
                           <button
                             type="button"
@@ -1227,7 +1224,7 @@ function HRSection({
                             Closing
                           </button>
                         </div>
-                        <span className="text-2xs font-semibold uppercase tracking-wide text-gray-400">Answer Type</span>
+                        <span className="text-2xs font-semibold uppercase tracking-wide text-gray-500">Answer Type</span>
                         <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
                           <button
                             type="button"
@@ -1305,7 +1302,7 @@ function HRSection({
                 <p className="text-2xs text-destructive">{questionError}</p>
               )}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-2xs font-semibold uppercase tracking-wide text-gray-400">Answer Type</span>
+                <span className="text-2xs font-semibold uppercase tracking-wide text-gray-500">Answer Type</span>
                 <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
                   <button
                     type="button"
@@ -3506,7 +3503,7 @@ export default function AIInterviewConfig() {
                               key={line}
                               className={`flex items-center gap-1.5 text-2xs ${selected ? 'text-gray-700' : 'text-gray-500'}`}
                             >
-                              <CheckCircle2 className={`w-3.5 h-3.5 flex-shrink-0 ${selected ? 'text-brand-blue' : 'text-gray-400'}`} />
+                              <CheckCircle2 className={`w-3.5 h-3.5 flex-shrink-0 ${selected ? 'text-brand-blue' : 'text-gray-500'}`} />
                               {line}
                             </div>
                           ))}
@@ -3783,7 +3780,7 @@ export default function AIInterviewConfig() {
                       <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
                     ) : (
                       <div className="flex items-center gap-1">
-                        <button
+                        <IconButton bare label="Preview video"
                           onClick={async () => {
                             if (videoPreviewSrc) {
                               setShowVideoPreview(true);
@@ -3798,14 +3795,13 @@ export default function AIInterviewConfig() {
                               }
                             }
                           }}
-                          className="p-1 text-gray-400 hover:text-brand-blue transition-colors"
-                          title="Preview video"
+                          className="p-1 text-gray-500 hover:text-brand-blue transition-colors"
                         >
                           <Play className="w-4 h-4" />
-                        </button>
-                        <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-destructive hover:bg-destructive-subtle rounded transition-colors" aria-label="Remove video" title="Remove video">
+                        </IconButton>
+                        <IconButton bare label="Remove video" onClick={handleRemoveVideo} className="p-1 text-gray-500 hover:text-destructive hover:bg-destructive-subtle rounded transition-colors">
                           <X className="w-4 h-4" />
-                        </button>
+                        </IconButton>
                       </div>
                     )}
                     </div>
@@ -4130,7 +4126,7 @@ export default function AIInterviewConfig() {
                   {mode === 'flexible' && (
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
                       <span className="tf-meta flex-shrink-0">Buffer Time</span>
-                      <span className={`text-xs font-semibold text-right ${bufferEnabled ? 'text-brand-blue' : 'text-gray-400'}`}>
+                      <span className={`text-xs font-semibold text-right ${bufferEnabled ? 'text-brand-blue' : 'text-gray-500'}`}>
                         {bufferEnabled ? 'Enabled (+5 min)' : 'Disabled'}
                       </span>
                     </div>

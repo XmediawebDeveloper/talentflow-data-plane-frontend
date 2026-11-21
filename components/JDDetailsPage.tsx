@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
 import { MobileRecordList, MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -115,7 +116,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
   };
 
   const getScoreColor = (score: number | null): string => {
-    if (score === null) return 'text-gray-400';
+    if (score === null) return 'text-gray-500';
     if (score >= 80) return 'text-success';
     if (score >= 60) return 'text-warning';
     return 'text-destructive';
@@ -246,7 +247,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           {/* Search */}
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               type="text"
               placeholder="Search by candidate name or email..."
@@ -489,25 +490,23 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                       className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
                     />
                   </div>
-                  <button
+                  <IconButton bare label="Previous page"
                     onClick={() => setPage(page - 1)}
                     disabled={page === 1}
                     className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                    aria-label="Previous page" title="Previous page"
                   >
                     <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  </button>
+                  </IconButton>
                   <span className="tf-label px-1 whitespace-nowrap">
                     <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
                   </span>
-                  <button
+                  <IconButton bare label="Next page"
                     onClick={() => setPage(page + 1)}
                     disabled={page === totalPages}
                     className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                    aria-label="Next page" title="Next page"
                   >
                     <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
             )}
@@ -650,7 +649,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
       <div className="tf-panel p-4">
         <div className="flex items-center gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               type="text"
               placeholder="Search by candidate name..."
@@ -789,25 +788,23 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
                       className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
                     />
                   </div>
-                  <button
+                  <IconButton bare label="Previous page"
                     onClick={() => setPage(page - 1)}
                     disabled={page === 1}
                     className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                    aria-label="Previous page" title="Previous page"
                   >
                     <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  </button>
+                  </IconButton>
                   <span className="tf-label px-1 whitespace-nowrap">
                     <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
                   </span>
-                  <button
+                  <IconButton bare label="Next page"
                     onClick={() => setPage(page + 1)}
                     disabled={page === totalPages}
                     className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                    aria-label="Next page" title="Next page"
                   >
                     <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
             )}
@@ -1302,7 +1299,7 @@ export default function JDDetailsPage() {
                     <span className="text-gray-500 block mb-1">Created On</span>
                     <div className="text-gray-900 space-y-1">
                       <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <Calendar className="w-4 h-4 text-gray-500" />
                         <span>{formatIST(jd.created_at)}</span>
                       </div>
                     </div>
@@ -1312,7 +1309,7 @@ export default function JDDetailsPage() {
                       <span className="text-gray-500 block mb-1">Published On</span>
                       <div className="text-gray-900 space-y-1">
                         <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-gray-400" />
+                          <Calendar className="w-4 h-4 text-gray-500" />
                           <span>{formatIST(jd.published_at)}</span>
                         </div>
                       </div>

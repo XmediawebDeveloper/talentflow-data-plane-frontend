@@ -8,6 +8,7 @@ import AIInterviewConfig from './AIInterviewConfig';
 import AIInterviewClusters from './AIInterviewClusters';
 import AIInterviewPreview from './AIInterviewPreview';
 import { EmbeddedWizardProvider, type EmbeddedWizardNav } from './embeddedWizardNav';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 const WIZARD_PATH = '/recruitment/ai-interviews/jd-selection/ai-interview-config';
 const STEP_BY_PATH: Record<string, 'config' | 'clusters' | 'preview'> = {
@@ -74,7 +75,7 @@ export default function AIInterviewWizardDialog({
   const handleCancel = () => (cancelHandlerRef.current ?? onCloseRef.current)();
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl lg:max-w-6xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* The house dialog header, as on the Assessment Configure popup. */}
         <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-start sm:items-center justify-between gap-3 flex-shrink-0">
@@ -120,6 +121,6 @@ export default function AIInterviewWizardDialog({
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

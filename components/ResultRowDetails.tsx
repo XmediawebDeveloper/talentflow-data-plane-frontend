@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { IconButton } from '@/components/ui/icon-button';
 
 /* The AI Talent Match table's row-action button (JobDetailView's
    ROW_ACTION_BUTTON_CLASS, the same string) — its ⋮ and ▾. */
@@ -19,16 +20,14 @@ export const ROW_MENU_ITEM_CLASS = 'flex items-center gap-2.5 px-4 py-2.5 text-s
 /** ▾ — this row's details, open / closed (the row click does the same). */
 export function RowDetailsToggle({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
   return (
-    <button
+    <IconButton bare label={expanded ? 'Hide details' : 'Show details'}
       type="button"
       onClick={onToggle}
       aria-expanded={expanded}
-      aria-label={expanded ? 'Hide details' : 'Show details'}
-      title={expanded ? 'Hide details' : 'Show details'}
       className={expanded ? ROW_ACTION_BUTTON_ACTIVE_CLASS : ROW_ACTION_BUTTON_CLASS}
     >
       <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
-    </button>
+    </IconButton>
   );
 }
 

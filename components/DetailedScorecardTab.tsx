@@ -7,6 +7,7 @@ import { showErrorToast } from '@/lib/utils/errorToast';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Tooltip } from '@/components/ui/tooltip';
 import { RATING_PASS_THRESHOLD } from '@/lib/utils/matchStatus';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface DetailedScores {
   titleMatch: number;
@@ -647,7 +648,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
           Overall Rating:
           {(overallRatingExplanation || resume.ratingSummaryText || resume.scoreFormula) && (
             <Tooltip content={overallRatingExplanation || resume.ratingSummaryText || resume.scoreFormula} position="bottom">
-              <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
+              <Info className="w-3.5 h-3.5 text-gray-500 hover:text-gray-600 cursor-help" />
             </Tooltip>
           )}
         </span>
@@ -798,17 +799,15 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <div className="text-2xs font-semibold uppercase tracking-wider text-gray-500">AI Reasoning</div>
-                      <button
+                      <IconButton bare label="Copy AI reasoning" tooltip="Copy full text"
                         type="button"
                         onClick={() => copyReasoning(index, criteria.aiReasoning)}
-                        className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
-                        aria-label="Copy AI reasoning"
-                        title="Copy full text"
+                        className="p-1 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
                       >
                         {copiedReasoningIndex === index
                           ? <Check className="w-3.5 h-3.5 text-success" />
                           : <Copy className="w-3.5 h-3.5" />}
-                      </button>
+                      </IconButton>
                     </div>
                     <p className="tf-body leading-relaxed whitespace-pre-line break-words">
                       {criteria.aiReasoning}
@@ -922,34 +921,30 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                               {criteria.aiReasoning}
                             </span>
                           )}
-                          <button
+                          <IconButton bare label="Copy AI reasoning" tooltip="Copy full text"
                             type="button"
                             onClick={() => copyReasoning(index, criteria.aiReasoning)}
-                            className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
-                            aria-label="Copy AI reasoning"
-                            title="Copy full text"
+                            className="p-1 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
                           >
                             {copiedReasoningIndex === index
                               ? <Check className="w-3.5 h-3.5 text-success" />
                               : <Copy className="w-3.5 h-3.5" />}
-                          </button>
+                          </IconButton>
                         </div>
                       </td>
                       {/* ⌄ — this row's full reasoning, open / closed. */}
                       {rowExpand && (
                         <td className="tf-td text-center">
-                          <button
+                          <IconButton bare label={rowOpen ? `Hide ${criteria.name} reasoning` : `Show ${criteria.name} reasoning`} tooltip={rowOpen ? 'Hide reasoning' : 'Show reasoning'}
                             type="button"
                             onClick={() => toggleRowExpanded(index)}
                             aria-expanded={rowOpen}
-                            aria-label={rowOpen ? `Hide ${criteria.name} reasoning` : `Show ${criteria.name} reasoning`}
-                            title={rowOpen ? 'Hide reasoning' : 'Show reasoning'}
                             className={`inline-flex items-center justify-center p-1.5 rounded-md transition-colors ${
                               rowOpen ? 'bg-brand-blue/10 text-brand-blue' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
                             }`}
                           >
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${rowOpen ? 'rotate-180' : ''}`} />
-                          </button>
+                          </IconButton>
                         </td>
                       )}
                     </tr>

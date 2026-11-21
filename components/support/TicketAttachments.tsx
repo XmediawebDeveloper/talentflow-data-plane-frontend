@@ -10,6 +10,7 @@ import {
   fileExtension,
   formatBytes,
 } from '@/lib/supportAttachments';
+import { IconButton } from '@/components/ui/icon-button';
 
 function iconFor(name: string) {
   const ext = fileExtension(name);
@@ -149,16 +150,14 @@ export function AttachmentPicker({
                 <span className="min-w-0 flex-1 truncate tf-body" title={file.name}>{file.name}</span>
                 <ExtBadge name={file.name} />
                 <span className="shrink-0 tf-meta">{formatBytes(file.size)}</span>
-                <button
+                <IconButton bare label={`Remove ${file.name}`} tooltip="Remove"
                   type="button"
                   onClick={() => onChange(files.filter((_, i) => i !== index))}
                   disabled={disabled}
-                  aria-label={`Remove ${file.name}`}
-                  title="Remove"
                   className="shrink-0 rounded p-1 text-gray-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-500/10"
                 >
                   <X className="h-4 w-4" />
-                </button>
+                </IconButton>
               </li>
             );
           })}
@@ -200,18 +199,16 @@ export function AttachmentList({
             </div>
             <ExtBadge name={file.file_name} />
             {file.file_size && <span className="shrink-0 tf-meta">{file.file_size}</span>}
-            <button
+            <IconButton bare label={`Download ${file.file_name}`} tooltip="Download"
               type="button"
               onClick={async () => {
                 setBusy(file.id);
                 try { await onDownload(file); } finally { setBusy(null); }
               }}
-              aria-label={`Download ${file.file_name}`}
-              title="Download"
               className="shrink-0 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-slate-800"
             >
               {busy === file.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            </button>
+            </IconButton>
           </li>
         );
       })}

@@ -30,6 +30,7 @@ import type { BatchScoringStatus } from '@/lib/services/scoringService';
 /* On demand: mounted from the dashboard layout, opened only while scoring runs. */
 const BulkScoringProgressModal = dynamic(() => import('@/components/BulkScoringProgressModal'), { ssr: false, loading: () => null });
 import { Button } from '@/components/ui/button';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** One candidate's scorecard: the job page's Scored Resumes tab, opened on that resume. */
 export const scorecardUrl = (jobId: string, resumeId: string) =>
@@ -578,6 +579,8 @@ export default function GlobalScoringProgressIndicator() {
   const finishedScoring = activeScoringJobs.filter(isRunDone);
   const finishedInvites = inviteJobs.filter(j => !inviteRunning(j));
   const finishedFeedTasks = feedTasks.filter(t => (t.done || t.failed) && t.onRemove);
+  /* Page tasks (e.g. a finished resume upload) that can be cleared. */
+  const finishedExternal = externalTasks.filter(t => t.done && t.onDismiss);
 
   /* ── Overview popup ── */
   const overviewRows = items.flatMap(i => (i.row ? [i.row] : []));
@@ -751,15 +754,13 @@ export default function GlobalScoringProgressIndicator() {
             )}
             {/* Close: hides the list back into the round button. Tasks keep
                 running; nothing is removed. */}
-            <button
+            <IconButton bare label="Close My Activities" tooltip="Close (tasks keep running)"
               type="button"
               onClick={() => { setListOpen(false); setMinimized(true); toggleRef.current?.focus(); }}
-              aria-label="Close My Activities"
-              title="Close (tasks keep running)"
               className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-destructive-subtle hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
             >
               <X className="h-3.5 w-3.5" />
-            </button>
+            </IconButton>
           </header>
           {/* Status chips (4+ tasks) and a search (10+). */}
           {items.length >= 4 && (
@@ -857,7 +858,7 @@ export default function GlobalScoringProgressIndicator() {
           </ul>
           <footer className="flex items-center justify-between border-t border-[var(--border-dark)] bg-[var(--surface)] px-2.5 py-1">
             <span className="text-[9px] text-[var(--text-muted)]">Keeps running even if you change pages.</span>
-            {(finishedScoring.length > 0 || finishedInvites.length > 0 || finishedFeedTasks.length > 0) && (
+            {(finishedScoring.length > 0 || finishedInvites.length > 0 || finishedFeedTasks.length > 0 || finishedExternal.length > 0) && (
               <button
                 type="button"
                 onClick={() => {
@@ -868,6 +869,7 @@ export default function GlobalScoringProgressIndicator() {
                     .filter(a => finishedFeedTasks.some(t => t.id === `feed:${a.type}:${a.id}`))
                     .map(a => ({ type: a.type, id: a.id }));
                   if (refs.length) feedDismiss?.(refs);
+                  finishedExternal.forEach(t => t.onDismiss?.());
                 }}
                 className="text-[10px] text-[var(--muted-foreground)] hover:text-brand-blue hover:underline"
               >
@@ -1089,9 +1091,9 @@ function JobLine({ code, name, version, onOpen, title, after }: { code?: string 
 /** Small delete (remove from this list) button. */
 function RemoveButton({ onClick, what }: { onClick: () => void; what: string }) {
   return (
-    <Button variant="secondary" size="sm" className="!h-5 !w-5 !px-0 !rounded-md" onClick={onClick} aria-label={`Remove this ${what} from the list`} title="Remove from this list">
+    <IconButton label={`Remove this ${what} from the list`} tooltip="Remove from this list" variant="secondary" size="sm" className="!h-5 !w-5 !px-0 !rounded-md" onClick={onClick}>
       <Trash2 className="h-2.5 w-2.5" />
-    </Button>
+    </IconButton>
   );
 }
 

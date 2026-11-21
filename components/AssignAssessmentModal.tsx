@@ -3,6 +3,8 @@ import { Resume } from '@/lib/types/types';
 import { useState } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
 import { Button } from '@/components/ui/button';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface Assessment {
   id: string;
@@ -56,7 +58,7 @@ export default function AssignAssessmentModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
@@ -69,15 +71,14 @@ export default function AssignAssessmentModal({
               <p className="tf-meta mt-0.5">Send assessment invitations to candidates</p>
             </div>
           </div>
-          <Button
+          <IconButton label="Close"
             variant="secondary"
             size="sm"
             onClick={onClose}
             className="flex-shrink-0"
-            aria-label="Close"
           >
             <X className="w-5 h-5" />
-          </Button>
+          </IconButton>
         </div>
 
         {/* Content */}
@@ -228,6 +229,6 @@ export default function AssignAssessmentModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

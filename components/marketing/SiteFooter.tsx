@@ -102,7 +102,7 @@ export function SiteFooter() {
       <div
         data-footer-glow
         aria-hidden="true"
-        className="pointer-events-none absolute -left-48 -top-48 -z-10 h-[560px] w-[560px] rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.22),transparent)]"
+        className="pointer-events-none absolute -left-48 -top-48 -z-10 h-[560px] w-[560px] rounded-full bg-[radial-gradient(closest-side,var(--raw-rgba-7-156-196-0p22),transparent)]"
       />
 
       <div className="mx-auto w-full max-w-[1200px] xl:max-w-[1320px] 2xl:max-w-[1480px] px-4 sm:px-6 lg:px-8">

@@ -156,7 +156,7 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
               )}
               {tenant?.name && (
                 <span className="inline-flex items-center gap-1.5 text-white/90">
-                  <Building2 className="h-3.5 w-3.5 text-white/60" />
+                  <Building2 className="h-3.5 w-3.5 text-white/80" />
                   {tenant.name}
                 </span>
               )}
@@ -177,12 +177,12 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
             {formatDateTime(now)}
           </span>
           {user?.lastLogin ? (
-            <span className="inline-flex items-center gap-1.5 text-xs text-white/60">
+            <span className="inline-flex items-center gap-1.5 text-xs text-white/80">
               <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Last login: {formatLastLogin(user.lastLogin)}
             </span>
           ) : user?.createdAt ? (
-            <span className="inline-flex items-center gap-1.5 text-xs text-white/60">
+            <span className="inline-flex items-center gap-1.5 text-xs text-white/80">
               <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Member since {formatISTDate(user.createdAt)}
             </span>

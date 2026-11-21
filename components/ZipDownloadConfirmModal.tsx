@@ -1,6 +1,8 @@
 'use client';
 
 import { Download, FileArchive, Info, Loader2, Users, X } from 'lucide-react';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 interface ZipDownloadConfirmModalProps {
   open: boolean;
@@ -35,7 +37,7 @@ export default function ZipDownloadConfirmModal({
       {/* Backdrop */}
       <div className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200" onClick={close} />
       {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      <ModalA11y innerDialog><div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
           role="dialog"
           aria-modal="true"
@@ -53,14 +55,13 @@ export default function ZipDownloadConfirmModal({
                 <p className="tf-body-muted mt-0.5">Multiple files selected</p>
               </div>
             </div>
-            <button
+            <IconButton bare label="Close"
               onClick={close}
               disabled={busy}
-              className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="Close"
+              className="p-1 text-gray-500 hover:text-gray-600 dark:hover:text-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <X className="w-5 h-5" />
-            </button>
+            </IconButton>
           </div>
 
           {/* Content */}
@@ -110,7 +111,7 @@ export default function ZipDownloadConfirmModal({
             </button>
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
     </>
   );
 }

@@ -324,7 +324,7 @@ function FunnelDonut({ segments, centerLabel, centerValue }: FunnelDonutProps) {
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
         <p className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50 tabular-nums">{centerValue}</p>
-        <p className="mt-0.5 text-2xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{centerLabel}</p>
+        <p className="mt-0.5 text-2xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-500">{centerLabel}</p>
       </div>
     </div>
   );
@@ -362,7 +362,7 @@ function KpiCard({ label, value, note, icon: Icon, accent, bar, loading, trendVa
           </span>
         )}
       </div>
-      <p className="mt-3 text-2xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">{label}</p>
+      <p className="mt-3 text-2xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-500">{label}</p>
       <p className="mt-0.5 text-xl font-semibold leading-tight tracking-tight text-slate-900 dark:text-slate-50 tabular-nums">
         {loading ? <span className="inline-block h-6 w-14 animate-pulse rounded bg-slate-100 dark:bg-slate-800" /> : formatCompactNumber(value)}
       </p>

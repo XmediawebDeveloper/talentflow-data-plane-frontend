@@ -12,6 +12,8 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Question categories for HR round
 const HR_CATEGORIES = [
@@ -480,7 +482,7 @@ export default function HRQuestionBank() {
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
         <input
           type="text"
           value={searchQuery}
@@ -495,7 +497,7 @@ export default function HRQuestionBank() {
           the page does not open the form somewhere else. The shell is the
           Assessment flow's own "Add New Question" popup (AssessmentCreation). */}
       {showAddForm && (editingId ? canUpdateHRQuestionBank : canCreateHRQuestionBank) && (
-        <div
+        <ModalA11y closeOnEscape={false}><div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6"
           role="dialog"
           aria-modal="true"
@@ -511,9 +513,9 @@ export default function HRQuestionBank() {
                 {editingId ? 'Edit Question' : 'Add New Question'}
               </h3>
             </div>
-            <Button variant="secondary" size="sm" type="button" onClick={closeForm} disabled={saving} className="flex-shrink-0" aria-label="Close">
+            <IconButton label="Close" variant="secondary" size="sm" type="button" onClick={closeForm} disabled={saving} className="flex-shrink-0">
               <X className="w-5 h-5" />
-            </Button>
+            </IconButton>
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto space-y-5 px-4 sm:px-6 py-4">
@@ -576,7 +578,7 @@ export default function HRQuestionBank() {
             </Button>
           </div>
         </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Answer-type filter - one row of pills, the Resume Scoring "Show:"
@@ -680,7 +682,7 @@ export default function HRQuestionBank() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button
+                  <IconButton bare label="Edit question" tooltip={!canUpdateHRQuestionBank ? 'You do not have permission to edit questions' : 'Edit question'}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!canUpdateHRQuestionBank) return;
@@ -689,15 +691,13 @@ export default function HRQuestionBank() {
                     aria-disabled={!canUpdateHRQuestionBank}
                     className={`p-2 rounded-lg transition-colors ${
                       canUpdateHRQuestionBank
-                        ? 'text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10'
+                        ? 'text-gray-500 hover:text-brand-blue hover:bg-brand-blue/10'
                         : 'text-gray-300 cursor-not-allowed opacity-60'
                     }`}
-                    aria-label="Edit question"
-                    title={!canUpdateHRQuestionBank ? 'You do not have permission to edit questions' : 'Edit question'}
                   >
                     <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
+                  </IconButton>
+                  <IconButton bare label="Delete question" tooltip={!canDeleteHRQuestionBank ? 'You do not have permission to delete questions' : 'Delete question'}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!canDeleteHRQuestionBank) return;
@@ -706,14 +706,12 @@ export default function HRQuestionBank() {
                     aria-disabled={!canDeleteHRQuestionBank}
                     className={`p-2 rounded-lg transition-colors ${
                       canDeleteHRQuestionBank
-                        ? 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                        ? 'text-gray-500 hover:text-red-600 hover:bg-red-50'
                         : 'text-gray-300 cursor-not-allowed opacity-60'
                     }`}
-                    aria-label="Delete question"
-                    title={!canDeleteHRQuestionBank ? 'You do not have permission to delete questions' : 'Delete question'}
                   >
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </IconButton>
                 </div>
               </div>
             </div>
@@ -735,7 +733,7 @@ export default function HRQuestionBank() {
           (the shared ConfirmationDialog fades its backdrop in, which read as
           the page dimming slowly after the click). */}
       {deleteTarget && (
-        <div
+        <ModalA11y closeOnEscape={false}><div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6"
           role="alertdialog"
           aria-modal="true"
@@ -752,9 +750,9 @@ export default function HRQuestionBank() {
                   Delete Question
                 </h3>
               </div>
-              <Button variant="secondary" size="sm" type="button" onClick={() => setDeleteTarget(null)} className="flex-shrink-0" aria-label="Close">
+              <IconButton label="Close" variant="secondary" size="sm" type="button" onClick={() => setDeleteTarget(null)} className="flex-shrink-0">
                 <X className="w-5 h-5" />
-              </Button>
+              </IconButton>
             </div>
 
             <div id="hr-question-delete-desc" className="px-4 sm:px-6 py-4 space-y-2">
@@ -778,7 +776,7 @@ export default function HRQuestionBank() {
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
         </>
       )}

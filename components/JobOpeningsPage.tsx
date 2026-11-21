@@ -36,6 +36,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { prefetchJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 
@@ -335,7 +337,7 @@ export default function JobOpeningsPage() {
           <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
                 type="text"
                 placeholder="Search jobs by title, department, or location..."
@@ -492,7 +494,7 @@ export default function JobOpeningsPage() {
                     </td>
                     <td className="tf-td hidden lg:table-cell">
                       <div className="flex items-center gap-1.5 tf-body-secondary">
-                        <Users className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
+                        <Users className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
                         <span>{job.applicants_count || 0}</span>
                       </div>
                     </td>
@@ -532,16 +534,15 @@ export default function JobOpeningsPage() {
                         </button>
                         {/* More Actions Dropdown */}
                         <div className="relative">
-                          <button
+                          <IconButton bare label="More actions"
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveDropdown(activeDropdown === job.id ? null : job.id);
                             }}
                             className="p-1 sm:p-2 hover:bg-gray-100 rounded transition-colors border border-gray-200"
-                            aria-label="More actions" title="More actions"
                           >
                             <MoreVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" />
-                          </button>
+                          </IconButton>
                           {activeDropdown === job.id && (
                             <>
                               <div className="fixed inset-0 z-10" onClick={() => setActiveDropdown(null)} />
@@ -664,25 +665,23 @@ export default function JobOpeningsPage() {
                   className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
                 />
               </div>
-              <button
+              <IconButton bare label="Previous page"
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
                 className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                aria-label="Previous page" title="Previous page"
               >
                 <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
+              </IconButton>
               <span className="tf-label px-1 whitespace-nowrap">
                 <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
               </span>
-              <button
+              <IconButton bare label="Next page"
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
                 className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
-                aria-label="Next page" title="Next page"
               >
                 <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
+              </IconButton>
             </div>
           </div>
         )}
@@ -690,18 +689,17 @@ export default function JobOpeningsPage() {
 
       {/* Job Quota Exceeded Modal */}
       {showQuotaModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <ModalA11y><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
           <div className="bg-white rounded-xl border border-gray-200 max-w-[95vw] sm:max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] flex flex-col">
             {/* Header */}
             <div className="px-5 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
               <h3 className="tf-section-title sm:text-xl">Job Quota Exceeded</h3>
-              <button
+              <IconButton bare label="Close"
                 onClick={() => setShowQuotaModal(false)}
-                className="text-gray-400 hover:text-gray-600 p-1"
-                aria-label="Close"
+                className="text-gray-500 hover:text-gray-600 p-1"
               >
                 <X className="w-5 h-5 text-gray-500" />
-              </button>
+              </IconButton>
             </div>
 
             {/* Body */}
@@ -729,23 +727,22 @@ export default function JobOpeningsPage() {
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
 
       {/* Insufficient Units Modal - when RS, RU, AS are all 0 */}
       {showInsufficientUnitsModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <ModalA11y><div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
           <div className="bg-white rounded-xl border border-gray-200 max-w-[95vw] sm:max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] flex flex-col">
             {/* Header */}
             <div className="px-5 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
               <h3 className="tf-section-title sm:text-xl">Insufficient Units</h3>
-              <button
+              <IconButton bare label="Close"
                 onClick={() => setShowInsufficientUnitsModal(false)}
-                className="text-gray-400 hover:text-gray-600 p-1"
-                aria-label="Close"
+                className="text-gray-500 hover:text-gray-600 p-1"
               >
                 <X className="w-5 h-5 text-gray-500" />
-              </button>
+              </IconButton>
             </div>
 
             {/* Body */}
@@ -801,7 +798,7 @@ export default function JobOpeningsPage() {
               </Button>
             </div>
           </div>
-        </div>
+        </div></ModalA11y>
       )}
     </div>
   );

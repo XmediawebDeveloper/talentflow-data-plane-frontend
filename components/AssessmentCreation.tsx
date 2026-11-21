@@ -60,6 +60,9 @@ import { Skeleton, PageSkeleton } from '@/components/ui/skeleton';
 import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
 import { ASSESSMENT_JOB_LOCK_MESSAGE, isJobVersionLocked } from '@/lib/utils/assessmentJobLock';
 import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 import { safeReturnUrl } from '@/lib/utils/safeReturnUrl';
 
 // Languages that have an executable runtime in the candidate's coding round.
@@ -405,14 +408,13 @@ function JDSkillsReveal({
             <p className="tf-caption">
               {label} ({skills.length})
             </p>
-            <button
+            <IconButton bare label="Close"
               type="button"
               onClick={close}
-              aria-label="Close"
-              className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+              className="text-gray-500 hover:text-gray-600 flex-shrink-0"
             >
               <X className="h-3.5 w-3.5" />
-            </button>
+            </IconButton>
           </div>
           <div className="mt-2 overflow-y-auto" style={{ maxHeight: placement.listMaxHeight }}>
             <div className="flex flex-wrap gap-1.5">
@@ -1553,7 +1555,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
     if (!showAddHRQuizModal) return null;
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6">
+      <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6">
         <div className="w-full max-w-[95vw] sm:max-w-2xl rounded-xl border border-gray-100 bg-white ring-1 ring-black/[0.02] shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
           <div className="flex-shrink-0 flex items-center justify-between gap-3 border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
             <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1562,9 +1564,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               </div>
               <h3 className="tf-section-title sm:text-lg tracking-tight min-w-0 truncate">Add New Question</h3>
             </div>
-            <Button variant="secondary" size="sm" type="button" onClick={closeAddHRQuizModal} className="flex-shrink-0" aria-label="Close">
+            <IconButton label="Close" variant="secondary" size="sm" type="button" onClick={closeAddHRQuizModal} className="flex-shrink-0">
               <X className="w-5 h-5" />
-            </Button>
+            </IconButton>
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-4 sm:px-6 py-4">
@@ -1620,7 +1622,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             </Button>
           </div>
         </div>
-      </div>
+      </div></ModalA11y>
     );
   };
 
@@ -3805,7 +3807,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 <label className="flex w-full items-center gap-2 md:w-[25rem] lg:w-[29rem]">
                   <span className="tf-meta shrink-0 whitespace-nowrap !font-semibold !text-[var(--text-primary)]">Search Jobs</span>
                   <span className="relative min-w-0 flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
                     <input
                       type="text"
                       placeholder="Search by JD number, role, department or location..."
@@ -4029,7 +4031,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           {/* Clicking the headline ticks the job, so the whole
                               block is a target without a <label> wrapping the
                               controls beside it. */}
-                          <div
+                          <div {...clickableProps}
                             onClick={() => latestSelectable && pickJdVersion(job, versionKey)}
                             className={latestSelectable ? 'cursor-pointer' : 'cursor-default'}
                           >
@@ -4077,7 +4079,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                               without navigating away from a half-made
                               assessment. Opens on the LIST — this Eye is about
                               the job's history, not one version of it. */}
-                          <button
+                          <IconButton bare label="View version history"
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -4085,11 +4087,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                               setVersionHistoryFor(job);
                             }}
                             className="h-7 w-7 flex items-center justify-center bg-white text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                            aria-label="View version history"
-                            title="View version history"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                          </button>
+                          </IconButton>
                         </div>
                       </div>
 
@@ -4344,7 +4344,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                     a version row and a press on a card race
                                     each other exactly as two presses on one
                                     button do. */}
-                                <button
+                                <IconButton bare label={add.label}
                                   type="button"
                                   disabled={!add.enabled || !!startingAssessmentFor || !hasLoadedAssessmentEligibility || jobsLoadError === 'eligibility'}
                                   aria-busy={startingAssessmentFor === versionJob.id}
@@ -4354,8 +4354,6 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                       ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-white/10'
                                       : ADD_BUTTON_DISABLED
                                   }`}
-                                  aria-label={add.label}
-                                  title={add.label}
                                 >
                                   <span className="sm:hidden">Create</span>
                                   <span className="hidden sm:inline">Create Config</span>
@@ -4364,7 +4362,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                   ) : (
                                     <ChevronRight className="w-3.5 h-3.5" />
                                   )}
-                                </button>
+                                </IconButton>
 
                                 {/* The card's own Eye, on every version row —
                                     same button, same classes, same popup. Never
@@ -4375,7 +4373,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                     at THIS version's id, so the popup opens on
                                     the row's own version rather than the
                                     card's. */}
-                                <button
+                                <IconButton bare label={`View v${versionJob.versionNumber ?? 1} details`}
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -4387,11 +4385,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                     setVersionHistoryFor(versionJob);
                                   }}
                                   className="h-7 w-7 flex items-center justify-center bg-white text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                                  aria-label={`View v${versionJob.versionNumber ?? 1} details`}
-                                  title={`View v${versionJob.versionNumber ?? 1} details`}
                                 >
                                   <Eye className="w-3.5 h-3.5" />
-                                </button>
+                                </IconButton>
                               </>
                             );
                           }}
@@ -4533,7 +4529,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
         {/* Full-screen JD Creation Modal */}
         {showJDCreation && (
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+          <ModalA11y><div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
             <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
               {/* Modal Header */}
               <div className="bg-brand-blue px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 flex-shrink-0 rounded-t-xl sm:rounded-t-2xl">
@@ -4546,13 +4542,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     <p className="text-white/80 text-sm hidden sm:block">Create a job description for your assessment</p>
                   </div>
                 </div>
-                <button
+                <IconButton bare label="Close"
                   onClick={() => setShowJDCreation(false)}
                   className="h-8 w-8 inline-flex items-center justify-center flex-shrink-0 hover:bg-white/10 rounded-lg transition-colors"
-                  aria-label="Close"
                 >
                   <X className="w-5 h-5 text-white" />
-                </button>
+                </IconButton>
               </div>
 
               {/* JDCreation Component */}
@@ -4563,7 +4558,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 />
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
       </div>
     );
@@ -4658,7 +4653,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                  element — so the read-only fieldset cannot reach it and the
                  handler and its cursor are dropped here instead. Same row,
                  same colours; it just no longer responds. */
-              <div
+              <div {...((readOnly) ? {} : clickableProps)}
                 key={q.id}
                 onClick={readOnly ? undefined : () => toggleHRQuestion(q.id)}
                 className={`flex items-center gap-2.5 p-2 rounded-lg transition-all text-xs ${
@@ -4743,7 +4738,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <label className="tf-meta min-w-0">
                     Choose your programming language
-                    <span className="ml-2 text-2xs text-gray-400 font-normal">
+                    <span className="ml-2 text-2xs text-gray-500 font-normal">
                       {chosen.length}/{MAX_CODING_LANGUAGES} selected
                       {atMax ? ' — maximum reached' : ''}
                     </span>
@@ -4775,14 +4770,13 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             text-xs pill without stretching it. */}
                         <LanguageLogo language={lang} size="sm" />
                         {lang}
-                        <button
+                        <IconButton bare label={`Remove ${lang}`}
                           type="button"
                           onClick={() => toggleLanguageSelection(lang)}
                           className="flex-shrink-0 text-brand-blue/60 hover:text-destructive transition-colors"
-                          aria-label={`Remove ${lang}`}
                         >
                           <X className="w-3 h-3" />
-                        </button>
+                        </IconButton>
                       </span>
                     ))}
                   </div>
@@ -4796,7 +4790,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             <label className="tf-meta mb-2 block">
               Percentage Allocation
               {section.name === 'Coding' && (
-                <span className="ml-2 text-2xs text-gray-400 font-normal">
+                <span className="ml-2 text-2xs text-gray-500 font-normal">
                   Allowed: 35% / 50% / 75% / 100%
                 </span>
               )}
@@ -4904,7 +4898,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         aria-label={`${expandedRounds.has(round) ? 'Hide' : 'Show'} the ${round} section`}
         title={enabled ? `${expandedRounds.has(round) ? 'Hide' : 'Show'} the ${round} section` : undefined}
         className={`h-8 w-8 inline-flex items-center justify-center flex-shrink-0 rounded-md transition-colors ${
-          enabled ? 'cursor-pointer text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40' : 'text-gray-300 cursor-not-allowed'
+          enabled ? 'cursor-pointer text-gray-500 hover:text-gray-600 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40' : 'text-gray-300 cursor-not-allowed'
         }`}
       >
         <ChevronDown
@@ -5832,7 +5826,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             one question and lists what the answer throws away, so it never
             needed the language picker the other two modes are built around. */}
         {showCodingConfirm && codingPopupMode === 'disable' && (
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+          <ModalA11y><div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
             <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
               {/* Header — a lighter wash than the icon tile (originally
                   red-50 under a red-100 tile), so the tile and its Code mark
@@ -5887,12 +5881,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 </Button>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
 
         {/* Minimum Round Required Popup */}
         {showMinRoundPopup && (
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+          <ModalA11y><div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
             <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
               {/* Header */}
               <div className="flex-shrink-0 bg-warning-subtle border-b border-warning-line px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
@@ -5925,7 +5919,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 </Button>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
 
         {/* The publish confirmation is no longer a modal here — Publish runs

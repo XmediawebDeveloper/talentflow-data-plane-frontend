@@ -42,6 +42,7 @@ import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import ForwardTicketDialog from '@/components/support/ForwardTicketDialog';
 import { forwardTeamLabel } from '@/lib/services/internalTicketService';
 import UnitDisputesView from '@/components/subscription/unit-disputes/UnitDisputesView';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Main API - Local backend handles everything including support tickets
 // Character limits for the Create Support Ticket form.
@@ -1595,9 +1596,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             { icon: <Calendar />, label: formatISTDate(ticket.createdAt) },
                           ]}
                           actions={
-                            <button type="button" onClick={openTicket} aria-label={`View ticket ${ticket.ticketNumber}`} title="View" className="tf-icon-btn-outline">
+                            <IconButton bare label={`View ticket ${ticket.ticketNumber}`} tooltip="View" type="button" onClick={openTicket} className="tf-icon-btn-outline">
                               <Eye />
-                            </button>
+                            </IconButton>
                           }
                         />
                       );
@@ -1665,7 +1666,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left sm:px-5"
               >
                 <span className="tf-section-title">Help &amp; Resources</span>
-                <ChevronDown className={`h-5 w-5 shrink-0 text-gray-400 transition-transform duration-200 ${helpOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`h-5 w-5 shrink-0 text-gray-500 transition-transform duration-200 ${helpOpen ? 'rotate-180' : ''}`} />
               </button>
               {helpOpen && (
             <div id="support-help-resources" className="space-y-4 border-t border-gray-100 p-4 sm:p-5 dark:border-slate-700/60">
@@ -1686,7 +1687,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <h4 className="tf-row-title sm:text-base">{item.title}</h4>
                       <p className="tf-meta sm:text-sm">{item.desc}</p>
                     </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                    <ChevronRight className="h-5 w-5 shrink-0 text-gray-500 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
                   </>
                 );
                 const cls = 'group flex w-full items-center gap-3 tf-panel p-4 text-left transition-all hover:border-brand-blue/30 hover:shadow-md';
@@ -1695,7 +1696,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <button key={item.key} onClick={() => setView('knowledge-base')} className={cls}>{inner}</button>
                 ) : (
                   <div key={item.key} aria-disabled="true" className="relative flex w-full cursor-default items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-4 text-left opacity-80 dark:border-slate-700 dark:bg-slate-800/30">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-500">
                       <item.icon className="h-5 w-5" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -1828,7 +1829,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <AlertCircle className="h-3.5 w-3.5" /> Title is required
                         </p>
                       ) : <span />}
-                      <p className={`text-xs tabular-nums ${title.length >= TICKET_TITLE_MAX ? 'text-destructive' : 'text-gray-400 dark:text-slate-500'}`}>{title.length}/{TICKET_TITLE_MAX}</p>
+                      <p className={`text-xs tabular-nums ${title.length >= TICKET_TITLE_MAX ? 'text-destructive' : 'text-gray-500 dark:text-slate-500'}`}>{title.length}/{TICKET_TITLE_MAX}</p>
                     </div>
 
                     {/* Possible duplicates */}
@@ -1889,7 +1890,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             </div>
                           }
                         >
-                          <span tabIndex={0} aria-label="What each priority means" className="inline-flex cursor-help text-gray-400 hover:text-brand-blue">
+                          <span tabIndex={0} aria-label="What each priority means" className="inline-flex cursor-help text-gray-500 hover:text-brand-blue">
                             <Info className="h-4 w-4" />
                           </span>
                         </Tooltip>
@@ -1958,7 +1959,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <div className="min-h-[132px] rounded-md border border-gray-200 bg-gray-50 px-3 py-2 tf-body leading-relaxed dark:border-slate-700 dark:bg-slate-800/50">
                         {description.trim()
                           ? <div className="space-y-1">{renderFormattedMessage(description)}</div>
-                          : <p className="text-gray-400 dark:text-slate-500">Nothing to preview yet.</p>}
+                          : <p className="text-gray-500 dark:text-slate-500">Nothing to preview yet.</p>}
                       </div>
                     ) : (
                       <Textarea
@@ -1977,20 +1978,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {/* Toolbar + counter */}
                     <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-0.5">
-                        <button type="button" disabled={showDescriptionPreview} onClick={() => wrapDescription('**', '**', 'bold text')} aria-label="Bold" title="Bold" className={toolBtn}><Bold className="h-4 w-4" /></button>
-                        <button type="button" disabled={showDescriptionPreview} onClick={() => wrapDescription('_', '_', 'italic text')} aria-label="Italic" title="Italic" className={toolBtn}><Italic className="h-4 w-4" /></button>
-                        <button type="button" disabled={showDescriptionPreview} onClick={() => prefixDescriptionLines(() => '- ')} aria-label="Bulleted list" title="Bulleted list" className={toolBtn}><List className="h-4 w-4" /></button>
-                        <button type="button" disabled={showDescriptionPreview} onClick={() => prefixDescriptionLines(i => `${i + 1}. `)} aria-label="Numbered list" title="Numbered list" className={toolBtn}><ListOrdered className="h-4 w-4" /></button>
-                        <button type="button" disabled={showDescriptionPreview} onClick={() => wrapDescription('[', '](https://)', 'link text')} aria-label="Insert link" title="Insert link" className={toolBtn}><Link2 className="h-4 w-4" /></button>
+                        <IconButton bare label="Bold" type="button" disabled={showDescriptionPreview} onClick={() => wrapDescription('**', '**', 'bold text')} className={toolBtn}><Bold className="h-4 w-4" /></IconButton>
+                        <IconButton bare label="Italic" type="button" disabled={showDescriptionPreview} onClick={() => wrapDescription('_', '_', 'italic text')} className={toolBtn}><Italic className="h-4 w-4" /></IconButton>
+                        <IconButton bare label="Bulleted list" type="button" disabled={showDescriptionPreview} onClick={() => prefixDescriptionLines(() => '- ')} className={toolBtn}><List className="h-4 w-4" /></IconButton>
+                        <IconButton bare label="Numbered list" type="button" disabled={showDescriptionPreview} onClick={() => prefixDescriptionLines(i => `${i + 1}. `)} className={toolBtn}><ListOrdered className="h-4 w-4" /></IconButton>
+                        <IconButton bare label="Insert link" type="button" disabled={showDescriptionPreview} onClick={() => wrapDescription('[', '](https://)', 'link text')} className={toolBtn}><Link2 className="h-4 w-4" /></IconButton>
                         <div className="relative">
-                          <button type="button" disabled={showDescriptionPreview} onClick={() => { setDescEmojiOpen(o => !o); setDescTemplateOpen(false); }} aria-label="Insert emoji" title="Insert emoji" aria-expanded={descEmojiOpen} className={toolBtn}><Smile className="h-4 w-4" /></button>
+                          <IconButton bare label="Insert emoji" type="button" disabled={showDescriptionPreview} onClick={() => { setDescEmojiOpen(o => !o); setDescTemplateOpen(false); }} aria-expanded={descEmojiOpen} className={toolBtn}><Smile className="h-4 w-4" /></IconButton>
                           {descEmojiOpen && !showDescriptionPreview && (
                             <>
                               <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setDescEmojiOpen(false)} />
                               <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                 {EMOJI_GROUPS.map(group => (
                                   <div key={group.group} className="mb-1.5 last:mb-0">
-                                    <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                    <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">{group.group}</p>
                                     <div className="grid grid-cols-8 gap-0.5">
                                       {group.items.map(em => (
                                         <button
@@ -2019,7 +2020,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <AlertCircle className="h-3.5 w-3.5" /> Description is required
                           </p>
                         )}
-                        <p className={`text-xs tabular-nums ${description.length >= TICKET_DESCRIPTION_MAX ? 'text-destructive' : 'text-gray-400 dark:text-slate-500'}`}>{description.length}/{TICKET_DESCRIPTION_MAX}</p>
+                        <p className={`text-xs tabular-nums ${description.length >= TICKET_DESCRIPTION_MAX ? 'text-destructive' : 'text-gray-500 dark:text-slate-500'}`}>{description.length}/{TICKET_DESCRIPTION_MAX}</p>
                       </div>
                     </div>
 
@@ -2311,9 +2312,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             { icon: <Clock />, label: formatISTDate(ticket.updatedAt) },
                           ]}
                           actions={
-                            <button type="button" onClick={openTicket} aria-label={`View ticket ${ticket.ticketNumber}`} title="View" className="tf-icon-btn-outline">
+                            <IconButton bare label={`View ticket ${ticket.ticketNumber}`} tooltip="View" type="button" onClick={openTicket} className="tf-icon-btn-outline">
                               <Eye />
-                            </button>
+                            </IconButton>
                           }
                         />
                       );
@@ -2518,7 +2519,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           const toolBtn = 'flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100';
           const infoRow = (Icon: typeof Ticket, label: string, value: React.ReactNode) => (
             <div className="flex items-center gap-3 py-2">
-              <Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+              <Icon className="h-4 w-4 shrink-0 text-gray-500 dark:text-slate-500" />
               <span className="w-24 shrink-0 tf-body-muted">{label}</span>
               <div className="min-w-0 flex-1 tf-row-name">{value}</div>
             </div>
@@ -2589,9 +2590,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 tf-meta">
                       <span>{selectedTicket.ticketNumber}</span>
-                      <button type="button" onClick={copyTicketId} aria-label="Copy ticket ID" className="rounded p-0.5 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
+                      <IconButton bare label="Copy ticket ID" type="button" onClick={copyTicketId} className="rounded p-0.5 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
                         <Copy className="h-3.5 w-3.5" />
-                      </button>
+                      </IconButton>
                     </div>
                     <h2 className="mt-1 break-words text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{selectedTicket.title}</h2>
                     <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -2607,14 +2608,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <div className="flex shrink-0 items-start gap-3">
                     <div className="flex flex-row gap-4 sm:flex-col sm:gap-2 sm:border-l sm:border-gray-200 sm:pl-5 dark:sm:border-slate-700">
                       <div className="flex items-start gap-2">
-                        <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                        <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-slate-500" />
                         <div>
                           <div className="tf-meta">Created</div>
                           <div className="tf-caption">{formatIST(selectedTicket.createdAt)}</div>
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
-                        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-slate-500" />
                         <div>
                           <div className="tf-meta">Last Updated</div>
                           <div className="tf-caption">{formatIST(selectedTicket.updatedAt)}</div>
@@ -2623,15 +2624,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </div>
                     {/* More actions menu */}
                     <div className="relative">
-                      <button
+                      <IconButton bare label="More actions"
                         type="button"
                         onClick={() => setTicketMenuOpen(o => !o)}
-                        aria-label="More actions"
                         aria-expanded={ticketMenuOpen}
                         className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                       >
                         <MoreHorizontal className="h-4 w-4" />
-                      </button>
+                      </IconButton>
                       {ticketMenuOpen && (
                         <>
                           <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setTicketMenuOpen(false)} />
@@ -2768,9 +2768,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <div className="mt-4 flex items-start gap-2.5 rounded-lg bg-success-subtle px-3 py-2.5 text-xs text-success-strong sm:text-sm">
                             <Info className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                             <span className="flex-1">Keep the conversation updated with additional details to help us resolve the issue faster.</span>
-                            <button type="button" onClick={() => setShowReplyTip(false)} aria-label="Dismiss tip" className="shrink-0 rounded p-0.5 hover:bg-success/10">
+                            <IconButton bare label="Dismiss tip" type="button" onClick={() => setShowReplyTip(false)} className="shrink-0 rounded p-0.5 hover:bg-success/10">
                               <X className="h-4 w-4" />
-                            </button>
+                            </IconButton>
                           </div>
                         )}
                         <div className="mt-4 border-t border-gray-100 pt-4 dark:border-slate-700/60">
@@ -2792,7 +2792,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                   <div className="absolute right-0 z-20 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                     {replyTemplates.map(group => (
                                       <div key={group.group} className="py-1">
-                                        <p className="px-3 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                        <p className="px-3 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">{group.group}</p>
                                         {group.items.map(tpl => (
                                           <button
                                             key={tpl.label}
@@ -2831,16 +2831,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                   <Paperclip className="h-3 w-3 shrink-0 text-brand-blue" />
                                   <span className="truncate" title={file.name}>{file.name}</span>
                                   <span className="shrink-0 rounded bg-indigo-50 px-1 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{(file.name.split('.').pop() || '').toUpperCase()}</span>
-                                  <span className="shrink-0 text-gray-400">{(file.size / 1024).toFixed(0)} KB</span>
-                                  <button
+                                  <span className="shrink-0 text-gray-500">{(file.size / 1024).toFixed(0)} KB</span>
+                                  <IconButton bare label={`Remove ${file.name}`}
                                     type="button"
                                     onClick={() => setReplyFiles(prev => prev.filter((_, i) => i !== index))}
                                     disabled={replySending}
-                                    aria-label={`Remove ${file.name}`}
                                     className="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700"
                                   >
                                     <X className="h-3 w-3" />
-                                  </button>
+                                  </IconButton>
                                 </li>
                               ))}
                             </ul>
@@ -2868,20 +2867,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 </button>
                               </Tooltip>
                               <span className="mx-1 h-5 w-px bg-gray-200 dark:bg-slate-700" />
-                              <button type="button" onClick={() => wrapSelection('**', '**', 'bold text')} aria-label="Bold" title="Bold" className={toolBtn}><Bold className="h-4 w-4" /></button>
-                              <button type="button" onClick={() => wrapSelection('_', '_', 'italic text')} aria-label="Italic" title="Italic" className={toolBtn}><Italic className="h-4 w-4" /></button>
-                              <button type="button" onClick={() => prefixLines(() => '- ')} aria-label="Bulleted list" title="Bulleted list" className={toolBtn}><List className="h-4 w-4" /></button>
-                              <button type="button" onClick={() => prefixLines(i => `${i + 1}. `)} aria-label="Numbered list" title="Numbered list" className={toolBtn}><ListOrdered className="h-4 w-4" /></button>
-                              <button type="button" onClick={() => wrapSelection('[', '](https://)', 'link text')} aria-label="Insert link" title="Insert link" className={toolBtn}><Link2 className="h-4 w-4" /></button>
+                              <IconButton bare label="Bold" type="button" onClick={() => wrapSelection('**', '**', 'bold text')} className={toolBtn}><Bold className="h-4 w-4" /></IconButton>
+                              <IconButton bare label="Italic" type="button" onClick={() => wrapSelection('_', '_', 'italic text')} className={toolBtn}><Italic className="h-4 w-4" /></IconButton>
+                              <IconButton bare label="Bulleted list" type="button" onClick={() => prefixLines(() => '- ')} className={toolBtn}><List className="h-4 w-4" /></IconButton>
+                              <IconButton bare label="Numbered list" type="button" onClick={() => prefixLines(i => `${i + 1}. `)} className={toolBtn}><ListOrdered className="h-4 w-4" /></IconButton>
+                              <IconButton bare label="Insert link" type="button" onClick={() => wrapSelection('[', '](https://)', 'link text')} className={toolBtn}><Link2 className="h-4 w-4" /></IconButton>
                               <div className="relative">
-                                <button type="button" onClick={() => { setEmojiMenuOpen(o => !o); setTemplateMenuOpen(false); }} aria-label="Insert emoji" title="Insert emoji" aria-expanded={emojiMenuOpen} className={toolBtn}><Smile className="h-4 w-4" /></button>
+                                <IconButton bare label="Insert emoji" type="button" onClick={() => { setEmojiMenuOpen(o => !o); setTemplateMenuOpen(false); }} aria-expanded={emojiMenuOpen} className={toolBtn}><Smile className="h-4 w-4" /></IconButton>
                                 {emojiMenuOpen && (
                                   <>
                                     <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setEmojiMenuOpen(false)} />
                                     <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                       {EMOJI_GROUPS.map(group => (
                                         <div key={group.group} className="mb-1.5 last:mb-0">
-                                          <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                          <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">{group.group}</p>
                                           <div className="grid grid-cols-8 gap-0.5">
                                             {group.items.map(em => (
                                               <button
@@ -2951,14 +2950,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <FileText className="h-4 w-4 shrink-0 text-brand-blue" />
                             <span className="min-w-0 flex-1 truncate tf-body" title={file.name}>{file.name}</span>
                             <span className="shrink-0 tf-meta">{file.size}</span>
-                            <button
+                            <IconButton bare label={`Download ${file.name}`}
                               type="button"
                               onClick={() => downloadAttachment(selectedTicket.id, file)}
-                              aria-label={`Download ${file.name}`}
                               className="shrink-0 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800"
                             >
                               <Download className="h-4 w-4" />
-                            </button>
+                            </IconButton>
                           </li>
                         ))}
                       </ul>
@@ -2979,9 +2977,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {infoRow(Tag, 'Ticket ID', (
                       <span className="inline-flex items-center gap-1.5">
                         <span className="truncate">{selectedTicket.ticketNumber}</span>
-                        <button type="button" onClick={copyTicketId} aria-label="Copy ticket ID" className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
+                        <IconButton bare label="Copy ticket ID" type="button" onClick={copyTicketId} className="rounded p-0.5 text-gray-500 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
                           <Copy className="h-3.5 w-3.5" />
-                        </button>
+                        </IconButton>
                       </span>
                     ))}
                     {infoRow(Circle, 'Status', getStatusBadge(selectedTicket.status))}
@@ -3199,7 +3197,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         </span>
                         <span className="min-w-0 flex-1 truncate tf-label">{getInternalCategoryLabel(cat)}</span>
                         <span className="shrink-0 rounded-md bg-white px-2 py-0.5 tf-caption tabular-nums ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">{count}</span>
-                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-brand-blue" />
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500 group-hover:text-brand-blue" />
                       </button>
                     );
                   })}
@@ -3232,7 +3230,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <h3 className="tf-section-title">{action.title}</h3>
                       <p className="tf-body-secondary">{action.desc}</p>
                     </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+                    <ChevronRight className="h-5 w-5 shrink-0 text-gray-500 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
                   </button>
                 );
               })}
@@ -3291,9 +3289,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           { icon: <Calendar />, label: formatISTDate(ticket.created_at) },
                         ]}
                         actions={
-                          <button type="button" onClick={() => openInternal(ticket)} aria-label={`View ticket ${ticket.ticket_number}`} title="View" className="tf-icon-btn-outline">
+                          <IconButton bare label={`View ticket ${ticket.ticket_number}`} tooltip="View" type="button" onClick={() => openInternal(ticket)} className="tf-icon-btn-outline">
                             <Eye />
-                          </button>
+                          </IconButton>
                         }
                       />
                     ))}
@@ -3509,9 +3507,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             { icon: <UserCheck />, label: ticket.assigned_to ? ticket.assigned_to.name : null },
                           ]}
                           actions={
-                            <button type="button" onClick={openTicket} aria-label={`View ticket ${ticket.ticket_number}`} title="View" className="tf-icon-btn-outline">
+                            <IconButton bare label={`View ticket ${ticket.ticket_number}`} tooltip="View" type="button" onClick={openTicket} className="tf-icon-btn-outline">
                               <Eye />
-                            </button>
+                            </IconButton>
                           }
                         />
                       );
@@ -3745,7 +3743,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           const actionBtn = 'flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60';
           const infoRow = (Icon: typeof Ticket, label: string, value: React.ReactNode) => (
             <div className="flex items-center gap-3 py-2">
-              <Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+              <Icon className="h-4 w-4 shrink-0 text-gray-500 dark:text-slate-500" />
               <span className="w-24 shrink-0 tf-body-muted">{label}</span>
               <div className="min-w-0 flex-1 tf-row-name">{value}</div>
             </div>
@@ -3794,9 +3792,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 tf-meta">
                       <span>{t.ticket_number}</span>
-                      <button type="button" onClick={copyId} aria-label="Copy ticket ID" className="rounded p-0.5 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
+                      <IconButton bare label="Copy ticket ID" type="button" onClick={copyId} className="rounded p-0.5 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
                         <Copy className="h-3.5 w-3.5" />
-                      </button>
+                      </IconButton>
                     </div>
                     <h2 className="mt-1 break-words text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{t.title}</h2>
                     <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -3821,14 +3819,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
                   <div className="flex shrink-0 flex-row gap-4 sm:flex-col sm:gap-2 sm:border-l sm:border-gray-200 sm:pl-5 dark:sm:border-slate-700">
                     <div className="flex items-start gap-2">
-                      <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                      <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-slate-500" />
                       <div>
                         <div className="tf-meta">Created</div>
                         <div className="tf-caption">{formatIST(t.created_at)}</div>
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
-                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-slate-500" />
                       <div>
                         <div className="tf-meta">Last Updated</div>
                         <div className="tf-caption">{formatIST(t.updated_at)}</div>
@@ -3955,7 +3953,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 <div className="absolute right-0 z-20 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                   {adminTemplates.map(group => (
                                     <div key={group.group} className="py-1">
-                                      <p className="px-3 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                      <p className="px-3 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">{group.group}</p>
                                       {group.items.map(tpl => (
                                         <button
                                           key={tpl.label}
@@ -3999,20 +3997,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           {/* Toolbar */}
                           <div className="flex flex-wrap items-center gap-0.5">
-                            <button type="button" onClick={() => wrapSelection('**', '**', 'bold text')} aria-label="Bold" title="Bold" className={toolBtn}><Bold className="h-4 w-4" /></button>
-                            <button type="button" onClick={() => wrapSelection('_', '_', 'italic text')} aria-label="Italic" title="Italic" className={toolBtn}><Italic className="h-4 w-4" /></button>
-                            <button type="button" onClick={() => prefixLines(() => '- ')} aria-label="Bulleted list" title="Bulleted list" className={toolBtn}><List className="h-4 w-4" /></button>
-                            <button type="button" onClick={() => prefixLines(i => `${i + 1}. `)} aria-label="Numbered list" title="Numbered list" className={toolBtn}><ListOrdered className="h-4 w-4" /></button>
-                            <button type="button" onClick={() => wrapSelection('[', '](https://)', 'link text')} aria-label="Insert link" title="Insert link" className={toolBtn}><Link2 className="h-4 w-4" /></button>
+                            <IconButton bare label="Bold" type="button" onClick={() => wrapSelection('**', '**', 'bold text')} className={toolBtn}><Bold className="h-4 w-4" /></IconButton>
+                            <IconButton bare label="Italic" type="button" onClick={() => wrapSelection('_', '_', 'italic text')} className={toolBtn}><Italic className="h-4 w-4" /></IconButton>
+                            <IconButton bare label="Bulleted list" type="button" onClick={() => prefixLines(() => '- ')} className={toolBtn}><List className="h-4 w-4" /></IconButton>
+                            <IconButton bare label="Numbered list" type="button" onClick={() => prefixLines(i => `${i + 1}. `)} className={toolBtn}><ListOrdered className="h-4 w-4" /></IconButton>
+                            <IconButton bare label="Insert link" type="button" onClick={() => wrapSelection('[', '](https://)', 'link text')} className={toolBtn}><Link2 className="h-4 w-4" /></IconButton>
                             <div className="relative">
-                              <button type="button" onClick={() => { setEmojiMenuOpen(o => !o); setTemplateMenuOpen(false); }} aria-label="Insert emoji" title="Insert emoji" aria-expanded={emojiMenuOpen} className={toolBtn}><Smile className="h-4 w-4" /></button>
+                              <IconButton bare label="Insert emoji" type="button" onClick={() => { setEmojiMenuOpen(o => !o); setTemplateMenuOpen(false); }} aria-expanded={emojiMenuOpen} className={toolBtn}><Smile className="h-4 w-4" /></IconButton>
                               {emojiMenuOpen && (
                                 <>
                                   <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setEmojiMenuOpen(false)} />
                                   <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                     {EMOJI_GROUPS.map(group => (
                                       <div key={group.group} className="mb-1.5 last:mb-0">
-                                        <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                        <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">{group.group}</p>
                                         <div className="grid grid-cols-8 gap-0.5">
                                           {group.items.map(em => (
                                             <button
@@ -4088,9 +4086,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {infoRow(Tag, 'Ticket ID', (
                       <span className="inline-flex items-center gap-1.5">
                         <span className="truncate">{t.ticket_number}</span>
-                        <button type="button" onClick={copyId} aria-label="Copy ticket ID" className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
+                        <IconButton bare label="Copy ticket ID" type="button" onClick={copyId} className="rounded p-0.5 text-gray-500 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
                           <Copy className="h-3.5 w-3.5" />
-                        </button>
+                        </IconButton>
                       </span>
                     ))}
                     {infoRow(Circle, 'Status', getInternalStatusBadge(t.status))}

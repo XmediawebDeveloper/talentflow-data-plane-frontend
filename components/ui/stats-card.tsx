@@ -12,7 +12,7 @@ const TONES = {
     container:
       'border-slate-300 bg-gradient-to-br from-white via-white to-blue-50/50 shadow-[0_10px_26px_-22px_rgba(37,99,235,0.35)] hover:border-brand-blue/40 hover:shadow-[0_16px_30px_-22px_rgba(37,99,235,0.45)] dark:border-slate-700 dark:from-slate-900 dark:via-slate-900 dark:to-blue-500/10 dark:hover:border-brand-blue/50',
     radial:
-      'bg-[radial-gradient(circle_at_right,rgba(37,99,235,0.10),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,rgba(37,99,235,0.25),transparent_70%)]',
+      'bg-[radial-gradient(circle_at_right,var(--raw-rgba-37-99-235-0p1),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,var(--raw-rgba-37-99-235-0p25),transparent_70%)]',
     icon:
       'bg-blue-50 text-brand-blue ring-blue-100 dark:bg-blue-500/15 dark:ring-blue-400/30 dark:text-blue-300',
     sparkText: 'text-brand-blue/85',
@@ -22,7 +22,7 @@ const TONES = {
     container:
       'border-emerald-200/80 bg-gradient-to-br from-white via-white to-emerald-50/60 shadow-[0_10px_26px_-22px_rgba(22,163,74,0.28)] hover:border-emerald-300 hover:shadow-[0_16px_30px_-22px_rgba(22,163,74,0.38)] dark:border-emerald-500/40 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-500/10 dark:hover:border-emerald-400/60',
     radial:
-      'bg-[radial-gradient(circle_at_right,rgba(34,197,94,0.12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,rgba(34,197,94,0.25),transparent_70%)]',
+      'bg-[radial-gradient(circle_at_right,var(--raw-rgba-34-197-94-0p12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,var(--raw-rgba-34-197-94-0p25),transparent_70%)]',
     icon:
       'bg-emerald-50 text-emerald-600 ring-emerald-100 dark:bg-emerald-500/15 dark:ring-emerald-400/30 dark:text-emerald-300',
     sparkText: 'text-emerald-500/85',
@@ -32,7 +32,7 @@ const TONES = {
     container:
       'border-orange-200/80 bg-gradient-to-br from-white via-white to-orange-50/60 shadow-[0_10px_26px_-22px_rgba(249,115,22,0.28)] hover:border-orange-300 hover:shadow-[0_16px_30px_-22px_rgba(249,115,22,0.38)] dark:border-orange-500/40 dark:from-slate-900 dark:via-slate-900 dark:to-orange-500/10 dark:hover:border-orange-400/60',
     radial:
-      'bg-[radial-gradient(circle_at_right,rgba(249,115,22,0.12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,rgba(249,115,22,0.25),transparent_70%)]',
+      'bg-[radial-gradient(circle_at_right,var(--raw-rgba-249-115-22-0p12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,var(--raw-rgba-249-115-22-0p25),transparent_70%)]',
     icon:
       'bg-orange-50 text-brand-orange-deep ring-orange-100 dark:bg-orange-500/15 dark:ring-orange-400/30 dark:text-orange-300',
     sparkText: 'text-orange-500/85',
@@ -42,7 +42,7 @@ const TONES = {
     container:
       'border-cyan-200/80 bg-gradient-to-br from-white via-white to-cyan-50/60 shadow-[0_10px_26px_-22px_rgba(6,182,212,0.28)] hover:border-cyan-300 hover:shadow-[0_16px_30px_-22px_rgba(6,182,212,0.38)] dark:border-cyan-500/40 dark:from-slate-900 dark:via-slate-900 dark:to-cyan-500/10 dark:hover:border-cyan-400/60',
     radial:
-      'bg-[radial-gradient(circle_at_right,rgba(6,182,212,0.12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,rgba(6,182,212,0.25),transparent_70%)]',
+      'bg-[radial-gradient(circle_at_right,var(--raw-rgba-6-182-212-0p12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,var(--raw-rgba-6-182-212-0p25),transparent_70%)]',
     icon:
       'bg-cyan-50 text-brand-cyan ring-cyan-100 dark:bg-cyan-500/15 dark:ring-cyan-400/30 dark:text-cyan-300',
     sparkText: 'text-cyan-500/85',
@@ -52,7 +52,7 @@ const TONES = {
     container:
       'border-violet-200/80 bg-gradient-to-br from-white via-white to-violet-50/60 shadow-[0_10px_26px_-22px_rgba(139,92,246,0.28)] hover:border-violet-300 hover:shadow-[0_16px_30px_-22px_rgba(139,92,246,0.38)] dark:border-violet-500/40 dark:from-slate-900 dark:via-slate-900 dark:to-violet-500/10 dark:hover:border-violet-400/60',
     radial:
-      'bg-[radial-gradient(circle_at_right,rgba(139,92,246,0.12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,rgba(139,92,246,0.25),transparent_70%)]',
+      'bg-[radial-gradient(circle_at_right,var(--raw-rgba-139-92-246-0p12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,var(--raw-rgba-139-92-246-0p25),transparent_70%)]',
     icon:
       'bg-violet-50 text-violet-600 ring-violet-100 dark:bg-violet-500/15 dark:ring-violet-400/30 dark:text-violet-300',
     sparkText: 'text-violet-500/85',
@@ -62,7 +62,7 @@ const TONES = {
     container:
       'border-amber-200/80 bg-gradient-to-br from-white via-white to-amber-50/60 shadow-[0_10px_26px_-22px_rgba(245,158,11,0.28)] hover:border-amber-300 hover:shadow-[0_16px_30px_-22px_rgba(245,158,11,0.38)] dark:border-amber-500/40 dark:from-slate-900 dark:via-slate-900 dark:to-amber-500/10 dark:hover:border-amber-400/60',
     radial:
-      'bg-[radial-gradient(circle_at_right,rgba(245,158,11,0.12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,rgba(245,158,11,0.25),transparent_70%)]',
+      'bg-[radial-gradient(circle_at_right,var(--raw-rgba-245-158-11-0p12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,var(--raw-rgba-245-158-11-0p25),transparent_70%)]',
     icon:
       'bg-amber-50 text-amber-600 ring-amber-100 dark:bg-amber-500/15 dark:ring-amber-400/30 dark:text-amber-300',
     sparkText: 'text-amber-500/85',
@@ -72,7 +72,7 @@ const TONES = {
     container:
       'border-rose-200/80 bg-gradient-to-br from-white via-white to-rose-50/60 shadow-[0_10px_26px_-22px_rgba(244,63,94,0.28)] hover:border-rose-300 hover:shadow-[0_16px_30px_-22px_rgba(244,63,94,0.38)] dark:border-rose-500/40 dark:from-slate-900 dark:via-slate-900 dark:to-rose-500/10 dark:hover:border-rose-400/60',
     radial:
-      'bg-[radial-gradient(circle_at_right,rgba(244,63,94,0.12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,rgba(244,63,94,0.25),transparent_70%)]',
+      'bg-[radial-gradient(circle_at_right,var(--raw-rgba-244-63-94-0p12),transparent_70%)] dark:bg-[radial-gradient(circle_at_right,var(--raw-rgba-244-63-94-0p25),transparent_70%)]',
     icon:
       'bg-rose-50 text-rose-600 ring-rose-100 dark:bg-rose-500/15 dark:ring-rose-400/30 dark:text-rose-300',
     sparkText: 'text-rose-500/85',
@@ -85,7 +85,7 @@ const TONES = {
     // The dashboard Quick Access "liquid glass" chip, brand blue.
     icon:
       'bg-gradient-to-br from-brand-blue/35 via-brand-blue/15 to-brand-blue/[0.04] text-brand-blue ring-brand-blue/25 shadow-brand-blue/25 dark:text-blue-300',
-    sparkText: 'text-gray-400',
+    sparkText: 'text-gray-500',
     sparkId: 'spark-neutral',
   },
 } as const;

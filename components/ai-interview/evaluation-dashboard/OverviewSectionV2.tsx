@@ -392,7 +392,7 @@ export function OverviewSectionV2({
               <div
                 key={i}
                 className="p-5 rounded-xl border-2"
-                style={{ borderColor: item.color, backgroundColor: `${item.color}0A` }}
+                style={{ borderColor: item.color, backgroundColor: `color-mix(in srgb, ${item.color} 3.922%, transparent)` }}
               >
                 <div className="flex items-start justify-between mb-3 gap-3">
                   <div>

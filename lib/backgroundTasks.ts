@@ -32,6 +32,9 @@ export interface ExternalBackgroundTask {
   onRemove?: () => void;
   /** When it started (ms) — orders the list; in-page tasks sort first. */
   at?: number;
+  /** The dock's "Clear finished" on a done task. The owner stops tracking it
+   *  (and so stops re-registering it). Tasks without one are left in place. */
+  onDismiss?: () => void;
 }
 
 const tasks = new Map<string, ExternalBackgroundTask>();

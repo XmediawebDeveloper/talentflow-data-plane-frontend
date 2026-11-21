@@ -152,7 +152,7 @@ export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdenti
                     <span>{label}</span>
                   </div>
                 ))}
-                <span className="text-gray-300">&bull;</span>
+                <span className="text-muted-foreground dark:text-gray-300">&bull;</span>
               </>
             )}
 
@@ -191,16 +191,16 @@ export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdenti
               </span>
             )}
 
-            {hasFactsBefore && <span className="text-gray-300">&bull;</span>}
+            {hasFactsBefore && <span className="text-muted-foreground dark:text-gray-300">&bull;</span>}
 
             <span>Posted {jd.published_at || jd.created_at ? formatIST(jd.published_at || jd.created_at) : 'N/A'}</span>
-            <span className="text-gray-300">&bull;</span>
+            <span className="text-muted-foreground dark:text-gray-300">&bull;</span>
 
             <span>By {jd.created_by_name || 'Unknown'}</span>
 
             {version && version > 0 && (
               <>
-                <span className="text-gray-300">&bull;</span>
+                <span className="text-muted-foreground dark:text-gray-300">&bull;</span>
                 {/* The page's purple version pill, as a label. Nothing opens
                     from it here — see the note on read-only above. */}
                 <span className="tf-badge bg-purple-600 text-white">

@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import AIInterviewDetailsView from './AIInterviewDetailsView';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * Read-only popup of one interview's Interview Details → Configure Details
@@ -43,7 +45,7 @@ export default function ConfigurePreviewDialog({
   const title = config?.jd_title || config?.position || 'Interview';
 
   return (
-    <div
+    <ModalA11y closeOnEscape={false}><div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm p-3 sm:p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
@@ -65,9 +67,9 @@ export default function ConfigurePreviewDialog({
             </div>
           </div>
           {!cancelInFooter && (
-            <Button variant="secondary" size="sm" onClick={onClose} aria-label="Close" className="flex-shrink-0">
+            <IconButton label="Close" variant="secondary" size="sm" onClick={onClose} className="flex-shrink-0">
               <X className="w-5 h-5" />
-            </Button>
+            </IconButton>
           )}
         </div>
 
@@ -93,6 +95,6 @@ export default function ConfigurePreviewDialog({
           </div>
         )}
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

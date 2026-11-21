@@ -7,6 +7,8 @@ import { useAdminAssignedPlan } from '@/components/providers/AdminAssignedPlanPr
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { adminAssignedPlanService, type ApplyMode } from '@/lib/services/adminAssignedPlanService';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 const GST_RATE = 0.18;
 
@@ -163,7 +165,7 @@ export default function AdminAssignedPlanModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-[88] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 z-[88] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
       <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-5 flex items-center justify-between shrink-0">
@@ -176,14 +178,13 @@ export default function AdminAssignedPlanModal() {
               <p className="text-indigo-100 text-sm">Complete payment to activate your new plan</p>
             </div>
           </div>
-          <button
+          <IconButton bare label="Close"
             onClick={closePaymentModal}
             disabled={paymentProcessing}
             className="p-2 rounded-lg hover:bg-white/20 transition-colors disabled:opacity-50"
-            aria-label="Close"
           >
             <X className="w-5 h-5 text-white" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Body */}
@@ -377,6 +378,6 @@ export default function AdminAssignedPlanModal() {
           </button>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

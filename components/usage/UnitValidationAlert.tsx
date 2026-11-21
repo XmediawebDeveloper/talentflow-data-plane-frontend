@@ -91,7 +91,7 @@ export default function UnitValidationAlert({
             {onDismiss && (
               <button
                 onClick={onDismiss}
-                className={`text-gray-400 hover:text-gray-600`}
+                className={`text-gray-500 hover:text-gray-600`}
               >
                 <span className="sr-only">Dismiss</span>
                 ×

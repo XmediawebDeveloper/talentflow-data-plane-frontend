@@ -14,6 +14,8 @@ import type { TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
 import {
   bulkInviteService, isBulkInviteActive, type BulkInviteItemStatus, type BulkInviteResultRow,
 } from '@/lib/services/bulkInviteService';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * Every candidate of the invite widget's sends in ONE table — the invite
@@ -34,7 +36,7 @@ const STATUS: Record<BulkInviteItemStatus, { label: string; cls: string; icon: R
   queued: { label: 'In queue', cls: 'bg-slate-50 text-gray-700 ring-gray-200', icon: <Clock className="w-3.5 h-3.5" /> },
   processing: { label: 'Sending', cls: 'bg-brand-blue/5 text-brand-blue ring-brand-blue/20', icon: <Loader2 className="w-3.5 h-3.5 animate-spin" /> },
   sent: { label: 'Sent successfully', cls: 'bg-success-subtle text-success ring-success/30', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
-  skipped: { label: 'Skipped', cls: 'bg-warning-subtle text-warning-strong ring-warning-line', icon: <SkipForward className="w-3.5 h-3.5" /> },
+  skipped: { label: 'Skipped', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/25', icon: <SkipForward className="w-3.5 h-3.5" /> },
   failed: { label: 'Failed', cls: 'bg-destructive-subtle text-destructive ring-destructive-line', icon: <XCircle className="w-3.5 h-3.5" /> },
   cancelled: { label: 'Cancelled', cls: 'bg-warning-subtle text-warning-strong ring-warning-line', icon: <Ban className="w-3.5 h-3.5" /> },
 };
@@ -160,10 +162,10 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
   const to = Math.min(filtered.length, current * perPage);
 
   const chips: { key: BulkInviteItemStatus; label: string; icon: React.ReactNode }[] = [
-    { key: 'queued', label: 'Queue', icon: <Clock className="w-4 h-4 text-brand-blue" /> },
+    { key: 'queued', label: 'Queue', icon: <Clock className="w-4 h-4 text-gray-500 dark:text-slate-400" /> },
     { key: 'processing', label: 'Sending', icon: <Loader2 className={`w-4 h-4 text-brand-blue ${counts.processing > 0 ? 'animate-spin' : ''}`} /> },
     { key: 'sent', label: 'Sent', icon: <CheckCircle2 className="w-4 h-4 text-success" /> },
-    { key: 'skipped', label: 'Skipped', icon: <SkipForward className="w-4 h-4 text-gray-500" /> },
+    { key: 'skipped', label: 'Skipped', icon: <SkipForward className="w-4 h-4 text-brand-orange-deep" /> },
     { key: 'cancelled', label: 'Cancelled', icon: <Ban className="w-4 h-4 text-warning-strong" /> },
     { key: 'failed', label: 'Failed', icon: <XCircle className="w-4 h-4 text-destructive" /> },
   ];
@@ -172,7 +174,7 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
   const cols = oneJd ? 6 : 7;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-6">
+    <ModalA11y innerDialog closeOnEscape={false}><div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-6">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
         role="dialog"
@@ -215,14 +217,14 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
                 Cancel sending
               </Button>
             )}
-            <button type="button" onClick={refresh} title="Refresh" aria-label="Refresh"
+            <IconButton bare label="Refresh" type="button" onClick={refresh}
               className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 hover:bg-gray-50 dark:hover:bg-slate-800">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <button type="button" onClick={onClose} title="Close" aria-label="Close"
+            </IconButton>
+            <IconButton bare label="Close" type="button" onClick={onClose}
               className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 hover:bg-gray-50 dark:hover:bg-slate-800">
               <X className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
         </div>
         <div className="h-1 w-full bg-gray-100 dark:bg-slate-800">
@@ -252,7 +254,7 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
         <div className="flex flex-wrap items-center gap-3 px-5 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60">
           <label className="relative">
             <span className="sr-only">Search</span>
-            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -428,19 +430,19 @@ export default function BulkInviteOverviewDialog({ jobs, onClose }: { jobs: Trac
             <span>Showing {from} to {to} of {filtered.length} records</span>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" disabled={current <= 1} onClick={() => setPage(current - 1)} aria-label="Previous page"
+            <IconButton bare label="Previous page" type="button" disabled={current <= 1} onClick={() => setPage(current - 1)}
               className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800">
               <ChevronLeft className="w-4 h-4" />
-            </button>
+            </IconButton>
             <span className="tabular-nums font-medium text-gray-900 dark:text-slate-100">{current} / {pages}</span>
-            <button type="button" disabled={current >= pages} onClick={() => setPage(current + 1)} aria-label="Next page"
+            <IconButton bare label="Next page" type="button" disabled={current >= pages} onClick={() => setPage(current + 1)}
               className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800">
               <ChevronRight className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
         </div>
       </div>
       {actions.cancelDialog}
-    </div>
+    </div></ModalA11y>
   );
 }

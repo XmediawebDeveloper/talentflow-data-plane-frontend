@@ -39,18 +39,18 @@ interface BillingReportsProps<T extends ReportInvoice> {
 const MODULES = [
   { key: 'Resume Scoring', pattern: /resume scor/i, color: 'var(--brand-blue)', badge: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' },
   { key: 'AI Interview', pattern: /ai interview/i, color: 'var(--brand-cyan)', badge: 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20' },
-  { key: 'Resume Upload', pattern: /resume (upload|storage)/i, color: '#7c3aed', badge: 'bg-violet-50 text-violet-700 ring-violet-200' },
-  { key: 'Assessment', pattern: /assessment/i, color: '#10b981', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  { key: 'Resume Upload', pattern: /resume (upload|storage)/i, color: 'var(--raw-7c3aed)', badge: 'bg-violet-50 text-violet-700 ring-violet-200' },
+  { key: 'Assessment', pattern: /assessment/i, color: 'var(--raw-10b981)', badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   { key: 'Max Users', pattern: /max (users|seats)|seat/i, color: 'var(--brand-orange)', badge: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' },
   { key: 'Subscription', pattern: /plan|subscription|upgrade|renew/i, color: 'var(--brand-teal)', badge: 'bg-brand-teal/10 text-brand-teal ring-brand-teal/20' },
 ] as const;
-const OTHERS = { key: 'Others', color: '#94a3b8', badge: 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700' };
+const OTHERS = { key: 'Others', color: 'var(--raw-94a3b8)', badge: 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700' };
 
 const STATUSES = [
-  { key: 'PAID', label: 'Paid', color: '#10b981' },
+  { key: 'PAID', label: 'Paid', color: 'var(--raw-10b981)' },
   { key: 'PENDING', label: 'Pending', color: 'var(--brand-orange)' },
-  { key: 'FAILED', label: 'Failed', color: '#f87171' },
-  { key: 'REFUNDED', label: 'Refunded', color: '#94a3b8' },
+  { key: 'FAILED', label: 'Failed', color: 'var(--raw-f87171)' },
+  { key: 'REFUNDED', label: 'Refunded', color: 'var(--raw-94a3b8)' },
 ] as const;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -289,7 +289,7 @@ export default function BillingReports<T extends ReportInvoice>({
       {/* Table filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search by invoice number, plan name, or description"
@@ -361,7 +361,7 @@ export default function BillingReports<T extends ReportInvoice>({
                       </td>
                       <td className="tf-td">
                         <div className="flex min-w-0 items-center gap-1.5">
-                          <CreditCard className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
+                          <CreditCard className="h-3.5 w-3.5 shrink-0 text-gray-500 dark:text-slate-500" />
                           <span className="min-w-0 truncate tf-body" title={getPaymentLabel(inv)}>{getPaymentLabel(inv)}</span>
                         </div>
                       </td>

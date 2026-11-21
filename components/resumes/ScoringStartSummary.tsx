@@ -10,6 +10,7 @@ import { checkQuotaStatus } from '@/lib/services/usageTrackingService';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { FROM_RESUME_DATABASE } from '@/lib/utils/resumeActivityTrail';
+import { ModalA11y } from '@/components/ui/modal-a11y';
 
 export interface ScoringStartRequest {
   job: { id: string; title: string; jobCode?: string; version?: number };
@@ -109,7 +110,7 @@ export default function ScoringStartSummary({ request, onBack, onCancel, onStart
   );
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+    <ModalA11y><div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 w-full max-w-[95vw] sm:max-w-lg max-h-[calc(100dvh-1.5rem)] overflow-hidden flex flex-col">
         {/* Header: what is being scored, against which job version */}
         <div className="flex-shrink-0 flex items-start gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
@@ -156,7 +157,7 @@ export default function ScoringStartSummary({ request, onBack, onCancel, onStart
                   >
                     <Redo2 className="w-4 h-4 text-gray-500 flex-shrink-0" />
                     <span><b className="font-semibold">{check.alreadyScored.length}</b> already scored for v{job.version ?? 1} — skipped</span>
-                    <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openList === 'scored' ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${openList === 'scored' ? 'rotate-180' : ''}`} />
                   </button>
                   {openList === 'scored' && skippedList(check.alreadyScored)}
                 </div>
@@ -172,7 +173,7 @@ export default function ScoringStartSummary({ request, onBack, onCancel, onStart
                   >
                     <Loader2 className="w-4 h-4 text-brand-blue flex-shrink-0" />
                     <span><b className="font-semibold">{check.inProgress.length}</b> already being scored in another run — skipped</span>
-                    <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${openList === 'running' ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${openList === 'running' ? 'rotate-180' : ''}`} />
                   </button>
                   {openList === 'running' && skippedList(check.inProgress)}
                 </div>
@@ -220,6 +221,6 @@ export default function ScoringStartSummary({ request, onBack, onCancel, onStart
           </div>
         </div>
       </div>
-    </div>
+    </div></ModalA11y>
   );
 }

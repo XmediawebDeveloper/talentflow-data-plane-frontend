@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { HelpCircle, Lightbulb, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import InviteStatusChip, { type InviteStatusKind } from '@/components/ui/invite-status-chip';
+import { IconButton } from '@/components/ui/icon-button';
 
 /**
  * The Invite Status Tracking popups' first-time-user aids, shared by the
@@ -76,9 +77,9 @@ export function StatCardsHint({ activeLabel, onClear }: { activeLabel: string | 
         <span>Showing only</span>
         <span className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 pl-2.5 pr-1 py-0.5 text-xs font-medium">
           {activeLabel}
-          <button type="button" onClick={onClear} aria-label="Show all candidates" title="Show all" className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-brand-blue/15">
+          <IconButton bare label="Show all candidates" tooltip="Show all" type="button" onClick={onClear} className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-brand-blue/15">
             <X className="w-3 h-3" />
-          </button>
+          </IconButton>
         </span>
       </div>
     );

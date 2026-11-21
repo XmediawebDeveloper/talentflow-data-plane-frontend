@@ -15,6 +15,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
+import { ModalA11y } from '@/components/ui/modal-a11y';
+import { IconButton } from '@/components/ui/icon-button';
 
 // Neutral-gray skeleton that mirrors the Security page: password form card,
 // 2FA card, session-timeout card and active-sessions list.
@@ -420,13 +422,13 @@ export default function SecurityPage() {
                   data-1p-ignore="true"
                   className="tf-input pr-9 sm:pr-10"
                 />
-                <button
+                <IconButton bare label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
                   type="button"
                   onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600"
+                  className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-slate-500 hover:text-gray-600"
                 >
                   {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                </button>
+                </IconButton>
               </div>
             </div>
             <div>
@@ -451,13 +453,13 @@ export default function SecurityPage() {
                       : 'border-gray-300 dark:border-slate-700'
                   }`}
                 />
-                <button
+                <IconButton bare label={showNewPassword ? 'Hide new password' : 'Show new password'}
                   type="button"
                   onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600"
+                  className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-slate-500 hover:text-gray-600"
                 >
                   {showNewPassword ? <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                </button>
+                </IconButton>
               </div>
             </div>
             <div>
@@ -480,13 +482,13 @@ export default function SecurityPage() {
                       : 'border-gray-300 dark:border-slate-700'
                   }`}
                 />
-                <button
+                <IconButton bare label={showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'}
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600"
+                  className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-slate-500 hover:text-gray-600"
                 >
                   {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                </button>
+                </IconButton>
               </div>
             </div>
 
@@ -504,7 +506,7 @@ export default function SecurityPage() {
                     { label: 'Passwords match', check: passwordsMatch },
                   ].map((req, i) => (
                     <div key={i} className="flex items-center gap-1.5 sm:gap-2">
-                      <CheckCircle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 transition-colors ${req.check ? 'text-success' : 'text-gray-300 dark:text-slate-500'}`} />
+                      <CheckCircle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 transition-colors ${req.check ? 'text-success' : 'text-muted-foreground dark:text-slate-500'}`} />
                       <span className={`text-sm transition-colors ${req.check ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
                         {req.label}
                       </span>
@@ -569,14 +571,13 @@ export default function SecurityPage() {
                   <div className="flex items-center gap-1.5">
                     <h2 className="tf-section-title">Two-Factor Authentication</h2>
                     <HoverCardTrigger asChild>
-                      <button
+                      <IconButton bare label="How does two-factor authentication work?"
                         type="button"
-                        aria-label="How does two-factor authentication work?"
                         onClick={() => setTwoFAInfoOpen(open => !open)}
-                        className="rounded-full p-0.5 text-gray-400 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
+                        className="rounded-full p-0.5 text-gray-500 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
                       >
                         <Info className="h-4 w-4" />
-                      </button>
+                      </IconButton>
                     </HoverCardTrigger>
                   </div>
                   <HoverCardContent
@@ -656,12 +657,11 @@ export default function SecurityPage() {
             <div className="mt-2 sm:mt-3 md:mt-4 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <h3 className="tf-row-name">Setup Two-Factor Authentication</h3>
-                <button
+                <IconButton bare label="Close"
                   onClick={() => setShow2FASetup(false)}
-                  className="p-1 hover:bg-gray-200 rounded"
-                 aria-label="Close">
+                  className="p-1 hover:bg-gray-200 rounded">
                   <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                </button>
+                </IconButton>
               </div>
 
               <div className="space-y-3 sm:space-y-4">
@@ -730,15 +730,14 @@ export default function SecurityPage() {
             <div className="mt-2 sm:mt-3 md:mt-4 p-4 sm:p-6 bg-destructive-subtle rounded-lg border border-destructive-line">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <h3 className="tf-row-name">Disable Two-Factor Authentication</h3>
-                <button
+                <IconButton bare label="Close"
                   onClick={() => {
                     setShowDisable2FADialog(false);
                     setDisable2FACode('');
                   }}
-                  className="p-1 hover:bg-destructive-subtle rounded"
-                 aria-label="Close">
+                  className="p-1 hover:bg-destructive-subtle rounded">
                   <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                </button>
+                </IconButton>
               </div>
 
               <div className="space-y-3 sm:space-y-4">
@@ -797,14 +796,13 @@ export default function SecurityPage() {
                 <div className="flex items-center gap-1.5">
                   <h2 className="tf-section-title">Session Timeout</h2>
                   <HoverCardTrigger asChild>
-                    <button
+                    <IconButton bare label="How does session timeout work?"
                       type="button"
-                      aria-label="How does session timeout work?"
                       onClick={() => setTimeoutInfoOpen(open => !open)}
-                      className="rounded-full p-0.5 text-gray-400 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
+                      className="rounded-full p-0.5 text-gray-500 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
                     >
                       <Info className="h-4 w-4" />
-                    </button>
+                    </IconButton>
                   </HoverCardTrigger>
                 </div>
                 <HoverCardContent
@@ -883,7 +881,7 @@ export default function SecurityPage() {
             />
             {isSavingTimeout && (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <Loader2 className="w-4 h-4 animate-spin text-gray-400 dark:text-slate-500" />
+                <Loader2 className="w-4 h-4 animate-spin text-gray-500 dark:text-slate-500" />
               </div>
             )}
           </div>
@@ -904,14 +902,13 @@ export default function SecurityPage() {
                   <div className="flex items-center gap-1.5">
                     <h2 className="tf-section-title">Single Sign-On (SSO)</h2>
                     <HoverCardTrigger asChild>
-                      <button
+                      <IconButton bare label="How does single sign-on work?"
                         type="button"
-                        aria-label="How does single sign-on work?"
                         onClick={() => setSsoInfoOpen(open => !open)}
-                        className="rounded-full p-0.5 text-gray-400 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
+                        className="rounded-full p-0.5 text-gray-500 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
                       >
                         <Info className="h-4 w-4" />
-                      </button>
+                      </IconButton>
                     </HoverCardTrigger>
                   </div>
                   <HoverCardContent
@@ -977,14 +974,13 @@ export default function SecurityPage() {
               <div className="flex items-center gap-1.5">
                 <h2 className="tf-section-title">Active Sessions</h2>
                 <HoverCardTrigger asChild>
-                  <button
+                  <IconButton bare label="What are active sessions?"
                     type="button"
-                    aria-label="What are active sessions?"
                     onClick={() => setSessionsInfoOpen(open => !open)}
-                    className="rounded-full p-0.5 text-gray-400 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
+                    className="rounded-full p-0.5 text-gray-500 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
                   >
                     <Info className="h-4 w-4" />
-                  </button>
+                  </IconButton>
                 </HoverCardTrigger>
               </div>
               <HoverCardContent
@@ -1060,7 +1056,7 @@ export default function SecurityPage() {
                         <MapPin className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                         <span className="truncate max-w-[100px] sm:max-w-none">{session.location || 'Unknown Location'}</span>
                         {session.ip_address && (
-                          <span className="text-gray-400 dark:text-slate-500 truncate">({session.ip_address})</span>
+                          <span className="text-gray-500 dark:text-slate-500 truncate">({session.ip_address})</span>
                         )}
                         <span className="hidden sm:inline">•</span>
                         <span className="text-sm">{session.is_current ? 'Current session' : formatLastActive(session.last_active_at)}</span>
@@ -1097,7 +1093,7 @@ export default function SecurityPage() {
 
         {/* Revoke All Other Sessions Popup Modal */}
         {showRevokeAllDialog && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+          <ModalA11y><div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
             {/* Backdrop */}
             <div
               className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -1108,12 +1104,11 @@ export default function SecurityPage() {
             <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 animate-in fade-in zoom-in duration-200">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="tf-section-title">Revoke All Other Sessions</h3>
-                <button
+                <IconButton bare label="Close"
                   onClick={() => setShowRevokeAllDialog(false)}
-                  className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors flex-shrink-0"
-                 aria-label="Close">
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors flex-shrink-0">
                   <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                </button>
+                </IconButton>
               </div>
 
               <div className="space-y-2.5 sm:space-y-3 md:space-y-4">
@@ -1141,7 +1136,7 @@ export default function SecurityPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </div></ModalA11y>
         )}
       </div>
       </div>

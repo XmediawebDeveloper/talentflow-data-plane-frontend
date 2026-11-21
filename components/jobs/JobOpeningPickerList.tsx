@@ -22,6 +22,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { onListCacheInvalidate } from '@/lib/utils/listCache';
 import { getTokens } from '@/lib/services/api';
 import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { clickableProps } from '@/lib/a11y/clickableProps';
+import { IconButton } from '@/components/ui/icon-button';
 
 /** Same rows-per-page the Job Openings list starts on. */
 const DEFAULT_ITEMS_PER_PAGE = 10;
@@ -489,7 +491,7 @@ export default function JobOpeningPickerList({
       <div className={layout === 'page' ? 'hidden' : 'mb-4'}>
         <label className="block tf-label mb-2">Search Jobs</label>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
           <input
             type="text"
             placeholder="Search by JD number, role, department or location..."
@@ -539,7 +541,7 @@ export default function JobOpeningPickerList({
             <label className="flex w-full items-center gap-2 md:w-[25rem] lg:w-[29rem]">
               <span className="tf-meta shrink-0 whitespace-nowrap !font-semibold !text-[var(--text-primary)]">Search Jobs</span>
               <span className="relative min-w-0 flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-slate-500" />
                 <input
                   type="text"
                   placeholder="Search by JD number, role, department or location..."
@@ -769,7 +771,7 @@ export default function JobOpeningPickerList({
                           Clicking the headline picks the job, so the whole
                           block is a target without a <label> wrapping the
                           controls beside it. */}
-                      <div
+                      <div {...clickableProps}
                         onClick={() => selectable && pickVersion(job, versionKey)}
                         className={selectable ? 'cursor-pointer' : 'cursor-not-allowed'}
                       >
@@ -849,7 +851,7 @@ export default function JobOpeningPickerList({
                           unlike the View Versions button below: a
                           single-version job opens here too, and the popup
                           shows that one version. */}
-                      <button
+                      <IconButton bare label="View version history"
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -857,11 +859,9 @@ export default function JobOpeningPickerList({
                           setVersionHistoryFor(job);
                         }}
                         className="h-9 w-9 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                        aria-label="View version history"
-                        title="View version history"
                       >
                         <Eye className="w-4 h-4" />
-                      </button>
+                      </IconButton>
                       {viewVersionsButton && (
                         <div className={`lg:hidden sm:order-first sm:mr-auto sm:ml-0 sm:basis-auto sm:[&>button]:w-auto [&>button]:h-9 [&>button]:px-3 ${lineageSelected && onProceed ? 'max-sm:basis-full [&>button]:w-full [&>button]:justify-center' : 'ml-auto'}`}>{viewVersionsButton}</div>
                       )}
@@ -900,7 +900,7 @@ export default function JobOpeningPickerList({
                          group so picking a version releases whatever else
                          was chosen. */
                       renderAction={(versionJob) => (
-                        <button
+                        <IconButton bare label={`View v${versionJob.versionNumber ?? 1} details`}
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -908,11 +908,9 @@ export default function JobOpeningPickerList({
                             setVersionHistoryFor(versionJob);
                           }}
                           className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                          aria-label={`View v${versionJob.versionNumber ?? 1} details`}
-                          title={`View v${versionJob.versionNumber ?? 1} details`}
                         >
                           <Eye className="w-3.5 h-3.5" />
-                        </button>
+                        </IconButton>
                       )}
                       onSelectVersion={(versionJob) => pickVersion(versionJob, versionKey)}
                       selectedVersionId={selectedJobId}
