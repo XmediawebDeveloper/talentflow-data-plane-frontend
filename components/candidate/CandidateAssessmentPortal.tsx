@@ -613,6 +613,13 @@ function CandidateAssessmentPortalInner({ token, candidateName, role }: Candidat
     onAttempt: (type, details) => {
       console.log('[PROCTORING] Blocked assessment shell action', { type, details });
       reportAssessmentShellViolation(type, details);
+      // Leaving the page (close / refresh / back): upload what is buffered NOW.
+      // The browser's "Leave site?" prompt keeps the page alive while it is
+      // open, so this upload usually completes before the tab goes away.
+      if (type === 'close' || type === 'refresh' || type === 'hard_refresh' || type === 'back') {
+        void cameraRecorderRef.current?.flushNow();
+        void screenRecorderRef.current?.flushNow();
+      }
     },
   });
 
@@ -1922,6 +1929,15 @@ function CandidateAssessmentPortalInner({ token, candidateName, role }: Candidat
   // The terminated screen needs the same paint + screen-capture settle time
   // the feedback popup does before the recorders may close.
   const TERMINATED_VISIBLE_GRACE_MS = 5000;
+
+  // Upload everything recorded up to Submit / termination right away. The
+  // recorders keep running through the grace period below, but a candidate who
+  // closes the window during that grace no longer loses the whole recording.
+  useEffect(() => {
+    if (step !== 'completed' && step !== 'terminated') return;
+    void cameraRecorderRef.current?.flushNow();
+    void screenRecorderRef.current?.flushNow();
+  }, [step]);
 
   useEffect(() => {
     if (step === 'results' || step === 'error') { finishRecordings(); return; }
