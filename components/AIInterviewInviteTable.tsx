@@ -5,7 +5,7 @@ import { Fragment, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil, Check,
   MoreVertical, Monitor, History, XCircle, FileText, Timer, ChevronDown,
-  KeyRound, ScanFace, Mic, Languages, GraduationCap, AlertTriangle,
+  KeyRound, ScanFace, Mic, Languages, GraduationCap, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
@@ -112,7 +112,7 @@ export const isRevocableInvite = (inv: any): boolean =>
  * revoked invite gets corrected and sent again (Save and Send), so there is
  * nothing to edit before that.
  */
-const canEdit = (inv: any): boolean => inv.status === 'revoked';
+const canEdit = (inv: any): boolean => inv.status === 'revoked' || inv.status === 'bounced';
 
 /**
  * Resend only ever covers an expired row now — a live "invited" row has no
@@ -201,7 +201,7 @@ const copyInterviewLink = async (inv: any) => {
   toast.success('Interview link copied!');
 };
 
-type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string };
+type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string; reason?: string };
 
 /** Milestones oldest-first, every one on its own line. Delegates to
  *  buildFullTimeline (below) over the invitation's own embedded `timeline`
@@ -266,12 +266,13 @@ export const hasMoreTimelineHistory = (inv: any, limit?: number): boolean =>
 
 /** Timeline labels that are a status of the invitation (Edited only records
  *  a change to it) — View History's Status column. */
-const TIMELINE_STATUS_LABELS = new Set(['Invited', 'Revoked', 'System Check', 'Started', 'Completed', 'Terminated', 'Expired at']);
+const TIMELINE_STATUS_LABELS = new Set(['Invited', 'Revoked', 'Bounced', 'System Check', 'Started', 'Completed', 'Terminated', 'Expired at']);
 
 /** One line under each event in View History, saying what it means. */
 const TIMELINE_EVENT_DESCRIPTION: Record<string, string> = {
   'Invited': 'Invitation sent to candidate',
   'Revoked': 'Invitation revoked',
+  'Bounced': 'Invitation email bounced',
   'Edited': 'Invitation details edited',
   'System Check': 'Candidate accepted consent and began the system check',
   'Started': 'Candidate started the AI interview',
@@ -293,7 +294,9 @@ export const loadInterviewHistory = async (inv: any): Promise<TimelineHistoryRow
   return collapseRepeatedSystemChecks(buildFullTimeline(inv, logs)).map((entry) => ({
     ...entry,
     isStatus: TIMELINE_STATUS_LABELS.has(entry.label),
-    description: TIMELINE_EVENT_DESCRIPTION[entry.label],
+    description: entry.reason
+      ? `${TIMELINE_EVENT_DESCRIPTION[entry.label] ?? entry.label} – ${entry.reason}`
+      : TIMELINE_EVENT_DESCRIPTION[entry.label],
   }));
 };
 
@@ -333,6 +336,8 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
       return { label: 'Identity Verified', Icon: ScanFace, tone: 'text-brand-cyan' };
     case 'ai_interview_identity_failed':
       return { label: 'Identity Check Failed', Icon: ScanFace, tone: 'text-destructive' };
+    case 'ai_interview_email_bounced':
+      return { label: 'Bounced', Icon: RefreshCw, tone: 'text-destructive' };
     case 'ai_interview_voice_enrolled':
       return { label: 'Voice Enrolled', Icon: Mic, tone: 'text-brand-cyan' };
     case 'ai_interview_voice_enroll_failed':
@@ -453,7 +458,7 @@ const collapseRepeatedEvents = (sorted: TimelineEntry[]): TimelineEntry[] =>
   });
 const buildFullTimeline = (
   inv: any,
-  auditLogs: Array<{ action: string; created_at: string | null }>
+  auditLogs: Array<{ action: string; created_at: string | null; details?: Record<string, unknown> | null }>
 ): TimelineEntry[] => {
   // Defensive: collapse exact duplicates — same action, same millisecond —
   // rather than every occurrence of an action. The real fix is upstream
@@ -472,7 +477,12 @@ const buildFullTimeline = (
 
   const out: TimelineEntry[] = dedupedLogs
     .filter((log) => !!log.created_at)
-    .map((log) => ({ ...describeTimelineAction(log.action), at: log.created_at as string }));
+    .map((log) => {
+      // Why the email bounced (`details.bounce_reason`, from the NDR).
+      const detailReason = log.details?.bounce_reason;
+      const reason = typeof detailReason === 'string' && detailReason ? detailReason : undefined;
+      return { ...describeTimelineAction(log.action), at: log.created_at as string, ...(reason ? { reason } : {}) };
+    });
 
   // created_at (row birth, never touched again) rather than
   // invitation_sent_at/expires_at (both overwritten by a later resend) —
@@ -602,7 +612,7 @@ export const inviteStatusLabel = (inv: {
     case 'expired': return 'Expired';
     case 'revoked': return 'Revoked';
     case 'failed': return 'Invite Failed';
-    case 'bounced': return 'Bounced';
+    case 'bounced': return 'Failed';
     default: return inv.status ? String(inv.status) : 'Pending';
   }
 };

@@ -48,7 +48,8 @@ const LOOK: Record<InviteStatusKind, { className: string; Icon: typeof Clock; la
   revoked: { className: RED, Icon: Undo2, label: 'Revoked' },
   expired: { className: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20', Icon: Clock, label: 'Expired' },
   invite_failed: { className: RED, Icon: X, label: 'Invite Failed' },
-  bounced: { className: RED, Icon: RefreshCw, label: 'Bounced' },
+  // Status column reads "Failed"; the timeline still names the event "Bounced".
+  bounced: { className: RED, Icon: RefreshCw, label: 'Failed' },
   link_created: { className: SLATE, Icon: Mail, label: 'Invited' },
   other: { className: SLATE, Icon: Clock, label: 'Pending' },
 };
