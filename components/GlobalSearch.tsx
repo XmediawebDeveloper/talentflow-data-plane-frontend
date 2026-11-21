@@ -672,9 +672,14 @@ export default function GlobalSearch({ className, variant = 'bar' }: GlobalSearc
       // The Job ID, as the Assessments table shows it — the assessment's own
       // AS-xxx is not shown in the app.
       idText: assessment.jd_short_id || undefined,
-      // Every version of an assessment shares one job, so the version is what
-      // tells two results apart here.
-      extra: assessment.version > 1 ? <span className="tf-hint !text-[0.6875rem]">V{assessment.version}</span> : undefined,
+      // The job's version and the assessment's own, labelled as on AI
+      // interview rows — the versions are what tell two results apart.
+      extra: (assessment.jd_version || assessment.version) ? (
+        <span className="flex items-center gap-1">
+          {!!assessment.jd_version && <LabelledVersion label="Job" version={assessment.jd_version} title={`Job version ${assessment.jd_version}`} />}
+          {!!assessment.version && <LabelledVersion label="Assessment" version={assessment.version} title={`Assessment version ${assessment.version}`} tone="blue" />}
+        </span>
+      ) : undefined,
       // Job title (unless the name already says it), then the status — always.
       meta: [metaLine(assessment.title, [assessment.jd_title]), assessment.status].filter(Boolean).join(' · '),
       rankFields: [assessment.jd_short_id, assessment.title, assessment.jd_title],
