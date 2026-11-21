@@ -6,8 +6,8 @@
  * screen in CandidateAIInterviewPortal.tsx). This class carries the same
  * hard-won rules so the assessment does not re-learn them:
  *
- *  - timeslice 5 s; chunks are buffered and shipped every 30 s (and on tab
- *    hide) ONLY once ≥ 5 MiB + 256 KiB is buffered — S3 refuses smaller
+ *  - timeslice 5 s; chunks are buffered and shipped once 5 s after start,
+ *    then every 30 s, and on tab hide / pagehide / flushNow() — ONLY once ≥ 5 MiB + 256 KiB is buffered — S3 refuses smaller
  *    non-final parts. The trailing remainder ships as the final part.
  *  - segment_index is monotonic and PERSISTED in sessionStorage: a reload must
  *    continue numbering, because index 0 makes the backend abort the earlier
@@ -41,6 +41,10 @@ export interface SegmentedRecorderOptions {
   audioBitsPerSecond?: number;
   timesliceMs?: number;
   checkpointMs?: number;
+  /** One-off early checkpoint after start (default 5 s) so a very short attempt
+   *  that is closed before the first regular checkpoint still has footage on
+   *  the server. Pass 0 to disable. */
+  firstCheckpointMs?: number;
   /** Minimum buffered bytes before a checkpoint uploads. Default = S3 part minimum;
    *  pass 0 when the backend stages small segments (assessment) so every 30 s flushes. */
   minSegmentBytes?: number;
@@ -88,10 +92,14 @@ export class SegmentedRecorder {
   private chunks: Blob[] = [];
   private segmentIndex: number;
   private checkpointTimer: ReturnType<typeof setInterval> | null = null;
+  private firstCheckpointTimer: ReturnType<typeof setTimeout> | null = null;
   private checkpointInFlight = false;
   private finalizing = false;
   private finalPromise: Promise<void> | null = null;
   private readonly visHandler = () => { if (document.hidden) void this.checkpoint(); };
+  // pagehide = the tab is going away. Best effort: the browser may cancel the
+  // upload, but anything already sent by an earlier checkpoint is safe.
+  private readonly pageHideHandler = () => { void this.checkpoint(); };
 
   constructor(private readonly opts: SegmentedRecorderOptions) {
     this.segmentIndex = readIndex(opts.storageKey);
@@ -118,7 +126,15 @@ export class SegmentedRecorder {
     recorder.start(this.opts.timesliceMs ?? 5000);
     this.recorder = recorder;
     this.checkpointTimer = setInterval(() => { void this.checkpoint(); }, this.opts.checkpointMs ?? 30_000);
+    const firstMs = this.opts.firstCheckpointMs ?? 5000;
+    if (firstMs > 0) {
+      this.firstCheckpointTimer = setTimeout(() => {
+        this.firstCheckpointTimer = null;
+        void this.checkpoint();
+      }, firstMs);
+    }
     document.addEventListener('visibilitychange', this.visHandler);
+    window.addEventListener('pagehide', this.pageHideHandler);
     console.log(`[${this.opts.label}] started mime=${recorder.mimeType || mime || 'default'} segment=${this.segmentIndex}`);
   }
 
@@ -135,6 +151,12 @@ export class SegmentedRecorder {
       try { recorder.requestData(); } catch { finish(); return; }
       setTimeout(finish, 1500);
     });
+  }
+
+  /** Upload what is buffered right now (submit, leave-page prompt). Same rules
+   *  as a timed checkpoint; a no-op while one is in flight or after stop(). */
+  flushNow(): Promise<void> {
+    return this.checkpoint();
   }
 
   /** Flush pending frames; upload a segment when ≥ MIN_SEGMENT_BYTES is buffered. */
@@ -171,7 +193,9 @@ export class SegmentedRecorder {
     if (this.finalPromise) return this.finalPromise;
     this.finalizing = true;
     if (this.checkpointTimer) { clearInterval(this.checkpointTimer); this.checkpointTimer = null; }
+    if (this.firstCheckpointTimer) { clearTimeout(this.firstCheckpointTimer); this.firstCheckpointTimer = null; }
     document.removeEventListener('visibilitychange', this.visHandler);
+    window.removeEventListener('pagehide', this.pageHideHandler);
     const recorder = this.recorder;
     this.recorder = null;
 

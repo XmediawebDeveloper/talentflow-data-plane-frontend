@@ -315,7 +315,6 @@ function nowIST(): string {
 // Minimum bytes to buffer before flushing a non-final recording segment.
 // S3 multipart-upload requires every part except the last to be >= 5 MiB; we add
 // a small margin so a slightly-undersized flush can't fail CompleteMultipartUpload.
-const RECORDING_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
 // A recorder that has produced no data this long after start is stalled (its
 // audio mix isn't running) — see the watchdog in startRecorder. Two 5 s
 // timeslices plus slack.
@@ -1792,7 +1791,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const finalUploadPromiseRef = useRef<Promise<void> | null>(null);
   // S3 multipart-upload segment index (0-based → backend part_number = idx + 1).
   // recordedChunksRef now holds only the UNFLUSHED clusters since the last
-  // segment; we flush a segment once the buffer reaches RECORDING_MIN_SEGMENT_BYTES.
+  // segment; we flush whatever is buffered (the backend stages small segments).
   // Camera-recording segment index. PERSISTED in sessionStorage (survives a
   // page reload in the same tab) so a reconnect-triggered refresh RESUMES the
   // segment numbering instead of restarting at 0. Restarting at 0 made the
@@ -3385,6 +3384,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         checkpointTimerRef.current = setInterval(() => {
           uploadCheckpointRef.current().catch(() => {});
         }, 30_000);
+        // One early upload 5 s in, so an interview closed before the first
+        // 30 s checkpoint still has webcam footage on the server. Harmless if
+        // the recorder is gone by then (the checkpoint no-ops).
+        window.setTimeout(() => { uploadCheckpointRef.current().catch(() => {}); }, 5000);
       };
       // Use isTypeSupported() to select the best available codec across browsers:
       // - Chrome/Brave: vp9 > vp8 webm
@@ -7970,12 +7973,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   useEffect(() => { handleMessageRef.current = handleMessage; }, [handleMessage]);
 
   // Checkpoint upload — flushes the recorder's buffer and ships ONE multipart
-  // segment WITHOUT stopping the recorder, but only once enough bytes have
-  // accumulated to form a valid S3 part (>= RECORDING_MIN_SEGMENT_BYTES). Called
-  // on a 30 s timer and on visibilitychange→hidden. Because S3 forbids
-  // sub-5-MiB non-final parts, small buffers are intentionally held back until
-  // the next tick rather than flushed; the trailing remainder ships as the final
-  // (any-size) part from uploadRecording().
+  // segment WITHOUT stopping the recorder, whenever anything is buffered (any
+  // size — the backend stages sub-5-MiB segments and folds them into the next
+  // valid S3 part). Called once 5 s after start, on a 30 s timer, and on
+  // visibilitychange→hidden / pagehide. The trailing remainder ships as the
+  // final part from uploadRecording().
   const uploadCheckpoint = useCallback(async (): Promise<void> => {
     if (isFinalizingUploadRef.current) return; // final upload owns the recorder
     if (checkpointInProgressRef.current) return; // skip overlap
@@ -8012,8 +8014,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       });
 
       const buffered = recordedChunksRef.current.reduce((sum, c) => sum + c.size, 0);
-      // Not enough for a valid non-final S3 part yet — keep buffering.
-      if (buffered < RECORDING_MIN_SEGMENT_BYTES) return;
+      // Ship whatever is buffered, however small: the backend STAGES sub-5-MiB
+      // segments (recording_staging) and folds them into the next valid S3
+      // part, so a short interview closed abruptly no longer loses everything.
+      if (buffered === 0) return;
 
       // Atomically snapshot the buffered clusters and reset the ref so new
       // clusters accumulate into a fresh array. Single-threaded JS guarantees no
@@ -8053,8 +8057,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         uploadCheckpointRef.current().catch(() => {});
       }
     };
+    // pagehide = tab closing. Best effort: the browser may cancel the upload.
+    const onPageHide = () => { uploadCheckpointRef.current().catch(() => {}); };
     document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', onPageHide);
+    };
   }, []);
 
   // Upload recording
