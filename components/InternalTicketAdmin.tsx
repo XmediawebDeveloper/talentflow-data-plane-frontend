@@ -3,6 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useDetailAutoRefresh, isOlder, announceNewReplies } from '@/lib/hooks/useDetailAutoRefresh';
+import { useReplyDraft } from '@/lib/hooks/useReplyDraft';
+import { useDebounce } from '@/lib/hooks/useDebounce';
+import { useAuth } from '@/lib/hooks/useAuth';
+import ListPagination from '@/components/ListPagination';
 import {
   Inbox, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
   Search, ArrowLeft, Filter, CheckCircle2, Circle, Clock3, XCircle,
@@ -69,6 +74,7 @@ export default function InternalTicketAdmin() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const ticketIdFromUrl = searchParams.get('ticket');
+  const { user: authUser } = useAuth();
 
   const [view, setView] = useState<ViewType>('overview');
   const [selectedTicket, setSelectedTicket] = useState<InternalTicket | null>(null);
@@ -76,6 +82,19 @@ export default function InternalTicketAdmin() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterAssignment, setFilterAssignment] = useState<string>('all');
+  // Server-side paging + search: before, only the API's first page ever
+  // loaded, and the search box filtered inside that page.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+  const debouncedSearch = useDebounce(searchQuery.trim(), 350);
+  // A new filter or search starts again from page 1.
+  const filterKey = `${filterStatus}|${filterPriority}|${filterAssignment}|${debouncedSearch}`;
+  const [pagedFor, setPagedFor] = useState(filterKey);
+  if (pagedFor !== filterKey) {
+    setPagedFor(filterKey);
+    setPage(1);
+  }
   const [replyMessage, setReplyMessage] = useState('');
   const [replyFiles, setReplyFiles] = useState<File[]>([]);
   const [replySending, setReplySending] = useState(false);
@@ -85,6 +104,36 @@ export default function InternalTicketAdmin() {
   const [stats, setStats] = useState<InternalTicketAdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  /* An open ticket refreshes itself (every 30s while the tab is visible, and
+     on coming back to the tab), so a reply or status change from the other
+     side shows up without reloading. Skipped while a reply / action is in
+     flight; an older response never replaces newer data. */
+  const openTicketId = view === 'detail' ? selectedTicket?.id ?? null : null;
+  useDetailAutoRefresh(!!openTicketId, async () => {
+    if (!openTicketId || replySending || actionLoading) return;
+    const fresh = await internalTicketService.getTicket(openTicketId);
+    const shown = selectedTicket?.id === fresh.id ? selectedTicket : null;
+    const apply = (cur: InternalTicket) => cur.id === fresh.id && !isOlder(fresh.updated_at, cur.updated_at);
+    setSelectedTicket((cur) => (cur && apply(cur) ? fresh : cur));
+    setTickets((prev) => prev.map((t) => (apply(t) ? fresh : t)));
+    // Someone else's reply came in → say so (yours are already on screen).
+    if (shown && apply(shown)) {
+      const since = Date.parse(shown.updated_at);
+      announceNewReplies(
+        fresh.ticket_number,
+        (fresh.responses ?? [])
+          .filter((r) => r.user_id !== authUser?.id && Date.parse(r.created_at) > since)
+          .map((r) => ({ name: r.user_name, message: r.message })),
+      );
+    }
+  });
+  // The reply box keeps a draft per ticket (shared with Support Center's Team tab).
+  useReplyDraft(
+    openTicketId && authUser?.id ? `${authUser.id}:team:${openTicketId}` : null,
+    replyMessage,
+    setReplyMessage,
+  );
 
   // The stats call failed — the cards show '—' instead of a number.
   const [statsFailed, setStatsFailed] = useState(false);
@@ -140,25 +189,30 @@ export default function InternalTicketAdmin() {
     }
   }, [ticketIdFromUrl, router]);
 
-  const fetchTickets = async () => {
+  // `silent`: the background refresh — no spinner, no error toast.
+  const fetchTickets = async ({ silent = false }: { silent?: boolean } = {}) => {
     const seq = ++fetchSeqRef.current;
     const isStale = () => seq !== fetchSeqRef.current;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await internalTicketService.adminListAllTickets({
+        page,
+        page_size: pageSize,
         status: filterStatus !== 'all' ? filterStatus as any : undefined,
         priority: filterPriority !== 'all' ? filterPriority as any : undefined,
-        search: searchQuery || undefined,
+        search: debouncedSearch || undefined,
         assigned_to_me: filterAssignment === 'mine' ? true : undefined,
         unassigned: filterAssignment === 'unassigned' ? true : undefined,
       });
       if (isStale()) return;
       setTickets(response.items);
+      setTotal(response.total ?? response.items.length);
     } catch (error) {
-      if (isStale()) return;
+      if (isStale() || silent) return;
       console.error('Error fetching tickets:', error);
       setTickets([]);
-      showErrorToast(error, "Couldn't load team tickets", { id: 'internal-ticket-admin-load', retry: fetchTickets });
+      setTotal(0);
+      showErrorToast(error, "Couldn't load team tickets", { id: 'internal-ticket-admin-load', retry: () => fetchTickets() });
     } finally {
       if (!isStale()) setLoading(false);
     }
@@ -191,7 +245,14 @@ export default function InternalTicketAdmin() {
   useEffect(() => {
     if (!hasFetched.current) return;
     fetchTickets();
-  }, [filterStatus, filterPriority, filterAssignment]);
+  }, [filterStatus, filterPriority, filterAssignment, debouncedSearch, page, pageSize]);
+
+  // The overview and list refresh themselves too (every 30s while visible),
+  // so status changes and new tickets show without a reload.
+  useDetailAutoRefresh(view === 'overview' || view === 'tickets', () => {
+    void fetchTickets({ silent: true });
+    void fetchStats();
+  });
 
   const handleAssignTicket = async (ticketId: string) => {
     try {
@@ -358,15 +419,8 @@ export default function InternalTicketAdmin() {
     return cat?.icon || HelpCircle;
   };
 
-  const filteredTickets = tickets.filter(ticket => {
-    const matchesSearch =
-      ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.ticket_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.created_by?.name?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
-
+  // Search runs on the server now (across every page), so rows show as returned.
+  const filteredTickets = tickets;
   // The overview stat cards can set 'in_progress', so match either separator.
   const statusFilterLabel = (v: string) =>
     STATUS_FILTER_OPTIONS.find(o => o.value === v.replace(/_/g, '-'))?.label ?? v;
@@ -840,6 +894,17 @@ export default function InternalTicketAdmin() {
                   })}
                 </MobileRecordList>
                 </>
+              )}
+              {/* Pagination (server total, not just this page) */}
+              {!loading && total > 0 && (
+                <ListPagination
+                  currentPage={page}
+                  itemsPerPage={pageSize}
+                  totalItems={total}
+                  onPageChange={setPage}
+                  onItemsPerPageChange={(n) => { setPageSize(n); setPage(1); }}
+                  itemLabel="tickets"
+                />
               )}
             </div>
           </div>

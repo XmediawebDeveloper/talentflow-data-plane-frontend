@@ -30,6 +30,8 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { AttachmentPicker as TeamAttachmentPicker, AttachmentList as TeamAttachmentList } from '@/components/support/TicketAttachments';
 import { saveBlob } from '@/lib/supportAttachments';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useDetailAutoRefresh, isOlder, announceNewReplies } from '@/lib/hooks/useDetailAutoRefresh';
+import { useReplyDraft } from '@/lib/hooks/useReplyDraft';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import api, { ApiError, handleApiError, getTokens } from '@/lib/services/api';
 import { PageHeader } from '@/components/ui/page-header';
@@ -736,12 +738,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     fetchTickets();
   }, [myCurrentPage, myItemsPerPage, filterStatus, filterPriority, myCategoryFilter, debouncedSearch, ticketSort]);
 
-  const fetchTickets = async () => {
+  // `silent`: the background refresh — no spinner, errors left alone.
+  const fetchTickets = async ({ silent = false }: { silent?: boolean } = {}) => {
     const seq = ++ticketsFetchSeqRef.current;
     const isStale = () => seq !== ticketsFetchSeqRef.current;
     try {
-      setLoading(true);
-      setTicketsError(null);
+      if (!silent) {
+        setLoading(true);
+        setTicketsError(null);
+      }
       const { data } = await api.get(supportPath(), {
         params: {
           page: myCurrentPage,
@@ -757,7 +762,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       setTickets((data.items || []).map(transformTicket));
       setMyTotal(data.total ?? 0);
     } catch (error) {
-      if (isStale()) return;
+      if (isStale() || silent) return;
       setTickets([]);
       setMyTotal(0);
       setTicketsError(errorText(error, 'Could not load your tickets'));
@@ -787,6 +792,60 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     }
   };
 
+  /* An open ticket refreshes itself (every 30s while the tab is visible, and
+     on coming back to the tab), so a reply or status change from the other
+     side shows up without reloading. Skipped while you are sending a reply or
+     running an action; an older response never replaces newer data. */
+  const externalDetailId = activeTab === 'external' && view === 'detail' ? selectedTicket?.id ?? null : null;
+  useDetailAutoRefresh(!!externalDetailId, async () => {
+    if (!externalDetailId || replySending) return;
+    const { data } = await api.get(supportPath(`/${externalDetailId}`));
+    const fresh = transformTicket(data);
+    const shown = selectedTicket?.id === fresh.id ? selectedTicket : null;
+    const apply = (cur: SupportTicket) => cur.id === fresh.id && !isOlder(fresh.updatedAt, cur.updatedAt);
+    setSelectedTicket((cur) => (cur && apply(cur) ? fresh : cur));
+    setTickets((prev) => prev.map((t) => (apply(t) ? fresh : t)));
+    // TalentFlow support replied → say so.
+    if (shown && apply(shown)) {
+      const since = Date.parse(shown.updatedAt);
+      announceNewReplies(
+        fresh.ticketNumber,
+        (fresh.responses ?? [])
+          .filter((r) => r.from === 'support' && Date.parse(r.timestamp) > since)
+          .map((r) => ({ name: r.agentName || 'TalentFlow Support', message: r.message })),
+      );
+    }
+  });
+  const teamDetailId = activeTab === 'team' && isAdmin && view === 'detail' ? selectedInternalTicket?.id ?? null : null;
+  useDetailAutoRefresh(!!teamDetailId, async () => {
+    if (!teamDetailId || replySending || internalActionLoading) return;
+    const fresh = await internalTicketService.getTicket(teamDetailId);
+    const shown = selectedInternalTicket?.id === fresh.id ? selectedInternalTicket : null;
+    const apply = (cur: InternalTicket) => cur.id === fresh.id && !isOlder(fresh.updated_at, cur.updated_at);
+    setSelectedInternalTicket((cur) => (cur && apply(cur) ? fresh : cur));
+    setInternalTickets((prev) => prev.map((t) => (apply(t) ? fresh : t)));
+    // The requester (or another admin) replied → say so.
+    if (shown && apply(shown)) {
+      const since = Date.parse(shown.updated_at);
+      announceNewReplies(
+        fresh.ticket_number,
+        (fresh.responses ?? [])
+          .filter((r) => r.user_id !== authUser?.id && Date.parse(r.created_at) > since)
+          .map((r) => ({ name: r.user_name, message: r.message })),
+      );
+    }
+  });
+  // The reply box keeps a draft per ticket (survives switching tickets / reload).
+  // Team drafts are shared with /organization/internal-tickets (same tickets).
+  useReplyDraft(
+    !authUser?.id ? null
+      : externalDetailId ? `${authUser.id}:support:${externalDetailId}`
+        : teamDetailId ? `${authUser.id}:team:${teamDetailId}`
+          : null,
+    replyMessage,
+    setReplyMessage,
+  );
+
   // Team tab: stats once when first opened; the list follows its own filters.
   useEffect(() => {
     if (activeTab === 'team' && isAdmin && !hasInternalFetched.current) {
@@ -800,12 +859,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     fetchInternalTickets();
   }, [activeTab, isAdmin, teamCurrentPage, teamItemsPerPage, teamFilterStatus, teamFilterPriority, teamCategoryFilter, internalFilterAssignment, debouncedTeamSearch, teamSort]);
 
-  const fetchInternalTickets = async () => {
+  // `silent`: the background refresh — no spinner, errors left alone.
+  const fetchInternalTickets = async ({ silent = false }: { silent?: boolean } = {}) => {
     const seq = ++internalTicketsFetchSeqRef.current;
     const isStale = () => seq !== internalTicketsFetchSeqRef.current;
     try {
-      setInternalLoading(true);
-      setInternalTicketsError(null);
+      if (!silent) {
+        setInternalLoading(true);
+        setInternalTicketsError(null);
+      }
       const response = await internalTicketService.adminListAllTickets({
         page: teamCurrentPage,
         page_size: teamItemsPerPage,
@@ -821,7 +883,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       setInternalTickets(response.items);
       setTeamTotal(response.total ?? 0);
     } catch (error) {
-      if (isStale()) return;
+      if (isStale() || silent) return;
       setInternalTickets([]);
       setTeamTotal(0);
       setInternalTicketsError(errorText(error, 'Could not load team tickets'));
@@ -840,6 +902,17 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       setInternalStatsFailed(true);
     }
   };
+
+  // Overviews and lists refresh themselves too (every 30s while visible), so
+  // statuses, "awaiting reply" tags and counts stay current without a reload.
+  useDetailAutoRefresh(activeTab === 'external' && (view === 'overview' || view === 'tickets'), () => {
+    void fetchTickets({ silent: true });
+    void fetchStats();
+  });
+  useDetailAutoRefresh(activeTab === 'team' && isAdmin && (view === 'overview' || view === 'tickets'), () => {
+    void fetchInternalTickets({ silent: true });
+    void fetchInternalStats();
+  });
 
   const fetchInternalTicketDetail = async (ticketId: string) => {
     try {
