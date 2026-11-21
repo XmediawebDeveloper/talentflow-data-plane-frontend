@@ -139,13 +139,13 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
         aiInterviewService.list({ search: searchQuery, page_size: pageSize, compact: true }),
       ]);
 
-      const keep = <T,>(items: T[], visible: (item: T) => boolean, filter = idQuery) =>
-        (filter ? items.filter(visible) : items).slice(0, RESULT_LIMIT);
+      const keep = <T,>(items: T[], visible: (item: T) => boolean, filter = idQuery, limit = RESULT_LIMIT) =>
+        (filter ? items.filter(visible) : items).slice(0, limit);
 
       setResumes(resumeRes.status === 'fulfilled'
         // For a number / phone-style query a résumé must match by name, email
         // or the (highlighted) phone number.
-        ? keep(resumeRes.value.items, (r) => textMatches([r.candidate_name, r.candidate_email, r.email], q) || (!!r.phone && !!phoneMatchRange(r.phone, q)), idQuery || phoneQuery)
+        ? keep(resumeRes.value.items, (r) => textMatches([r.candidate_name, r.candidate_email, r.email], q) || (!!r.phone && !!phoneMatchRange(r.phone, q)), idQuery || phoneQuery, phoneQuery ? pageSize : RESULT_LIMIT)
         : []);
       setFolders(folderRes.status === 'fulfilled' ? flattenFolders(folderRes.value, searchQuery) : []);
       setJds(jdRes.status === 'fulfilled'
