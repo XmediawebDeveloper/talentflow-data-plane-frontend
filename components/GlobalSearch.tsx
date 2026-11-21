@@ -15,6 +15,42 @@ interface GlobalSearchProps {
   className?: string;
 }
 
+/**
+ * Finds the query's digits inside the phone number's digits and returns the
+ * [start, end) character range in the original (possibly formatted) string,
+ * so spaces/dashes/+ inside the match are highlighted but nothing outside it.
+ */
+function phoneMatchRange(phone: string, query: string): [number, number] | null {
+  const q = query.replace(/\D/g, '');
+  if (!q) return null;
+  const digitPos: number[] = [];
+  let digits = '';
+  for (let i = 0; i < phone.length; i++) {
+    if (/\d/.test(phone[i])) {
+      digitPos.push(i);
+      digits += phone[i];
+    }
+  }
+  const idx = digits.indexOf(q);
+  if (idx === -1) return null;
+  return [digitPos[idx], digitPos[idx + q.length - 1] + 1];
+}
+
+function renderPhone(phone: string, query: string) {
+  const range = phoneMatchRange(phone, query);
+  if (!range) return phone;
+  const [start, end] = range;
+  return (
+    <>
+      {phone.slice(0, start)}
+      <mark className="bg-yellow-200 dark:bg-yellow-500/40 text-inherit font-semibold rounded-sm px-px">
+        {phone.slice(start, end)}
+      </mark>
+      {phone.slice(end)}
+    </>
+  );
+}
+
 export default function GlobalSearch({ className }: GlobalSearchProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -274,6 +310,11 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                           {resume.candidate_name || resume.file_name}
                         </span>
                       </div>
+                      {resume.phone && phoneMatchRange(resume.phone, query) && (
+                        <div className="tf-meta mt-0.5">
+                          {renderPhone(resume.phone, query)}
+                        </div>
+                      )}
                       <div className="tf-meta mt-0.5">
                         {[resume.current_title, resume.current_company, resume.location].filter(Boolean).join(' · ') || resume.candidate_email || resume.file_name}
                       </div>
