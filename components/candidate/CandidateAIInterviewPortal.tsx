@@ -80,7 +80,6 @@ interface Props {
 // Minimum bytes to buffer before flushing a non-final screen-recording segment.
 // S3 multipart upload requires every part except the last to be >= 5 MiB; the
 // margin keeps a slightly-undersized flush from failing CompleteMultipartUpload.
-const SCREEN_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
 // Screen recorder with no data this long after start is stalled — see
 // armScreenStallWatchdog. Two 5 s timeslices plus slack.
 const SCREEN_STALL_CHECK_MS = 12_000;
@@ -455,6 +454,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   };
   const screenStreamRef = useRef<MediaStream | null>(null);
   const screenCheckpointInProgressRef = useRef(false);
+  // Latest screen checkpoint (set when the recorder is armed) so the interview
+  // start / termination / pagehide paths can force an upload right away.
+  const screenCheckpointRef = useRef<(() => Promise<void>) | null>(null);
   const isFinalizingScreenUploadRef = useRef(false);
   // Audio mixing for screen recording (Bina's TTS tap + candidate mic)
   const recordingAudioCtxRef = useRef<AudioContext | null>(null);
@@ -1047,6 +1049,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     const sr = screenRecorderRef.current;
     if (sr && sr.state === 'inactive') {
       try { sr.start(5000); armScreenStallWatchdog(sr); } catch { /* already started / not startable */ }
+      // One early upload 5 s in, so an interview closed before the first 30 s
+      // checkpoint still has screen footage on the server.
+      const t = window.setTimeout(() => { void screenCheckpointRef.current?.(); }, 5000);
+      return () => window.clearTimeout(t);
     }
   }, [step, armScreenStallWatchdog]);
 
@@ -1173,8 +1179,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         details: { reason, message, action: 'interview_terminated' },
       });
     } catch { /* non-blocking */ }
-    // Keep the entire-screen recorder running briefly so the footage captures
-    // whatever was on screen when the violation happened, then upload.
+    // Upload everything recorded so far right now (a tab closed during the
+    // post-violation window below would otherwise lose it), then keep the
+    // entire-screen recorder running briefly so the footage captures whatever
+    // was on screen when the violation happened, then upload the tail.
+    void screenCheckpointRef.current?.();
     window.setTimeout(() => { stopAndUploadScreenRecording(); }, POST_VIOLATION_RECORD_MS);
     if (isFullscreen()) exitFullscreen().catch(() => {});
     setStep('terminated');
@@ -1869,13 +1878,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             try { recorder.requestData(); } catch { finish(); return; }
             setTimeout(finish, 1500); // safety net for throttled tabs
           });
-          // Only flush once we have enough bytes for a valid non-final S3
-          // multipart part (>= SCREEN_MIN_SEGMENT_BYTES). S3 forbids sub-5-MiB
-          // intermediate parts, so a smaller buffer is held back for the next
-          // tick; the trailing remainder ships as the final (any-size) part from
-          // stopAndUploadScreenRecording.
+          // Ship whatever is buffered, however small: the backend STAGES
+          // sub-5-MiB segments (recording_staging) and folds them into the next
+          // valid S3 part. Waiting for 5 MiB meant a short interview closed
+          // abruptly had uploaded nothing and lost the whole screen recording.
           const buffered = screenChunksRef.current.reduce((sum, c) => sum + c.size, 0);
-          if (buffered < SCREEN_MIN_SEGMENT_BYTES) return;
+          if (buffered === 0) return;
           // Atomically snapshot the buffered chunks and clear the ref so
           // subsequent ondataavailable pushes go into a fresh array.
           // Single-threaded JS guarantees no chunk push can race between
@@ -1901,15 +1909,20 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           screenCheckpointInProgressRef.current = false;
         }
       };
+      screenCheckpointRef.current = screenCheckpoint;
       // 30s periodic; also fire on visibility hidden (tab switch / minimize)
+      // and on pagehide (tab closing — best effort, the browser may cancel it).
       const screenCheckpointTimer = setInterval(() => { screenCheckpoint(); }, 30000);
       const screenVisHandler = () => { if (document.visibilityState === 'hidden') screenCheckpoint(); };
+      const screenPageHideHandler = () => { void screenCheckpoint(); };
       document.addEventListener('visibilitychange', screenVisHandler);
+      window.addEventListener('pagehide', screenPageHideHandler);
       // Cleanup when recorder stops (track ended handler below already stops it)
       const originalOnStop = sr.onstop;
       sr.onstop = (ev) => {
         clearInterval(screenCheckpointTimer);
         document.removeEventListener('visibilitychange', screenVisHandler);
+        window.removeEventListener('pagehide', screenPageHideHandler);
         if (originalOnStop) (originalOnStop as any).call(sr, ev);
       };
       // If candidate stops sharing manually — record as severe malpractice and block the interview.

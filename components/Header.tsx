@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, Lock, X, Building2, Menu, MessageCircle } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Bell, CheckCheck, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, Lock, X, Building2, Menu, MessageCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
@@ -40,7 +40,7 @@ const MAX_BADGE_COUNT = 9;
    is measured against the rows actually rendered rather than given a pixel
    height: a row is as tall as its message wraps, and that differs between the
    phone-width sheet and the desktop dropdown. */
-const VISIBLE_NOTIFICATIONS = 2;
+const VISIBLE_NOTIFICATIONS = 4;
 
 /* Header theme button cycles Light → Dark → Auto (follows the OS setting). */
 const THEME_CYCLE = ['light', 'dark', 'system'] as const;
@@ -950,8 +950,12 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       {/* Global Search Bar - Hidden on mobile, visible on desktop */}
       <GlobalSearch className="hidden lg:flex items-center flex-1 max-w-sm" />
 
-      {/* Spacer for mobile to push icons to the right */}
-      <div className="flex-1 lg:hidden" />
+      {/* Spacer for mobile to push icons to the right — with the search
+          button (phones / tablets) at its right end, before the icons. Not
+          under 360px (2xs), where the icon row is already at its limit. */}
+      <div className="flex-1 lg:hidden flex justify-end">
+        <GlobalSearch variant="icon" className="hidden 2xs:block" />
+      </div>
 
       <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 lg:ml-8">
         {/* FIX-010: Keyboard Shortcuts Button with Tooltip - Hidden on mobile */}
@@ -1357,46 +1361,61 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                 className="fixed inset-0 z-[80]"
                 onClick={() => setShowNotifications(false)}
               ></div>
-              <div className="animate-in fade-in zoom-in-90 slide-in-from-top-1 duration-200 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:animate-none origin-top sm:origin-top-right fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-[85]">
-                <div className="px-4 py-3 bg-brand-blue text-white">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-medium flex items-center gap-2">
+              <div className="animate-in fade-in zoom-in-90 slide-in-from-top-1 duration-200 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:animate-none origin-top sm:origin-top-right fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-[23rem] bg-white dark:bg-slate-900 rounded-xl shadow-xl shadow-slate-900/10 ring-1 ring-gray-200/80 dark:ring-slate-700 overflow-hidden z-[85]">
+                {/* Header: title + live dot + new count, "Mark all read" on the
+                    right, then an All / Unread segmented toggle. */}
+                <div className="px-3.5 pt-3 pb-2.5 border-b border-gray-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-100">
+                      Notifications
                       {/* Real-time connection indicator */}
                       <Tooltip content={wsConnected ? 'Real-time connected' : 'Using polling'} position="bottom">
-                        <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-success' : 'bg-warning'}`}></span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-success' : 'bg-warning'}`} aria-label={wsConnected ? 'Real-time connected' : 'Using polling'} />
                       </Tooltip>
-                      <Bell className="w-5 h-5" />
-                      Notifications
+                      {unreadCount > 0 && (
+                        <span className="rounded-full bg-brand-blue/10 px-1.5 py-px text-2xs font-semibold text-brand-blue dark:bg-blue-400/15 dark:text-blue-300">
+                          {unreadCount} new
+                        </span>
+                      )}
                     </h3>
-                    {unreadCount > 0 && (
-                      <span className="tf-badge bg-white/20">{unreadCount} new</span>
-                    )}
+                    <button
+                      onClick={handleMarkAllAsRead}
+                      disabled={unreadCount === 0}
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/[0.08] disabled:cursor-not-allowed disabled:text-gray-500 disabled:hover:bg-transparent dark:text-blue-300 dark:hover:bg-blue-400/15 dark:disabled:text-slate-500 transition-colors"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" aria-hidden />
+                      Mark all read
+                    </button>
                   </div>
-                  <p className="text-sm text-white/80 mt-1">Stay updated with latest activities</p>
-                </div>
 
-                {/* Filter Tabs */}
-                <div className="flex border-b border-gray-200 bg-gray-50">
-                  <button
-                    onClick={() => setActiveNotificationTab('all')}
-                    className={`tf-tab-line flex-1 ${
-                      activeNotificationTab === 'all'
-                        ? 'tf-tab-line-active bg-white'
-                        : ''
-                    }`}
-                  >
-                    All ({totalCount})
-                  </button>
-                  <button
-                    onClick={() => setActiveNotificationTab('unread')}
-                    className={`tf-tab-line flex-1 ${
-                      activeNotificationTab === 'unread'
-                        ? 'tf-tab-line-active bg-white'
-                        : ''
-                    }`}
-                  >
-                    Unread ({unreadCount})
-                  </button>
+                  <div role="tablist" aria-label="Filter notifications" className="mt-2.5 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-0.5 dark:bg-slate-800">
+                    {([
+                      ['all', 'All', totalCount],
+                      ['unread', 'Unread', unreadCount],
+                    ] as const).map(([tab, label, count]) => {
+                      const active = activeNotificationTab === tab;
+                      return (
+                        <button
+                          key={tab}
+                          role="tab"
+                          aria-selected={active}
+                          onClick={() => setActiveNotificationTab(tab)}
+                          className={`flex items-center justify-center gap-1.5 rounded-md py-1 text-xs font-medium transition-colors ${
+                            active
+                              ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-700 dark:text-slate-100'
+                              : 'text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
+                          }`}
+                        >
+                          {label}
+                          <span className={`rounded-full px-1.5 text-2xs tabular-nums ${
+                            active ? 'bg-brand-blue/10 text-brand-blue dark:bg-blue-400/15 dark:text-blue-300' : 'bg-gray-200/70 dark:bg-slate-700'
+                          }`}>
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Fixed to VISIBLE_NOTIFICATIONS rows once there are more than
@@ -1415,44 +1434,52 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                     </div>
                   ) : notifications.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 text-gray-500">
-                      <Bell className="w-8 h-8 mb-2 opacity-50" />
-                      <p className="text-sm">
+                      <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 dark:bg-slate-800">
+                        <Bell className="w-5 h-5" aria-hidden />
+                      </span>
+                      <p className="text-sm font-medium text-gray-700 dark:text-slate-200">
                         {activeNotificationTab === 'unread' ? 'No unread notifications' : 'No notifications'}
                       </p>
-                      <p className="tf-hint mt-1">You're all caught up!</p>
+                      <p className="tf-hint mt-0.5">You're all caught up!</p>
                     </div>
                   ) : (
-                    <div ref={notificationListRef} className="p-2 space-y-1">
+                    <div ref={notificationListRef} className="p-1.5 space-y-0.5">
                       {notifications.map((notification) => {
                         const style = getNotificationStyle(notification.type);
                         const IconComponent = style.icon;
+                        const unread = !notification.is_read;
                         return (
                           <button
                             key={notification.id}
                             onClick={() => handleNotificationClick(notification)}
-                            className={`w-full text-left p-3 hover:bg-brand-blue/5 rounded-lg transition-colors ${
-                              !notification.is_read ? `border-l-4 ${style.borderColor} ${style.bgTint}` : ''
+                            className={`group/n relative flex w-full gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-brand-blue/[0.06] dark:hover:bg-blue-400/10 ${
+                              unread ? 'bg-brand-blue/[0.03] dark:bg-blue-400/[0.05]' : ''
                             }`}
                           >
-                            <div className="flex gap-3">
-                              <div className={`w-10 h-10 ${style.bgColor} rounded-full flex items-center justify-center flex-shrink-0`}>
-                                <IconComponent className={`w-5 h-5 ${style.iconColor}`} />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-2 mb-1">
-                                  <p className={`text-sm ${notification.is_read ? 'text-gray-600' : 'text-gray-900 font-medium'}`}>
-                                    {notification.title}
-                                  </p>
-                                  <span className="tf-meta whitespace-nowrap">{notification.time_ago}</span>
-                                </div>
-                                <p className="tf-meta">{notification.message}</p>
-                                {user.role === 'tenant_admin' && notification.action_label && (
-                                  <div className="flex items-center gap-2 mt-2">
-                                    <span className={`text-xs ${style.labelColor} font-medium`}>{notification.action_label}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                            <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${style.bgColor}`}>
+                              <IconComponent className={`w-4 h-4 ${style.iconColor}`} aria-hidden />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-start gap-2">
+                                <span className={`min-w-0 flex-1 text-[0.8125rem] leading-snug line-clamp-2 ${
+                                  unread ? 'font-semibold text-gray-900 dark:text-slate-100' : 'font-medium text-gray-700 dark:text-slate-300'
+                                }`}>
+                                  {notification.title}
+                                </span>
+                                <span className="mt-px shrink-0 text-2xs text-gray-500 whitespace-nowrap">{notification.time_ago}</span>
+                              </span>
+                              <span className="mt-0.5 block tf-meta !text-xs leading-snug line-clamp-2">{notification.message}</span>
+                              {user.role === 'tenant_admin' && notification.action_label && (
+                                <span className={`mt-1 inline-flex items-center gap-0.5 text-xs font-medium ${style.labelColor}`}>
+                                  {notification.action_label}
+                                  <ChevronRight className="w-3 h-3 transition-transform group-hover/n:translate-x-0.5 motion-reduce:transition-none" aria-hidden />
+                                </span>
+                              )}
+                            </span>
+                            {/* Unread marker */}
+                            {unread && (
+                              <span className="absolute right-2 bottom-2.5 h-1.5 w-1.5 rounded-full bg-brand-blue dark:bg-blue-400" aria-label="Unread" />
+                            )}
                           </button>
                         );
                       })}
@@ -1460,29 +1487,17 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                   )}
                 </div>
 
-                {/* Footer Actions */}
-                <div className="border-t border-gray-200 p-3 bg-gray-50 flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleMarkAllAsRead}
-                    disabled={unreadCount === 0}
-                    className="flex-1"
-                  >
-                    Mark All Read
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => {
-                      setShowNotifications(false);
-                      router.push('/notifications');
-                    }}
-                    className="flex-1"
-                  >
-                    View All
-                  </Button>
-                </div>
+                {/* Footer — one link to the full page (Mark all read is in the head). */}
+                <button
+                  onClick={() => {
+                    setShowNotifications(false);
+                    router.push('/notifications');
+                  }}
+                  className="flex w-full items-center justify-center gap-1 border-t border-gray-100 py-2.5 text-xs font-semibold text-brand-blue transition-colors hover:bg-brand-blue/[0.06] dark:border-slate-800 dark:text-blue-300 dark:hover:bg-blue-400/10"
+                >
+                  View all notifications
+                  <ArrowRight className="w-3.5 h-3.5" aria-hidden />
+                </button>
               </div>
             </>
           )}

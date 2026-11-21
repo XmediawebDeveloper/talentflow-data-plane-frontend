@@ -5,6 +5,7 @@ import { Fragment, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil, Check,
   MoreVertical, Monitor, History, XCircle, FileText, Timer, ChevronDown,
+  KeyRound, ScanFace, Mic, Languages, GraduationCap, AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
@@ -277,6 +278,12 @@ const TIMELINE_EVENT_DESCRIPTION: Record<string, string> = {
   'Completed': 'Candidate completed the AI interview',
   'Terminated': 'AI interview ended before it was completed',
   'Expired at': 'Invitation link expired',
+  'OTP Verified': 'Candidate verified their email with a one-time code',
+  'Identity Verified': 'Candidate passed the identity check',
+  'Voice Enrolled': 'Candidate recorded a voice sample',
+  'Device Check': 'Candidate ran the camera, microphone and network check',
+  'Practice Completed': 'Candidate finished the practice question',
+  'Proctoring Violation': 'Proctoring flagged suspicious activity',
 };
 
 /** View History on the Job Details AI Interview Result tab: the session's
@@ -315,8 +322,36 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
       return { label: 'Terminated', Icon: Ban, tone: 'text-destructive' };
     case 'ai_interview_invite_expired':
       return { label: 'Expired at', Icon: Clock, tone: 'text-brand-orange-deep' };
+    // Candidate pre-interview steps — printed their raw action names before.
+    case 'ai_interview_otp_sent':
+      return { label: 'OTP Sent', Icon: KeyRound, tone: 'text-brand-cyan' };
+    case 'ai_interview_otp_verified':
+      return { label: 'OTP Verified', Icon: KeyRound, tone: 'text-brand-cyan' };
+    case 'ai_interview_otp_failed':
+      return { label: 'OTP Failed', Icon: KeyRound, tone: 'text-destructive' };
+    case 'ai_interview_identity_verified':
+      return { label: 'Identity Verified', Icon: ScanFace, tone: 'text-brand-cyan' };
+    case 'ai_interview_identity_failed':
+      return { label: 'Identity Check Failed', Icon: ScanFace, tone: 'text-destructive' };
+    case 'ai_interview_voice_enrolled':
+      return { label: 'Voice Enrolled', Icon: Mic, tone: 'text-brand-cyan' };
+    case 'ai_interview_voice_enroll_failed':
+      return { label: 'Voice Enrollment Failed', Icon: Mic, tone: 'text-destructive' };
+    case 'ai_interview_system_check':
+      return { label: 'Device Check', Icon: Monitor, tone: 'text-brand-cyan' };
+    case 'ai_interview_language_selected':
+      return { label: 'Language Selected', Icon: Languages, tone: 'text-brand-cyan' };
+    case 'ai_interview_practice_completed':
+      return { label: 'Practice Completed', Icon: GraduationCap, tone: 'text-brand-cyan' };
+    case 'proctoring_violation':
+      return { label: 'Proctoring Violation', Icon: AlertTriangle, tone: 'text-brand-orange-deep' };
     default:
-      return { label: action, Icon: Clock, tone: 'text-gray-500 dark:text-slate-400' };
+      // Never print a raw action name: "ai_interview_foo_bar" -> "Foo Bar".
+      return {
+        label: action.replace(/^ai_interview_/, '').split('_').filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' '),
+        Icon: Clock,
+        tone: 'text-gray-500 dark:text-slate-400',
+      };
   }
 };
 
@@ -490,7 +525,10 @@ const buildFullTimeline = (
     compareTimelineEntries
   );
   // Ascending — oldest event first, the order it happened in.
-  return collapseRepeatedExpiries(collapseRepeatedEvents(merged));
+  // Milestones only (Invited, System Check, Started, Completed + the
+  // Revoked/Expired/Terminated end states) — candidate pre-check steps and
+  // proctoring violations are left to the Activity Log.
+  return collapseRepeatedExpiries(collapseRepeatedEvents(merged)).filter((e) => TIMELINE_STATUS_LABELS.has(e.label));
 };
 
 /** Badge wording and colours kept in one place so a recruiter reads the same

@@ -1,11 +1,14 @@
 'use client';
 
-/* Chat test page — small shared pieces. TEST ONLY. */
+/* Team Chat — small shared pieces. */
 
 import type { ReactNode } from 'react';
-import { FileSpreadsheet, FileText, FileType2, File as FileIcon, Image as ImageIcon, Hash, Lock, Archive } from 'lucide-react';
+import {
+  FileSpreadsheet, FileText, FileType2, File as FileIcon, Image as ImageIcon, UsersRound, Archive,
+  Briefcase, Handshake, Receipt, Search, CalendarDays, GraduationCap, Megaphone, Code2, Building2, type LucideIcon,
+} from 'lucide-react';
 import NameAvatar from '@/components/ui/name-avatar';
-import type { ApplicationStatus, AttachmentKind, Person, Presence } from './types';
+import type { AttachmentKind, Person, Presence, TeamIcon } from './types';
 
 export const MIN = 60_000;
 
@@ -39,37 +42,55 @@ export const PRESENCE_LABEL: Record<Presence, string> = { online: 'Online', away
 export function Avatar({ person, size = 'md', presence = true }: { person: Person; size?: 'xs' | 'sm' | 'md' | 'lg'; presence?: boolean }) {
   return (
     <span className="relative inline-flex shrink-0">
-      <NameAvatar name={person.name} size={size} userId={person.id} title={person.name} />
-      {presence && (
+      <NameAvatar name={person.name} size={size} userId={person.id} title={person.name} src={person.avatarUrl} />
+      {presence && person.presence && (
         <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-slate-900 ${PRESENCE_DOT[person.presence]}`} />
       )}
     </span>
   );
 }
 
-export function ChannelTile({ archived, size = 'md', active }: { archived?: boolean; size?: 'sm' | 'md'; active?: boolean }) {
+/** Team icons — hiring / workplace themed; one is picked per team. */
+export const TEAM_ICONS: { key: TeamIcon; label: string; Icon: LucideIcon }[] = [
+  { key: 'users', label: 'People', Icon: UsersRound },
+  { key: 'briefcase', label: 'Hiring', Icon: Briefcase },
+  { key: 'handshake', label: 'HR / Onboarding', Icon: Handshake },
+  { key: 'search', label: 'Sourcing', Icon: Search },
+  { key: 'calendar', label: 'Interviews', Icon: CalendarDays },
+  { key: 'graduation', label: 'Campus', Icon: GraduationCap },
+  { key: 'receipt', label: 'Billing', Icon: Receipt },
+  { key: 'megaphone', label: 'Employer brand', Icon: Megaphone },
+  { key: 'code', label: 'Engineering', Icon: Code2 },
+  { key: 'building', label: 'Office / Admin', Icon: Building2 },
+];
+export const teamIconOf = (key?: TeamIcon) => (TEAM_ICONS.find(t => t.key === key) ?? TEAM_ICONS[0]).Icon;
+/* The tile glyphs, built once (a component picked during render would remount each time). */
+const TEAM_GLYPH = Object.fromEntries(TEAM_ICONS.map(({ key, Icon }) => [key, <Icon key={key} className="h-4 w-4" />])) as Record<TeamIcon, ReactNode>;
+
+export function TeamTile({ archived, size = 'md', active, icon }: { archived?: boolean; size?: 'sm' | 'md'; active?: boolean; icon?: TeamIcon }) {
   const box = size === 'sm' ? 'h-8 w-8' : 'h-9 w-9';
   return (
     <span className={`inline-flex ${box} shrink-0 items-center justify-center rounded-lg ${
       archived ? 'bg-gray-100 text-gray-500 dark:bg-slate-800' : active ? 'bg-brand-blue text-white' : 'bg-brand-blue/10 text-brand-blue'
     }`}>
-      {archived ? <Archive className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
+      {archived ? <Archive className="h-4 w-4" /> : TEAM_GLYPH[icon ?? 'users']}
     </span>
   );
 }
 
-export const PrivateMark = () => <Lock className="h-3 w-3 shrink-0 text-gray-400" aria-label="Members only" />;
-
-const STATUS_TONE: Record<ApplicationStatus, string> = {
-  Applied: 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300',
-  Shortlisted: 'bg-brand-blue/10 text-brand-blue',
-  Assessment: 'bg-brand-orange/10 text-brand-orange-deep',
-  'AI Interview': 'bg-brand-cyan/10 text-brand-cyan',
-  Offered: 'bg-success-subtle text-success',
-  Rejected: 'bg-destructive-subtle text-destructive',
-};
-export function ApplicationStatusBadge({ status }: { status: ApplicationStatus }) {
-  return <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_TONE[status]}`}>{status}</span>;
+/** "Last seen today at 10:32 AM" — from the last login (no live presence API). */
+export function lastSeenLabel(p: Person, meId?: string): string {
+  if (p.id === meId || p.presence === 'online') return 'Online';
+  if (!p.lastSeen) return 'Not logged in yet';
+  const mins = Math.round((Date.now() - p.lastSeen) / MIN);
+  if (mins < 5) return 'Online';
+  if (mins < 60) return `Last seen ${mins} min ago`;
+  const d = new Date(p.lastSeen);
+  const today = new Date();
+  const y = new Date(); y.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return `Last seen today at ${timeOf(p.lastSeen)}`;
+  if (d.toDateString() === y.toDateString()) return `Last seen yesterday at ${timeOf(p.lastSeen)}`;
+  return `Last seen ${d.toLocaleDateString([], { day: 'numeric', month: 'short' })} at ${timeOf(p.lastSeen)}`;
 }
 
 const KIND_ICON: Record<AttachmentKind, { Icon: typeof FileIcon; tone: string; label: string }> = {
@@ -117,8 +138,3 @@ export function IconBtn({ label, onClick, active, children, badge, disabled, cla
     </button>
   );
 }
-
-/** "Simulated" marker — anything that only works on this test page. */
-export const SimTag = ({ children = 'Simulated' }: { children?: ReactNode }) => (
-  <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">{children}</span>
-);
