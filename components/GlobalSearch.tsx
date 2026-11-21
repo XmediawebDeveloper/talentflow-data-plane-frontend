@@ -353,14 +353,11 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                           Resume
                         </span>
                         <span className="tf-row-name truncate">
-                          {resume.candidate_name || resume.file_name}
+                          {resume.phone && phoneMatchRange(resume.phone, query)
+                            ? renderPhone(resume.phone, query)
+                            : resume.candidate_name || resume.file_name}
                         </span>
                       </div>
-                      {resume.phone && phoneMatchRange(resume.phone, query) && (
-                        <div className="tf-meta mt-0.5">
-                          {renderPhone(resume.phone, query)}
-                        </div>
-                      )}
                       <div className="tf-meta mt-0.5">
                         {[resume.current_title, resume.current_company, resume.location].filter(Boolean).join(' · ') || resume.candidate_email || resume.file_name}
                       </div>
