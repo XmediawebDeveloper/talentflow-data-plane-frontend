@@ -1,88 +1,41 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Mirrors the Support Center's real first paint (SupportCenter.tsx):
-// breadcrumb + gradient-hero-shaped block (with tab-switcher row) + 4 stat
-// cards + 2 quick-action cards + a "Recent Tickets" list card. Neutral gray so
-// the hero footprint doesn't reshuffle when the client component takes over.
+// Mirrors the Support Tickets page's first paint (components/support/desk):
+// breadcrumb, title, area tabs + view switch, 5 KPI cards, and the table card.
 export default function Loading() {
   return (
-    <div className="tf-page max-xl:bg-white">
+    <div className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="w-full bg-white rounded-none xl:rounded-2xl my-0 xl:my-5 shadow-none xl:shadow-2xl">
-          {/* Breadcrumb */}
-          <div className="mx-4 md:mx-8 mt-4 md:mt-6 mb-0">
-            <Skeleton className="h-3 w-56" />
+        <div className="tf-page-sheet">
+          <Skeleton className="mb-4 h-3 w-48 md:mb-6" />
+          <Skeleton className="h-7 w-48" />
+          <Skeleton className="mt-2 h-4 w-80 max-w-full" />
+
+          <div className="mb-4 mt-5 flex items-end gap-4 border-b border-gray-200 pb-2.5 dark:border-slate-700">
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-5 w-28" />
+            <Skeleton className="ml-auto hidden h-8 w-44 rounded-lg md:block" />
           </div>
 
-          {/* Hero-shaped block (matches the gradient hero footprint) */}
-          <div className="px-4 md:px-8 pt-4 md:pt-6">
-            <section className="rounded-2xl bg-gray-100 dark:bg-slate-800/60 p-5 sm:p-6 lg:p-7">
-              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <Skeleton className="h-12 w-12 shrink-0 rounded-xl" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-5 w-28 rounded-full" />
-                    <Skeleton className="h-7 w-56" />
-                    <Skeleton className="h-4 w-full max-w-md" />
-                  </div>
-                </div>
-                <Skeleton className="h-10 w-32 rounded-xl shrink-0" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-gray-200 px-3.5 py-3 dark:border-slate-700">
+                <Skeleton className="h-9 w-9 rounded-lg" />
+                <div className="space-y-1.5"><Skeleton className="h-5 w-10" /><Skeleton className="h-3 w-16" /></div>
               </div>
-              {/* Tab-switcher row */}
-              <div className="flex gap-2 mt-4 sm:mt-6 border-b border-gray-200 dark:border-slate-700 pb-3">
-                <Skeleton className="h-6 w-40 rounded" />
-                <Skeleton className="h-6 w-40 rounded" />
-              </div>
-            </section>
+            ))}
           </div>
 
-          {/* Content */}
-          <div className="p-3 sm:p-4 md:p-6 lg:p-8 space-y-4 sm:space-y-6">
-            {/* Stats cards */}
-            <div className="tf-grid-stats">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="tf-panel p-3 sm:p-4 md:p-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <Skeleton className="h-3.5 w-20" />
-                    <Skeleton className="h-5 w-5 rounded-full" />
-                  </div>
-                  <Skeleton className="h-7 sm:h-8 w-16 mb-1" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-              ))}
+          <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700">
+            <div className="flex flex-wrap gap-2 border-b border-gray-200 p-3 dark:border-slate-700">
+              <Skeleton className="h-9 w-72 max-w-full" />
+              <Skeleton className="h-8 w-28" />
+              <Skeleton className="h-8 w-28" />
+              <Skeleton className="h-8 w-32" />
             </div>
-
-            {/* Quick actions */}
-            <div className="tf-grid-2">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="tf-panel p-4 sm:p-6 md:p-8">
-                  <Skeleton className="h-8 w-8 mb-2 sm:mb-4 rounded-lg" />
-                  <Skeleton className="h-5 w-40 mb-2" />
-                  <Skeleton className="h-3 w-full max-w-xs" />
-                </div>
-              ))}
-            </div>
-
-            {/* Recent tickets list card */}
-            <div className="tf-panel p-3 sm:p-4 md:p-6">
-              <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="h-4 w-16" />
-              </div>
-              <div className="space-y-2 sm:space-y-3">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="flex items-center justify-between gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 p-3 sm:p-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
-                      <div className="space-y-2">
-                        <Skeleton className="h-4 w-48" />
-                        <Skeleton className="h-3 w-32" />
-                      </div>
-                    </div>
-                    <Skeleton className="h-5 w-16 rounded-full shrink-0" />
-                  </div>
-                ))}
-              </div>
+            <div className="space-y-2 p-3">
+              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
             </div>
           </div>
         </div>

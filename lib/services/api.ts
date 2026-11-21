@@ -362,7 +362,7 @@ export const clearTokens = () => {
       method: 'DELETE', headers: SESSION_HEADERS, credentials: 'same-origin', keepalive: true,
     }).catch(() => { /* cookie expires on its own; the backend session is already revoked */ });
 
-    // Drop unsent support-ticket drafts (saved per user by SupportCenter) so the
+    // Drop unsent support-ticket drafts (create forms and replies, saved per user) so the
     // next person on this browser never sees them.
     try {
       for (let i = localStorage.length - 1; i >= 0; i--) {
