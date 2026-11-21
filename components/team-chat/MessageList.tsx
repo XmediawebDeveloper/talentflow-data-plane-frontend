@@ -158,6 +158,8 @@ const MessageList = forwardRef<HTMLDivElement, {
         const last = !runNext;
         const sel = selected.has(m.id);
         const reply = m.replyToId ? byId.get(m.replyToId) : undefined;
+        // Original not loaded (older than the latest 50): quote from the server's preview.
+        const quote = !reply && m.replyQuote ? m.replyQuote : undefined;
         const readers = m.readBy ?? [];
         const readAll = readers.length >= othersCount && othersCount > 0;
 
@@ -209,6 +211,12 @@ const MessageList = forwardRef<HTMLDivElement, {
                             <span className="block font-semibold">{reply.authorId === me.id ? 'You' : reply.authorId === 'system' ? 'System' : personById(reply.authorId).name}</span>
                             <span className="line-clamp-2">{reply.deleted ? 'Message deleted' : reply.text || reply.attachments?.[0]?.name}</span>
                           </button>
+                        )}
+                        {quote && (
+                          <div className={`mb-1.5 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-xs ${mine ? 'border-white/70 bg-white/15 text-white/90' : 'border-brand-blue bg-brand-blue/5 text-gray-600'}`}>
+                            <span className="block font-semibold">{quote.authorId === me.id ? 'You' : quote.authorName}</span>
+                            <span className="line-clamp-2">{quote.text}</span>
+                          </div>
                         )}
                         {m.text && <span className="whitespace-pre-wrap">{renderText(m.text, me.id, find)}</span>}
                       </div>
