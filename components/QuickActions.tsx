@@ -202,10 +202,10 @@ export default function QuickActions({ open, onOpenChange, subscriptionExpired }
                   }}
                   aria-disabled={locked}
                   title={reason ?? action.description}
-                  className={`relative flex flex-col items-center justify-start gap-1 md:gap-1.5 px-1 md:px-1.5 pt-2 pb-1.5 md:pt-3 md:pb-2.5 rounded-lg text-center text-xs font-medium leading-tight transition-colors focus-visible:outline-none focus-visible:bg-brand-blue/[0.07] ${
+                  className={`relative flex flex-col items-center justify-start gap-1 md:gap-1.5 px-1 md:px-1.5 pt-2 pb-1.5 md:pt-3 md:pb-2.5 rounded-lg text-center text-xs font-medium leading-tight transition-colors focus-visible:outline-none focus-visible:bg-brand-blue/[0.1] dark:focus-visible:bg-blue-400/15 ${
                     locked
                       ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                      : 'group text-gray-700 dark:text-slate-200 hover:bg-brand-blue/[0.06] hover:text-brand-blue dark:hover:bg-slate-800 dark:hover:text-blue-300'
+                      : 'group text-gray-700 dark:text-slate-200 hover:bg-brand-blue/[0.1] hover:text-brand-blue dark:hover:bg-blue-400/15 dark:hover:text-blue-300'
                   }`}
                 >
                   <span className={`flex h-8 w-8 md:h-9 md:w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
