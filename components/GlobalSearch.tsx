@@ -15,6 +15,33 @@ interface GlobalSearchProps {
   className?: string;
 }
 
+/* ── ID-style queries ("650", "JD-650") ─────────────────────────────────
+   Each list endpoint's `search` also matches fields this dropdown never
+   shows: a résumé's phone number, an assessment's internal AS-022 and an AI
+   interview's internal AI-045 (neither is shown anywhere in the app — their
+   tables identify them by the Job ID). So a typed number returned rows with
+   no visible reason to be there. For an ID-style query a row is kept only
+   when the number is in an ID the app shows (the Job ID) or in the name. */
+const ID_QUERY = /^[a-z]{0,4}[-s]?d+$/i;
+/** Phone-style input: digits with spaces, +, -, dots or brackets
+ *  ("98765 43210", "+91 98765-43210"). Résumés are never found by phone. */
+const PHONE_QUERY = /^[ds+().-]+$/;
+const RESULT_LIMIT = 5;
+
+/** "650" or "JD-650" against an ID such as "JD-650" / "JD-003". */
+function idMatches(id: string | null | undefined, query: string): boolean {
+  if (!id) return false;
+  const q = query.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (/[a-z]/.test(q)) return id.toLowerCase().replace(/[^a-z0-9]/g, '').includes(q);
+  const digits = id.replace(/D/g, '');
+  return digits.includes(q) || (digits !== '' && Number(digits) === Number(q));
+}
+
+function textMatches(fields: (string | null | undefined)[], query: string): boolean {
+  const q = query.trim().toLowerCase();
+  return fields.some((f) => !!f && f.toLowerCase().includes(q));
+}
+
 export default function GlobalSearch({ className }: GlobalSearchProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -61,20 +88,38 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
     }
 
     setIsLoading(true);
+    const q = searchQuery.trim();
+    const idQuery = ID_QUERY.test(q);
+    const phoneQuery = /d/.test(q) && PHONE_QUERY.test(q);
+    // ID / phone style: ask for more, since hidden-field matches are dropped below.
+    const pageSize = idQuery || phoneQuery ? 25 : RESULT_LIMIT;
     try {
       const [resumeRes, folderRes, jdRes, assessmentRes, aiInterviewRes] = await Promise.allSettled([
-        resumeService.list({ search: searchQuery, page_size: 5 }),
+        resumeService.list({ search: searchQuery, page_size: pageSize }),
         folderService.list(),
-        jdService.list({ search: searchQuery, page_size: 5 }),
-        assessmentService.list({ search: searchQuery, page_size: 5 }),
-        aiInterviewService.list({ search: searchQuery, page_size: 5, compact: true }),
+        jdService.list({ search: searchQuery, page_size: pageSize }),
+        assessmentService.list({ search: searchQuery, page_size: pageSize }),
+        aiInterviewService.list({ search: searchQuery, page_size: pageSize, compact: true }),
       ]);
 
-      setResumes(resumeRes.status === 'fulfilled' ? resumeRes.value.items : []);
+      const keep = <T,>(items: T[], visible: (item: T) => boolean, filter = idQuery) =>
+        (filter ? items.filter(visible) : items).slice(0, RESULT_LIMIT);
+
+      setResumes(resumeRes.status === 'fulfilled'
+        // No search by phone number: for a number / phone-style query a résumé
+        // must match by name or email (résumés have no ID in the app).
+        ? keep(resumeRes.value.items, (r) => textMatches([r.candidate_name, r.candidate_email, r.email], q), idQuery || phoneQuery)
+        : []);
       setFolders(folderRes.status === 'fulfilled' ? flattenFolders(folderRes.value, searchQuery) : []);
-      setJds(jdRes.status === 'fulfilled' ? jdRes.value.items : []);
-      setAssessments(assessmentRes.status === 'fulfilled' ? assessmentRes.value.items : []);
-      setAiInterviews(aiInterviewRes.status === 'fulfilled' ? aiInterviewRes.value.items : []);
+      setJds(jdRes.status === 'fulfilled'
+        ? keep(jdRes.value.items, (jd) => idMatches(jd.job_id, q) || textMatches([jd.title], q))
+        : []);
+      setAssessments(assessmentRes.status === 'fulfilled'
+        ? keep(assessmentRes.value.items, (a) => idMatches(a.jd_short_id, q) || textMatches([a.title, a.jd_title], q))
+        : []);
+      setAiInterviews(aiInterviewRes.status === 'fulfilled'
+        ? keep(aiInterviewRes.value.items, (i) => idMatches(i.jd_short_id, q) || textMatches([i.candidate_name, i.position, i.jd_title], q))
+        : []);
     } catch {
       // Silently handle errors - partial results are fine
     } finally {
@@ -327,8 +372,10 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                     >
                       <div className="flex items-center gap-2">
                         <span className="tf-row-name">{assessment.title}</span>
-                        {assessment.short_id && (
-                          <span className="tf-hint">{assessment.short_id}</span>
+                        {/* The Job ID, as the Assessments table shows it — the
+                            assessment's own AS-xxx is not shown in the app. */}
+                        {assessment.jd_short_id && (
+                          <span className="tf-hint">{assessment.jd_short_id}</span>
                         )}
                         {/* Every version of an assessment shares one AS-XXX, so
                             the version is what tells two results apart here. */}
@@ -361,8 +408,10 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                         <span className="tf-row-name">
                           {interview.candidate_name || interview.position || 'AI Interview'}
                         </span>
-                        {interview.display_id && (
-                          <span className="tf-hint">{interview.display_id}</span>
+                        {/* The Job ID, as the AI Interviews table shows it — the
+                            interview's own AI-xxx is not shown in the app. */}
+                        {interview.jd_short_id && (
+                          <span className="tf-hint">{interview.jd_short_id}</span>
                         )}
                       </div>
                       <div className="tf-meta mt-0.5">
