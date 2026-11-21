@@ -13,6 +13,7 @@ import { IconButton } from '@/components/ui/icon-button';
 import { Tooltip } from '@/components/ui/tooltip';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { getStatusConfig, mapJDStatus } from '@/lib/utils/jobOpeningDisplay';
+import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
 
 interface GlobalSearchProps {
   className?: string;
@@ -95,7 +96,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === q.toLowerCase() ? (
-          <mark key={i} className="rounded-sm bg-brand-blue/10 font-semibold text-inherit dark:bg-brand-blue/30">
+          <mark key={i} className="rounded-sm bg-yellow-200 font-semibold text-gray-900 dark:bg-yellow-300/90 dark:!text-slate-900">
             {part}
           </mark>
         ) : (
@@ -108,8 +109,94 @@ function Highlight({ text, query }: { text: string; query: string }) {
 
 /** A job's status as the Job Openings pill draws it (same colours and dot). */
 function JDStatusPill({ status }: { status: string }) {
-  const label = mapJDStatus(status);
-  const tone = getStatusConfig(label);
+  return <StatusPill label={mapJDStatus(status)} />;
+}
+
+/* An AI interview's status in the same pill: published / active / completed
+   green, draft orange, the rest grey (mapJDStatus would call them "Draft"). */
+const INTERVIEW_TONE: Record<string, string> = {
+  published: 'Published', active: 'Published', completed: 'Published',
+  draft: 'Draft', disabled: 'Disabled', archived: 'Archived', closed: 'Closed',
+};
+function InterviewStatusPill({ status }: { status: string }) {
+  const key = status.toLowerCase();
+  const label = key.replace(/[_-]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  return <StatusPill label={label} tone={INTERVIEW_TONE[key] ?? 'Other'} />;
+}
+
+/** A row's second line: the parts joined by " · ", leaving out empty ones and
+ *  any that repeat the title or an earlier part (ignoring case/spaces) — e.g.
+ *  an assessment named after its job doesn't list the job title again. */
+function metaLine(title: string, parts: (string | null | undefined)[]): string {
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+  const t = norm(title);
+  const seen = new Set([t]);
+  return parts
+    .filter((p): p is string => {
+      // Also drop a part the title already contains — "sap developer" under
+      // "sap developer Assessment" or "Assessment - sap developer".
+      if (!p || !p.trim() || seen.has(norm(p)) || (t && t.includes(norm(p)))) return false;
+      seen.add(norm(p));
+      return true;
+    })
+    .join(' · ');
+}
+
+/** Why a résumé matched when the match isn't in anything the row shows: the
+ *  server searches the whole résumé, so "lop" finds every "developer" in a
+ *  skills list. Returns the first hidden field the list response carries that
+ *  contains the query — matching skills, a company, or a few words of the
+ *  summary around the match. Work history text isn't in the list response,
+ *  so a match only there still shows no reason. */
+function resumeMatchNote(resume: Resume, query: string, visible: string[]): { label: string; text: string } | undefined {
+  const q = query.trim().toLowerCase();
+  if (!q || visible.some((v) => v.toLowerCase().includes(q))) return undefined;
+  const has = (s: unknown): s is string => typeof s === 'string' && s.toLowerCase().includes(q);
+  const skills = [...new Set([...(resume.skills ?? []), ...(resume.technical_skills ?? []), ...(resume.soft_skills ?? [])])].filter(has);
+  if (skills.length) {
+    const more = skills.length > 3 ? ` +${skills.length - 3} more` : '';
+    return { label: skills.length > 1 ? 'Skills' : 'Skill', text: skills.slice(0, 3).join(', ') + more };
+  }
+  const company = [resume.current_company, resume.previous_company].find(has);
+  if (company) return { label: 'Company', text: company };
+  const summary = resume.professional_summary;
+  if (has(summary)) {
+    const at = summary.toLowerCase().indexOf(q);
+    const start = Math.max(0, at - 30);
+    const end = Math.min(summary.length, at + q.length + 40);
+    return { label: 'Summary', text: `${start > 0 ? '…' : ''}${summary.slice(start, end).trim()}${end < summary.length ? '…' : ''}` };
+  }
+  return undefined;
+}
+
+/** "Job V1" / "Interview V2" — the version badge's look (grey for the job,
+ *  blue for the interview, as VersionBadge's secondary / primary) with a label,
+ *  so two versions side by side say which is which. */
+function LabelledVersion({ label, version, title, tone = 'gray' }: { label: string; version: number; title: string; tone?: 'gray' | 'blue' }) {
+  return (
+    <span
+      title={title}
+      className={`inline-flex items-center gap-0.5 whitespace-nowrap rounded-md border px-1.5 text-2xs font-semibold ${
+        tone === 'blue' ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-gray-100 text-gray-700 border-gray-300'
+      }`}
+    >
+      <span className="font-medium opacity-80">{label}</span> V{version}
+    </span>
+  );
+}
+
+/** "v2", in the Job Openings version badge, one step smaller than its
+ *  smallest size. */
+function SmallVersionBadge({ version }: { version: number }) {
+  return (
+    <span className="flex items-center [&>span:first-child]:!text-2xs [&>span:first-child]:!px-1.5 [&>span:first-child]:!py-0">
+      <VersionBadge version={version} size="sm" variant="secondary" />
+    </span>
+  );
+}
+
+function StatusPill({ label, tone: toneKey = label }: { label: string; tone?: string }) {
+  const tone = getStatusConfig(toneKey);
   return (
     <span className={`inline-flex flex-shrink-0 items-center gap-1 px-1.5 py-px rounded-full text-2xs font-medium whitespace-nowrap border ${tone.bg} ${tone.text} ${tone.border}`}>
       <span className={`w-1.5 h-1.5 shrink-0 rounded-full ${tone.dot}`} aria-hidden />
@@ -154,14 +241,24 @@ const FETCHERS = {
   async assessment(search: string, page: number): Promise<PageResult<AssessmentResponse>> {
     const q = search.trim();
     const { idQuery } = classifyQuery(q);
-    const res = await assessmentService.list({ search, page, page_size: idQuery ? FILTERED_PAGE_SIZE : SHOW_STEP });
+    // ID query: match the Job ID / job name only (the Assessments list's own
+    // search box scope), so "640" / "JD-640" finds that job's assessments —
+    // the default search looks at the internal AS-xxx id instead.
+    const res = idQuery
+      ? await assessmentService.listPage({ search, search_scope: 'job', page, page_size: FILTERED_PAGE_SIZE })
+      : await assessmentService.list({ search, page, page_size: SHOW_STEP });
     const items = idQuery ? res.items.filter((a) => idMatches(a.jd_short_id, q) || textMatches([a.title, a.jd_title], q)) : res.items;
     return { items, totalPages: res.total_pages ?? 1, total: idQuery ? null : res.total ?? null };
   },
   async interview(search: string, page: number): Promise<PageResult<AIInterviewResponse>> {
     const q = search.trim();
     const { idQuery } = classifyQuery(q);
-    const res = await aiInterviewService.list({ search, page, page_size: idQuery ? FILTERED_PAGE_SIZE : SHOW_STEP, compact: true });
+    // ID query: the AI Interviews table's own search (Job ID / job name /
+    // AI id; AI-id-only matches are dropped below), so "640" / "JD-640" finds
+    // that job's AI interviews. Rows are the interviews the detail page opens.
+    const res = idQuery
+      ? await aiInterviewService.listConfigsPage({ search, search_scope: 'table', page, page_size: FILTERED_PAGE_SIZE })
+      : await aiInterviewService.list({ search, page, page_size: SHOW_STEP, compact: true });
     const items = idQuery ? res.items.filter((i) => idMatches(i.jd_short_id, q) || textMatches([i.candidate_name, i.position, i.jd_title], q)) : res.items;
     return { items, totalPages: res.total_pages ?? 1, total: idQuery ? null : res.total ?? null };
   },
@@ -186,6 +283,9 @@ interface ResultItem {
   titleNote?: string;
   extra?: ReactNode;
   meta: string;
+  /** Why the row matched, when the match is in a field the row doesn't show
+   *  ("Skills: React developer") — résumé rows. */
+  matchNote?: { label: string; text: string };
   /** Fields that rank this row inside its section. */
   rankFields: (string | null | undefined)[];
 }
@@ -483,19 +583,33 @@ export default function GlobalSearch({ className, variant = 'bar' }: GlobalSearc
       kind: 'folder',
       href: `/recruitment/resume-database?tab=my-resumes&folder_id=${folder.id}`,
       title: folder.name,
-      meta: path,
+      // Only the parent folders ("Clients / 2026") — a top-level folder has
+      // no second line rather than its own name again.
+      meta: path.split(' / ').slice(0, -1).join(' / '),
       rankFields: [folder.name],
     })),
-    resume: resumes.map((resume) => ({
-      key: `resume-${resume.id}`,
-      kind: 'resume',
-      href: `/recruitment/resume-view/${resume.id}`,
-      title: resume.candidate_name || resume.file_name,
-      // "Name - email" on the first line; role · company · location below.
-      titleNote: resume.candidate_email || resume.email || undefined,
-      meta: [resume.current_title, resume.current_company, resume.location].filter(Boolean).join(' · '),
-      rankFields: [resume.candidate_name, resume.candidate_email],
-    })),
+    resume: resumes.map((resume) => {
+      const title = resume.candidate_name || resume.file_name;
+      // "Name - email" on the first line; role · experience · phone · location
+      // below. (The phone is shown only — résumés aren't searched by it.)
+      const titleNote = resume.candidate_email || resume.email || undefined;
+      const meta = [
+        resume.current_title,
+        formatCandidateExperience(resume.experience_months, resume.experience_years),
+        resume.phone,
+        resume.location,
+      ].filter(Boolean).join(' · ');
+      return {
+        key: `resume-${resume.id}`,
+        kind: 'resume' as const,
+        href: `/recruitment/resume-view/${resume.id}`,
+        title,
+        titleNote,
+        meta,
+        matchNote: resumeMatchNote(resume, trimmed, [title, titleNote ?? '', meta]),
+        rankFields: [resume.candidate_name, resume.candidate_email],
+      };
+    }),
     jd: jds.map((jd) => ({
       key: `jd-${jd.id}`,
       kind: 'jd',
@@ -505,9 +619,8 @@ export default function GlobalSearch({ className, variant = 'bar' }: GlobalSearc
          own JD ID badge and status pill. */
       leadId: jd.job_id || undefined,
       extra: (
-        // The shared VersionBadge's smallest size is 12px; one step down here.
-        <span className="flex items-center gap-1 [&>span:first-child]:!text-2xs [&>span:first-child]:!px-1.5 [&>span:first-child]:!py-0">
-          <VersionBadge version={(jd as any).version_number ?? 1} size="sm" variant="secondary" />
+        <span className="flex items-center gap-1">
+          <SmallVersionBadge version={(jd as any).version_number ?? 1} />
           {jd.status && <JDStatusPill status={jd.status} />}
         </span>
       ),
@@ -525,18 +638,31 @@ export default function GlobalSearch({ className, variant = 'bar' }: GlobalSearc
       // Every version of an assessment shares one job, so the version is what
       // tells two results apart here.
       extra: assessment.version > 1 ? <span className="tf-hint !text-[0.6875rem]">V{assessment.version}</span> : undefined,
-      meta: [assessment.jd_title, assessment.status].filter(Boolean).join(' · '),
+      // Job title (unless the name already says it), then the status — always.
+      meta: [metaLine(assessment.title, [assessment.jd_title]), assessment.status].filter(Boolean).join(' · '),
       rankFields: [assessment.jd_short_id, assessment.title, assessment.jd_title],
     })),
     interview: aiInterviews.map((interview) => ({
       key: `interview-${interview.id}`,
       kind: 'interview',
       href: `/recruitment/ai-interviews/${interview.id}`,
-      title: interview.candidate_name || interview.position || 'AI Interview',
-      // "Name - JD-xxx - email", as on résumé rows. The Job ID is the one the
-      // AI Interviews table shows — the interview's own AI-xxx isn't shown.
-      titleNote: [interview.jd_short_id, interview.candidate_email].filter(Boolean).join(' - ') || undefined,
-      meta: [interview.position, interview.jd_title, interview.status].filter(Boolean).join(' · '),
+      /* Same layout as a JD row: JD ID badge · title · version · status, then
+         the details below. The JD ID is the one the AI Interviews table shows
+         — the interview's own AI-xxx isn't shown in the app. */
+      leadId: interview.jd_short_id || undefined,
+      title: interview.candidate_name || interview.jd_title || interview.position || 'AI Interview',
+      extra: (interview.jd_version || interview.interview_version || interview.status) ? (
+        <span className="flex items-center gap-1">
+          {/* Two versions, labelled as the AI Interviews page does ("Job V1 ·
+              AI Interview V2"): the job's, and the interview's own. */}
+          {!!interview.jd_version && <LabelledVersion label="Job" version={interview.jd_version} title={`Job version ${interview.jd_version}`} />}
+          {!!interview.interview_version && <LabelledVersion label="Interview" version={interview.interview_version} title={`AI interview version ${interview.interview_version}`} tone="blue" />}
+          {interview.status && <InterviewStatusPill status={interview.status} />}
+        </span>
+      ) : undefined,
+      meta: metaLine(interview.candidate_name || interview.jd_title || interview.position || '', [
+        interview.candidate_email, interview.jd_title, interview.position,
+      ]),
       rankFields: [interview.jd_short_id, interview.candidate_name, interview.candidate_email, interview.position, interview.jd_title],
     })),
   };
@@ -787,6 +913,12 @@ export default function GlobalSearch({ className, variant = 'bar' }: GlobalSearc
                     </div>
                     {item.meta && (
                       <div className="tf-meta !text-[0.6875rem] max-sm:!text-[10px] mt-px truncate"><Highlight text={item.meta} query={trimmed} /></div>
+                    )}
+                    {item.matchNote && (
+                      <div className="tf-meta !text-[0.6875rem] max-sm:!text-[10px] mt-px truncate" title={`${item.matchNote.label}: ${item.matchNote.text}`}>
+                        <span className="font-medium text-gray-600 dark:text-slate-300">{item.matchNote.label}:</span>{' '}
+                        <Highlight text={item.matchNote.text} query={trimmed} />
+                      </div>
                     )}
                   </div>
                 );
