@@ -950,8 +950,12 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       {/* Global Search Bar - Hidden on mobile, visible on desktop */}
       <GlobalSearch className="hidden lg:flex items-center flex-1 max-w-sm" />
 
-      {/* Spacer for mobile to push icons to the right */}
-      <div className="flex-1 lg:hidden" />
+      {/* Spacer for mobile to push icons to the right — with the search
+          button (phones / tablets) at its right end, before the icons. Not
+          under 360px (2xs), where the icon row is already at its limit. */}
+      <div className="flex-1 lg:hidden flex justify-end">
+        <GlobalSearch variant="icon" className="hidden 2xs:block" />
+      </div>
 
       <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 lg:ml-8">
         {/* FIX-010: Keyboard Shortcuts Button with Tooltip - Hidden on mobile */}

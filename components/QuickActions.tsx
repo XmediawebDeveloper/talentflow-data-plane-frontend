@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ClipboardList, FilePlus2, Lock, Upload, Video, type LucideIcon } from 'lucide-react';
+import { ClipboardList, FilePlus2, HelpCircle, History, Lock, Upload, Video, type LucideIcon } from 'lucide-react';
 import { ZapAnimatedIcon } from '@/components/icons/HeaderAnimatedIcons';
 import { Tooltip } from '@/components/ui/tooltip';
 import { ResumeScoringIcon, TalentMatchIcon } from '@/components/icons/nav-icons';
@@ -88,6 +88,24 @@ const QUICK_ACTIONS: QuickAction[] = [
     permissions: ['canCreateAIInterviews', 'canRunAiInterviews'],
     planFeature: 'ai_interview',
   },
+  {
+    id: 'usage-history',
+    label: 'Usage History',
+    description: 'Units used across the organisation',
+    icon: History,
+    href: () => '/organization/usage-history',
+    // Account owner only (routeAccess adminOnly) — no permission opens it, so
+    // everyone else sees the tile locked.
+    permissions: [],
+  },
+  {
+    id: 'support-tickets',
+    label: 'Support Tickets',
+    description: 'Help & support requests',
+    icon: HelpCircle,
+    href: () => '/support-tickets',
+    permissions: ['canViewSupport'],
+  },
 ];
 
 const SUBSCRIPTION_LOCKED_MESSAGE = 'Your subscription is inactive. Renew your plan to use this.';
@@ -155,7 +173,7 @@ export default function QuickActions({ open, onOpenChange, subscriptionExpired }
         <>
           {/* Same z-band as the other header dropdowns (see the plan menu). */}
           <div className="fixed inset-0 z-[80]" onClick={() => onOpenChange(false)} />
-          {/* Compact grid: icon over title, three per row (the description,
+          {/* Compact grid: icon over title, four per row (the description,
               or the lock reason, is the tile's tooltip). The whole box pops
               out of the bolt — scales up from its top-right corner
               (tailwindcss-animate utilities). */}
@@ -167,7 +185,7 @@ export default function QuickActions({ open, onOpenChange, subscriptionExpired }
                too far left for a box anchored to it) — fixed width, centred by
                left-3 right-3 + mx-auto, so it never stretches across a wide
                phone. md+: anchored to the bolt. */
-            className="animate-in fade-in zoom-in-90 slide-in-from-top-1 duration-200 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:animate-none origin-top md:origin-top-right fixed left-3 right-3 mx-auto w-[16.5rem] max-w-[calc(100vw-1.5rem)] top-[4.25rem] md:absolute md:left-auto md:right-0 md:mx-0 md:top-full md:mt-2 md:w-[18.5rem] max-h-[calc(100dvh-5rem)] overflow-y-auto p-1.5 md:p-2 grid grid-cols-3 gap-0.5 md:gap-1 bg-white dark:bg-slate-900 rounded-xl shadow-xl shadow-slate-900/10 ring-1 ring-gray-200/80 dark:ring-slate-700 z-[85]"
+            className="animate-in fade-in zoom-in-90 slide-in-from-top-1 duration-200 ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:animate-none origin-top md:origin-top-right fixed left-3 right-3 mx-auto w-[21rem] max-w-[calc(100vw-1.5rem)] top-[4.25rem] md:absolute md:left-auto md:right-0 md:mx-0 md:top-full md:mt-2 md:w-[24rem] max-h-[calc(100dvh-5rem)] overflow-y-auto p-1.5 md:p-2 grid grid-cols-4 gap-0.5 md:gap-1 bg-white dark:bg-slate-900 rounded-xl shadow-xl shadow-slate-900/10 ring-1 ring-gray-200/80 dark:ring-slate-700 z-[85]"
           >
             {QUICK_ACTIONS.map((action) => {
               const reason = lockReason(action);
